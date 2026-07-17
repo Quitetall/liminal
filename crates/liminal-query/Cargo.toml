@@ -1,0 +1,18 @@
+# RESERVED Tier B stub — see src/lib.rs (spec v4 §24, §118A).
+
+[package]
+name = "liminal-query"
+description = "Pure incremental queries over a Workspace Basis; effects live outside (spec v4 §24, §118A)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+liminal-revision.workspace = true
+
+[lints]
+workspace = true

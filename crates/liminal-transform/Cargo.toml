@@ -1,0 +1,18 @@
+# RESERVED Tier B stub — see src/lib.rs (spec v4 §14, §28).
+
+[package]
+name = "liminal-transform"
+description = "Graph rewrite calculus and declared pass contracts (spec v4 §14, §28)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+
+[lints]
+workspace = true

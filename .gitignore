@@ -1,0 +1,20 @@
+# Build artifacts
+/target
+**/*.rs.bk
+
+# Profiling litter
+perf.data*
+flamegraph.svg
+
+# Fuzzing artifacts (fuzz/ itself is committed once it exists — Phase 1)
+fuzz/artifacts/
+fuzz/coverage/
+
+# Editor / OS litter
+.DS_Store
+.idea/
+.vscode/
+.direnv/
+
+# NOTE: Cargo.lock is COMMITTED — the workspace contains binaries; CI must be reproducible.
+# NOTE: proptest-regressions/ is COMMITTED — it is the §113 regression corpus in miniature.

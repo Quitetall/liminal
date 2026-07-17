@@ -1,0 +1,19 @@
+# Conformance corpora contain DELIBERATELY damaged text (spec R4 §2.2 adversarial
+# traces) and must never be "fixed". spec/v4/ is canonical and verbatim.
+
+[default.extend-words]
+# Operational Transformation — collaboration algorithm family (v4 §7.6, §123).
+OT = "OT"
+# Stenographic macro from the spec's Rust pack: `fpr` = public Result-returning fn (v4 §30).
+fpr = "fpr"
+
+[files]
+extend-exclude = [
+  "target/**",
+  "conformance/fixtures/**",
+  "conformance/corpora/**",
+  "conformance/golden/**",
+  "**/snapshots/*.snap",
+  "*.lock",
+  "spec/v4/**",
+]

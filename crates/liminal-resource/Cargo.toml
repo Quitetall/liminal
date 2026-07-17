@@ -1,0 +1,13 @@
+[package]
+name = "liminal-resource"
+description = "Content-addressed object store: dedup, integrity, chunking (v4 §47). RESERVED."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,22 @@
+[package]
+name = "liminal-jurisdiction"
+description = "The deliberate complexity sink in one typed home: Contracts, profiles, interpretive checker, Overlays, Reconciliation Queue, RepairPlan interpreter, and ILRP (spec v4 §7; R4 §4–9; spec/rfc/0001)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+liminal-graph.workspace = true
+liminal-id.workspace = true
+liminal-revision.workspace = true
+liminal-source.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

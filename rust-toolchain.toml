@@ -1,0 +1,8 @@
+# Pinned stable toolchain. Policy (ADR-0002): bump to each new stable within a week
+# of release via `just bump-toolchain <version>`; `rust-version` in the workspace
+# Cargo.toml moves with it. MSRV is NOT a compatibility promise until the first
+# crates.io publish.
+[toolchain]
+channel = "1.97.1"
+components = ["rustfmt", "clippy", "rust-src", "rust-analyzer"]
+profile = "minimal"

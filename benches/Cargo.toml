@@ -1,0 +1,32 @@
+# liminal-benches — v4 §116 benchmark charter, held to Law 14 (baselines, never gates,
+# until the Phase 1 vertical slice lands). See src/lib.rs for the full policy.
+
+[package]
+name = "liminal-benches"
+description = "v4 §116 performance benchmark harness: toy-store baselines now; no optimization or CI gating until Phase 1 (Law 14)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[features]
+# v4 §116 benches whose subject subsystem is Phase-gated (parser, daemon, sync, AI, …).
+# Default-off; enabling compiles them, running them panics by design (`unimplemented!`)
+# with the metric and activation phase in the message.
+unimplemented = []
+
+[dependencies]
+camino.workspace = true
+divan.workspace = true
+liminal-graph.workspace = true
+liminal-id.workspace = true
+
+[[bench]]
+name = "liminal"
+harness = false
+
+[lints]
+workspace = true

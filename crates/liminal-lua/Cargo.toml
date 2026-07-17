@@ -1,0 +1,13 @@
+[package]
+name = "liminal-lua"
+description = "Lua scripting for trusted personal customization (v4 §94). RESERVED."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,13 @@
+[package]
+name = "liminal-cir"
+description = "L2 Resolved Graph IR: the semantic normal form at an explicit Basis (v4 §11). RESERVED."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

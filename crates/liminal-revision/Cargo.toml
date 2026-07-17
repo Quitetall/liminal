@@ -1,0 +1,18 @@
+[package]
+name = "liminal-revision"
+description = "WorkspaceBasis capture, Basis Perspectives, and component-granular invalidation (spec v4 §7.5; R4 §8)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+liminal-id.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

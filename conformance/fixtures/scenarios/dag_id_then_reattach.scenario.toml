@@ -1,0 +1,58 @@
+# Phase -1 toy scenario — spec: v4 §7.7 (worked example), R4 §5 (repair
+# plans are dependency DAGs), R4 §10.
+#
+# A graph-native comment Relation requires explicit identity on its
+# file-held target. A foreign edit strips the `{#p-fourier}` source ID, so
+# only a heuristic match remains — below the Relation's required grade.
+# The proposed repair is a two-step dependency DAG: mutation 2 (reattach
+# the Relation) is invalid before mutation 1 (reinsert the source ID)
+# succeeds (R4 §5). Authorization is mutation-local and conjunctive (Law
+# 3F): the file Node's Holder governs the ID insertion; the Relation's
+# Holder governs the endpoint. Because reidentifying the paragraph rests
+# on a heuristic match, the plan is not auto-applied. Per v4 §7.7 the
+# comment is retained, both proposals persist as Overlays, and ONE
+# reconciliation item describes the dependency between them.
+#
+# `checker_stdout = ""`: the reconciliation item is the single visible
+# incident for this root cause (R4 §2.3); the checker does not amplify it.
+
+[scenario]
+id = "dag_id_then_reattach"
+title = "Two-step repair DAG: source-ID insertion must precede Relation reattachment"
+spec = ["v4 §7.7", "R4 §5"]
+profiles = ["external-file", "graph-native"]
+
+[[setup.file]]
+path = "notes.md"
+text = """
+The Fourier transform decomposes a signal. {#p-fourier}
+"""
+
+[[setup.graph]]
+kind = "comment-relation"
+target = "p-fourier"
+requires_grade = "explicit"
+
+[[step]]
+# Foreign edit strips the explicit source ID, e.g. an overzealous
+# formatter deleting the `{#p-fourier}` annotation.
+kind = "foreign_edit"
+path = "notes.md"
+find = " {#p-fourier}"
+replace = ""
+
+[expect]
+plan_steps = ["insert_source_id", "reattach_relation"]
+auto_apply = false
+terminal = "NeedsReview"
+checker_stdout = ""
+reconciliation_items = 1
+# v4 §7.7: a proposed source-ID-insertion Overlay plus a proposed
+# Relation-endpoint Overlay, coalesced under one reconciliation item.
+overlays = 2
+
+# R4 §5: mutation 2 is invalid before mutation 1 succeeds. Any schedule
+# the interpreter produces must honor this edge (RepairDependency).
+[[expect.dependency]]
+before = "insert_source_id"
+after = "reattach_relation"

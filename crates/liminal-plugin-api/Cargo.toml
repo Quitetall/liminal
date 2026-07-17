@@ -1,0 +1,13 @@
+[package]
+name = "liminal-plugin-api"
+description = "Plugin ABI and capability vocabulary: explicit capabilities, attributable effects (v4 §93, §98). RESERVED."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

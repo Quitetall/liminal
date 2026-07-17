@@ -1,0 +1,26 @@
+[package]
+name = "liminal-cli"
+description = "The lim CLI: check, overlays, repairs, repair undo, jurisdiction explain (spec v4 §7.9–7.10, §20; R4 §3, §9). Sound workspaces produce zero bytes of output."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "lim"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+camino.workspace = true
+clap.workspace = true
+liminal-daemon.workspace = true
+liminal-id.workspace = true
+liminal-jurisdiction.workspace = true
+liminal-revision.workspace = true
+
+[lints]
+workspace = true

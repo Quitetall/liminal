@@ -1,0 +1,67 @@
+# Phase -1 toy scenario — spec: v4 Law 3B (capture is never rejected),
+# v4 §7.10 (Overlay lifecycle), R4 §9 (Reconciliation Queue precedes
+# agenda), R4 §10.
+#
+# The file Holder's write route becomes unavailable (read-only mount /
+# missing file) before a phone client saves. Capture must still succeed:
+# the edit becomes a durable local Overlay instead of being blocked or
+# discarded (Law 3B). The Overlay survives a daemon restart, is visible in
+# `lim overlays` with its age (v4 §7.10 point 4 — the core queue exists
+# from Phase -1, without the agenda domain), and no byte of the capture is
+# lost.
+#
+# No `terminal` is expected: with the write route unavailable no repair
+# intent reaches an ILRP terminal state. The draft is a profile-declared
+# transient awaiting the Holder, reported separately from unexpected
+# reconciliation debt within its policy window (R4 §2.3), hence
+# `reconciliation_items = 0` while `overlays = 1`.
+
+[scenario]
+id = "offline_holder_overlay"
+title = "Unavailable write route: capture becomes a durable Overlay that survives restart"
+spec = ["v4 Law 3B", "v4 §7.10", "R4 §9", "R4 §10"]
+profiles = ["external-file"]
+
+[[setup.file]]
+path = "notes.md"
+text = """
+The Fourier transform decomposes a signal
+into its constituent frequencies. {#p-fourier}
+"""
+
+[[setup.buffer]]
+client = "phone"
+path = "notes.md"
+
+[[step]]
+# The durable Holder loses its write route (e.g. read-only remount).
+kind = "holder_unavailable"
+path = "notes.md"
+mode = "read_only"
+
+[[step]]
+kind = "buffer_edit"
+client = "phone"
+path = "notes.md"
+find = "decomposes a signal"
+replace = "decomposes a time-domain signal"
+
+[[step]]
+# Save cannot reach the Holder. Capture is preserved as a durable
+# Overlay — never rejected, never silently promoted (Laws 3B, 3C).
+kind = "save"
+client = "phone"
+path = "notes.md"
+
+[[step]]
+# Durability check: the Overlay must survive a full process restart.
+kind = "daemon_restart"
+
+[expect]
+auto_apply = false
+checker_stdout = ""
+overlays = 1
+overlay_survives_restart = true
+overlay_listed_with_age = true
+data_loss = false
+reconciliation_items = 0

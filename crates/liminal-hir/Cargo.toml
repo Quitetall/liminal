@@ -1,0 +1,13 @@
+[package]
+name = "liminal-hir"
+description = "L1 Liminal Human IR: authorial intent, sugar, anchors, unexpanded macros (v4 §10). RESERVED."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

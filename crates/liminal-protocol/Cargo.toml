@@ -1,0 +1,13 @@
+[package]
+name = "liminal-protocol"
+description = "Liminal Document Protocol: editor-neutral semantic protocol surface (v4 §58). RESERVED."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

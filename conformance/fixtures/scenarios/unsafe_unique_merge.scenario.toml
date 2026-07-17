@@ -1,0 +1,65 @@
+# Phase -1 toy scenario — spec: R4 §6 (determinism is not safety), R4 §10,
+# v4 §7.7, v4 Law 3G.
+#
+# A foreign edit and a Neovim buffer edit land on DIFFERENT LINES of the
+# SAME paragraph. Three-way textual merge therefore produces exactly one
+# clean candidate — deterministic, unique, textually conflict-free. It is
+# still not auto-applied: both edits mutate one semantic Node, so there is
+# no structural disjointness at the block level and no domain validator
+# proving non-interference (v4 §7.7: "a unique textual merge is not a
+# safety proof"). The merge is preserved as a reviewable repair proposal
+# (an Overlay) with exactly one coalesced reconciliation item. Nothing is
+# rejected and nothing is silently accepted (Laws 3B, 3C).
+#
+# `checker_stdout = ""` is deliberate: the one visible incident for this
+# root cause is the reconciliation item in the queue (R4 §2.3: visible
+# incidents per root cause <= 1). The checker does not amplify it.
+
+[scenario]
+id = "unsafe_unique_merge"
+title = "Unique clean textual merge inside one paragraph is offered, never auto-applied"
+spec = ["R4 §6", "R4 §10", "v4 §7.7", "v4 Law 3G"]
+profiles = ["external-file"]
+
+[[setup.file]]
+path = "notes.md"
+text = """
+The Fourier transform decomposes a signal
+into its constituent frequencies. {#p-fourier}
+
+The Laplace transform generalizes it
+to the complex plane. {#p-laplace}
+"""
+
+[[setup.buffer]]
+client = "neovim"
+path = "notes.md"
+
+[[step]]
+# Foreign tool rewrites line 2 of the p-fourier paragraph.
+kind = "foreign_edit"
+path = "notes.md"
+find = "into its constituent frequencies."
+replace = "into its constituent frequency components."
+
+[[step]]
+# Neovim edits line 1 of the SAME paragraph. Different line, same Node.
+kind = "buffer_edit"
+client = "neovim"
+path = "notes.md"
+find = "The Fourier transform decomposes a signal"
+replace = "The discrete Fourier transform decomposes a signal"
+
+[[step]]
+kind = "save"
+client = "neovim"
+path = "notes.md"
+
+[expect]
+merge_candidates = 1
+plan_steps = ["apply_textual_merge"]
+auto_apply = false
+terminal = "NeedsReview"
+checker_stdout = ""
+reconciliation_items = 1
+overlays = 1

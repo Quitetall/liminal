@@ -1,0 +1,74 @@
+# Phase -1 toy scenario — spec: R4 §6, R4 §10, v4 §7.7, v4 Law 3G.
+#
+# The safe counterpart of unsafe_unique_merge: a foreign edit touches the
+# p-laplace paragraph while the Neovim buffer edits the p-fourier
+# paragraph. The two mutations are structurally disjoint at the semantic
+# Node (blank-line block) level — the toy's declared disjointness contract
+# (R4 §11.1). Determinism PLUS domain safety evidence means the repair
+# auto-applies. R4 §6 requires every automatic repair to record its full
+# decision log and remain one-command revertible via
+# `lim repair undo <repair-id>`; those expectations are asserted here.
+
+[scenario]
+id = "disjoint_safe_repair"
+title = "Structurally disjoint foreign and buffer edits auto-apply, logged and revertible"
+spec = ["R4 §6", "R4 §10", "v4 §7.7", "v4 Law 3G"]
+profiles = ["external-file"]
+
+[[setup.file]]
+path = "notes.md"
+text = """
+The Fourier transform decomposes a signal
+into its constituent frequencies. {#p-fourier}
+
+The Laplace transform generalizes it
+to the complex plane. {#p-laplace}
+"""
+
+[[setup.buffer]]
+client = "neovim"
+path = "notes.md"
+
+[[step]]
+# Foreign tool edits the p-laplace paragraph.
+kind = "foreign_edit"
+path = "notes.md"
+find = "The Laplace transform generalizes it"
+replace = "The Laplace transform generalizes the Fourier transform"
+
+[[step]]
+# Neovim edits the p-fourier paragraph — a DIFFERENT semantic Node.
+kind = "buffer_edit"
+client = "neovim"
+path = "notes.md"
+find = "into its constituent frequencies."
+replace = "into its constituent frequency components."
+
+[[step]]
+kind = "save"
+client = "neovim"
+path = "notes.md"
+
+[expect]
+plan_steps = ["apply_disjoint_merge"]
+auto_apply = true
+safety_evidence = "structural_disjointness"
+terminal = "Committed"
+revertible = true
+revert_command = "lim repair undo <repair-id>"
+checker_exit = 0
+checker_stdout = ""
+checker_stderr = ""
+reconciliation_items = 0
+overlays = 0
+
+# R4 §6: every automatic repair records exactly these fields.
+[expect.decision_log]
+fields = [
+  "input_basis",
+  "selected_rule",
+  "safety_evidence",
+  "applied_steps",
+  "resulting_basis",
+  "inverse",
+]

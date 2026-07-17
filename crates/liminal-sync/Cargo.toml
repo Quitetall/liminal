@@ -1,0 +1,17 @@
+# RESERVED Tier B stub — see src/lib.rs (spec v4 §88, §123).
+
+[package]
+name = "liminal-sync"
+description = "Live synchronization over semantic operations (spec v4 §88, §123)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

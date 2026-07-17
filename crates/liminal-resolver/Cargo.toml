@@ -1,0 +1,19 @@
+# RESERVED Tier B stub — see src/lib.rs (spec v4 §39–40, §8.6).
+
+[package]
+name = "liminal-resolver"
+description = "Effectful external resolution outside the query engine (spec v4 §39–40, §8.6)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+liminal-id.workspace = true
+serde.workspace = true
+
+[lints]
+workspace = true

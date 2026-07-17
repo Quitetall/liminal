@@ -1,0 +1,13 @@
+[package]
+name = "liminal-text"
+description = "Text subsystem: ropes/piece trees, grapheme navigation, anchors, marks (v4 §46). RESERVED."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

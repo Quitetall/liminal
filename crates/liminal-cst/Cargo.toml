@@ -1,0 +1,20 @@
+# RESERVED Tier B stub — see src/lib.rs (spec v4 §9, §22, §23).
+
+[package]
+name = "liminal-cst"
+description = "L0 lossless Concrete Syntax Tree and coarse structural scan (spec v4 §9, §22, §23)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+liminal-id.workspace = true
+liminal-source.workspace = true
+serde.workspace = true
+
+[lints]
+workspace = true

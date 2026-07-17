@@ -1,0 +1,662 @@
+--- /mnt/data/liminal_master_architecture_plan_v3.md	2026-07-17 09:33:05.102784700 +0000
++++ /mnt/data/liminal_master_architecture_plan_v4.md	2026-07-17 09:41:05.051926668 +0000
+@@ -1,6 +1,6 @@
+ # Liminal — Master Architecture and Infrastructure Plan
+ 
+-**Revision:** 3 — Jurisdiction ergonomics, repair composition, overlay lifecycle, and buffer-granular bases  
++**Revision:** 4 — measured Jurisdiction ergonomics, unified repair, crash-safe coordination, and client-scoped bases  
+ **Project type:** Open-source infrastructure and systems research project  
+ **Primary motivation:** Build the technically correct substrate for personal use and intellectual satisfaction; adoption is welcome but not required.  
+ **Core design rule:** **The semantic universe contains only Nodes and Relations. Everything else is a derived abstraction that may compile into any imperative subsystem required for performance.**
+@@ -108,25 +108,39 @@
+ 
+ Liminal must preserve typing, drawing, dictation, paste, and other capture even when the intended Holder is unavailable, read-only, ambiguous, or inconsistent. The edit becomes a durable local Overlay rather than being blocked or discarded.
+ 
+-### Law 3C — No silent Promotion or Holder change
++### Law 3C — No silent acceptance or Holder change
+ 
+-An Overlay becomes accepted by a durable Holder only through an explicit, recorded Promotion or a domain merge rule whose acceptance conditions are already declared. Importers, formatters, renderers, and caches never transfer Jurisdiction implicitly.
++An Overlay becomes accepted by a durable Holder only through an explicit, recorded repair whose acceptance conditions are declared by the relevant Jurisdictions. **Promotion** is the user-facing name for such an accepted repair; it is not an independent mutation mechanism. Importers, formatters, renderers, caches, and projections never transfer Jurisdiction implicitly.
+ 
+ ### Law 3D — One immutable Workspace Basis per computation
+ 
+ Every parser query, compiler pass, renderer, export, AI operation, resolver decision, and repair plan runs against one captured Workspace Basis. Editor buffers participate through first-class, per-buffer generation components. A computation may finish on that Basis or restart on a newer one; it may not silently mix them.
+ 
+-### Law 3E — The common case requires zero Jurisdiction authoring
++### Law 3E — The common case requires zero Jurisdiction authoring and zero sound-state noise
+ 
+-Normal users need only four Jurisdiction terms: **Jurisdiction**, **Holder**, **Overlay**, and **Promotion**. Standard domain profiles must automatically resolve at least 99% of common-case subjects in each maintained conformance corpus without user-authored contracts. The Jurisdiction Checker is completely silent when resolution is sound. Contracts surface only at cross-Jurisdiction boundaries, foreign edits, unresolved Overlays, unavailable Holders, explicit inspection, or custom domain development.
++Standard profiles must resolve ordinary work without authored Contracts or ownership ceremony. Conformance is measured over **Jurisdiction-sensitive read and write operations** replayed from held-out traces not authored or tuned by the profile implementer, including real Git histories, recorded editor sessions, and foreign-tool edits. Each stable profile must automatically resolve at least 99% of those operations, at least 99% of ordinary sessions must require no manual Jurisdiction interaction, and every sound session must emit exactly zero user-facing Jurisdiction diagnostics. Diagnostics from one root cause must be coalesced rather than amplified per keystroke or dependent operation.
++
++The default UI should use familiar language such as **draft**, **save**, **sync**, **accept**, **source**, and **conflict**. The terms **Jurisdiction**, **Holder**, **Overlay**, and **Promotion** belong to advanced explanations and infrastructure documentation, not routine editing chrome.
+ 
+ ### Law 3F — Cross-Jurisdiction repair is mutation-local
+ 
+-No Contract gains power over another subject merely because a Relation connects them. A repair is a transaction of proposed mutations, and each mutation is governed by the Jurisdiction of the Node or Relation it changes. The target's foreign-edit policy governs target mutation; the Relation's identity requirement and dangling-reference policy govern Relation mutation. Automatic repair is allowed only when every affected Jurisdiction authorizes its own mutation and all identity requirements are met. Otherwise Liminal preserves proposed changes as Overlays and creates reconciliation work.
++No Contract gains power over another subject merely because a Relation connects them. A repair is an ordered graph of proposed mutations, and each mutation is governed by the Jurisdiction of the Node or Relation it changes. The target's foreign-edit policy governs target mutation; the Relation's identity requirement and dangling-reference policy govern Relation mutation. Automatic repair is allowed only when every affected Jurisdiction authorizes its own mutation and all cross-subject requirements are met. Otherwise Liminal preserves the proposals as Overlays and creates one coalesced reconciliation item.
++
++### Law 3G — Promotion is repair, and determinism is not safety
++
++Every Promotion is a repair plan evaluated by the same authorization, identity, invariant, Basis, crash-recovery, and reversibility rules as any other repair. A unique textual or merge result is necessary but not sufficient for automatic acceptance. Automatic repair additionally requires a domain-specific safety check. For external-file domains, a textually clean merge is only a proposal unless the affected semantic Nodes are disjoint or a language/domain validator proves non-interference. Every automatically accepted repair must be recorded and one-command revertible.
++
++### Law 3H — Cross-Holder repair is intent-logged, ordered, idempotent, and resumable
++
++Files, graph stores, remote services, and other Holders do not share one atomic transaction. Any repair spanning more than one Holder must first commit a durable repair intent, execute an explicit dependency DAG with preconditions, postconditions, and idempotency keys, and then finalize the accepted graph revision. A crash may leave work pending, but may not make a half-applied repair invisible or unrecoverable.
++
++### Law 3I — Overlay debt remains visible until resolved
++
++Deferring reconciliation must not become burial. Every unresolved Overlay is durable, ages according to its profile, is automatically accepted only when the resulting repair is both deterministic and safe, and otherwise enters a core reconciliation queue. The CLI and contextual UI surface this queue from Phase -1; the later agenda domain may project the same items as tasks. Overlays surface when their target is opened and at sync, publication, or destructive-conversion boundaries. They are never silently garbage-collected.
+ 
+-### Law 3G — Overlay debt remains visible until resolved
++### Law 3J — Independent dirty buffers never form a chimeric Basis
+ 
+-Deferring reconciliation must not become burial. Every unresolved Overlay is durable, ages according to its profile, auto-promotes when a unique deterministic result is permitted, and otherwise becomes an agenda item after a configured threshold. Overlays surface when their target is opened and at sync, publication, or destructive-conversion boundaries. They are never silently garbage-collected.
++When multiple clients hold dirty buffers over the same durable subject, they represent distinct working claims. A computation must explicitly select the requesting client's working Basis, a durable-only Basis, a published Basis, or a declared federated frontier. Workspace-scoped consumers may not combine unrelated dirty buffers from different clients into one semantic snapshot.
+ 
+ ### Law 4 — Personalization may change representation, never interpretation
+ 
+@@ -424,20 +438,31 @@
+ This complexity must be **contained**:
+ 
+ - Domain and workspace profiles author nearly all Contracts.
+-- Normal users need four terms only.
++- Routine UI uses familiar draft/save/sync language; Jurisdiction vocabulary is inspectable, not ambient.
+ - The checker says nothing when the workspace is sound.
+ - Full Contracts appear only at boundaries or under explicit inspection.
+ - No other subsystem may create an independent ownership model.
+ - The first implementation is an interpreter; optimized plans wait until the model survives Phase -1.
+ 
+-### 7.1 The four user-facing terms
++### 7.1 Vocabulary tiers
++
++The architecture has precise internal terminology, but the ordinary interface should use concepts users already know.
++
++#### Everyday interface vocabulary
++
++- **Draft** — a local change that has not yet reached its durable destination.
++- **Save**, **sync**, or **accept** — the context-appropriate action that attempts to reconcile that draft.
++- **Source** — shown only when the user needs to know which file, service, replica, or graph record will receive the change.
++- **Conflict** or **review needed** — a coalesced boundary condition, not a stream of policy diagnostics.
++
++#### Advanced user and infrastructure vocabulary
+ 
+ - **Jurisdiction** — the rule deciding which system governs a piece of information.
+ - **Holder** — the source currently selected to provide or accept that information.
+-- **Overlay** — a preserved local change not yet accepted by the durable Holder.
+-- **Promotion** — acceptance of an Overlay by its Holder or declared merge domain.
++- **Overlay** — the durable internal form of an unaccepted draft.
++- **Promotion** — the user-facing description of a repair that successfully places an Overlay under its intended Holder or merge domain.
+ 
+-Terms such as Contract, Basis, claim, custody, provenance, federation, materialization, transition, and resolution are maintainer or runtime vocabulary. They remain available in diagnostic explanations and API documentation, but ordinary editing interfaces should not require them.
++Terms such as Contract, Basis, claim, custody, provenance, federation, materialization, transition, causal frontier, and resolution are maintainer or runtime vocabulary. They remain available through `lim jurisdiction explain`, diagnostic details, APIs, and design documentation. Routine editing interfaces should not require them.
+ 
+ ### 7.2 Jurisdiction subjects and the reduction of facets
+ 
+@@ -454,7 +479,7 @@
+ 
+ Rule:
+ 
+-> If a so-called facet requires its own Holder, history, identity, Relations, or Promotion lifecycle, reify it as a Node or Relation.
++> If a so-called facet requires its own Holder, history, identity, Relations, or repair lifecycle, reify it as a Node or Relation.
+ 
+ For example, an image is not one giant independently governed record:
+ 
+@@ -489,48 +514,73 @@
+   candidate Holders, read precedence, fallback, federation/merge engine
+ 
+ MutationPolicy:
+-  write route, foreign edits, cross-Jurisdiction repair permissions
++  write route, foreign edits, repair authorization, domain safety checks,
++  idempotency and acceptance rules
+ 
+ ContinuityPolicy:
+   identity requirement, revision behavior, dangling-reference behavior
+ 
+ LifecyclePolicy:
+-  Overlay durability, Promotion, freshness, aging, surfacing, publication
++  Overlay durability, freshness, aging, surfacing, publication
+ ```
+ 
+-This is still substantial complexity. The architecture's claim is not that it vanishes; it is that profiles centralize it and common users do not repeatedly author it.
++This is still substantial complexity. The architecture's claim is not that it vanishes; it is that profiles centralize it and common users do not repeatedly author it. Promotion does not add another lifecycle engine: it is a successful `RepairPlan` rendered in user-facing language.
+ 
+ ### 7.4 Profile coverage and ergonomics conformance
+ 
+ Every standard domain package provides a default Jurisdiction profile. Profiles are selected through file type, schema, domain, workspace configuration, or explicit override.
+ 
+-The maintained conformance corpus labels common-case subjects and boundary cases separately. For every standard profile:
++The denominator is not “all Nodes” and not raw keystrokes. A **Jurisdiction-sensitive operation** is a read, write, repair, sync, export, publication, foreign-edit ingestion, or resolver event that must choose a Holder, Basis, write route, or reconciliation rule. Repeated downstream computations caused by one root event do not each count as new user-facing incidents.
++
++An **editing session** is one client/workspace activity interval from explicit open to explicit close, or—when the trace lacks lifecycle events—until a fixed conformance timeout of 30 minutes without activity. A **sound session** is one whose inputs remain within the declared profile invariants: required Holders are available, identities meet declared grades, and no unresolved foreign corruption or merge dispute is injected. Sound-session silence therefore tests checker ergonomics rather than hiding real boundary conditions.
++
++Acceptance uses a versioned, held-out trace corpus that is separate from profile-development fixtures. It should include:
++
++- Real Git histories containing merges, rebases, moves, renames, and conflict resolutions
++- Consented and anonymized editor-session traces
++- Foreign-tool formatting and rewrite traces
++- Offline/online transitions and resolver observations
++- Adversarial mutation traces produced by an independent harness
++
++The implementer may tune against a training corpus, but may not alter the locked acceptance corpus after seeing profile results without creating a new version and retaining the old score.
++
++For every stable profile:
+ 
+ ```text
+-common-case automatic resolution >= 99%
+-manual Contract authoring for common cases <= 1%
+-user-facing diagnostics on sound cases = 0
++auto_resolution_rate =
++  automatically resolved jurisdiction-sensitive operations
++  / all jurisdiction-sensitive operations
++
++auto_resolution_rate >= 99%
++manual-intervention-free ordinary sessions >= 99%
++user-facing diagnostics in every sound session = 0
+ checker output on an entirely sound workspace = empty
++unexpected reconciliation items created in every sound ordinary session = 0
++visible incidents per root cause per session <= 1
++manual Contract authoring in ordinary sessions = 0
+ ```
+ 
+-Coverage is measured per profile and domain, not only as one aggregate that can hide a weak domain. A profile that misses the threshold remains experimental.
++An operation counts as automatically resolved only if it reaches the profile's declared stable outcome without manual Contract authoring, an unexpected diagnostic, or unexpected reconciliation debt. Falling back to an undeclared Overlay does not count as success. A profile-declared transient draft—such as offline work awaiting automatic synchronization—is reported separately and must reconcile within its policy window or become debt.
++
++Coverage and session SLOs are measured per profile and domain, not only as one aggregate that can hide a weak domain. A profile that misses any threshold remains experimental. A 99% operation score does not excuse a noisy workflow; the session-level SLO prevents thousands of harmless operations from hiding repeated interruptions.
+ 
+ The full Contract is surfaced only when:
+ 
+-- A Relation crosses Jurisdictions.
++- A Relation crosses Jurisdictions and automatic composition cannot prove safety.
+ - A foreign edit damages identity or structure.
+ - A Holder is unavailable or read-only.
+-- An Overlay cannot be promoted automatically.
++- An Overlay cannot be reconciled automatically.
+ - A user asks `lim jurisdiction explain`.
+ - A plugin or domain author defines a new profile.
+ 
+-### 7.5 Workspace Basis and buffer-granular revisions
++### 7.5 Workspace Basis Perspectives and buffer-granular revisions
+ 
+ Every compiler, renderer, query, export, AI operation, and repair plan captures one immutable `WorkspaceBasis`:
+ 
+ ```rust
+ pub struct WorkspaceBasis {
+     pub transaction: TransactionId,
++    pub perspective: BasisPerspective,
+     pub components: PersistentMap<JurisdictionKey, BasisComponent>,
+ }
+ 
+@@ -572,19 +622,41 @@
+ 
+ The Basis is logically workspace-wide but physically persistent and dependency-granular. Queries record which components they read; editing buffer A must not invalidate computations that depend only on buffer B or an unrelated image object.
+ 
+-Saving is a Promotion:
++Saving is presented as Promotion, but operationally it is a repair from the buffer Overlay into the file Holder:
+ 
+ ```text
+-BufferGeneration(g42) --Promotion--> FileContent(hash F9)
++BufferGeneration(g42) --accepted repair--> FileContent(hash F9)
+ ```
+ 
+ If the bytes are identical, semantic query results may be reused even though the lifecycle state changes.
+ 
++The daemon may know about many candidate buffer generations, but a captured computation Basis selects at most one independent working claim per durable subject. Every workspace-scoped consumer declares a `BasisPerspective`:
++
++```rust
++pub enum BasisPerspective {
++    ClientScoped { client: ClientId },
++    DurableOnly,
++    Published { revision: PublicationId },
++    Federated { domain: FederationId, frontier: CausalFrontier },
++}
++```
++
++Resolution rules:
++
++- An interactive preview, query, or AI request defaults to the requesting client's `ClientScoped` Basis.
++- A background build, reproducible export, CI job, or publication defaults to `DurableOnly` or an explicit `Published` Basis.
++- A shared collaborative surface may use `Federated` only when a declared merge runtime supplies one frontier.
++- Two unrelated dirty buffers over the same file remain branch-like working claims. They are never combined into one Basis.
++- If one client has multiple divergent buffers for the same durable subject, the client must select one buffer in its working-holder map; otherwise that subject falls back to `DurableOnly` and the ambiguity becomes one coalesced reconciliation item.
++- A consumer without a requester and without an explicit mode must fail closed to `DurableOnly`, not guess among dirty clients.
++
++Thus Neovim and a phone may each see their own unsaved work while a durable export continues to see only accepted file state. Cross-document queries and AI context compilation must record the selected mode in provenance.
++
+ ### 7.6 Standard Jurisdiction profiles
+ 
+ #### External-file profile
+ 
+-The active editor buffer is the working Holder; file bytes are the durable Holder; a Git object may be the published Holder. Syntax trees, language analysis, graph structure, and previews are derived at an exact buffer or file Basis.
++Under `BasisPerspective::ClientScoped { client }`, the requesting client's selected editor buffer is the working Holder; file bytes are the durable Holder; a Git object may be the published Holder. Other clients' dirty buffers remain separate Overlay branches and are not visible through that Basis. Syntax trees, language analysis, graph structure, and previews are derived at an exact buffer or file Basis.
+ 
+ Use for code, configuration, portable Markdown, portable Org, and formats consumed directly by mature external tools.
+ 
+@@ -616,21 +688,33 @@
+ 
+ Raw text and a structured annotation surface are coordinated. This is the killer case, not an assumed solution. It remains experimental until Phase -1 proves anchor recovery, foreign-edit behavior, identity guarantees, and canonical round-trip laws. The Contract cannot make two coordinated surfaces coherent by declaration alone.
+ 
+-### 7.7 Cross-Jurisdiction repair composition
++### 7.7 Repair plans, Promotion, and safety
+ 
+-When a graph-native Relation targets an external-file Node and a foreign edit damages the target, no single Contract governs the whole repair.
++When a graph-native Relation targets an external-file Node and a foreign edit damages the target, no single Contract governs the whole repair. Promotion is not a separate mechanism; it is the user-facing name for a repair whose result has been accepted by the intended Holder or merge domain. At the semantic level, a Promotion has one terminal acceptance mutation; the repair plan may contain ordered prerequisite mutations or external steps required to make that terminal mutation valid.
+ 
+-A repair plan is a set of proposed mutations:
++A repair plan is an ordered dependency graph, not an unordered list:
+ 
+ ```rust
+ pub struct RepairPlan {
++    pub id: RepairId,
+     pub basis: WorkspaceBasis,
+-    pub mutations: Vec<ProposedMutation>,
++    pub steps: BTreeMap<RepairStepId, ProposedMutation>,
++    pub dependencies: Vec<RepairDependency>,
++    pub inverse: Option<InverseRepairPlan>,
+ }
+ 
+ pub struct ProposedMutation {
++    pub id: RepairStepId,
+     pub subject: JurisdictionSubject,
+     pub operation: Operation,
++    pub expected_prestate: StatePredicate,
++    pub expected_poststate: StatePredicate,
++    pub idempotency_key: IdempotencyKey,
++}
++
++pub struct RepairDependency {
++    pub before: RepairStepId,
++    pub after: RepairStepId,
+ }
+ ```
+ 
+@@ -639,10 +723,16 @@
+ ```text
+ auto-apply repair
+ iff
+-for every proposed mutation:
+-  that subject's Jurisdiction authorizes the mutation
++  the plan has one valid result at its captured Basis
+ and
+-all cross-subject identity and invariant requirements are satisfied
++  for every proposed mutation:
++    that subject's Jurisdiction authorizes the mutation
++and
++  all cross-subject identity and invariant requirements are satisfied
++and
++  the domain safety validator proves the result safe enough for automatic acceptance
++and
++  the plan is idempotent and revertible or reconstructible
+ ```
+ 
+ Consequences:
+@@ -652,7 +742,10 @@
+ - Mutating the Relation endpoint is governed by the Relation's Holder.
+ - Inserting an ID into file bytes is governed by the file Node's Holder.
+ - Neither Contract may commandeer the other subject.
+-- If one required mutation cannot be accepted, preserve each proposal as an Overlay and create one linked reconciliation task.
++- A unique textual merge is not a safety proof.
++- External-file auto-acceptance requires semantic/node-level disjointness or a domain-aware validator that proves non-interference. Otherwise Liminal offers a reviewable repair.
++- Every automatically accepted repair records preimages or an inverse and supports `lim repair undo <repair-id>`.
++- If one required mutation cannot be accepted, preserve the proposals as Overlays and create one linked reconciliation item.
+ 
+ Example:
+ 
+@@ -662,9 +755,40 @@
+   → Git merge removes or duplicates paragraph ID
+ ```
+ 
+-If the explicit ID survives uniquely, the Relation remains sound. If only a heuristic match exists while the Relation requires explicit identity, Liminal does not reattach silently. It retains the comment, creates a proposed Relation-endpoint Overlay, optionally creates a source-ID insertion Overlay, and surfaces one agenda task describing both.
++If the explicit ID survives uniquely, the Relation remains sound. If only a heuristic match exists while the Relation requires explicit identity, Liminal does not reattach silently. It retains the comment, creates a proposed Relation-endpoint Overlay, optionally creates a source-ID insertion Overlay, and surfaces one reconciliation item describing the dependency between them.
++
++### 7.8 Intent-Logged Repair Protocol
++
++A repair that spans graph state and any nontransactional or independently transactional Holder uses the **Intent-Logged Repair Protocol (ILRP)**. This does not make the filesystem transactional. It makes partial work visible, ordered, idempotent, and recoverable.
++
++Protocol:
++
++1. **Prepare.** In one graph-store transaction, record the `RepairPlan`, captured Basis, dependency DAG, expected prestates and poststates, idempotency keys, required capabilities, and inverse/preimage data. Mark the intent `Prepared`.
++2. **Apply.** Execute steps in topological order. Before each step, verify its prestate. For files, stage a temporary file, flush it, and use atomic replacement where the platform supports it. For services, use the repair step's idempotency key when supported.
++3. **Acknowledge.** Record each completed step and observed poststate durably. Repeating a completed step must be harmless or detected as already applied.
++4. **Finalize.** After all external prerequisites are satisfied, commit the graph mutations and mark the repair `Committed` in one graph transaction.
++5. **Recover.** On restart, scan nonterminal intents. If the world matches a prestate, resume. If it matches a poststate, acknowledge and continue. If it matches neither, stop, preserve all data, and create a reconciliation Overlay rather than guessing.
++6. **Revert.** When requested and still valid, execute the inverse plan through the same protocol.
++
++Suggested states:
++
++```text
++Prepared → Applying → ExternalApplied → Finalizing → Committed
++                     ↘ NeedsReview
++Prepared/Applying    ↘ Aborted
++```
++
++The guarantee is not impossible cross-system atomicity. It is:
++
++```text
++at-least-once idempotent external application
+++ exactly-once accepted graph finalization
+++ durable evidence of every partial state
++```
++
++Dependency ordering is essential. Inserting a persistent ID into source bytes must precede reattaching a Relation that depends on that ID. Phase -1 must kill the daemon after each protocol step and prove resumability.
+ 
+-### 7.8 Jurisdiction Checker
++### 7.9 Jurisdiction Checker
+ 
+ The first checker is an interpretive reference implementation, not a compiled execution plan. It answers:
+ 
+@@ -673,7 +797,9 @@
+ 3. Is a merge runtime required?
+ 4. Does identity satisfy every incoming durable Relation?
+ 5. Are there unresolved Overlays?
+-6. Can a proposed repair or Promotion be applied without crossing another Jurisdiction illegally?
++6. Which `BasisPerspective` governs this computation?
++7. Can a proposed repair be applied without crossing another Jurisdiction illegally?
++8. Is the repair deterministic, safe, ordered, recoverable, and reversible at the captured Basis?
+ 
+ Normal behavior is silence:
+ 
+@@ -681,37 +807,38 @@
+ sound workspace → exit 0, no output, no badge, no notification
+ ```
+ 
+-Detailed internal diagnostic codes may exist for tests and maintainers, but ordinary UI reduces them to four understandable situations:
++Detailed internal diagnostic codes may exist for tests and maintainers, but ordinary UI reduces them to familiar situations:
+ 
+-- No usable Holder
+-- Conflicting Holders
+-- Overlay awaiting Promotion
+-- Holder unavailable or stale
++- Draft not yet saved or synced
++- Conflicting changes need review
++- Source unavailable or stale
++- Repair could not be applied safely
+ 
+-Optimization into `CompiledJurisdictionPlan`, indexed dispatch, or generated policy code is explicitly deferred until the Phase -1 identity and projection experiments stop reshaping the Contract.
++Optimization into `CompiledJurisdictionPlan`, indexed dispatch, or generated policy code is explicitly deferred until the Phase -1 identity, repair, crash, and projection experiments stop reshaping the Contract.
+ 
+-### 7.9 Overlay lifecycle and Jurisdiction debt
++### 7.10 Overlay lifecycle and Jurisdiction debt
+ 
+-An Overlay is durable immediately. It records its subject, base Basis, edit or operation, creation time, last activity, profile, and Promotion policy.
++An Overlay is durable immediately. It records its subject, base Basis, edit or operation, creation time, last activity, profile, and proposed repair policy.
+ 
+ Required lifecycle behavior:
+ 
+-1. **Attempt deterministic Promotion automatically.** If the Holder becomes available and the declared merge rule yields one unambiguous result, promote and record it.
+-2. **Coalesce without erasing history.** Repeated local edits to the same unresolved subject may be presented as one current Overlay while retaining the operation chain.
++1. **Attempt safe repair automatically.** If the Holder becomes available and the repair is authorized, uniquely determined, domain-safe, idempotent, and revertible, accept it and record the repair.
++2. **Coalesce without erasing history.** Repeated local edits to the same unresolved subject may be presented as one current draft while retaining the operation chain.
+ 3. **Age explicitly.** Profiles define `surface_after` and `escalate_after` thresholds.
+-4. **Dogfood the agenda domain.** An unresolved Overlay that crosses its surfacing threshold generates a derived agenda task linked to the affected subjects and repair plan.
+-5. **Surface contextually.** Show the Overlay when its subject is opened and before sync, publication, destructive conversion, or workspace cleanup.
+-6. **Never silently collect it.** An Overlay leaves the active queue only through Promotion, explicit discard, or an explicit archival action that remains searchable.
+-7. **Report debt, not noise.** `lim overlays` and agenda views show count, age, affected domains, and promotion blockers; ordinary editing remains interruption-free.
++4. **Maintain a core reconciliation queue from Phase -1.** Each aging Overlay produces or updates one graph-native reconciliation item accessible through `lim overlays` and contextual views. This queue cannot depend on the later agenda subsystem.
++5. **Project into the agenda when available.** The agenda domain may render the same reconciliation items as tasks, preserving identity and status rather than copying them.
++6. **Surface contextually.** Show the draft or conflict when its subject is opened and before sync, publication, destructive conversion, or workspace cleanup.
++7. **Never silently collect it.** An Overlay leaves the active queue only through accepted repair, explicit discard, or an explicit archival action that remains searchable.
++8. **Report debt, not noise.** Default UI uses “draft,” “pending sync,” or “review needed.” `lim overlays` and advanced Jurisdiction views expose count, age, affected domains, repair blockers, and exact Contracts.
+ 
+-This turns "never block capture" into deferred but visible work rather than a conflicted-copy graveyard.
++This turns “never block capture” into deferred but visible work rather than a conflicted-copy graveyard.
+ 
+-### 7.10 Initial domain Jurisdiction matrix
++### 7.11 Initial domain Jurisdiction matrix
+ 
+ | Domain or semantic address | Working Holder | Durable Holder | Graph role | Identity strategy | Merge/runtime |
+ |---|---|---|---|---|---|
+-| Rust or other program source | Editor buffer generation | File bytes; Git object for publication | Derived syntax/semantic index plus graph-native annotations | Content version + language symbol; explicit/managed ID only for durable external Relations | Text/Git or language-aware patching |
+-| Portable Markdown or Org | Editor buffer generation | Canonical text file | Derived graph; optional experimental annotations | Explicit IDs for durable blocks; otherwise anchored or heuristic continuity | Text/Git |
++| Rust or other program source | Requesting client's selected buffer generation under `BasisPerspective::ClientScoped` | File bytes; Git object for publication | Derived syntax/semantic index plus graph-native annotations | Content version + language symbol; explicit/managed ID only for durable external Relations | Text/Git or language-aware patching |
++| Portable Markdown or Org | Requesting client's selected buffer generation under `BasisPerspective::ClientScoped` | Canonical text file | Derived graph; optional experimental annotations | Explicit IDs for durable blocks; otherwise anchored or heuristic continuity | Text/Git |
+ | Native Liminal prose | Graph transaction | Graph snapshot + operation log | Holds Jurisdiction | Stable `EntityId` + immutable `VersionId` | Graph transactions or delegated CRDT |
+ | Table, spreadsheet, slide | Graph transaction | Graph snapshot | Holds Jurisdiction | Stable entity + immutable version | Domain-specific engine |
+ | Image, audio, video, raw ink | Capture stream while recording | Content-addressed object | Metadata and Relations are separate graph subjects | Content hash for bytes; stable graph entities for placements and annotations | Append/finalize, object deduplication |
+@@ -758,10 +885,11 @@
+ 3. Derive a semantic delta.
+ 4. Reuse identity only at the strength allowed by the domain's continuity policy.
+ 5. Mark uncertain continuity as inferred rather than silently asserting it.
+-6. Build a mutation-local repair plan for affected Relations. Each proposed mutation remains governed by its own subject's Jurisdiction.
+-7. Apply only repairs authorized by every affected Jurisdiction and satisfying every Relation identity requirement.
+-8. Preserve unresolved repairs as linked Overlays and agenda work.
+-9. Commit the accepted result as a new Workspace Basis.
++6. Build a mutation-local repair DAG for affected Relations. Each proposed mutation remains governed by its own subject's Jurisdiction.
++7. Validate both determinism and domain safety; a clean textual merge alone is not sufficient.
++8. Apply cross-Holder work through ILRP, respecting dependency ordering and exact prestates.
++9. Preserve unresolved work as linked Overlays and one core reconciliation item; the agenda may project it later.
++10. Commit the accepted result as a new Workspace Basis and retain a one-command inverse where possible.
+ 
+ Exact source holds Jurisdiction only in external-file subjects. In graph-native subjects it is provenance or a projection.
+ 
+@@ -2552,12 +2680,20 @@
+ 
+ ## 92. Crash consistency
+ 
+-- Append operations atomically.
++- Append graph operations atomically.
+ - Use checksummed segments.
+ - Write snapshots with atomic replacement.
+ - Verify content-addressed objects.
+ - Recover after interrupted writes.
+ - Provide salvage and `lim doctor` modes.
++- Coordinate every cross-Holder repair through ILRP rather than implying a distributed transaction.
++- Persist the repair intent before the first external mutation.
++- Give every repair step an idempotency key plus expected prestate and poststate.
++- Stage and atomically replace individual files where supported; never claim multi-file atomicity.
++- Resume, finalize, revert, or surface `NeedsReview` after a crash according to observed state.
++- Run daemon-kill tests at every repair transition in CI.
++
++The graph store acts as coordinator because it can transactionally retain intent and progress. This grants recoverability, not supranational Jurisdiction over the files or services being changed.
+ 
+ ---
+ 
+@@ -2889,6 +3025,10 @@
+ semantic_diff(apply(tx, g), g) matches tx
+ resolver replay with frozen inputs is deterministic
+ sync replicas converge under supported operation schedules
++captured Workspace Bases never combine independent dirty buffers for one durable subject
++repair recovery after any injected crash reaches Committed, NeedsReview, or Aborted without hidden half-state
++automatic repair is authorized, domain-safe, idempotent, and one-command revertible
++Promotion semantics are observationally equivalent to the corresponding accepted RepairPlan
+ ```
+ 
+ ## 113. Test classes
+@@ -2904,7 +3044,10 @@
+ - Snapshot migration tests
+ - Plugin capability tests
+ - Sync simulation and partition tests
+-- Crash-recovery tests
++- Crash-recovery tests with daemon termination after every ILRP step
++- Concurrent-client Basis-selection tests
++- Held-out Git/editor/foreign-tool trace replay
++- Automatic-repair revert tests
+ - Object corruption tests
+ - AI-operation validation tests
+ - Large-workspace performance tests
+@@ -2921,8 +3064,12 @@
+ - Plugin ABI tests
+ - Relation resolver tests
+ - Incremental equivalence tests
++- Versioned held-out Jurisdiction traces with operation and session labels
++- Expected BasisPerspective selection for concurrent-client scenarios
++- Repair DAG, ILRP recovery, and inverse-plan fixtures
++- Sound-session silence assertions
+ 
+-The specification and reference implementation should not be inseparable.
++The specification and reference implementation should not be inseparable. Profile-development fixtures and locked acceptance traces must remain separate.
+ 
+ ## 115. CI and supply-chain hardening
+ 
+@@ -3077,11 +3224,11 @@
+ 
+ Known-territory engineering must not postpone architecture-killing questions.
+ 
+-## Phase -1 — Jurisdiction, identity, and projection falsification laboratory
++## Phase -1 — Jurisdiction, identity, repair, and projection falsification laboratory
+ 
+ This phase is ordered by information gain rather than implementation dependency. It begins with a deliberately small interpretive checker and does **not** build `CompiledJurisdictionPlan`, indexed policy dispatch, a custom CRDT, or production optimization.
+ 
+-### -1.0 Interpretive Jurisdiction toy
++### -1.0 Interpretive Jurisdiction and repair toy
+ 
+ Implement only two profiles:
+ 
+@@ -3090,20 +3237,27 @@
+ 
+ Construct one toy workspace containing:
+ 
+-- A file-held paragraph edited through a buffer with first-class `epoch + generation` Basis components
++- A file-held paragraph edited through a Neovim buffer with first-class `epoch + generation` Basis components
++- A second phone/client buffer dirty over the same durable file
+ - A graph-native comment Relation targeting that paragraph
+ - One foreign edit that moves, duplicates, or damages the paragraph identity
+-- One unavailable write route that forces a local Overlay
+-- One later Promotion after the Holder becomes available
++- One unavailable write route that forces a durable Overlay
++- One single-step accepted repair presented as Promotion
++- One two-step repair DAG in which source-ID insertion must precede Relation reattachment
++- Daemon termination injected after every ILRP durable boundary: intent commit, external apply, acknowledgement, graph finalization, and completion notification
+ 
+-The reference checker must produce the expected silent success and boundary diagnostics without rejecting any edit.
++The reference checker must produce expected silent success and boundary diagnostics without rejecting any edit.
+ 
+ Exit gate:
+ 
+ - Sound states produce no output.
+ - The cross-Jurisdiction repair follows the mutation-local composition rule.
+-- The offline edit is durable as an Overlay.
+-- Promotion is explicit and revision-safe.
++- Promotion uses the same `RepairPlan` interpreter as other repairs.
++- A unique textual result is not automatically accepted without the domain safety condition.
++- The offline edit is durable as an Overlay and appears in the core `lim overlays` queue without requiring the agenda domain.
++- ILRP resumes correctly after termination at every tested boundary and reaches `Committed`, `NeedsReview`, or `Aborted` without hidden half-state, duplication, or lost work.
++- The accepted automatic repair is one-command revertible.
++- `ClientScoped(neovim)`, `ClientScoped(phone)`, and `DurableOnly` Bases produce three intentional snapshots; no computation observes a chimera of both dirty buffers.
+ - Buffer generations invalidate only dependent queries.
+ 
+ ### -1.1 Persistent identity torture corpus
+@@ -3137,7 +3291,7 @@
+ 
+ Exercise inline marks, links, comments, list restructuring, selections, undo, malformed source, and concurrent edits. The annotated-source profile remains experimental unless anchor recovery under foreign edits passes its declared conformance level.
+ 
+-### -1.3 Revision and invalidation prototype
++### -1.3 Revision, Basis selection, and invalidation prototype
+ 
+ Combine:
+ 
+@@ -3145,21 +3299,50 @@
+ - A pure incremental query engine
+ - Explicit durability and freshness inputs
+ - An effect reactor that injects observations as transactions
+-- A persistent Workspace Basis map with per-buffer generations
+-- Dependency tracking on individual Basis components rather than the whole map
++- A persistent available-input map with per-client buffer generations
++- Explicit `ClientScoped(client)`, `DurableOnly`, `Published`, and `Federated` Basis Perspectives
++- Dependency tracking on individual selected Basis components rather than the whole available-input map
++
++Test an AI context build, a cross-document query, an interactive preview, and a durable export while two clients have different dirty buffers over one file.
+ 
+ ### -1.4 Adapter-boundary prototype
+ 
+ Lower representative Resolved Graph IR into a Pandoc adapter AST and back. Record semantic loss, ID survival, foreign-node preservation, and the exact projection capability level achieved.
+ 
++### -1.5 Held-out ergonomics and adversarial trace harness
++
++Define the exact operation and session denominators before profile tuning. Build importers or trace generators for:
++
++- Real external Git histories and merge resolutions
++- Consented/anonymized editor sessions
++- Foreign formatter and rich-tool rewrites
++- Offline/online transitions
++- Independent adversarial identity and boundary mutations
++
++Split training and locked acceptance corpora. Report per profile:
++
++```text
++auto-resolution rate over Jurisdiction-sensitive operations
++manual-intervention-free session rate
++sound-session diagnostic count
++unexpected reconciliation items created per session
++unresolved Overlay/repair-intent debt at session end
++visible incidents per root cause
++```
++
++A profile cannot enter the stable set by passing only self-authored fixtures.
++
+ Final Phase -1 gate:
+ 
+ - The architecture can state exactly which Holder governs every toy subject.
+ - Facets needing independent governance have been reified as Nodes or Relations.
+ - Anonymous arbitrary text is not falsely promised perfect identity.
+ - At least one source projection reaches canonical round-trip, and richer lens limits are measured honestly.
+-- Overlay aging and agenda surfacing are demonstrated.
++- Cross-Holder repair is ordered, crash-resumable, idempotent, and revertible.
++- Two independent dirty buffers never enter one Workspace Basis.
++- Overlay aging and core CLI/contextual surfacing are demonstrated without the agenda domain.
+ - Pure queries replay deterministically from frozen Workspace Bases.
++- The held-out trace harness has frozen denominators and a locked acceptance split.
+ - Failure of any gate revises the Contract before production parser, daemon, or compiled Jurisdiction optimization begins.
+ 
+ 
+@@ -3169,9 +3352,13 @@
+ 
+ - Kernel specification for Node and Relation
+ - Jurisdiction Contract interpreter and Workspace Basis specification
+-- Four-term user vocabulary and profile-coverage conformance tests
++- Tiered vocabulary: familiar default UI language plus advanced Jurisdiction terminology
++- Operation- and session-denominated profile-coverage conformance tests over held-out traces
+ - Mutation-local cross-Jurisdiction repair law
+-- Overlay aging, automatic Promotion, and agenda surfacing rules
++- Unified RepairPlan/Promotion semantics with domain safety checks and one-command revert
++- ILRP specification and recovery fixtures
++- Overlay aging, core reconciliation-queue surfacing, and later agenda projection rules
++- Explicit requester-scoped, durable-only, published, and federated Basis Perspectives
+ - Identity grades and dual entity/version identity model
+ - Projection capability levels and lens laws
+ - Transform contract model
+@@ -3186,7 +3373,8 @@
+ 
+ - The same small kernel can represent prose, a code block, a table, an image reference, an audio interval, and a synchronized external value without adding a new primitive.
+ - Every example resolves through a standard profile or an explicitly marked boundary Contract and has a declared identity guarantee.
+-- Each standard profile automatically resolves at least 99% of its common-case corpus and produces no output for sound cases.
++- Each stable profile automatically resolves at least 99% of held-out Jurisdiction-sensitive operations and leaves at least 99% of ordinary sessions free of manual Jurisdiction interaction.
++- Every sound session produces exactly zero user-facing Jurisdiction diagnostics, zero unexpected reconciliation items, and zero requests for user-authored Contracts.
+ 
+ ## Phase 1 — External-file Jurisdiction source-to-HTML vertical slice
+ 
+@@ -3209,7 +3397,7 @@
+ - Editing a paragraph incrementally updates only its semantic and HTML dependencies.
+ - Canonical formatting is deterministic and idempotent.
+ - The graph is explicitly treated as derived for this profile, with no dual-Jurisdiction ambiguity.
+-- The interpretive Jurisdiction Checker remains the reference semantics; optimized plans are still deferred.
++- The interpretive Jurisdiction Checker and RepairPlan interpreter remain the reference semantics; optimized plans are still deferred.
+ 
+ ## Phase 2 — Persistent daemon and Neovim integration
+ 
+@@ -3485,9 +3673,9 @@
+ 
+ AtJSON-style annotations, Automerge/Peritext rich text, and a ProseMirror-class transaction model are primary prototype references. No universal bidirectional promise is permitted without conformance evidence.
+ 
+-## 125. Jurisdiction optimization boundary
++## 125. Jurisdiction and repair optimization boundary
+ 
+-Do not compile Contracts into indexed dispatch or generated policy code until Phase -1 and Phase 0 freeze their observable semantics. The interpreter is the conformance oracle. Optimization may begin only after differential tests prove the compiled path equivalent.
++Do not compile Contracts, repair DAGs, Basis selection, or ILRP execution into indexed dispatch or generated policy code until Phase -1 and Phase 0 freeze their observable semantics. The Jurisdiction and RepairPlan interpreters are the conformance oracles. Optimization may begin only after differential tests prove the compiled path equivalent, including injected-crash recovery and concurrent-buffer Basis cases.
+ 
+ ## 126. Relation policy language
+ 
+@@ -3643,6 +3831,10 @@
+ 
+ ---
+ 
+-## Revision 2 summary
++## Revision 3 summary
++
++Revision 3 replaced the former formal term with Jurisdiction; admitted Jurisdiction as the deliberate complexity sink; reduced facets to schema addresses over Nodes and Relations; established a small diagnostic vocabulary and silent healthy behavior; defined mutation-local cross-Jurisdiction repair; gave Overlays an explicit lifecycle; marked annotated-source and federated profiles as delegated hard subsystems rather than solved declarations; moved compiled Jurisdiction plans after falsification; and made per-buffer editor generations first-class Workspace Basis components.
++
++## Revision 4 summary
+ 
+-This revision replaces the former formal term with Jurisdiction; admits Jurisdiction as the deliberate complexity sink; reduces facets to schema addresses over Nodes and Relations; adds a four-term user vocabulary and a measurable 99% profile-coverage law; makes sound checking silent; defines mutation-local cross-Jurisdiction repair; gives Overlays aging, automatic Promotion, and agenda surfacing; marks annotated-source and federated profiles as delegated hard subsystems rather than solved declarations; moves compiled Jurisdiction plans after falsification; and makes per-buffer editor generations first-class Workspace Basis components.
+\ No newline at end of file
++Revision 4 makes ergonomics measurable over held-out operations and complete sessions; prevents hidden Overlay debt from counting as success; makes ordinary UI domain-native rather than Jurisdiction-heavy; unifies Promotion with the repair engine; separates deterministic results from safe automatic application; replaces unordered repair mutations with dependency DAGs; adds reversible decision records; defines the crash-resumable Intent-Logged Repair Protocol for graph-plus-filesystem changes; introduces explicit requester-scoped and durable `BasisPerspective` selection so concurrent dirty buffers never form a chimera; moves Overlay surfacing into a Phase -1 core Reconciliation Queue with agenda as a later projection; and expands the falsification toy to include daemon termination at every repair boundary.
+\ No newline at end of file

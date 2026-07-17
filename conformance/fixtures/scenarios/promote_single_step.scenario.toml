@@ -1,0 +1,58 @@
+# Phase -1 toy scenario — spec: R4 §4 (Promotion is repair), R4 §10, v4 §7.7.
+#
+# A Neovim buffer edits a file-held paragraph and saves. The save is a
+# Promotion: the user-facing name for a RepairPlan whose accepted result
+# causes the working Overlay to become governed by its intended durable
+# Holder (R4 §4). Here the plan has exactly one step — write the file
+# Holder. The durable file is unchanged since the buffer's base hash, so
+# the mutated block is structurally disjoint from every other governed
+# subject: the domain safety predicate holds and the plan auto-applies
+# through the same RepairPlan interpreter as any other repair (Law 3G).
+# The session is sound throughout, so the checker stays byte-silent.
+
+[scenario]
+id = "promote_single_step"
+title = "Save is Promotion: a single-step RepairPlan into the file Holder"
+spec = ["R4 §4", "R4 §10", "v4 §7.7", "v4 Law 3G"]
+profiles = ["external-file"]
+
+[[setup.file]]
+path = "notes.md"
+text = """
+The Fourier transform decomposes a signal
+into its constituent frequencies. {#p-fourier}
+
+The Laplace transform generalizes it
+to the complex plane. {#p-laplace}
+"""
+
+[[setup.buffer]]
+client = "neovim"
+path = "notes.md"
+
+[[step]]
+kind = "buffer_edit"
+client = "neovim"
+path = "notes.md"
+find = "The Fourier transform decomposes a signal"
+replace = "The continuous Fourier transform decomposes a signal"
+
+[[step]]
+# Save = Promotion. Not a separate mutation mechanism (Law 3C, R4 §4):
+# it must be observationally equivalent to running the RepairPlan
+# interpreter on a one-step plan targeting the file Holder.
+kind = "save"
+client = "neovim"
+path = "notes.md"
+
+[expect]
+plan_steps = ["write_file_holder"]
+auto_apply = true
+safety_evidence = "structural_disjointness"
+terminal = "Committed"
+revertible = true
+checker_exit = 0
+checker_stdout = ""
+checker_stderr = ""
+reconciliation_items = 0
+overlays = 0

@@ -1,0 +1,29 @@
+name: Scheduled
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  advisories:
+    name: cargo-deny advisories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories
+
+  beta-canary:
+    name: beta toolchain canary
+    runs-on: ubuntu-latest
+    continue-on-error: true # early warning for the next toolchain bump, never a gate
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install beta --profile minimal
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo +beta check --workspace --all-targets

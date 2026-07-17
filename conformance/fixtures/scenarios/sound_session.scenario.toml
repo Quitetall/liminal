@@ -1,0 +1,70 @@
+# Phase -1 toy scenario — spec: v4 Law 3E (zero sound-state noise),
+# v4 §7.9 (Jurisdiction Checker: normal behavior is silence), R4 §2.3,
+# R4 §10 ("sound states are silent").
+#
+# An entirely ordinary session: identified paragraphs, a healthy
+# graph-native comment Relation whose explicit-identity requirement is
+# satisfied, one client, edits and saves that promote cleanly. Every input
+# stays within the declared profile invariants, so this is a sound session
+# (v4 §7.4). The load-bearing assertion is BYTE-emptiness: the checker
+# exits 0 with empty stdout AND empty stderr — not "no errors". A spinner,
+# a badge, or a friendly notice is a failure. Zero reconciliation items,
+# zero overlays at session end.
+
+[scenario]
+id = "sound_session"
+title = "Sound session: checker exits 0 with byte-empty output, zero debt"
+spec = ["v4 Law 3E", "v4 §7.9", "R4 §2.3", "R4 §10"]
+profiles = ["external-file", "graph-native"]
+
+[[setup.file]]
+path = "notes.md"
+text = """
+The Fourier transform decomposes a signal
+into its constituent frequencies. {#p-fourier}
+
+The Laplace transform generalizes it
+to the complex plane. {#p-laplace}
+"""
+
+[[setup.graph]]
+kind = "comment-relation"
+target = "p-fourier"
+requires_grade = "explicit"
+
+[[setup.buffer]]
+client = "neovim"
+path = "notes.md"
+
+[[step]]
+kind = "buffer_edit"
+client = "neovim"
+path = "notes.md"
+find = "into its constituent frequencies."
+replace = "into its constituent frequency components."
+
+[[step]]
+kind = "save"
+client = "neovim"
+path = "notes.md"
+
+[[step]]
+kind = "buffer_edit"
+client = "neovim"
+path = "notes.md"
+find = "to the complex plane."
+replace = "to the whole complex plane."
+
+[[step]]
+kind = "save"
+client = "neovim"
+path = "notes.md"
+
+[expect]
+auto_apply = true
+terminal = "Committed"
+checker_exit = 0
+checker_stdout = ""
+checker_stderr = ""
+reconciliation_items = 0
+overlays = 0

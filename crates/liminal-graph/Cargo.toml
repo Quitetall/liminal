@@ -1,0 +1,25 @@
+[package]
+name = "liminal-graph"
+description = "The two semantic primitives (Node, Relation), transaction vocabulary, and the toy §92 checksummed-log store that doubles as ILRP coordinator (spec v4 §4–6, §43–45, §86, §92)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+camino.workspace = true
+crc32fast.workspace = true
+fs4.workspace = true
+liminal-id.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
