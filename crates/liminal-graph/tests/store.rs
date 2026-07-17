@@ -151,6 +151,24 @@ fn mid_file_corruption_is_detected_never_served() {
     );
 }
 
+#[test]
+fn store_lock_excludes_second_writer() {
+    let dir = fresh_dir("lock");
+    let store = GraphStore::open(&dir).unwrap();
+
+    // Second open while the first handle is live must fail with Locked.
+    let err = GraphStore::open(&dir).unwrap_err();
+    assert!(
+        matches!(err, liminal_graph::StoreError::Locked(_)),
+        "expected Locked error, got: {err}"
+    );
+
+    // Advisory lock dies with the holder — drop and reopen succeeds.
+    drop(store);
+    let store2 = GraphStore::open(&dir);
+    assert!(store2.is_ok(), "reopen after drop must succeed: {store2:?}");
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
 

@@ -16,11 +16,11 @@ slow-timeout = { period = "30s" }
 filter = 'test(/^crash_/)'
 test-group = "crash"
 slow-timeout = { period = "120s", terminate-after = 2 }
-retries = 0 # a flaky crash-recovery test is a FINDING, never retried away
+retries = 0                                             # a flaky crash-recovery test is a FINDING, never retried away
 
 [profile.ci]
-fail-fast = false            # full failure surface per run
-retries = 0                  # falsification culture: no flake-masking anywhere
+fail-fast = false                                      # full failure surface per run
+retries = 0                                            # falsification culture: no flake-masking anywhere
 failure-output = "immediate-final"
 slow-timeout = { period = "60s", terminate-after = 3 }
 

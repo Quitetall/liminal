@@ -16,6 +16,8 @@ pub mod scenario;
 pub mod slo;
 
 pub use debt::{DebtReport, scan_workspace_debt};
-pub use harness::{CrashState, HitTrace, RecoveryReport, ToyRun, assert_silent};
+pub use harness::{
+    CrashState, HitTrace, RecoveryReport, ToyRun, assert_silent, runnable_crash_scenarios,
+};
 pub use scenario::{Expectation, ScenarioScript, SetupFile, SetupGraph, Step};
 pub use slo::Scorecard;

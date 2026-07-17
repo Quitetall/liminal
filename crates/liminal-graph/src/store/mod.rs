@@ -20,6 +20,7 @@
 //! human-inspectable (falsification > speed).
 
 mod log;
+pub mod ns;
 mod snapshot;
 
 use std::collections::BTreeMap;

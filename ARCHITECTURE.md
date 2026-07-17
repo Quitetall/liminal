@@ -10,6 +10,10 @@ reverse; a change that alters spec-observable behavior needs an RFC in
 [`spec/rfc/`](spec/rfc/), a repo/implementation decision needs an ADR in
 [`docs/adr/`](docs/adr/).
 
+Implementers: the mechanical HOW for every milestone lives in
+[`docs/execution/`](docs/execution/00-protocol.md) — read the protocol first,
+then the current milestone's work order.
+
 ## Bird's eye view
 
 The semantic kernel is two primitives (v4 Law 1):

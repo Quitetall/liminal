@@ -4,7 +4,7 @@ all-features = true
 [advisories]
 version = 2
 yanked = "deny"
-ignore = [] # every entry requires an inline reason = "..." comment
+ignore = []     # every entry requires an inline reason = "..." comment
 
 [licenses]
 version = 2
@@ -40,4 +40,4 @@ deny = [
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
-allow-git = [] # any entry requires an ADR (pinned rev only, never a branch)
+allow-git = []            # any entry requires an ADR (pinned rev only, never a branch)

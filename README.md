@@ -92,7 +92,8 @@ liminal/
 ├── backends/        Planned output backends — deliberately empty. See README.
 ├── integrations/    Planned tool integrations — deliberately empty. See README.
 ├── apps/            Planned rich clients (Phase 9) — deliberately empty.
-└── docs/            docs/implementation-plan.md (Phase -1 milestones) and
+└── docs/            docs/implementation-plan.md (Phase -1 milestones),
+                     docs/execution/ (execution-grade work orders), and
                      docs/adr/ (architecture decision records).
 ```
 
@@ -106,6 +107,10 @@ liminal/
 3. [`docs/implementation-plan.md`](docs/implementation-plan.md) — the Phase -1
    milestone plan, the crash-injection architecture, and the explicit list of
    what must NOT be built yet.
+4. [`docs/execution/`](docs/execution/00-protocol.md) — execution-grade work
+   orders: every milestone's algorithms, schemas, constants, and step-by-step
+   checklists, pre-decided so implementation is mechanical. Start with the
+   protocol, then the current milestone's `M<nn>.md`.
 
 ## Development quickstart
 

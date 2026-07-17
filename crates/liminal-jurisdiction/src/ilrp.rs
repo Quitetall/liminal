@@ -14,11 +14,14 @@
 
 use std::collections::BTreeMap;
 
-use liminal_graph::GraphStore;
+use liminal_graph::ns::ILRP_INTENT;
+use liminal_graph::{GraphStore, Origin, TxnMeta};
 use liminal_id::{RepairId, RepairStepId, Timestamp};
 use serde::{Deserialize, Serialize};
 
-use crate::repair::{ProposedMutation, RepairPlan, SafetyEvidence, StatePredicate};
+use crate::repair::{
+    ProposedMutation, RepairOperation, RepairPlan, SafetyEvidence, StatePredicate,
+};
 
 /// Intent lifecycle (v4 §7.8, verbatim state diagram):
 ///
@@ -189,6 +192,21 @@ impl CrashInjector for NoCrash {
     fn crash_if_armed(&self, _at: CrashPoint) {}
 }
 
+impl<C: CrashInjector> CrashInjector for &C {
+    fn crash_if_armed(&self, at: CrashPoint) {
+        (*self).crash_if_armed(at);
+    }
+}
+
+impl<X: ExternalExecutor> ExternalExecutor for &X {
+    fn verify(&self, mutation: &ProposedMutation) -> Result<PrestateMatch, IlrpError> {
+        (*self).verify(mutation)
+    }
+    fn apply(&self, mutation: &ProposedMutation) -> Result<StepAck, IlrpError> {
+        (*self).apply(mutation)
+    }
+}
+
 /// The ILRP interpreter (v4 §7.8). ONE driver serves save, sync, merge,
 /// recovery, writeback, and Promotion (R4 §4).
 #[derive(Debug)]
@@ -201,7 +219,36 @@ pub struct IlrpDriver<'s, X, C> {
     pub crash: C,
 }
 
+/// Re-export for local readability.
+const AUX_NS_INTENT: &str = ILRP_INTENT;
+
 impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
+    /// Build `TxnMeta` with a provenance string.
+    fn meta(provenance: &str, origin: Origin) -> TxnMeta {
+        TxnMeta {
+            actor: None,
+            origin,
+            at: Timestamp::now(),
+            provenance: Some(provenance.to_owned()),
+            inverse: None,
+        }
+    }
+
+    /// Commit the full intent to the aux store in one transaction.
+    fn commit_intent(
+        &self,
+        id: RepairId,
+        intent: &RepairIntent,
+        note: &str,
+        origin: Origin,
+    ) -> Result<(), IlrpError> {
+        let key = id.to_string();
+        let mut txn = self.store.begin()?;
+        txn.put_aux(AUX_NS_INTENT, &key, serde_json::to_value(intent)?)?;
+        txn.commit(Self::meta(note, origin))?;
+        Ok(())
+    }
+
     /// **Prepare** (v4 §7.8 step 1): in ONE graph transaction, record the
     /// plan, captured Basis, dependency DAG, expected pre/poststates,
     /// idempotency keys, and safety evidence. The intent enters `Prepared`.
@@ -210,25 +257,222 @@ impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
         plan: RepairPlan,
         evidence: SafetyEvidence,
     ) -> Result<RepairId, IlrpError> {
-        let _ = (plan, evidence);
-        todo!("Phase -1 M2: ILRP Prepare (v4 §7.8 step 1)")
+        // Validate DAG up front.
+        crate::repair::topo_order(&plan)?;
+
+        let id = plan.id;
+        let key = id.to_string();
+
+        // Duplicate check.
+        if self.store.get_aux(AUX_NS_INTENT, &key)?.is_some() {
+            return Err(IlrpError::Store(liminal_graph::StoreError::Conflict(
+                format!("intent exists: {key}"),
+            )));
+        }
+
+        let intent = RepairIntent {
+            plan,
+            state: IntentState::Prepared,
+            evidence,
+            acks: BTreeMap::new(),
+        };
+
+        // One transaction: persist the intent.
+        let mut txn = self.store.begin()?;
+        txn.put_aux(AUX_NS_INTENT, &key, serde_json::to_value(&intent)?)?;
+        txn.commit(Self::meta("ilrp:prepare", Origin::Human))?;
+
+        // Fault point: after the Prepare transaction commits.
+        self.crash.crash_if_armed(CrashPoint::AfterIntentCommit);
+
+        Ok(id)
     }
 
-    /// **Apply → Acknowledge → Finalize** (v4 §7.8 steps 2–4): execute steps
-    /// in topological order with prestate verification; persist each ack;
-    /// commit graph mutations and intent completion in one transaction. The
-    /// accepted Basis advances only at finalization.
+    /// **Apply → Acknowledge → Finalize** (v4 §7.8 steps 2–4).
     pub fn run(&self, repair: RepairId) -> Result<IntentState, IlrpError> {
-        let _ = repair;
-        todo!("Phase -1 M2: ILRP Apply/Acknowledge/Finalize (v4 §7.8 steps 2–4)")
+        let key = repair.to_string();
+        let value = self
+            .store
+            .get_aux(AUX_NS_INTENT, &key)?
+            .ok_or(IlrpError::Store(liminal_graph::StoreError::NotFound(
+                key.clone(),
+            )))?;
+        let mut intent: RepairIntent = serde_json::from_value(value)
+            .map_err(|e| IlrpError::Store(liminal_graph::StoreError::Corrupt(e.to_string())))?;
+
+        // Terminal → idempotent re-run.
+        if intent.state.is_terminal() {
+            return Ok(intent.state);
+        }
+
+        self.advance(repair, &mut intent, Origin::Human)
     }
 
     /// **Recover** (v4 §7.8 step 5): scan nonterminal intents on restart.
-    /// Prestate → resume; poststate → acknowledge and continue; neither →
-    /// `NeedsReview` with contested Overlays. Never guess. Running recovery
-    /// twice must be a no-op (crash-matrix idempotence assertion).
     pub fn recover_all(&self) -> Result<Vec<(RepairId, IntentState)>, IlrpError> {
-        todo!("Phase -1 M2: ILRP Recover (v4 §7.8 step 5)")
+        let all = self.store.scan_aux(AUX_NS_INTENT)?;
+        let mut results = Vec::new();
+
+        for (key, value) in all {
+            let id: RepairId = key.parse().map_err(|e: liminal_id::ParseIdError| {
+                IlrpError::Store(liminal_graph::StoreError::Corrupt(e.to_string()))
+            })?;
+            let mut intent: RepairIntent = serde_json::from_value(value)
+                .map_err(|e| IlrpError::Store(liminal_graph::StoreError::Corrupt(e.to_string())))?;
+
+            if intent.state.is_terminal() {
+                continue;
+            }
+
+            let state = self.advance(id, &mut intent, Origin::Recovery)?;
+            results.push((id, state));
+        }
+
+        Ok(results)
+    }
+
+    /// Shared advance logic for run and recover_all (D02.1).
+    fn advance(
+        &self,
+        id: RepairId,
+        intent: &mut RepairIntent,
+        origin: Origin,
+    ) -> Result<IntentState, IlrpError> {
+        match intent.state {
+            IntentState::Prepared => {
+                // Transition to Applying.
+                intent.state = IntentState::Applying;
+                self.commit_intent(id, intent, "state:applying", origin)?;
+            }
+            // Already in Applying — continue from where we left off.
+            IntentState::Applying | IntentState::Finalizing => {}
+            IntentState::ExternalApplied => {
+                // All external steps done — proceed to Finalizing.
+                intent.state = IntentState::Finalizing;
+                self.commit_intent(id, intent, "state:finalizing", origin)?;
+            }
+            _ => {
+                return Err(IlrpError::IllegalTransition {
+                    from: intent.state,
+                    to: intent.state,
+                });
+            }
+        }
+
+        // Apply phase: execute steps in topological order.
+        // Only runs when in Applying state (ExternalApplied skips this via the
+        // match above transitioning to Finalizing).
+        if intent.state == IntentState::Applying {
+
+            let order = crate::repair::topo_order(&intent.plan)?;
+
+            for step_id in &order {
+                // Already acked → skip.
+                if intent.acks.contains_key(step_id) {
+                    continue;
+                }
+
+                let step = &intent.plan.steps[step_id];
+
+                // Graph steps short-circuit: verify is Prestate, apply is no-op ack.
+                if matches!(step.operation, RepairOperation::Graph(_)) {
+                    let ack = StepAck {
+                        step: *step_id,
+                        observed_poststate: step.expected_poststate.clone(),
+                        at: Timestamp::now(),
+                    };
+                    intent.acks.insert(*step_id, ack);
+                    self.commit_intent(id, intent, &format!("ack:{step_id}"), origin)?;
+                    self.crash.crash_if_armed(CrashPoint::AfterAcknowledge);
+                    continue;
+                }
+
+                // External step: verify prestate.
+                match self.executor.verify(step)? {
+                    PrestateMatch::Prestate => {
+                        // Apply.
+                        let ack = self.executor.apply(step)?;
+                        self.crash.crash_if_armed(CrashPoint::AfterExternalApply);
+                        intent.acks.insert(*step_id, ack);
+                        self.commit_intent(id, intent, &format!("ack:{step_id}"), origin)?;
+                        self.crash.crash_if_armed(CrashPoint::AfterAcknowledge);
+                    }
+                    PrestateMatch::Poststate => {
+                        // Already applied; synthesize ack.
+                        let ack = StepAck {
+                            step: *step_id,
+                            observed_poststate: step.expected_poststate.clone(),
+                            at: Timestamp::now(),
+                        };
+                        intent.acks.insert(*step_id, ack);
+                        self.commit_intent(id, intent, &format!("ack:{step_id}"), origin)?;
+                        self.crash.crash_if_armed(CrashPoint::AfterAcknowledge);
+                    }
+                    PrestateMatch::Neither => {
+                        // Contested — stop and preserve.
+                        intent.state = IntentState::NeedsReview;
+                        self.commit_intent(id, intent, "state:needs-review", origin)?;
+                        return Ok(IntentState::NeedsReview);
+                    }
+                }
+            }
+
+            // All steps applied.
+            intent.state = IntentState::ExternalApplied;
+            self.commit_intent(id, intent, "state:external-applied", origin)?;
+        }
+
+        // Finalize phase.
+        if intent.state == IntentState::ExternalApplied {
+            intent.state = IntentState::Finalizing;
+            self.commit_intent(id, intent, "state:finalizing", origin)?;
+        }
+
+        if intent.state == IntentState::Finalizing {
+            // Fault point: immediately before the Finalize transaction.
+            self.crash.crash_if_armed(CrashPoint::BeforeFinalize);
+
+            // Build ONE txn: graph ops + state=committed.
+            let order = crate::repair::topo_order(&intent.plan)?;
+            let mut txn = self.store.begin()?;
+
+            for step_id in &order {
+                let step = &intent.plan.steps[step_id];
+                if let RepairOperation::Graph(op) = &step.operation {
+                    txn.apply(op.clone())?;
+                }
+            }
+
+            intent.state = IntentState::Committed;
+            txn.put_aux(
+                AUX_NS_INTENT,
+                &id.to_string(),
+                serde_json::to_value(&intent)?,
+            )?;
+
+            match txn.commit(Self::meta("ilrp:finalize", origin)) {
+                Ok(_) => {}
+                Err(
+                    liminal_graph::StoreError::Conflict(_)
+                    | liminal_graph::StoreError::NotFound(_),
+                ) => {
+                    // Graph ops invalid against current state — stop and
+                    // preserve for review (M02 Algorithm B §5).
+                    intent.state = IntentState::NeedsReview;
+                    self.commit_intent(id, intent, "state:needs-review", origin)?;
+                    return Ok(IntentState::NeedsReview);
+                }
+                Err(e) => return Err(e.into()),
+            }
+
+            // Fault point: after Finalize commits, before notification.
+            self.crash
+                .crash_if_armed(CrashPoint::AfterFinalizeBeforeNotify);
+
+            return Ok(IntentState::Committed);
+        }
+
+        Ok(intent.state)
     }
 }
 
@@ -258,6 +502,9 @@ pub enum IlrpError {
     /// External execution failed in a way that is not a state mismatch.
     #[error("external executor: {0}")]
     Executor(String),
+    /// Serialization/deserialization of an intent record failed.
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
 }
 
 #[cfg(test)]

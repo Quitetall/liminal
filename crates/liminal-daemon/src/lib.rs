@@ -8,9 +8,14 @@
 //! boundary names for a SIGKILL-handshake harness.
 
 pub mod crash;
+pub mod digest;
+pub mod executor;
+pub mod runner;
+pub mod scenario;
 pub mod session;
 pub mod workspace;
 
 pub use crash::EnvCrashInjector;
+pub use executor::FsExecutor;
 pub use session::ClientSession;
 pub use workspace::{SaveError, ToyWorkspace, WorkspaceError};

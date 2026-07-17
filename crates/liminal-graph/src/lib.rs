@@ -22,4 +22,5 @@ pub mod store;
 pub use node::{Node, NodeFlags, PayloadRef};
 pub use op::{Operation, Origin, Transaction, TxnMeta};
 pub use relation::{AnchorRef, IdentityRequirement, Relation, RelationFlags, Target};
+pub use store::ns;
 pub use store::{AuxWrite, GraphStore, GraphTxn, StoreError};

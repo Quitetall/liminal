@@ -68,10 +68,21 @@ fn offline_edit_is_durable_and_visible_in_lim_overlays() {
 /// baseline hit trace (`ToyRun::crash_matrix`); recovery must be idempotent
 /// (equal world digests on double recovery). Runs serialized (crash_ prefix →
 /// nextest crash group).
+///
+/// Scope grows via `runnable_crash_scenarios()`: `dag_id_then_reattach` joins
+/// at M4. The assertion never changes; only coverage grows.
 #[test]
-#[ignore = "Phase -1 M2: ILRP coordinator + derived crash matrix"]
 fn crash_ilrp_resumes_after_kill_at_every_boundary() {
-    unimplemented!("ToyRun::crash_matrix over promote_single_step, then dag_id_then_reattach (M4)")
+    let scenarios = liminal_conformance::harness::runnable_crash_scenarios()
+        .expect("must load runnable scenarios");
+    assert!(
+        !scenarios.is_empty(),
+        "at least one crash scenario must be runnable"
+    );
+    for scenario in &scenarios {
+        liminal_conformance::harness::ToyRun::crash_matrix(scenario)
+            .unwrap_or_else(|e| panic!("crash matrix failed for {}: {e}", scenario.scenario.id));
+    }
 }
 
 /// R4 §6 / §10: every automatically accepted repair is one-command revertible

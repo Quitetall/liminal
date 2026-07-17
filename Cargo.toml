@@ -9,29 +9,29 @@ resolver = "3"
 members = ["crates/*", "conformance", "benches"]
 
 [workspace.package]
-version = "0.0.0"                  # pre-publication; the first publish is a deliberate bump (ADR-0002)
+version = "0.0.0"                                       # pre-publication; the first publish is a deliberate bump (ADR-0002)
 edition = "2024"
-rust-version = "1.97"              # tracks rust-toolchain.toml; NOT an MSRV promise pre-publish (ADR-0002)
-license = "Apache-2.0"             # ADR-0001
+rust-version = "1.97"                                   # tracks rust-toolchain.toml; NOT an MSRV promise pre-publish (ADR-0002)
+license = "Apache-2.0"                                  # ADR-0001
 repository = "https://github.com/briankhanglam/liminal"
 authors = ["Brian Lam <briankhanglam@gmail.com>"]
-publish = false                    # nothing publishes before Phase 0 ratifies the constitution
+publish = false                                         # nothing publishes before Phase 0 ratifies the constitution
 
 [workspace.dependencies]
 # ---- external; deliberately minimal — every addition needs a spec citation ----
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"          # human-inspectable intent log / overlay payloads (falsification > speed)
-thiserror = "2"           # library error enums
-anyhow = "1"              # binaries and the conformance harness only
-camino = { version = "1", features = ["serde1"] }   # UTF-8 paths for PathId / file Holders
+serde_json = "1"                                                    # human-inspectable intent log / overlay payloads (falsification > speed)
+thiserror = "2"                                                     # library error enums
+anyhow = "1"                                                        # binaries and the conformance harness only
+camino = { version = "1", features = ["serde1"] }                   # UTF-8 paths for PathId / file Holders
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }  # bins only
-uuid = { version = "1", features = ["v7", "serde"] }  # 128-bit time-ordered persistent IDs (v4 §44)
-blake3 = "1"              # ContentHash / content addressing (v4 §19.3, §47)
-crc32fast = "1"           # log record checksums (v4 §92)
-fs4 = "0.13"              # advisory single-writer lock; survives SIGABRT where O_EXCL lockfiles would not
+tracing-subscriber = { version = "0.3", features = ["env-filter"] } # bins only
+uuid = { version = "1", features = ["v7", "serde"] }                # 128-bit time-ordered persistent IDs (v4 §44)
+blake3 = "1"                                                        # ContentHash / content addressing (v4 §19.3, §47)
+crc32fast = "1"                                                     # log record checksums (v4 §92)
+fs4 = "0.13"                                                        # advisory single-writer lock; survives SIGABRT where O_EXCL lockfiles would not
 clap = { version = "4", features = ["derive"] }
-toml = "0.8"              # scenario fixture loading (conformance harness)
+toml = "0.8"                                                        # scenario fixture loading (conformance harness)
 insta = { version = "1", features = ["glob", "redactions"] }
 proptest = "1"
 divan = "0.1"
@@ -61,8 +61,8 @@ liminal-daemon = { path = "crates/liminal-daemon" }
 liminal-cli = { path = "crates/liminal-cli" }
 
 [workspace.lints.rust]
-unsafe_code = "forbid"             # liminal-text / liminal-wasm-host may opt out later via a documented per-crate exception
-missing_docs = "warn"              # every public item cites its spec section (v4 §7.7 / R4 §6 style)
+unsafe_code = "forbid"                               # liminal-text / liminal-wasm-host may opt out later via a documented per-crate exception
+missing_docs = "warn"                                # every public item cites its spec section (v4 §7.7 / R4 §6 style)
 missing_debug_implementations = "warn"
 unreachable_pub = "warn"
 unused_qualifications = "warn"
@@ -73,16 +73,16 @@ all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
-doc_markdown = "allow"             # spec-citation prose is full of proper nouns; backtick policing adds noise, not clarity
-missing_errors_doc = "allow"       # scaffold phase; escalate per-crate at Phase 0 exit
+doc_markdown = "allow"                       # spec-citation prose is full of proper nouns; backtick policing adds noise, not clarity
+missing_errors_doc = "allow"                 # scaffold phase; escalate per-crate at Phase 0 exit
 missing_panics_doc = "allow"
-todo = "allow"                     # the scaffold intentionally contains todo!(); CI runs -Dwarnings
+todo = "allow"                               # the scaffold intentionally contains todo!(); CI runs -Dwarnings
 dbg_macro = "warn"
 undocumented_unsafe_blocks = "warn"
 
 [profile.dev.package."*"]
-opt-level = 2                      # blake3 at usable speed inside dev crash-loop tests
+opt-level = 2 # blake3 at usable speed inside dev crash-loop tests
 
 [profile.release]
 lto = "thin"
-debug = "line-tables-only"         # ILRP crash forensics need backtraces
+debug = "line-tables-only" # ILRP crash forensics need backtraces

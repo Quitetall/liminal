@@ -7,6 +7,7 @@
 
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
+use liminal_jurisdiction::{CrashInjector as _, CrashPoint};
 
 #[derive(Parser)]
 #[command(
@@ -33,23 +34,46 @@ enum Cmd {
     /// Open the workspace, run ILRP recovery, and print each nonterminal
     /// intent's terminal outcome (Committed / NeedsReview / Aborted).
     Recover,
+
+    /// Hidden M1 scaffold: fire a named crash point `count` times through the
+    /// real env-armed injector (proves SIGABRT death + durable hit tracing).
+    #[command(name = "__fire", hide = true)]
+    Fire {
+        point: String,
+        #[arg(default_value_t = 1)]
+        count: u64,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
     let args = Liminald::parse();
     match args.cmd {
         Cmd::Exec { scenario } => {
-            let _ = scenario;
-            anyhow::bail!(
-                "Phase -1 M2: scenario execution is not implemented yet \
-                 (docs/implementation-plan.md)"
-            );
+            let script = liminal_daemon::scenario::ScenarioScript::load(&scenario)?;
+            let root = &args.workspace;
+            std::fs::create_dir_all(root)?;
+            let executor = liminal_daemon::FsExecutor::new(root.clone());
+            let crash = liminal_daemon::EnvCrashInjector::from_env();
+            liminal_daemon::runner::exec(root, &script, executor, crash)?;
+            Ok(())
         }
         Cmd::Recover => {
-            anyhow::bail!(
-                "Phase -1 M2: recovery is not implemented yet \
-                 (docs/implementation-plan.md)"
-            );
+            let root = &args.workspace;
+            let outcome = liminal_daemon::runner::recover(root)?;
+            let json = serde_json::to_string(&outcome)?;
+            println!("{json}");
+            Ok(())
+        }
+        Cmd::Fire { point, count } => {
+            let crash_point = CrashPoint::all()
+                .into_iter()
+                .find(|p| p.name() == point)
+                .ok_or_else(|| anyhow::anyhow!("unknown crash point: {point}"))?;
+            let injector = liminal_daemon::crash::EnvCrashInjector::from_env();
+            for _ in 0..count {
+                injector.crash_if_armed(crash_point);
+            }
+            Ok(())
         }
     }
 }

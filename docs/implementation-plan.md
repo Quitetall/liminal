@@ -10,6 +10,13 @@
 
 Liminal is a multi-year project. This document is the on-ramp: it says what gets built, in what order, what is deliberately **not** built, and how "done" is decided at every step.
 
+**Every Phase -1 milestone has an execution-grade work order** in
+[`docs/execution/`](execution/00-protocol.md) — algorithms, schemas, constants,
+output formats, and step-by-step checklists, pre-decided so an executor
+implements without design work. This document stays the WHAT/WHY; the work
+orders are the HOW. Phases 0–12 are decomposed in
+[`docs/execution/phases.md`](execution/phases.md).
+
 Three rules govern how to read it:
 
 1. **The tests ARE the backlog.** The entire future test surface the spec enumerates (v4 §112 laws, §113 classes, §114 conformance suite, R4 §2.3 SLOs, R4 §10 gates) already exists in `conformance/` as named, compiled tests. Tests whose subject does not exist yet are `#[ignore = "Phase N: <what must exist>"]` with the exact assertion spelled out. There is no separate issue tracker for spec work: if the spec requires it, a named test already demands it.
@@ -26,20 +33,20 @@ Milestones map onto the spec's Phase -1 subsections (v4 Part XXII, -1.0 through 
 
 Durations are honest estimates, not commitments; M9 is the only hard time-box.
 
-| # | Weeks | Spec | Title |
-|---|-------|------|-------|
-| M1 | 1 | v4 §92 | Skeleton + honest durability substrate |
-| M2 | 2 | v4 §7.8, R4 §7 | **Killer #1** — ILRP coordinator + full crash matrix |
-| M3 | 1.5 | v4 §7.3, §7.9 | Interpretive Jurisdiction, two profiles, silent checker |
-| M4 | 2 | v4 §7.7, R4 §4–6 | **Killer #2** — repair DAGs, determinism ≠ safety, revert, Promotion |
-| M5 | 1 | v4 §7.10, R4 §9 | Overlay lifecycle + Reconciliation Queue + offline Holder |
-| M6 | 1.5 | v4 §7.5, R4 §8 | **Killer #3** — Basis Perspectives, anti-chimera, component invalidation |
-| M7 | 2 | v4 §-1.1, §19 | **Killer #4** — persistent-identity torture corpus |
-| M8 | 2 | v4 §-1.3, §8.6 | Revision, Basis selection, and invalidation prototype |
-| M9 | 2 (hard) | v4 §-1.2, §8.5, R4 §11.6 | Annotated-source + rich-editing spikes |
-| M10 | 1 | v4 §-1.4, §14 | Pandoc adapter-boundary spike |
-| M11 | 2 | v4 §-1.5, §7.4, R4 §2 | Held-out ergonomics + adversarial trace harness |
-| M12 | 1 | v4 Part XXII final gate | Final gate review, ADRs, go/no-go on Phase 0 |
+| # | Weeks | Spec | Title | Work order |
+|---|-------|------|-------|-----------|
+| M1 | 1 | v4 §92 | Skeleton + honest durability substrate | [M01](execution/M01.md) |
+| M2 | 2 | v4 §7.8, R4 §7 | **Killer #1** — ILRP coordinator + full crash matrix | [M02](execution/M02.md) |
+| M3 | 1.5 | v4 §7.3, §7.9 | Interpretive Jurisdiction, two profiles, silent checker | [M03](execution/M03.md) |
+| M4 | 2 | v4 §7.7, R4 §4–6 | **Killer #2** — repair DAGs, determinism ≠ safety, revert, Promotion | [M04](execution/M04.md) |
+| M5 | 1 | v4 §7.10, R4 §9 | Overlay lifecycle + Reconciliation Queue + offline Holder | [M05](execution/M05.md) |
+| M6 | 1.5 | v4 §7.5, R4 §8 | **Killer #3** — Basis Perspectives, anti-chimera, component invalidation | [M06](execution/M06.md) |
+| M7 | 2 | v4 §-1.1, §19 | **Killer #4** — persistent-identity torture corpus | [M07](execution/M07.md) |
+| M8 | 2 | v4 §-1.3, §8.6 | Revision, Basis selection, and invalidation prototype | [M08](execution/M08.md) |
+| M9 | 2 (hard) | v4 §-1.2, §8.5, R4 §11.6 | Annotated-source + rich-editing spikes | [M09](execution/M09.md) |
+| M10 | 1 | v4 §-1.4, §14 | Pandoc adapter-boundary spike | [M10](execution/M10.md) |
+| M11 | 2 | v4 §-1.5, §7.4, R4 §2 | Held-out ergonomics + adversarial trace harness | [M11](execution/M11.md) |
+| M12 | 1 | v4 Part XXII final gate | Final gate review, ADRs, go/no-go on Phase 0 | [M12](execution/M12.md) |
 
 ### M1 — Skeleton + honest durability substrate (1 week)
 

@@ -25,8 +25,28 @@ impl ToyWorkspace {
     /// and runs ILRP recovery over every nonterminal intent
     /// (v4 §7.8 step 5 — recovery is the FIRST thing that happens).
     pub fn open(root: &Utf8Path) -> Result<Self, WorkspaceError> {
-        let _ = root;
-        todo!("Phase -1 M2/M5: open + staged-file sweep + IlrpDriver::recover_all")
+        let store_dir = root.join("state");
+        let store = GraphStore::open(&store_dir)?;
+
+        // Sweep abandoned staged files (D02.4: delete all).
+        for staged in liminal_source::scan_staged(root)? {
+            staged.abandon()?;
+        }
+
+        // Run ILRP recovery over every nonterminal intent.
+        let executor = crate::executor::FsExecutor::new(root.to_owned());
+        let driver = liminal_jurisdiction::IlrpDriver {
+            store: &store,
+            executor: &executor,
+            crash: liminal_jurisdiction::NoCrash,
+        };
+        let _recovery_outcomes = driver.recover_all()?;
+
+        Ok(Self {
+            store,
+            profiles: ProfileSet::phase_minus_1(),
+            inputs: AvailableInputs::default(),
+        })
     }
 
     /// The interpretive checker over this workspace.

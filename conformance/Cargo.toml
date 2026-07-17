@@ -13,6 +13,10 @@ publish.workspace = true
 name = "gates"
 path = "src/bin/gates.rs"
 
+[[bin]]
+name = "lim-toy"
+path = "src/bin/lim-toy.rs"
+
 [dependencies]
 anyhow.workspace = true
 blake3.workspace = true
