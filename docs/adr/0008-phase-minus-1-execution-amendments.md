@@ -34,6 +34,7 @@ AM-2.2 (M02): Setup gains `buffers: Vec<SetupBuffer>` — promote_single_step co
 AM-2.3 (M02): liminal_graph::store::ns module — aux-namespace constants get one home (protocol §7).
 AM-2.4 (M02): conformance `[[bin]] lim-toy` — D02.6 binary-location resolution.
 AM-2.5 (M02): test-name prefixing — recovery_never_guesses → crash_recovery_never_guesses (nextest crash-group filter). Assertions unchanged.
+AM-7.1 (M07): IdentityGrade::strength(self) -> u8 exposed pub (was private) for the M07 corpus's D07.5 worst-outcome ordering. Additive; pre-authorized by M07.md Frozen surfaces.
 
 **What would falsify or reverse this:** an M12 audit finding an amendment that
 was applied in code but not recorded here, or recorded here but not in the

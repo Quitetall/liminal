@@ -1,0 +1,32 @@
+[corpus]
+seeds = [11, 22, 33, 44, 55, 66, 77, 88]
+min_git = "2.44"
+
+[[template]]
+id = "notes"
+text = """
+The Fourier transform decomposes a signal
+into its constituent frequencies. {#p-fourier}
+
+The Laplace transform generalizes it
+to the complex plane. {#p-laplace}
+
+Anonymous paragraph with no marker,
+used for heuristic-continuity cases.
+"""
+
+[strategies]
+enabled = ["inline-id", "sidecar", "content-hash", "structural", "revision-anchor", "managed-graph"]
+
+[structural]
+ngram = 3
+jaccard_threshold = 0.5
+
+[operations]
+enabled = ["rename_move", "split", "merge", "copy_paste", "duplicate_identical",
+           "delete_recreate", "formatter_rewrite", "external_edit",
+           "git_merge", "git_rebase", "git_cherry_pick"]
+
+[operations.git]
+conflict_policies = ["ours", "theirs", "union"]
+overlap_probability = 0.5

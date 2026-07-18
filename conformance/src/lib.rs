@@ -11,6 +11,7 @@
 
 pub mod debt;
 pub mod harness;
+pub mod identity;
 pub mod laws;
 pub mod memo;
 pub mod scenario;

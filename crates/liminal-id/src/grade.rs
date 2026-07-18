@@ -43,7 +43,12 @@ impl IdentityGrade {
         self.strength() >= required.strength()
     }
 
-    fn strength(self) -> u8 {
+    /// The grade's position in the spec's total strength order (v4 §19.1):
+    /// `Ephemeral = 0` … `ContentAddressed = 6`. Exposed for the M07 identity
+    /// torture corpus, whose worst-outcome total ordering (D07.5) needs an
+    /// additive strength on `Preserved(grade)` cells (AM-7.1).
+    #[must_use]
+    pub fn strength(self) -> u8 {
         match self {
             Self::Ephemeral => 0,
             Self::Anchored => 1,

@@ -502,6 +502,7 @@ dependencies = [
  "liminal-source",
  "liminal-sync",
  "proptest",
+ "rand",
  "serde",
  "serde_json",
  "thiserror",
