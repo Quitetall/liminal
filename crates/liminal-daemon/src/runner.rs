@@ -13,7 +13,8 @@ use liminal_graph::{
 };
 use liminal_id::{
     ClientId, ContentHash, EntityId, IdempotencyKey, IdentityGrade, JurisdictionKey,
-    JurisdictionSubject, NodeId, PathId, RepairId, RepairStepId, RevisionId, TransactionId,
+    JurisdictionSubject, NodeId, PathId, RelationId, RepairId, RepairStepId, RevisionId,
+    TransactionId,
 };
 use liminal_jurisdiction::{
     Checker, CrashInjector, ExternalExecutor, IlrpDriver, IntentState, InverseRepairPlan,
@@ -157,7 +158,7 @@ fn ingest_graph(store: &GraphStore, graph_entries: &[SetupGraph]) -> anyhow::Res
                 })?;
                 txn.apply(Operation::AddRelation {
                     relation: Relation {
-                        id: liminal_id::RelationId::new(),
+                        id: RelationId::new(),
                         source: comment_node,
                         target: Target::Node(target_node),
                         kind: liminal_graph::kind::COMMENT,
@@ -284,6 +285,104 @@ fn build_save_plan(
         steps: BTreeMap::from([(step_id, step)]),
         dependencies: vec![],
         inverse,
+    }
+}
+
+/// Inputs to [`build_dag_plan`] — the resolved subjects and state hashes of the
+/// canonical foreign-change two-step DAG.
+#[derive(Debug, Clone)]
+pub struct DagPlanInputs {
+    /// The FILE node governing the source-id insertion.
+    pub file_node: NodeId,
+    /// The file's workspace-relative path.
+    pub rel_path: PathId,
+    /// The Relation being reattached.
+    pub relation: RelationId,
+    /// The candidate paragraph node the Relation retargets to.
+    pub candidate: NodeId,
+    /// The entity whose id the insertion serializes.
+    pub entity: EntityId,
+    /// The file's current (pre-insertion) content hash.
+    pub file_prestate_hash: ContentHash,
+    /// The file's hash after the marker is inserted.
+    pub file_poststate_hash: ContentHash,
+    /// Where the marker is inserted (byte span in prestate bytes).
+    pub at: liminal_source::SourceRange,
+    /// The Relation's current physical revision.
+    pub relation_revision: RevisionId,
+}
+
+/// Build the canonical two-step repair DAG (M04 Algorithm A, foreign-change
+/// case): `s_insert` inserts the source id into the file (governed by the FILE
+/// node's Jurisdiction), then `s_reattach` retargets the Relation to the
+/// candidate node (governed by the Relation's Jurisdiction). The dependency
+/// edge forces ID insertion strictly before reattachment (R4 §5).
+///
+/// The step subjects are mutation-local (Law 3F): the file step's subject is
+/// the FILE node, the graph step's subject is the Relation — neither
+/// commandeers the other.
+#[must_use]
+pub fn build_dag_plan(i: &DagPlanInputs) -> RepairPlan {
+    let s_insert = RepairStepId::new();
+    let s_reattach = RepairStepId::new();
+
+    let insert = ProposedMutation {
+        id: s_insert,
+        subject: JurisdictionSubject::Node(i.file_node),
+        operation: RepairOperation::InsertSourceId {
+            path: i.rel_path.clone(),
+            at: i.at,
+            entity: i.entity,
+        },
+        expected_prestate: StatePredicate::FileContent {
+            path: i.rel_path.clone(),
+            hash: i.file_prestate_hash,
+        },
+        expected_poststate: StatePredicate::FileContent {
+            path: i.rel_path.clone(),
+            hash: i.file_poststate_hash,
+        },
+        idempotency_key: IdempotencyKey::new(),
+    };
+
+    let next_rev = RevisionId(i.relation_revision.0 + 1);
+    let reattach = ProposedMutation {
+        id: s_reattach,
+        subject: JurisdictionSubject::Relation(i.relation),
+        operation: RepairOperation::Graph(Operation::RetargetRelation {
+            id: i.relation,
+            target: Target::Node(i.candidate),
+        }),
+        expected_prestate: StatePredicate::RelationAt {
+            relation: i.relation,
+            revision: i.relation_revision,
+        },
+        expected_poststate: StatePredicate::RelationAt {
+            relation: i.relation,
+            revision: next_rev,
+        },
+        idempotency_key: IdempotencyKey::new(),
+    };
+
+    RepairPlan {
+        id: RepairId::new(),
+        basis: WorkspaceBasis {
+            transaction: TransactionId::new(),
+            perspective: BasisPerspective::DurableOnly,
+            components: BTreeMap::from([(
+                JurisdictionKey::Path(i.rel_path.clone()),
+                BasisComponent::FileContent {
+                    path: i.rel_path.clone(),
+                    hash: i.file_prestate_hash,
+                },
+            )]),
+        },
+        steps: BTreeMap::from([(s_insert, insert), (s_reattach, reattach)]),
+        dependencies: vec![liminal_jurisdiction::RepairDependency {
+            before: s_insert,
+            after: s_reattach,
+        }],
+        inverse: None,
     }
 }
 
