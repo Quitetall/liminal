@@ -1,0 +1,5 @@
+---
+source: conformance/tests/milestones/m04.rs
+expression: redacted
+---
+repair:<id>  save-promotion  structural-disjointness  1 steps  undo available

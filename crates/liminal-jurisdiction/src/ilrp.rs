@@ -258,7 +258,26 @@ impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
         evidence: SafetyEvidence,
     ) -> Result<RepairId, IlrpError> {
         // Validate DAG up front.
-        crate::repair::topo_order(&plan)?;
+        let order = crate::repair::topo_order(&plan)?;
+
+        // D04.4: Graph steps execute inside the Finalize transaction, AFTER all
+        // external steps. A plan where any file/external step depends on a Graph
+        // step is unexecutable under ILRP — refuse it here, before any effect.
+        let graph_steps: std::collections::BTreeSet<RepairStepId> = plan
+            .steps
+            .iter()
+            .filter(|(_, m)| matches!(m.operation, RepairOperation::Graph(_)))
+            .map(|(id, _)| *id)
+            .collect();
+        for dep in &plan.dependencies {
+            let after_is_external = !graph_steps.contains(&dep.after);
+            if graph_steps.contains(&dep.before) && after_is_external {
+                return Err(IlrpError::Executor(
+                    "graph-before-file ordering cannot be executed under ILRP".into(),
+                ));
+            }
+        }
+        let _ = order;
 
         let id = plan.id;
         let key = id.to_string();

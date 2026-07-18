@@ -1,46 +1,54 @@
-//! M04 exit-gate tests: the two-step DAG crash matrix and the `lim repairs`
-//! golden.
+//! M04 exit-gate born-passing test: the `lim repairs` golden (Algorithm E).
 //!
-//! ── STUB (M04.9, T3). Born-passing tests to be written once the M04 repair
-//! engine (evaluate_repair conjunction, save-as-Promotion, InsertSourceId
-//! executor, accept_repair) lands. See docs/execution/M04.md exit gate. ──
-//!
-//! These are `#[ignore]`d with a phase-tagged reason so the tree compiles and
-//! the debt meter counts them. When the engine is real, DELETE the `#[ignore]`
-//! and implement the body per the spec in each doc comment. Do NOT create these
-//! born-passing until the engine exists — an ignore-flip here is the M04 close.
+//! (The two-step-DAG crash matrix lives in `tests/crash.rs` as
+//! `crash_matrix_two_step_dag` — crash_ prefix → serialized nextest group.)
 
-/// `crash_matrix_two_step_dag` (born-passing at M04): `ToyRun::crash_matrix`
-/// over the `dag_accept` scenario — 5 boundary points with per-step
-/// occurrences (two `after_external_apply`? no: one file step + one graph step,
-/// so `after_external_apply:1` for the InsertSourceId, the RetargetRelation is a
-/// Graph step landing at Finalize). Double-recovery world-digest equality holds
-/// at every point. Requires `runnable_crash_scenarios()` RUNNABLE to include
-/// `"dag_accept"`.
-///
-/// SPEC: mirror `crash_matrix_promote_single_step` in conformance/tests/crash.rs
-/// but load the `dag_accept` scenario. Name it `crash_matrix_two_step_dag` and
-/// place it in conformance/tests/crash.rs (crash_ prefix → serialized group),
-/// NOT here — this module holds the non-crash born-passing test only.
+use liminal_conformance::harness::{ToyRun, all_scenarios};
+
+/// `lim repairs` output golden (M04 Algorithm E, D04.8 — no timestamps).
+/// Drive one accepted disjoint save (undo available) and, in the same run, an
+/// accepted DAG repair; snapshot the two record lines with UUIDs redacted.
 #[test]
-#[ignore = "Phase -1 M4: two-step DAG crash matrix (needs repair engine + accept_repair)"]
-fn crash_matrix_two_step_dag_placeholder() {
-    unimplemented!("see doc comment; real test is crash_matrix_two_step_dag in tests/crash.rs")
+fn repairs_output_golden() {
+    let scenarios = all_scenarios().expect("scenarios");
+
+    // A disjoint save → one accepted "save-promotion" record (undo available).
+    let disjoint = scenarios
+        .iter()
+        .find(|s| s.scenario.id == "disjoint_safe_repair")
+        .expect("disjoint_safe_repair");
+    let run = ToyRun::new("repairs-golden").expect("workspace");
+    run.exec_scenario(disjoint).expect("exec");
+
+    let out = run.lim(&["repairs"]).expect("lim repairs runs");
+    assert!(out.status.success(), "lim repairs exit 0");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    // Redact the UUID so the golden is stable (a golden is spec — T1).
+    let redacted = redact_uuids(&stdout);
+    insta::assert_snapshot!(redacted);
 }
 
-/// `repairs_output_golden` (born-passing at M04): drive a workspace to one
-/// accepted disjoint save + one NeedsReview DAG proposal, then snapshot
-/// `lim repairs` stdout (insta, UUID-redacted).
-///
-/// SPEC (M04 Algorithm E output format, D04.8 — no timestamps):
-///   repair:<uuid>  <selected_rule>  <evidence-kind>  <n> steps  undo available|undone|no inverse
-///   repair:<uuid>  needs review: <first ReviewReason>
-///   repair:<uuid>  interrupted (<state kebab>) — run recovery
-/// Sorted by repair id (UUIDv7 ⇒ chronological). Redact UUIDs with an insta
-/// filter (`[uuid]`) so the golden is stable. Accept via `cargo insta review`
-/// — that acceptance is a T1 act (a golden is spec).
-#[test]
-#[ignore = "Phase -1 M4: lim repairs golden (needs repair records + CLI)"]
-fn repairs_output_golden() {
-    unimplemented!("drive save + DAG proposal; insta snapshot `lim repairs` per Algorithm E")
+/// Replace every `repair:<uuid>` (and bare uuids) with `repair:<id>`.
+fn redact_uuids(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if i + 36 <= bytes.len() && is_uuid(&s[i..i + 36]) {
+            out.push_str("<id>");
+            i += 36;
+        } else {
+            out.push(bytes[i] as char);
+            i += 1;
+        }
+    }
+    out
+}
+
+fn is_uuid(s: &str) -> bool {
+    s.chars().enumerate().all(|(j, c)| match j {
+        8 | 13 | 18 | 23 => c == '-',
+        _ => c.is_ascii_hexdigit(),
+    })
 }

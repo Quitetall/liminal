@@ -17,6 +17,20 @@ fn crash_matrix_promote_single_step() {
 }
 
 #[test]
+fn crash_matrix_two_step_dag() {
+    // The full two-step-DAG crash matrix (M04): kill at every ILRP boundary of
+    // the `dag_accept` scenario (ID-insert file step, then RetargetRelation at
+    // Finalize), recover, and assert Committed with idempotent double recovery.
+    let scenarios = runnable_crash_scenarios().expect("must load scenarios");
+    let scenario = scenarios
+        .iter()
+        .find(|s| s.scenario.id == "dag_accept")
+        .expect("dag_accept scenario must exist");
+
+    ToyRun::crash_matrix(scenario).expect("crash matrix must pass for dag_accept");
+}
+
+#[test]
 fn crash_recovery_never_guesses() {
     let scenarios = runnable_crash_scenarios().expect("must load scenarios");
     let scenario = scenarios

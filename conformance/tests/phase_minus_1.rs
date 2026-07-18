@@ -63,9 +63,78 @@ fn no_edit_is_rejected() {
 /// composition rule — each proposed mutation is authorized by ITS OWN
 /// subject's Jurisdiction; neither Contract commandeers the other subject.
 #[test]
-#[ignore = "Phase -1 M4: mutation-local conjunctive authorization"]
 fn cross_jurisdiction_repair_is_mutation_local() {
-    unimplemented!("damage the comment Relation's target; assert per-subject authorization")
+    use liminal_conformance::harness::{ToyRun, all_scenarios};
+    use liminal_daemon::ToyWorkspace;
+
+    let scenarios = all_scenarios().expect("scenarios");
+    let scenario = scenarios
+        .iter()
+        .find(|s| s.scenario.id == "dag_id_then_reattach")
+        .expect("dag_id_then_reattach must exist");
+
+    // Drive the foreign edit → a two-step DAG is proposed (file ID-insert +
+    // graph reattach). It lands NeedsReview.
+    let run = ToyRun::new("mutation-local").expect("workspace");
+    let exec = run.exec_scenario(scenario).expect("exec");
+    assert!(exec.status.success(), "capture never rejected (Law 3B)");
+
+    let ws = ToyWorkspace::open(&run.root).expect("open");
+    let store = ws.store();
+
+    // Load the proposed plan.
+    let plans = store.scan_aux(liminal_graph::ns::JUR_PLAN).expect("plans");
+    assert_eq!(plans.len(), 1, "exactly one proposed DAG plan");
+    let plan: liminal_jurisdiction::RepairPlan =
+        serde_json::from_value(plans[0].1.clone()).expect("decode plan");
+
+    // Two steps, each governed by ITS OWN subject: the file ID-insert by the
+    // FILE node (external-file), the reattach by the Relation (graph-native).
+    let profiles = liminal_jurisdiction::ProfileSet::phase_minus_1();
+    let mut kinds: Vec<&str> = Vec::new();
+    for step in plan.steps.values() {
+        let profile = profiles
+            .for_subject(step.subject, store)
+            .expect("every step resolves to its own governor");
+        kinds.push(match step.subject {
+            liminal_id::JurisdictionSubject::Node(_) => {
+                assert_eq!(profile.id().0, "external-file");
+                "file"
+            }
+            liminal_id::JurisdictionSubject::Relation(_) => {
+                assert_eq!(profile.id().0, "graph-native");
+                "graph"
+            }
+        });
+    }
+    kinds.sort_unstable();
+    assert_eq!(kinds, vec!["file", "graph"], "one file + one graph step");
+
+    // Mutation-local authorization (Q7): no step's Contract refuses on
+    // authorization grounds — neither commandeers the other. The refusal that
+    // makes this NeedsReview comes from the Relation's OWN identity Contract
+    // (graph-native requires Explicit; the heuristic re-id is only Inferred),
+    // not from the file Contract reaching across.
+    let checker = ws.checker();
+    let auth = checker.authorize(&plan).expect("authorize");
+    assert!(
+        auth.refusals.is_empty(),
+        "mutation-local authorization must not refuse: {:?}",
+        auth.refusals
+    );
+
+    let decision = checker.evaluate_repair(&plan).expect("evaluate");
+    match decision {
+        liminal_jurisdiction::RepairDecision::NeedsReview { reasons } => {
+            assert!(
+                reasons.iter().any(|r| r.0.contains("heuristic match")),
+                "refusal must be the Relation's own identity requirement, got {reasons:?}"
+            );
+        }
+        liminal_jurisdiction::RepairDecision::AutoApply { evidence } => {
+            panic!("heuristic reattachment must NeedsReview, auto-applied with {evidence:?}")
+        }
+    }
 }
 
 /// R4 §4 / §10: Promotion and repair use ONE interpreter. Driving "save"
@@ -299,7 +368,40 @@ fn buffer_generations_invalidate_only_dependents() {
 /// fault-trace ordering of the apply boundaries, and rejects any schedule
 /// that runs reattachment first.
 #[test]
-#[ignore = "Phase -1 M4: repair DAG execution ordering"]
 fn two_step_repair_dag_orders_id_insert_before_reattach() {
-    unimplemented!("scenario: fixtures/scenarios/dag_id_then_reattach.scenario.toml")
+    use liminal_conformance::harness::{ToyRun, all_scenarios};
+
+    let scenarios = all_scenarios().expect("scenarios");
+    let scenario = scenarios
+        .iter()
+        .find(|s| s.scenario.id == "dag_accept")
+        .expect("dag_accept must exist");
+
+    // Baseline the accept run and read the ordered fault trace: the file step
+    // (after_external_apply) must precede the finalize boundary where the
+    // RetargetRelation graph op lands (before_finalize).
+    let run = ToyRun::new("dag-order").expect("workspace");
+    let trace = run.baseline(scenario).expect("baseline");
+    let pos = |name: &str| {
+        trace
+            .hits
+            .iter()
+            .position(|(n, _)| n == name)
+            .unwrap_or_else(|| panic!("trace missing {name}: {:?}", trace.hits))
+    };
+    assert!(
+        pos("ilrp/after_external_apply") < pos("ilrp/before_finalize"),
+        "source-id insertion (external apply) must precede reattachment \
+         (finalize): {:?}",
+        trace.hits
+    );
+
+    // A hand-built plan with the edge inverted (a file/external step depending
+    // on a Graph step) is unexecutable under ILRP and refused at prepare time
+    // (D04.4) — the interpreter never runs reattachment before insertion.
+    let refused = liminal_daemon::runner::graph_before_file_is_refused();
+    assert!(
+        refused,
+        "graph-before-file ordering must be refused (D04.4)"
+    );
 }

@@ -256,26 +256,20 @@ impl JurisdictionProfile for GraphNativeProfile {
         plan: &RepairPlan,
         store: &GraphStore,
     ) -> Result<SafetyEvidence, Vec<ReviewReason>> {
-        // M04 Algorithm B §3b (GraphNativeProfile): every RetargetRelation step
-        // must leave the relation's identity requirement satisfied. The new
-        // target's effective grade is raised to Explicit when a sibling
-        // InsertSourceId step in the same plan serializes that target's id
-        // (the reattach chains after the marker insertion); otherwise it is the
-        // durable grade_of the target — heuristic/Inferred when no marker exists.
+        // M04 Algorithm B §3a/§3b (GraphNativeProfile): every RetargetRelation
+        // step must leave the relation's identity requirement satisfied. When a
+        // sibling InsertSourceId step re-establishes the target's id, that
+        // binding is HEURISTIC — the marker was absent from Holder-controlled
+        // source, so re-inserting it proves nothing (§3a: Inferred, not
+        // Explicit). Inferred < Explicit, so a reattachment resting on a
+        // re-inserted id is refused for AUTOMATIC acceptance (this is the killer
+        // experiment: heuristic reattachment is never auto-safe). Absent a
+        // re-id step, the effective grade is the durable `grade_of` the target.
         let mut reasons: Vec<ReviewReason> = Vec::new();
-
-        // Targets that a same-plan InsertSourceId step promotes to Explicit.
-        let insert_targets: std::collections::BTreeSet<NodeId> = plan
+        let has_reid = plan
             .steps
             .values()
-            .filter_map(|s| match &s.operation {
-                RepairOperation::InsertSourceId { .. } => match s.subject {
-                    JurisdictionSubject::Node(n) => Some(n),
-                    JurisdictionSubject::Relation(_) => None,
-                },
-                _ => None,
-            })
-            .collect();
+            .any(|s| matches!(s.operation, RepairOperation::InsertSourceId { .. }));
 
         for step in plan.steps.values() {
             let RepairOperation::Graph(liminal_graph::Operation::RetargetRelation { id, target }) =
@@ -291,8 +285,8 @@ impl JurisdictionProfile for GraphNativeProfile {
                 continue;
             };
             let target_node = target.node();
-            let effective = if insert_targets.contains(&target_node) {
-                IdentityGrade::Explicit
+            let effective = if has_reid {
+                IdentityGrade::Inferred
             } else {
                 grade_of(JurisdictionSubject::Node(target_node), store)
             };

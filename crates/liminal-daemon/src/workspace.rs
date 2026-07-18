@@ -33,8 +33,9 @@ impl ToyWorkspace {
             staged.abandon()?;
         }
 
-        // Run ILRP recovery over every nonterminal intent.
-        let executor = crate::executor::FsExecutor::new(root.to_owned());
+        // Run ILRP recovery over every nonterminal intent. The executor is
+        // store-aware so a resumed InsertSourceId step can resolve its alias.
+        let executor = crate::executor::FsExecutor::with_store(root.to_owned(), &store)?;
         let driver = liminal_jurisdiction::IlrpDriver {
             store: &store,
             executor: &executor,

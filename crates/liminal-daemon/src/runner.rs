@@ -5,7 +5,7 @@
 //! save), and exits. `recover` opens the workspace (which runs ILRP recovery)
 //! and prints terminal states.
 
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use liminal_graph::ns::{ILRP_INTENT, JUR_ALIAS, JUR_DECISION, JUR_PLAN, JUR_REPAIR, SYS_BLOB};
 use liminal_graph::{
     GraphStore, IdentityRequirement, Node, NodeFlags, Operation, PayloadRef, Relation,
@@ -286,6 +286,167 @@ fn build_save_plan(
         dependencies: vec![],
         inverse,
     }
+}
+
+/// Detect comment Relations whose target `{#id}` vanished from the file after a
+/// foreign edit, and propose the canonical two-step repair DAG for each (M04.3
+/// `ingest::foreign_change`). Each DAG is evaluated through the ONE checker;
+/// heuristic reattachment is refused for automatic acceptance, so the plan +
+/// its NeedsReview decision persist for explicit acceptance (`accept_repair`).
+fn plan_foreign_changes(
+    profiles: &liminal_jurisdiction::ProfileSet,
+    root: &Utf8Path,
+    store: &GraphStore,
+) -> anyhow::Result<()> {
+    let head = store.head()?;
+
+    for relation in store.relations()? {
+        if relation.kind != liminal_graph::kind::COMMENT || relation.requires.is_none() {
+            continue;
+        }
+        // The relation targets a paragraph node; find its alias + entity.
+        let target_node = relation.target.node();
+        let target_str = target_node.to_string();
+        let mut alias_entity: Option<(String, EntityId)> = None;
+        for (alias, value) in store.scan_aux(JUR_ALIAS)? {
+            if value.get("node").and_then(|v| v.as_str()) == Some(target_str.as_str())
+                && let Some(entity_str) = value.get("entity").and_then(|v| v.as_str())
+                && let Ok(entity) = entity_str.parse::<EntityId>()
+            {
+                alias_entity = Some((alias, entity));
+                break;
+            }
+        }
+        let Some((alias, entity)) = alias_entity else {
+            continue;
+        };
+
+        // Which file holds this paragraph? Toy: the single ingested file.
+        let (rel_path, file_text) = single_file(store, root)?;
+        // If the `{#alias}` marker still appears, nothing vanished.
+        if file_text.contains(&format!("{{#{alias}}}")) {
+            continue;
+        }
+
+        // Heuristic candidate: the block whose text matches the original
+        // paragraph's payload (structural match). In the toy the target node's
+        // payload IS that text.
+        let Some(target) = store.node_at(head, target_node)? else {
+            continue;
+        };
+        let candidate_text = match &target.payload {
+            PayloadRef::Text(t) => t.clone(),
+            _ => continue,
+        };
+        let blocks = liminal_source::paragraph::parse(&file_text);
+        let Some(candidate_block) = blocks.iter().find(|b| b.text == candidate_text) else {
+            continue;
+        };
+
+        // Build the two-step DAG. The candidate node is the same target node
+        // (its identity persists; only the durable marker was stripped). The
+        // marker re-inserts at the end of the candidate block.
+        let file_node = file_node_for(store, &rel_path)?;
+        let prestate_hash = ContentHash::of(file_text.as_bytes());
+        let reinserted = {
+            let split = usize::try_from(candidate_block.range.end).unwrap_or(file_text.len());
+            format!(
+                "{} {{#{alias}}}{}",
+                &file_text[..split],
+                &file_text[split..]
+            )
+        };
+        let poststate_hash = ContentHash::of(reinserted.as_bytes());
+
+        let plan = build_dag_plan(&DagPlanInputs {
+            file_node,
+            rel_path: rel_path.clone(),
+            relation: relation.id,
+            candidate: target_node,
+            entity,
+            file_prestate_hash: prestate_hash,
+            file_poststate_hash: poststate_hash,
+            at: liminal_source::SourceRange {
+                start: candidate_block.range.end,
+                end: candidate_block.range.end,
+            },
+            relation_revision: relation.revision,
+        });
+
+        // Persist blobs (base = current file) so any downstream recompute works.
+        {
+            let mut txn = store.begin()?;
+            blob::put(&mut txn, &file_text)?;
+            txn.commit(save_meta())?;
+        }
+
+        // Evaluate through the ONE checker; persist plan + decision. Heuristic
+        // reattachment is refused (Inferred < Explicit) → NeedsReview.
+        let checker = Checker { store, profiles };
+        let decision = checker
+            .evaluate_repair(&plan)
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        persist_plan(store, &plan)?;
+        persist_decision(store, plan.id, &decision)?;
+    }
+    Ok(())
+}
+
+/// The single ingested file's (path, current on-disk text). Toy-scale: exactly
+/// one `file/<path>` blob key exists.
+fn single_file(store: &GraphStore, root: &Utf8Path) -> anyhow::Result<(PathId, String)> {
+    for (key, _) in store.scan_aux(SYS_BLOB)? {
+        if let Some(path) = key.strip_prefix("file/") {
+            let text = std::fs::read_to_string(root.join(path))?;
+            return Ok((PathId(path.into()), text));
+        }
+    }
+    anyhow::bail!("no ingested file")
+}
+
+/// Accept the single pending NeedsReview plan (AM-4.2): record HumanApproval
+/// evidence and drive it through the ONE IlrpDriver to Committed. Builds a
+/// store-aware `FsExecutor` (with the entity→alias snapshot) so the DAG's
+/// `InsertSourceId` step can resolve its marker; honors the ambient crash
+/// arming so accept is crash-tested like any other repair.
+fn accept_repair(store: &GraphStore, root: &Utf8Path) -> anyhow::Result<()> {
+    let executor = crate::executor::FsExecutor::with_store(root.to_owned(), store)?;
+    let crash = crate::crash::EnvCrashInjector::from_env();
+    let driver = IlrpDriver {
+        store,
+        executor: &executor,
+        crash,
+    };
+    // Find the single plan whose decision is NeedsReview.
+    let decisions = store.scan_aux(JUR_DECISION)?;
+    let pending: Vec<RepairId> = decisions
+        .into_iter()
+        .filter_map(|(key, value)| {
+            let id = key.parse::<RepairId>().ok()?;
+            match serde_json::from_value::<RepairDecision>(value).ok()? {
+                RepairDecision::NeedsReview { .. } => Some(id),
+                RepairDecision::AutoApply { .. } => None,
+            }
+        })
+        .collect();
+    anyhow::ensure!(
+        pending.len() == 1,
+        "accept_repair expects exactly one pending plan, found {}",
+        pending.len()
+    );
+    let plan_value = store
+        .get_aux(JUR_PLAN, &pending[0].to_string())?
+        .ok_or_else(|| anyhow::anyhow!("pending plan not found"))?;
+    let plan: RepairPlan = serde_json::from_value(plan_value)?;
+
+    let evidence = SafetyEvidence::HumanApproval {
+        actor: liminal_id::ActorId::new(),
+        at: liminal_id::Timestamp::now(),
+    };
+    let id = driver.prepare(plan.clone(), evidence.clone())?;
+    driver.run(id)?;
+    record_repair(store, &plan, "id-insert-then-reattach", &evidence)?;
+    Ok(())
 }
 
 /// Inputs to [`build_dag_plan`] — the resolved subjects and state hashes of the
@@ -664,12 +825,20 @@ pub fn exec<X: ExternalExecutor, C: CrashInjector>(
     for step in &scenario.steps {
         match step.kind.as_str() {
             "buffer_edit" => apply_buffer_edit(step, &mut buffers)?,
-            "foreign_edit" => apply_foreign_edit(step, root)?,
+            "foreign_edit" => {
+                apply_foreign_edit(step, root)?;
+                // Reconcile immediately: any comment Relation whose target's
+                // `{#id}` vanished gets a two-step repair DAG proposed (M04.3
+                // ingest::foreign_change). Refused for AUTOMATIC acceptance
+                // (heuristic reattachment), so it persists as NeedsReview.
+                plan_foreign_changes(&profiles, root, store)?;
+            }
             "save" => {
                 let client = field(step, "client")?;
                 let path = field(step, "path")?;
                 perform_save(&driver, &profiles, root, &bases, &buffers, client, path)?;
             }
+            "accept_repair" => accept_repair(store, root)?,
             other => anyhow::bail!("step kind {other:?} not implemented until M3/M4"),
         }
     }
@@ -759,6 +928,92 @@ pub fn recover(root: &Utf8Path) -> anyhow::Result<RecoverOutcome> {
 pub fn normalized_digest(root: &Utf8Path) -> anyhow::Result<String> {
     let ws = ToyWorkspace::open(root)?;
     crate::digest::normalized_world_digest(root, ws.store()).map_err(|e| anyhow::anyhow!("{e}"))
+}
+
+/// D04.4 self-check for the gate test: a plan whose file/external step depends
+/// on a Graph step is unexecutable under ILRP and refused at `prepare`. Returns
+/// true iff `IlrpDriver::prepare` rejects such a plan (reattach-before-insert).
+#[must_use]
+pub fn graph_before_file_is_refused() -> bool {
+    // Hand-build an inverted DAG: a Graph step BEFORE a file step.
+    let graph_step = RepairStepId::new();
+    let file_step = RepairStepId::new();
+    let file_node = NodeId::new();
+    let relation = RelationId::new();
+    let rel = PathId("notes.md".into());
+
+    let g = ProposedMutation {
+        id: graph_step,
+        subject: JurisdictionSubject::Relation(relation),
+        operation: RepairOperation::Graph(Operation::RetargetRelation {
+            id: relation,
+            target: Target::Node(file_node),
+        }),
+        expected_prestate: StatePredicate::Any,
+        expected_poststate: StatePredicate::Any,
+        idempotency_key: IdempotencyKey::new(),
+    };
+    let f = ProposedMutation {
+        id: file_step,
+        subject: JurisdictionSubject::Node(file_node),
+        operation: RepairOperation::WriteFile {
+            path: rel.clone(),
+            contents: b"x".to_vec(),
+        },
+        expected_prestate: StatePredicate::Any,
+        expected_poststate: StatePredicate::Any,
+        idempotency_key: IdempotencyKey::new(),
+    };
+    let plan = RepairPlan {
+        id: RepairId::new(),
+        basis: WorkspaceBasis {
+            transaction: TransactionId::new(),
+            perspective: BasisPerspective::DurableOnly,
+            components: BTreeMap::new(),
+        },
+        steps: BTreeMap::from([(graph_step, g), (file_step, f)]),
+        // file step depends on the graph step → unexecutable (D04.4).
+        dependencies: vec![liminal_jurisdiction::RepairDependency {
+            before: graph_step,
+            after: file_step,
+        }],
+        inverse: None,
+    };
+
+    // A throwaway in-memory store to attempt prepare against.
+    let Ok(dir) = tempdir_for("d044") else {
+        return false;
+    };
+    let Ok(store) = GraphStore::open(&dir) else {
+        return false;
+    };
+    let executor = crate::executor::FsExecutor::new(dir.clone());
+    let driver = IlrpDriver {
+        store: &store,
+        executor: &executor,
+        crash: liminal_jurisdiction::NoCrash,
+    };
+    matches!(
+        driver.prepare(
+            plan,
+            SafetyEvidence::StructurallyDisjoint {
+                description: "d044 check".into(),
+            }
+        ),
+        Err(liminal_jurisdiction::IlrpError::Executor(_))
+    )
+}
+
+/// A fresh scratch store dir under the system temp.
+fn tempdir_for(label: &str) -> anyhow::Result<Utf8PathBuf> {
+    let dir = Utf8PathBuf::from(std::env::temp_dir().to_str().unwrap()).join(format!(
+        "liminal-d044-{label}-{}-{:x}",
+        std::process::id(),
+        liminal_id::Timestamp::now().0
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
 }
 
 /// Build the `lim repairs` report lines (M04 Algorithm E), sorted by repair id

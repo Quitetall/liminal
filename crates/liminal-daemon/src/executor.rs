@@ -1,31 +1,21 @@
-//! File-system external executor for ILRP (M02 Algorithm C).
+//! File-system external executor for ILRP (M02 Algorithm C; M04.5).
 //!
 //! `FsExecutor` implements `ExternalExecutor` against real files in a workspace
-//! root. It uses `liminal-source::file::{stage, observe}` for hash-verified
-//! staged writes.
+//! root, using `liminal-source::{stage, observe}` for hash-verified staged
+//! writes. It handles both file-holder step kinds:
 //!
-//! ── STUB SURFACE (M04.5, T2): `InsertSourceId` execution + AM-4.1 store handle.
-//!
-//! `WriteFile` is real (M02). `InsertSourceId` currently returns
-//! `Executor("InsertSourceId deferred to M4")`. To implement per M04
-//! Algorithm A ("InsertSourceId execution"), change `FsExecutor` to
-//! `FsExecutor<'s> { root, store: &'s GraphStore }` (AM-4.1 second half — the
-//! executor needs the store to resolve entity→alias), then in `apply` do:
-//! read bytes (hash must equal the step prestate, else `verify` already
-//! classified `Neither`); find alias `a` by scanning `ns::JUR_ALIAS` for the
-//! entry whose `.entity == m.entity`; build `new_bytes = bytes[..at.start] ++
-//! " {#a}" ++ bytes[at.start..]` (the `at: SourceRange` was computed against
-//! prestate bytes at plan time — the hash check validates the offset);
-//! `stage(&abs, &new_bytes)` then `commit_if(Some(prestate hash))`; ack with
-//! the observed poststate hash. `verify` for `InsertSourceId` mirrors
-//! `WriteFile` (prestate/poststate hash classification against the on-disk
-//! file). Also add the D04.4 rule to `IlrpDriver::run` (in
-//! liminal-jurisdiction): a plan where any file/external step depends on a
-//! `Graph(_)` step is refused with `Executor("graph-before-file ordering
-//! cannot be executed under ILRP")`.
+//! - `WriteFile` carries the full new bytes (M02).
+//! - `InsertSourceId` (M04.5) reads the file, resolves the step's `entity` to
+//!   its `{#alias}` via the `entity → alias` snapshot captured in
+//!   [`FsExecutor::with_store`] (AM-4.1), inserts ` {#alias}` at the marker
+//!   offset, and stages the result. The D04.4 graph-before-file ordering rule
+//!   is enforced in `IlrpDriver::prepare`, not here.
 
 use camino::{Utf8Path, Utf8PathBuf};
-use liminal_id::Timestamp;
+use std::collections::BTreeMap;
+
+use liminal_graph::GraphStore;
+use liminal_id::{EntityId, Timestamp};
 use liminal_jurisdiction::ProposedMutation;
 use liminal_jurisdiction::{
     ExternalExecutor, IlrpError, PrestateMatch, RepairOperation, StatePredicate, StepAck,
@@ -33,16 +23,42 @@ use liminal_jurisdiction::{
 use liminal_source::{self as file, FileObservation};
 
 /// File-system executor: stages, commits, and verifies against `root`.
+///
+/// Carries an `entity → alias` snapshot of `JUR_ALIAS` captured at construction
+/// (AM-4.1: the executor needs to resolve which durable id an `InsertSourceId`
+/// step serializes). Rebuilt fresh per exec/recover, so it is current.
 #[derive(Debug)]
 pub struct FsExecutor {
     root: Utf8PathBuf,
+    entity_alias: BTreeMap<EntityId, String>,
 }
 
 impl FsExecutor {
-    /// Create a new executor rooted at `root`.
+    /// Create an executor rooted at `root` with an empty alias map (WriteFile
+    /// steps do not need it).
     #[must_use]
     pub fn new(root: Utf8PathBuf) -> Self {
-        Self { root }
+        Self {
+            root,
+            entity_alias: BTreeMap::new(),
+        }
+    }
+
+    /// Create an executor whose alias map is a snapshot of `JUR_ALIAS` in
+    /// `store` (needed for `InsertSourceId` execution).
+    pub fn with_store(root: Utf8PathBuf, store: &GraphStore) -> Result<Self, IlrpError> {
+        let mut entity_alias = BTreeMap::new();
+        for (alias, value) in store
+            .scan_aux(liminal_graph::ns::JUR_ALIAS)
+            .map_err(IlrpError::Store)?
+        {
+            if let Some(entity_str) = value.get("entity").and_then(|v| v.as_str())
+                && let Ok(entity) = entity_str.parse::<EntityId>()
+            {
+                entity_alias.insert(entity, alias);
+            }
+        }
+        Ok(Self { root, entity_alias })
     }
 
     /// Absolute path from a workspace-relative path.
@@ -63,23 +79,48 @@ fn matches_predicate(pred: &StatePredicate, obs: Option<&FileObservation>) -> bo
     }
 }
 
+/// The target file path of a file-holder step (WriteFile / InsertSourceId).
+fn step_path(op: &RepairOperation) -> Result<&liminal_id::PathId, IlrpError> {
+    match op {
+        RepairOperation::WriteFile { path, .. } | RepairOperation::InsertSourceId { path, .. } => {
+            Ok(path)
+        }
+        RepairOperation::External { .. } => Err(IlrpError::Executor(
+            "External deferred to a later phase".into(),
+        )),
+        RepairOperation::Graph(_) => Err(IlrpError::Executor(
+            "non-file predicate in file step".into(),
+        )),
+    }
+}
+
+impl FsExecutor {
+    /// Compute the new bytes an `InsertSourceId` step produces: insert
+    /// ` {#<alias>}` at the marker byte offset (M04 Algorithm A).
+    fn insert_source_id_bytes(
+        &self,
+        bytes: &[u8],
+        at: liminal_source::SourceRange,
+        entity: EntityId,
+    ) -> Result<Vec<u8>, IlrpError> {
+        let alias = self
+            .entity_alias
+            .get(&entity)
+            .ok_or_else(|| IlrpError::Executor(format!("no alias for entity {entity}")))?;
+        let split = usize::try_from(at.start)
+            .unwrap_or(bytes.len())
+            .min(bytes.len());
+        let mut out = Vec::with_capacity(bytes.len() + alias.len() + 4);
+        out.extend_from_slice(&bytes[..split]);
+        out.extend_from_slice(format!(" {{#{alias}}}").as_bytes());
+        out.extend_from_slice(&bytes[split..]);
+        Ok(out)
+    }
+}
+
 impl ExternalExecutor for FsExecutor {
     fn verify(&self, mutation: &ProposedMutation) -> Result<PrestateMatch, IlrpError> {
-        let path = match &mutation.operation {
-            RepairOperation::WriteFile { path, .. } => path,
-            RepairOperation::InsertSourceId { .. } => {
-                return Err(IlrpError::Executor("InsertSourceId deferred to M4".into()));
-            }
-            RepairOperation::External { .. } => {
-                return Err(IlrpError::Executor("External deferred to M4".into()));
-            }
-            RepairOperation::Graph(_) => {
-                return Err(IlrpError::Executor(
-                    "non-file predicate in file step".into(),
-                ));
-            }
-        };
-
+        let path = step_path(&mutation.operation)?;
         let abs = self.abs(&path.0);
         let obs = file::observe(&abs).map_err(|e| IlrpError::Executor(e.to_string()))?;
 
@@ -94,14 +135,26 @@ impl ExternalExecutor for FsExecutor {
     }
 
     fn apply(&self, mutation: &ProposedMutation) -> Result<StepAck, IlrpError> {
-        let RepairOperation::WriteFile { path, contents } = &mutation.operation else {
-            return Err(IlrpError::Executor(
-                "only WriteFile is supported at M2".into(),
-            ));
+        // Materialize the bytes this step writes (WriteFile carries them;
+        // InsertSourceId computes them from the marker offset + alias).
+        let (path, contents) = match &mutation.operation {
+            RepairOperation::WriteFile { path, contents } => (path.clone(), contents.clone()),
+            RepairOperation::InsertSourceId { path, at, entity } => {
+                let abs = self.abs(&path.0);
+                let bytes = std::fs::read(&abs).map_err(|e| IlrpError::Executor(e.to_string()))?;
+                let new_bytes = self.insert_source_id_bytes(&bytes, *at, *entity)?;
+                (path.clone(), new_bytes)
+            }
+            _ => {
+                return Err(IlrpError::Executor(
+                    "only WriteFile / InsertSourceId are file steps".into(),
+                ));
+            }
         };
 
         let abs = self.abs(&path.0);
-        let staged = file::stage(&abs, contents).map_err(|e| IlrpError::Executor(e.to_string()))?;
+        let staged =
+            file::stage(&abs, &contents).map_err(|e| IlrpError::Executor(e.to_string()))?;
 
         let expected_pre = match &mutation.expected_prestate {
             StatePredicate::FileContent { hash, .. } => Some(*hash),
