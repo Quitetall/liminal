@@ -290,21 +290,37 @@ pub fn plan_undo(
     record: &RepairRecord,
     current: &WorkspaceBasis,
 ) -> Result<RepairPlan, UndoBlocked> {
-    let _ = (record, current);
-    // ── STUB (M04.7, T3). Spec = M04 Algorithm D. ──
-    //
-    // 1. let inverse = record.inverse.as_ref().ok_or(UndoBlocked::NoInverse)?;
-    // 2. per inverse step, check expected_prestate against `current`:
-    //      StatePredicate::FileContent{path,hash} → current.components[Path(path)]
-    //          must carry that hash (BasisComponent::FileContent { hash, .. });
-    //      graph predicates and Any pass here (ILRP re-verifies at apply).
-    //      mismatch → Err(UndoBlocked::StaleState {
-    //          detail: format!("{path}: expected {exp8}, found {found8}") })
-    //          where exp8/found8 are the first 8 hex chars.
-    // 3. all match → Ok(inverse.clone() with basis := current.clone());
-    //    REUSE the inverse plan's step ids and plan id so a double-undo is
-    //    detected by ILRP as already-applied (idempotent).
-    todo!("Phase -1 M4: Basis-checked undo planning (Algorithm D; R4 §6, §11.3)")
+    // M04 Algorithm D. The recorded inverse restores the preimage bytes, but it
+    // is only valid if the world still matches the state the inverse expects to
+    // undo (i.e. nothing was written over the accepted repair since). Otherwise
+    // undo must become a NEW reviewable plan — never a stale-byte overwrite.
+    let inverse = record.inverse.as_ref().ok_or(UndoBlocked::NoInverse)?;
+
+    for step in inverse.steps.values() {
+        if let StatePredicate::FileContent { path, hash } = &step.expected_prestate {
+            let key = liminal_id::JurisdictionKey::Path(path.clone());
+            let found = match current.components.get(&key) {
+                Some(liminal_revision::BasisComponent::FileContent { hash: h, .. }) => Some(*h),
+                _ => None,
+            };
+            if found != Some(*hash) {
+                let exp8 = &hash.to_hex()[..8];
+                let found8 =
+                    found.map_or_else(|| "absent".to_owned(), |h| h.to_hex()[..8].to_owned());
+                return Err(UndoBlocked::StaleState {
+                    detail: format!("{path}: expected {exp8}, found {found8}"),
+                });
+            }
+        }
+        // Graph predicates and Any pass here; ILRP re-verifies at apply.
+    }
+
+    // All prestates match: the recorded inverse is directly applicable. Reuse
+    // its step/plan ids so a double-undo is detected as already-applied
+    // (idempotent), but rebase onto the current Basis.
+    let mut plan = inverse.clone();
+    plan.basis = current.clone();
+    Ok(plan)
 }
 
 /// Why an undo could not be planned automatically.

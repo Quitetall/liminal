@@ -187,6 +187,7 @@ fn build_save_plan(
     rel: &PathId,
     base_hash: Option<ContentHash>,
     current_hash: Option<ContentHash>,
+    old_bytes: Option<&[u8]>,
     merged: &[u8],
 ) -> RepairPlan {
     let merged_hash = ContentHash::of(merged);
@@ -238,40 +239,38 @@ fn build_save_plan(
     };
 
     // Inverse: one WriteFile restoring the OLD bytes (prestate = new hash,
-    // poststate = old hash). Only constructible when we know the old bytes,
-    // i.e. current_hash is Some.
-    let inverse = current_hash.map(|old_hash| {
-        let inv_step_id = RepairStepId::new();
-        let inv_step = ProposedMutation {
-            id: inv_step_id,
-            subject: JurisdictionSubject::Node(file_node),
-            // contents filled by the executor from SYS_BLOB[old_hash] is not
-            // how WriteFile works; the inverse carries the actual old bytes,
-            // which the save path passes in via `base`/current blob. Here we
-            // leave contents empty and rely on plan_undo (M04.7) to hydrate.
-            operation: RepairOperation::WriteFile {
-                path: rel.clone(),
-                contents: Vec::new(),
-            },
-            expected_prestate: expected_poststate,
-            expected_poststate: StatePredicate::FileContent {
-                path: rel.clone(),
-                hash: old_hash,
-            },
-            idempotency_key: IdempotencyKey::new(),
-        };
-        InverseRepairPlan(Box::new(RepairPlan {
-            id: RepairId::new(),
-            basis: WorkspaceBasis {
-                transaction: TransactionId::new(),
-                perspective: BasisPerspective::DurableOnly,
-                components: BTreeMap::new(),
-            },
-            steps: BTreeMap::from([(inv_step_id, inv_step)]),
-            dependencies: vec![],
-            inverse: None,
-        }))
-    });
+    // poststate = old hash). Constructible only when we hold the old bytes.
+    let inverse = match (current_hash, old_bytes) {
+        (Some(old_hash), Some(old)) => {
+            let inv_step_id = RepairStepId::new();
+            let inv_step = ProposedMutation {
+                id: inv_step_id,
+                subject: JurisdictionSubject::Node(file_node),
+                operation: RepairOperation::WriteFile {
+                    path: rel.clone(),
+                    contents: old.to_vec(),
+                },
+                expected_prestate: expected_poststate,
+                expected_poststate: StatePredicate::FileContent {
+                    path: rel.clone(),
+                    hash: old_hash,
+                },
+                idempotency_key: IdempotencyKey::new(),
+            };
+            Some(InverseRepairPlan(Box::new(RepairPlan {
+                id: RepairId::new(),
+                basis: WorkspaceBasis {
+                    transaction: TransactionId::new(),
+                    perspective: BasisPerspective::DurableOnly,
+                    components: BTreeMap::new(),
+                },
+                steps: BTreeMap::from([(inv_step_id, inv_step)]),
+                dependencies: vec![],
+                inverse: None,
+            })))
+        }
+        _ => None,
+    };
 
     RepairPlan {
         id: RepairId::new(),
@@ -344,8 +343,14 @@ fn perform_save<X: ExternalExecutor, C: CrashInjector>(
                 merged
             }
             MergeOutcome::Conflict => {
-                let plan =
-                    build_save_plan(file_node, &rel, base_hash, current_hash, ours.as_bytes());
+                let plan = build_save_plan(
+                    file_node,
+                    &rel,
+                    base_hash,
+                    current_hash,
+                    current_bytes.as_deref().map(str::as_bytes),
+                    ours.as_bytes(),
+                );
                 persist_plan(store, &plan)?;
                 return Ok(plan.id);
             }
@@ -353,7 +358,14 @@ fn perform_save<X: ExternalExecutor, C: CrashInjector>(
         _ => ours.clone(),
     };
 
-    let plan = build_save_plan(file_node, &rel, base_hash, current_hash, merged.as_bytes());
+    let plan = build_save_plan(
+        file_node,
+        &rel,
+        base_hash,
+        current_hash,
+        current_bytes.as_deref().map(str::as_bytes),
+        merged.as_bytes(),
+    );
     apply_or_review(driver, profiles, &plan)
 }
 
@@ -639,5 +651,252 @@ pub fn recover(root: &Utf8Path) -> anyhow::Result<RecoverOutcome> {
     Ok(RecoverOutcome {
         terminals,
         world_digest,
+    })
+}
+
+/// Build the `lim repairs` report lines (M04 Algorithm E), sorted by repair id
+/// (UUIDv7 ⇒ chronological). Zero records + zero nonterminal intents → empty.
+///
+/// Lines:
+///   `repair:<uuid>  <rule>  <evidence-kind>  <n> steps  undo available|undone|no inverse`
+///   `repair:<uuid>  needs review: <first reason>`      (decision without a record)
+///   `repair:<uuid>  interrupted (<state>) — run recovery`   (nonterminal intent)
+pub fn repairs_lines(root: &Utf8Path) -> anyhow::Result<Vec<String>> {
+    let ws = ToyWorkspace::open(root)?;
+    let store = ws.store();
+
+    // Accepted records + the set of repairs undone by a later `undo:<id>` record.
+    let records = ws.repairs().map_err(|e| anyhow::anyhow!("{e}"))?;
+    let undone: std::collections::BTreeSet<RepairId> = records
+        .iter()
+        .filter_map(|r| r.selected_rule.strip_prefix("undo:").map(ToOwned::to_owned))
+        .filter_map(|s| s.parse::<RepairId>().ok())
+        .collect();
+
+    // Map id → line. BTreeMap keeps them sorted by id.
+    let mut lines: BTreeMap<RepairId, String> = BTreeMap::new();
+
+    for r in &records {
+        let evidence_kind = match &r.evidence {
+            SafetyEvidence::StructurallyDisjoint { .. } => "structural-disjointness",
+            SafetyEvidence::DomainValidator { .. } => "domain-validator",
+            SafetyEvidence::HumanApproval { .. } => "human-approval",
+        };
+        let undo_state = if undone.contains(&r.repair) {
+            "undone"
+        } else if r.inverse.is_some() {
+            "undo available"
+        } else {
+            "no inverse"
+        };
+        lines.insert(
+            r.repair,
+            format!(
+                "{}  {}  {evidence_kind}  {} steps  {undo_state}",
+                r.repair,
+                r.selected_rule,
+                r.applied_steps.len()
+            ),
+        );
+    }
+
+    // NeedsReview decisions without an accepted record.
+    let record_ids: std::collections::BTreeSet<RepairId> =
+        records.iter().map(|r| r.repair).collect();
+    for (key, value) in store.scan_aux(JUR_DECISION)? {
+        let Ok(id) = key.parse::<RepairId>() else {
+            continue;
+        };
+        if record_ids.contains(&id) {
+            continue;
+        }
+        if let Ok(RepairDecision::NeedsReview { reasons }) = serde_json::from_value(value) {
+            let first = reasons.first().map_or("", |r| r.0.as_str());
+            lines.insert(id, format!("{id}  needs review: {first}"));
+        }
+    }
+
+    // Nonterminal ILRP intents.
+    for (key, value) in store.scan_aux(ILRP_INTENT)? {
+        let Ok(id) = key.parse::<RepairId>() else {
+            continue;
+        };
+        if let Ok(intent) = serde_json::from_value::<liminal_jurisdiction::RepairIntent>(value)
+            && !intent.state.is_terminal()
+        {
+            let state = format!("{:?}", intent.state).to_lowercase();
+            lines.insert(id, format!("{id}  interrupted ({state}) — run recovery"));
+        }
+    }
+
+    Ok(lines.into_values().collect())
+}
+
+/// The result of a `lim repair undo` (M04 Algorithm D CLI flow).
+#[derive(Debug)]
+pub enum UndoOutcome {
+    /// The recorded inverse applied cleanly; a new undo record was written.
+    Undone {
+        /// The undo repair id.
+        repair: RepairId,
+    },
+    /// Later edits diverged from the inverse's prestate; a reviewable proposal
+    /// was queued instead of a stale-byte overwrite.
+    QueuedForReview {
+        /// The queued proposal's repair id.
+        repair: RepairId,
+        /// What diverged.
+        detail: String,
+    },
+    /// The repair recorded no inverse.
+    NoInverse,
+}
+
+/// Undo an accepted repair by id (M04 Algorithm D). Applies the recorded
+/// inverse when the world still matches it; otherwise queues a reviewable
+/// proposal (never a stale-byte overwrite, R4 §6/§11.3).
+pub fn undo(root: &Utf8Path, repair_id: &str) -> anyhow::Result<UndoOutcome> {
+    let target: RepairId = repair_id
+        .parse()
+        .map_err(|e| anyhow::anyhow!("bad repair id: {e}"))?;
+
+    let ws = ToyWorkspace::open(root)?;
+    let store = ws.store();
+
+    // Load the accepted record.
+    let record = store
+        .get_aux(JUR_REPAIR, &target.to_string())?
+        .ok_or_else(|| anyhow::anyhow!("unknown repair: {repair_id}"))?;
+    let record: RepairRecord = serde_json::from_value(record)?;
+
+    // Build the current Basis: the file's current durable hash per path in the
+    // inverse's file steps.
+    let current = current_basis_for(store, root, &record)?;
+
+    let executor = crate::executor::FsExecutor::new(root.to_owned());
+    let driver = IlrpDriver {
+        store,
+        executor: &executor,
+        crash: liminal_jurisdiction::NoCrash,
+    };
+
+    match liminal_jurisdiction::plan_undo(&record, &current) {
+        Ok(plan) => {
+            let evidence = SafetyEvidence::StructurallyDisjoint {
+                description: format!("undo of {target}: restores recorded preimages"),
+            };
+            let id = plan.id;
+            let d = driver.prepare(plan.clone(), evidence.clone())?;
+            driver.run(d)?;
+            record_repair(store, &plan, &format!("undo:{target}"), &evidence)?;
+            Ok(UndoOutcome::Undone { repair: id })
+        }
+        Err(liminal_jurisdiction::UndoBlocked::NoInverse) => Ok(UndoOutcome::NoInverse),
+        Err(liminal_jurisdiction::UndoBlocked::StaleState { detail }) => {
+            // Build a reviewable proposal: preimage WriteFile steps whose
+            // prestate is the CURRENTLY observed hash (acknowledging it would
+            // overwrite intervening edits — hence review).
+            let proposal = build_review_undo(&record, root)?;
+            persist_plan(store, &proposal)?;
+            persist_decision(
+                store,
+                proposal.id,
+                &RepairDecision::NeedsReview {
+                    reasons: vec![liminal_jurisdiction::ReviewReason(detail.clone())],
+                },
+            )?;
+            Ok(UndoOutcome::QueuedForReview {
+                repair: proposal.id,
+                detail,
+            })
+        }
+    }
+}
+
+/// The current Basis over the paths a record's inverse touches (their current
+/// durable hashes).
+fn current_basis_for(
+    store: &GraphStore,
+    root: &Utf8Path,
+    record: &RepairRecord,
+) -> anyhow::Result<WorkspaceBasis> {
+    let mut components = BTreeMap::new();
+    if let Some(inv) = &record.inverse {
+        for step in inv.steps.values() {
+            if let RepairOperation::WriteFile { path, .. } = &step.operation {
+                let abs = root.join(&path.0);
+                if let Some(obs) =
+                    liminal_source::observe(&abs).map_err(|e| anyhow::anyhow!("{e}"))?
+                {
+                    components.insert(
+                        JurisdictionKey::Path(path.clone()),
+                        BasisComponent::FileContent {
+                            path: path.clone(),
+                            hash: obs.hash,
+                        },
+                    );
+                }
+            }
+        }
+    }
+    let _ = store;
+    Ok(WorkspaceBasis {
+        transaction: TransactionId::new(),
+        perspective: BasisPerspective::DurableOnly,
+        components,
+    })
+}
+
+/// A reviewable undo proposal when the direct inverse is stale: preimage
+/// WriteFile steps whose prestate is the CURRENTLY observed durable hash.
+fn build_review_undo(record: &RepairRecord, root: &Utf8Path) -> anyhow::Result<RepairPlan> {
+    let inv = record
+        .inverse
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("no inverse to review"))?;
+    let mut steps = BTreeMap::new();
+    for step in inv.steps.values() {
+        if let RepairOperation::WriteFile { path, contents } = &step.operation {
+            let abs = root.join(&path.0);
+            let current_hash = liminal_source::observe(&abs)
+                .map_err(|e| anyhow::anyhow!("{e}"))?
+                .map(|o| o.hash);
+            let prestate = match current_hash {
+                Some(hash) => StatePredicate::FileContent {
+                    path: path.clone(),
+                    hash,
+                },
+                None => StatePredicate::FileAbsent { path: path.clone() },
+            };
+            let sid = RepairStepId::new();
+            steps.insert(
+                sid,
+                ProposedMutation {
+                    id: sid,
+                    subject: step.subject,
+                    operation: RepairOperation::WriteFile {
+                        path: path.clone(),
+                        contents: contents.clone(),
+                    },
+                    expected_prestate: prestate,
+                    expected_poststate: StatePredicate::FileContent {
+                        path: path.clone(),
+                        hash: ContentHash::of(contents),
+                    },
+                    idempotency_key: IdempotencyKey::new(),
+                },
+            );
+        }
+    }
+    Ok(RepairPlan {
+        id: RepairId::new(),
+        basis: WorkspaceBasis {
+            transaction: TransactionId::new(),
+            perspective: BasisPerspective::DurableOnly,
+            components: BTreeMap::new(),
+        },
+        steps,
+        dependencies: vec![],
+        inverse: None,
     })
 }

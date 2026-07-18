@@ -169,9 +169,74 @@ fn crash_ilrp_resumes_after_kill_at_every_boundary() {
 /// (`lim repair undo <id>`), and undo after subsequent edits becomes a NEW
 /// Basis-checked RepairPlan rather than a stale-byte overwrite.
 #[test]
-#[ignore = "Phase -1 M4: decision log + Basis-checked undo"]
 fn accepted_auto_repair_is_one_command_revertible() {
-    unimplemented!("scenario: fixtures/scenarios/disjoint_safe_repair.scenario.toml")
+    use liminal_conformance::harness::{ToyRun, all_scenarios};
+    use liminal_daemon::ToyWorkspace;
+
+    let scenarios = all_scenarios().expect("must load scenarios");
+    let scenario = scenarios
+        .iter()
+        .find(|s| s.scenario.id == "disjoint_safe_repair")
+        .expect("disjoint_safe_repair must exist");
+
+    let run = ToyRun::new("revertible").expect("workspace");
+    let exec = run.exec_scenario(scenario).expect("exec");
+    assert!(exec.status.success(), "auto-apply must succeed");
+
+    // A RepairRecord with all six R4 §6 fields was written; capture its id and
+    // the post-save file bytes. Scope the store handle so the CLI can lock it.
+    let (repair_id, post_save) = {
+        let ws = ToyWorkspace::open(&run.root).expect("open");
+        let records = ws.repairs().expect("repairs");
+        assert_eq!(records.len(), 1, "exactly one accepted repair");
+        let r = &records[0];
+        // Six fields are structurally present (the type enforces it); assert
+        // the load-bearing ones are populated.
+        assert_eq!(r.selected_rule, "save-promotion");
+        assert!(r.inverse.is_some(), "must record an inverse (revertible)");
+        assert_eq!(r.applied_steps.len(), 1);
+        (
+            r.repair,
+            std::fs::read_to_string(run.root.join("notes.md")).unwrap(),
+        )
+    };
+
+    // `lim repair undo <id>` restores the pre-save state.
+    let undo = run
+        .lim(&["repair", "undo", &repair_id.to_string()])
+        .expect("undo runs");
+    assert!(undo.status.success(), "undo exit 0");
+    let stdout = String::from_utf8_lossy(&undo.stdout);
+    assert!(stdout.starts_with("undone: repair:"), "got {stdout:?}");
+    let after_undo = std::fs::read_to_string(run.root.join("notes.md")).unwrap();
+    assert_ne!(after_undo, post_save, "undo changed the file back");
+
+    // Undo again after an external edit → the recorded inverse is stale, so
+    // undo must queue a REVIEWABLE proposal, never overwrite with stale bytes.
+    // Re-run the whole scenario in a fresh workspace, then externally edit the
+    // file before undoing.
+    let run2 = ToyRun::new("revertible-stale").expect("workspace");
+    run2.exec_scenario(scenario).expect("exec2");
+    let repair2 = {
+        let ws = ToyWorkspace::open(&run2.root).expect("open2");
+        ws.repairs().expect("repairs2")[0].repair
+    };
+    std::fs::write(run2.root.join("notes.md"), b"a wholly different file\n").unwrap();
+    let undo2 = run2
+        .lim(&["repair", "undo", &repair2.to_string()])
+        .expect("undo2 runs");
+    assert!(undo2.status.success(), "stale undo still exits 0");
+    let stdout2 = String::from_utf8_lossy(&undo2.stdout);
+    assert!(
+        stdout2.starts_with("undo queued for review:"),
+        "stale undo must be reviewable, got {stdout2:?}"
+    );
+    // The file was NOT overwritten with stale bytes.
+    let after = std::fs::read_to_string(run2.root.join("notes.md")).unwrap();
+    assert_eq!(
+        after, "a wholly different file\n",
+        "no stale-byte overwrite"
+    );
 }
 
 /// Law 3J / R4 §10: `ClientScoped(neovim)`, `ClientScoped(phone)`, and

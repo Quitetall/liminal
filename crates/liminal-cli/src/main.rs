@@ -81,15 +81,12 @@ fn main() -> ExitCode {
         Cmd::Jurisdiction {
             cmd: JurisdictionCmd::Explain { subject },
         } => cmd::jurisdiction::explain(&args.workspace, &subject),
-        // Commands still stubbed for later milestones report via anyhow.
-        other => bail_result(match other {
-            Cmd::Overlays { all } => cmd::overlays::run(&args.workspace, all),
-            Cmd::Repairs => cmd::repairs::run(&args.workspace),
-            Cmd::Repair {
-                cmd: RepairCmd::Undo { repair_id },
-            } => cmd::repair_undo::run(&args.workspace, &repair_id),
-            Cmd::Check | Cmd::Jurisdiction { .. } => unreachable!("handled above"),
-        }),
+        Cmd::Repairs => cmd::repairs::run(&args.workspace),
+        Cmd::Repair {
+            cmd: RepairCmd::Undo { repair_id },
+        } => cmd::repair_undo::run(&args.workspace, &repair_id),
+        // Still stubbed for M5 (returns anyhow).
+        Cmd::Overlays { all } => bail_result(cmd::overlays::run(&args.workspace, all)),
     }
 }
 

@@ -182,10 +182,14 @@ impl ToyRun {
     /// Run `lim check` against this workspace, returning its raw output for
     /// byte-exact silence assertions (`assert_silent`).
     pub fn check(&self) -> anyhow::Result<Output> {
-        let output = std::process::Command::new(lim_path())
-            .args(["--workspace", self.root.as_str(), "check"])
-            .output()?;
-        Ok(output)
+        self.lim(&["check"])
+    }
+
+    /// Run an arbitrary `lim <args...>` subcommand against this workspace.
+    pub fn lim(&self, args: &[&str]) -> anyhow::Result<Output> {
+        let mut cmd = std::process::Command::new(lim_path());
+        cmd.args(["--workspace", self.root.as_str()]).args(args);
+        Ok(cmd.output()?)
     }
 
     /// Sound run: spawn `lim-toy exec <root> <scenario>` with NO fault armed;
