@@ -9,6 +9,8 @@
 
 mod cmd;
 
+use std::process::ExitCode;
+
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
 
@@ -72,17 +74,33 @@ enum JurisdictionCmd {
     },
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> ExitCode {
     let args = Lim::parse();
     match args.cmd {
         Cmd::Check => cmd::check::run(&args.workspace),
-        Cmd::Overlays { all } => cmd::overlays::run(&args.workspace, all),
-        Cmd::Repairs => cmd::repairs::run(&args.workspace),
-        Cmd::Repair {
-            cmd: RepairCmd::Undo { repair_id },
-        } => cmd::repair_undo::run(&args.workspace, &repair_id),
         Cmd::Jurisdiction {
             cmd: JurisdictionCmd::Explain { subject },
         } => cmd::jurisdiction::explain(&args.workspace, &subject),
+        // Commands still stubbed for later milestones report via anyhow.
+        other => bail_result(match other {
+            Cmd::Overlays { all } => cmd::overlays::run(&args.workspace, all),
+            Cmd::Repairs => cmd::repairs::run(&args.workspace),
+            Cmd::Repair {
+                cmd: RepairCmd::Undo { repair_id },
+            } => cmd::repair_undo::run(&args.workspace, &repair_id),
+            Cmd::Check | Cmd::Jurisdiction { .. } => unreachable!("handled above"),
+        }),
+    }
+}
+
+/// Map a stub command's `anyhow::Result<()>` onto an exit code, printing any
+/// error to stderr.
+fn bail_result(result: anyhow::Result<()>) -> ExitCode {
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::from(2)
+        }
     }
 }

@@ -7,6 +7,7 @@
 //! (R4 §7.5 Recover).
 
 mod file;
+pub mod paragraph;
 mod range;
 
 pub use file::{FileObservation, StageError, StagedWrite, observe, scan_staged, stage};

@@ -56,11 +56,15 @@ execution is a discovered gap.
 
 ## Steps
 
-- [ ] M<nn>.1 <imperative step> — command: `<exact command>` — expected: <exact observable output>
-- [ ] M<nn>.2 …
+- [ ] M<nn>.1 [T<k>] <imperative step> — command: `<exact command>` — expected: <exact observable output>
+- [ ] M<nn>.2 [T<k>] …
 
 (One command and one observable expectation per step; checkboxes are ticked
-in that step's commit.)
+in that step's commit. `[T<k>]` is the executor tier — the level of
+responsibility the step demands, defined in 00-protocol.md §7. The tag is a
+floor of care, not a model assignment; the §7 blanket rules — golden
+acceptance is T1, every escalation trigger promotes to T1 — override any
+step tag.)
 
 ## Amendments
 

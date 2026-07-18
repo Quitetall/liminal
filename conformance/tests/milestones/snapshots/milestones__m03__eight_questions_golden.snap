@@ -1,0 +1,46 @@
+---
+source: conformance/tests/milestones/m03.rs
+expression: report
+---
+== file node — DurableOnly ==
+  Q1 holder: file:notes.md
+  Q2 write_route: file:notes.md
+  Q3 merge_runtime: none
+  Q4 identity: 0 findings
+  Q5 overlays: 0 overlays
+  Q6 perspective: durable-only
+== file node — ClientScoped(neovim) ==
+  Q1 holder: file:notes.md
+  Q2 write_route: file:notes.md
+  Q3 merge_runtime: none
+  Q4 identity: 0 findings
+  Q5 overlays: 0 overlays
+  Q6 perspective: client-scoped
+== p-fourier — DurableOnly ==
+  Q1 holder: file:notes.md
+  Q2 write_route: file:notes.md
+  Q3 merge_runtime: none
+  Q4 identity: 0 findings
+  Q5 overlays: 0 overlays
+  Q6 perspective: durable-only
+== p-fourier — ClientScoped(neovim) ==
+  Q1 holder: file:notes.md
+  Q2 write_route: file:notes.md
+  Q3 merge_runtime: none
+  Q4 identity: 0 findings
+  Q5 overlays: 0 overlays
+  Q6 perspective: client-scoped
+== comment relation — DurableOnly ==
+  Q1 holder: graph
+  Q2 write_route: graph
+  Q3 merge_runtime: none
+  Q4 identity: n/a (relation)
+  Q5 overlays: 0 overlays
+  Q6 perspective: durable-only
+== comment relation — ClientScoped(neovim) ==
+  Q1 holder: graph
+  Q2 write_route: graph
+  Q3 merge_runtime: none
+  Q4 identity: n/a (relation)
+  Q5 overlays: 0 overlays
+  Q6 perspective: client-scoped

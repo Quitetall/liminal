@@ -10,18 +10,53 @@
 /// (`liminal_conformance::assert_silent`), zero reconciliation items, zero
 /// overlays. "No errors printed" is not silence.
 #[test]
-#[ignore = "Phase -1 M3: interpretive checker + sound-session scenario runner"]
 fn sound_states_are_silent() {
-    unimplemented!("see doc comment; scenario: fixtures/scenarios/sound_session.scenario.toml")
+    use liminal_conformance::harness::{ToyRun, all_scenarios};
+
+    let scenarios = all_scenarios().expect("must load scenarios");
+    let scenario = scenarios
+        .iter()
+        .find(|s| s.scenario.id == "sound_session")
+        .expect("sound_session scenario must exist");
+
+    let run = ToyRun::new("sound-silent").expect("must create workspace");
+    let exec = run.exec_scenario(scenario).expect("exec must run");
+    assert!(
+        exec.status.success(),
+        "sound scenario exec must succeed, stderr: {}",
+        String::from_utf8_lossy(&exec.stderr)
+    );
+
+    let check = run.check().expect("lim check must run");
+    liminal_conformance::assert_silent(&check);
 }
 
 /// Law 3B / R4 §10: "No edit is rejected." Every write path in every scenario
 /// — including the unavailable-Holder scenario — returns success; inadmissible
 /// writes become durable Overlays, never errors.
 #[test]
-#[ignore = "Phase -1 M3: capture paths + overlay creation"]
 fn no_edit_is_rejected() {
-    unimplemented!("drive every scenario write path; assert zero rejections, overlays instead")
+    use liminal_conformance::harness::{NOT_YET_DRIVEN, ToyRun, all_scenarios};
+
+    let scenarios = all_scenarios().expect("must load scenarios");
+    let mut driven = 0;
+    for scenario in &scenarios {
+        if NOT_YET_DRIVEN.contains(&scenario.scenario.id.as_str()) {
+            continue;
+        }
+        let run = ToyRun::new(&format!("no-reject-{}", scenario.scenario.id))
+            .expect("must create workspace");
+        let exec = run.exec_scenario(scenario).expect("exec must run");
+        assert!(
+            exec.status.success(),
+            "scenario {} rejected a write path (exit {:?}); stderr: {}",
+            scenario.scenario.id,
+            exec.status.code(),
+            String::from_utf8_lossy(&exec.stderr)
+        );
+        driven += 1;
+    }
+    assert!(driven > 0, "at least one scenario must be driven");
 }
 
 /// Law 3F / R4 §10: cross-Jurisdiction repair follows the mutation-local

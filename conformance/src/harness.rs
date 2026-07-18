@@ -24,12 +24,22 @@ fn lim_toy_path() -> Utf8PathBuf {
     if let Some(path) = option_env!("CARGO_BIN_EXE_lim-toy") {
         return Utf8PathBuf::from(path);
     }
-    // Fallback: search relative to CARGO_MANIFEST_DIR (workspace root).
+    resolve_target_bin("lim-toy")
+}
+
+/// Resolve the `lim` CLI binary (owned by `liminal-cli`, so never available via
+/// this crate's `CARGO_BIN_EXE_*`). Searches the workspace target directory.
+fn lim_path() -> Utf8PathBuf {
+    resolve_target_bin("lim")
+}
+
+/// Search the workspace `target/{debug,release}/` for a built binary.
+fn resolve_target_bin(name: &str) -> Utf8PathBuf {
     let manifest = Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap_or(&manifest);
     let candidates = [
-        workspace.join("target/debug/lim-toy"),
-        workspace.join("target/release/lim-toy"),
+        workspace.join(format!("target/debug/{name}")),
+        workspace.join(format!("target/release/{name}")),
     ];
     for candidate in &candidates {
         if candidate.exists() {
@@ -37,8 +47,7 @@ fn lim_toy_path() -> Utf8PathBuf {
         }
     }
     panic!(
-        "lim-toy binary not found; build with `cargo build -p liminal-conformance --bin lim-toy` \
-         or run tests via `cargo nextest run`"
+        "{name} binary not found; build the workspace binaries or run tests via `cargo nextest run`"
     )
 }
 
@@ -154,6 +163,29 @@ impl ToyRun {
         ));
         std::fs::create_dir_all(&root)?;
         Ok(Self { root })
+    }
+
+    /// Run `lim-toy exec <root> <scenario>` with NO fault armed and NO trace
+    /// requirement (a scenario may legitimately reach no ILRP boundary). Fails
+    /// if the process exits nonzero — that is a rejected write path.
+    pub fn exec_scenario(&self, scenario: &ScenarioScript) -> anyhow::Result<Output> {
+        let scenario_path = self.root.join("scenario.toml");
+        std::fs::write(&scenario_path, toml::to_string(scenario)?)?;
+        let output = std::process::Command::new(lim_toy_path())
+            .args(["exec", self.root.as_str(), scenario_path.as_str()])
+            .env_remove("LIMINAL_CRASHPOINT")
+            .env("LIMINAL_CRASH_TRACE", self.trace_path())
+            .output()?;
+        Ok(output)
+    }
+
+    /// Run `lim check` against this workspace, returning its raw output for
+    /// byte-exact silence assertions (`assert_silent`).
+    pub fn check(&self) -> anyhow::Result<Output> {
+        let output = std::process::Command::new(lim_path())
+            .args(["--workspace", self.root.as_str(), "check"])
+            .output()?;
+        Ok(output)
     }
 
     /// Sound run: spawn `lim-toy exec <root> <scenario>` with NO fault armed;
@@ -379,6 +411,23 @@ pub fn runnable_crash_scenarios() -> anyhow::Result<Vec<ScenarioScript>> {
         out.push(ScenarioScript::load(&path)?);
     }
     Ok(out)
+}
+
+/// Scenarios whose write paths cannot be driven end-to-end yet.
+///
+/// Shrunk by later milestones: M4 removes the three repair scenarios, M5
+/// removes the offline one. Empty (and deleted) by M5.
+pub const NOT_YET_DRIVEN: &[&str] = &[
+    "dag_id_then_reattach",
+    "disjoint_safe_repair",
+    "offline_holder_overlay",
+    "unsafe_unique_merge",
+];
+
+/// Load every authored scenario fixture, sorted by id.
+pub fn all_scenarios() -> anyhow::Result<Vec<ScenarioScript>> {
+    let dir = Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures/scenarios");
+    ScenarioScript::load_dir(&dir)
 }
 
 /// Verify a locked held-out corpus directory against its BLAKE3 manifest

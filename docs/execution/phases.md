@@ -10,6 +10,12 @@ Every phase's gating tests either already exist as phase-tagged `#[ignore]`d
 tests in `conformance/` (named below) or are authored born-ignored at the
 preceding gate. `just gates` tracks both.
 
+Work orders authored at each gate carry executor-tier tags (`[T1]`–`[T4]`,
+defined in [`00-protocol.md`](00-protocol.md) §7) on every step, so the
+responsibility split — what demands extreme rigor vs what is delegable
+mechanics — is decided at authoring time, not rediscovered per session.
+Authoring the work orders themselves is always T1.
+
 Pre-known ADR points come from spec v4 Part XXIII (§119–§131), pinned here to the
 phase that must decide them.
 

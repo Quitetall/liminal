@@ -56,6 +56,35 @@ impl IdentityGrade {
     }
 }
 
+impl std::str::FromStr for IdentityGrade {
+    type Err = ParseGradeError;
+
+    /// Parse the kebab-case name used in fixtures and Contract literals
+    /// (matches the serde `rename_all = "kebab-case"` form).
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "ephemeral" => Ok(Self::Ephemeral),
+            "anchored" => Ok(Self::Anchored),
+            "inferred" => Ok(Self::Inferred),
+            "explicit" => Ok(Self::Explicit),
+            "managed" => Ok(Self::Managed),
+            "external" => Ok(Self::External),
+            "content-addressed" => Ok(Self::ContentAddressed),
+            _ => Err(ParseGradeError {
+                input: s.to_owned(),
+            }),
+        }
+    }
+}
+
+/// Failed to parse an [`IdentityGrade`] from its kebab-case name.
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("invalid identity grade: {input:?}")]
+pub struct ParseGradeError {
+    /// The rejected input.
+    pub input: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::IdentityGrade::*;

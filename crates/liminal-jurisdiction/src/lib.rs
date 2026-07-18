@@ -28,12 +28,14 @@ pub mod profile;
 pub mod reconcile;
 pub mod repair;
 
-pub use checker::{CheckReport, Checker, CheckerError, Finding};
+pub use checker::{
+    AuthorizationReport, CheckReport, Checker, CheckerError, Finding, codes, everyday_rendering,
+};
 pub use contract::{
     ContinuityPolicy, DanglingPolicy, ForeignEditPolicy, HolderResolution, JurisdictionContract,
     LifecyclePolicy, MutationPolicy, RepairAuthorization, SafetyRequirement, SubjectSelector,
 };
-pub use explain::{Explanation, explain};
+pub use explain::{Explanation, explain, render_holder};
 pub use holder::{Holder, MergeRuntimeRef};
 pub use ilrp::{
     CrashInjector, CrashPoint, ExternalExecutor, IlrpDriver, IlrpError, IntentState, NoCrash,
@@ -41,7 +43,7 @@ pub use ilrp::{
 };
 pub use overlay::{Overlay, OverlayState};
 pub use profile::{
-    ExternalFileProfile, GraphNativeProfile, JurisdictionProfile, ProfileId, ProfileSet,
+    ExternalFileProfile, GraphNativeProfile, JurisdictionProfile, ProfileId, ProfileSet, grade_of,
 };
 pub use reconcile::{ReconciliationItem, ReconciliationQueue, ReconciliationStatus};
 pub use repair::{

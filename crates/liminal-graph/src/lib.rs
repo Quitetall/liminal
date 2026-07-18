@@ -13,12 +13,14 @@
 //! Spec: v4 §4 (Node), §5 (Relation), §43–45 (physical layout, RESERVED),
 //! §86 (transactions and operations), §92 (crash consistency).
 
+pub mod kind;
 mod node;
 mod op;
 pub mod physical;
 mod relation;
 pub mod store;
 
+pub use liminal_id::KindId;
 pub use node::{Node, NodeFlags, PayloadRef};
 pub use op::{Operation, Origin, Transaction, TxnMeta};
 pub use relation::{AnchorRef, IdentityRequirement, Relation, RelationFlags, Target};

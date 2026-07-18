@@ -21,6 +21,7 @@ liminal-daemon.workspace = true
 liminal-id.workspace = true
 liminal-jurisdiction.workspace = true
 liminal-revision.workspace = true
+toml.workspace = true
 
 [lints]
 workspace = true

@@ -58,6 +58,22 @@ impl ToyWorkspace {
         }
     }
 
+    /// The durable-id alias for a subject, if one is recorded in `JUR_ALIAS`.
+    /// Renders subjects as their everyday `{#id}` in CLI output (R4 §3).
+    #[must_use]
+    pub fn alias_for(&self, subject: liminal_id::JurisdictionSubject) -> Option<String> {
+        let liminal_id::JurisdictionSubject::Node(node) = subject else {
+            return None;
+        };
+        let node_str = node.to_string();
+        for (alias, value) in self.store.scan_aux(liminal_graph::ns::JUR_ALIAS).ok()? {
+            if value.get("node").and_then(|v| v.as_str()) == Some(node_str.as_str()) {
+                return Some(alias);
+            }
+        }
+        None
+    }
+
     /// The core Reconciliation Queue (R4 §9; agenda-free by construction).
     #[must_use]
     pub fn reconciliation(&self) -> ReconciliationQueue<'_> {

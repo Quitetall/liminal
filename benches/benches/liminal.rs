@@ -65,6 +65,7 @@ fn empty_relation(source: NodeId, target: NodeId) -> Relation {
         payload: PayloadRef::Text(String::new()),
         revision: RevisionId(0),
         flags: RelationFlags::default(),
+        requires: None,
     }
 }
 

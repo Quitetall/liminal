@@ -363,7 +363,6 @@ impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
         // Only runs when in Applying state (ExternalApplied skips this via the
         // match above transitioning to Finalizing).
         if intent.state == IntentState::Applying {
-
             let order = crate::repair::topo_order(&intent.plan)?;
 
             for step_id in &order {
@@ -453,8 +452,7 @@ impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
             match txn.commit(Self::meta("ilrp:finalize", origin)) {
                 Ok(_) => {}
                 Err(
-                    liminal_graph::StoreError::Conflict(_)
-                    | liminal_graph::StoreError::NotFound(_),
+                    liminal_graph::StoreError::Conflict(_) | liminal_graph::StoreError::NotFound(_),
                 ) => {
                     // Graph ops invalid against current state — stop and
                     // preserve for review (M02 Algorithm B §5).

@@ -6,10 +6,13 @@
 //! and prints terminal states.
 
 use camino::Utf8Path;
-use liminal_graph::ns::ILRP_INTENT;
+use liminal_graph::ns::{ILRP_INTENT, JUR_ALIAS, SYS_BLOB};
+use liminal_graph::{
+    IdentityRequirement, Node, NodeFlags, Operation, PayloadRef, Relation, RelationFlags, Target,
+};
 use liminal_id::{
-    ClientId, ContentHash, IdempotencyKey, JurisdictionSubject, NodeId, PathId, RepairId,
-    RepairStepId, TransactionId,
+    ClientId, ContentHash, EntityId, IdempotencyKey, IdentityGrade, JurisdictionSubject, NodeId,
+    PathId, RepairId, RepairStepId, RevisionId, TransactionId,
 };
 use liminal_jurisdiction::{
     CrashInjector, ExternalExecutor, IlrpDriver, IntentState, ProposedMutation, RepairOperation,
@@ -19,8 +22,163 @@ use liminal_revision::{BasisPerspective, WorkspaceBasis};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-use crate::scenario::ScenarioScript;
+use crate::scenario::{ScenarioScript, SetupGraph};
 use crate::workspace::ToyWorkspace;
+
+/// Ingest setup files: parse paragraphs, create FILE/PARAGRAPH nodes, store
+/// aliases (M03 Data schemas).
+fn ingest_files(
+    store: &liminal_graph::GraphStore,
+    files: &[crate::scenario::SetupFile],
+) -> anyhow::Result<()> {
+    let meta = liminal_graph::TxnMeta {
+        actor: None,
+        origin: liminal_graph::Origin::Human,
+        at: liminal_id::Timestamp::now(),
+        provenance: Some("setup:file".into()),
+        inverse: None,
+    };
+
+    for file in files {
+        // 1. Create FILE node.
+        let file_node = NodeId::new();
+        {
+            let mut txn = store.begin()?;
+            txn.apply(Operation::CreateNode {
+                node: Node {
+                    id: file_node,
+                    kind: liminal_graph::kind::FILE,
+                    payload: PayloadRef::None,
+                    revision: RevisionId(0),
+                    flags: NodeFlags::default(),
+                },
+            })?;
+            // Store raw bytes in SYS_BLOB.
+            txn.put_aux(
+                SYS_BLOB,
+                &format!("file/{}", file.path),
+                serde_json::Value::String(file.text.clone()),
+            )?;
+            txn.commit(meta.clone())?;
+        }
+
+        // 2. Parse paragraphs and create nodes.
+        let blocks = liminal_source::paragraph::parse(&file.text);
+        for (i, block) in blocks.iter().enumerate() {
+            let flags = if block.id.is_some() {
+                NodeFlags::HAS_DURABLE_ID
+            } else {
+                NodeFlags::default()
+            };
+            let para_node = NodeId::new();
+            let mut txn = store.begin()?;
+            txn.apply(Operation::CreateNode {
+                node: Node {
+                    id: para_node,
+                    kind: liminal_graph::kind::PARAGRAPH,
+                    payload: PayloadRef::Text(block.text.clone()),
+                    revision: RevisionId(0),
+                    flags,
+                },
+            })?;
+            // 3. InsertChild.
+            txn.apply(Operation::InsertChild {
+                parent: file_node,
+                child: para_node,
+                index: i as u64,
+            })?;
+            // 4. Store alias if id present.
+            if let Some(ref id) = block.id {
+                let entity = EntityId::new();
+                txn.put_aux(
+                    JUR_ALIAS,
+                    id,
+                    serde_json::json!({
+                        "node": para_node.to_string(),
+                        "entity": entity.to_string(),
+                    }),
+                )?;
+            }
+            txn.commit(meta.clone())?;
+        }
+    }
+    Ok(())
+}
+
+/// Ingest setup graph entries: COMMENT nodes + relations (M03 Data schemas).
+fn ingest_graph(
+    store: &liminal_graph::GraphStore,
+    graph_entries: &[SetupGraph],
+) -> anyhow::Result<()> {
+    let meta = liminal_graph::TxnMeta {
+        actor: None,
+        origin: liminal_graph::Origin::Human,
+        at: liminal_id::Timestamp::now(),
+        provenance: Some("setup:graph".into()),
+        inverse: None,
+    };
+
+    for entry in graph_entries {
+        match entry.kind.as_str() {
+            "comment-relation" => {
+                let body = entry
+                    .extra
+                    .get("body")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let target_alias = entry
+                    .target
+                    .as_deref()
+                    .ok_or_else(|| anyhow::anyhow!("comment-relation missing target"))?;
+                let requires_grade = entry.requires_grade.as_deref().unwrap_or("explicit");
+
+                // Look up the target node from the alias.
+                let alias_value = store
+                    .get_aux(JUR_ALIAS, target_alias)?
+                    .ok_or_else(|| anyhow::anyhow!("alias not found: {target_alias}"))?;
+                let node_str = alias_value["node"]
+                    .as_str()
+                    .ok_or_else(|| anyhow::anyhow!("alias missing node: {target_alias}"))?;
+                let target_node: NodeId = node_str
+                    .parse()
+                    .map_err(|e| anyhow::anyhow!("bad node id in alias: {e}"))?;
+
+                let grade: IdentityGrade = requires_grade
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("unknown grade: {requires_grade}"))?;
+
+                let comment_node = NodeId::new();
+                let mut txn = store.begin()?;
+                txn.apply(Operation::CreateNode {
+                    node: Node {
+                        id: comment_node,
+                        kind: liminal_graph::kind::COMMENT,
+                        payload: PayloadRef::Text(body.to_owned()),
+                        revision: RevisionId(0),
+                        flags: NodeFlags::default(),
+                    },
+                })?;
+                txn.apply(Operation::AddRelation {
+                    relation: Relation {
+                        id: liminal_id::RelationId::new(),
+                        source: comment_node,
+                        target: Target::Node(target_node),
+                        kind: liminal_graph::kind::COMMENT,
+                        payload: PayloadRef::None,
+                        revision: RevisionId(0),
+                        flags: RelationFlags::default(),
+                        requires: Some(IdentityRequirement { minimum: grade }),
+                    },
+                })?;
+                txn.commit(meta.clone())?;
+            }
+            other => {
+                anyhow::bail!("unknown setup.graph kind: {other}");
+            }
+        }
+    }
+    Ok(())
+}
 
 /// Build a save-as-Promotion `RepairPlan` for a buffer save step.
 fn build_save_plan(
@@ -102,6 +260,7 @@ pub fn exec<X: ExternalExecutor, C: CrashInjector>(
     executor: X,
     crash: C,
 ) -> anyhow::Result<()> {
+    // Write setup files to disk.
     for file in &scenario.setup.files {
         let path = root.join(&file.path);
         if let Some(parent) = path.parent() {
@@ -119,12 +278,13 @@ pub fn exec<X: ExternalExecutor, C: CrashInjector>(
         );
     }
 
-    if !scenario.setup.graph.is_empty() {
-        anyhow::bail!("setup.graph is M4");
-    }
-
     let ws = ToyWorkspace::open(root)?;
     let store = ws.store();
+
+    // Ingest files and graph entries (M03).
+    ingest_files(store, &scenario.setup.files)?;
+    ingest_graph(store, &scenario.setup.graph)?;
+
     let driver = IlrpDriver {
         store,
         executor: &executor,

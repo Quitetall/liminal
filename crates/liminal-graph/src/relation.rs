@@ -23,6 +23,10 @@ pub struct Relation {
     pub revision: RevisionId,
     /// Physical flags.
     pub flags: RelationFlags,
+    /// Minimum identity grade this Relation requires of its target (AM-3.1;
+    /// v4 §19.1, Law 12).
+    #[serde(default)]
+    pub requires: Option<IdentityRequirement>,
 }
 
 /// A Relation target (v4 §5, §5.3).

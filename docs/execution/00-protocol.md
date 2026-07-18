@@ -120,7 +120,48 @@ backlog test — the ignored set is the backlog; it shrinks only by passing.
 - Commit bodies cite spec sections (`v4 §7.8`, `R4 §10`) for anything semantically
   load-bearing.
 
-## 7. Shared conventions all orders rely on
+## 7. Executor tiers
+
+Every work-order step carries a tier tag `[T1]`–`[T4]`. A tier describes the
+**level of responsibility the step demands** — not which model or person
+executes it. Anyone may execute above a step's tier; never below. The tag is a
+floor of care.
+
+- **T1 — mission critical; human-grade / extreme rigor.** An error here can
+  pass the tests and still poison the architecture, or the step's output IS
+  constitutional. The executor must bring the project's highest scrutiny, and
+  the result gets an independent second look before it lands. T1 steps include:
+  the ILRP driver core, the auto-apply conjunction, freezing any constitutive
+  golden, the corpus-lock ceremony, the M12 audit and go/no-go, and Phase-gate
+  work-order authoring.
+- **T2 — implementation-level judgment.** The algorithm is fully specified, but
+  realizing it well requires real engineering decisions: data-structure and
+  error-path choices, edge handling, invariant-preserving refactors. Mistakes
+  are usually caught by the oracles, but poor judgment degrades the experiment.
+- **T3 — minor implementation details only.** The shape is fully given; the
+  executor writes idiomatic Rust filling small gaps (naming, small helpers,
+  test scaffolding). No semantic choices exist to make.
+- **T4 — mechanical.** Pure transcription and task execution: code or config
+  given verbatim in the order, file moves, ignore-flips, checkbox close-outs,
+  running listed commands.
+
+**Blanket rules (override any step tag):**
+
+1. Accepting any golden under `conformance/golden/` — and any `cargo insta
+   review` acceptance of a NEW snapshot — is a **T1 act**: a golden is spec.
+2. The escalation triggers are tier-independent: an ambiguity (§3), a red
+   `crash_*` test, any assertion edit, any new Amendment, or any Discovered gap
+   promotes the moment to **T1** no matter what the surrounding step is tagged.
+3. A lower-tier executor who cannot complete a step WITHOUT exceeding its tier
+   (i.e. a "T4" step turns out to require a decision) has, by definition, found
+   a Discovered gap — stop and record it (§3).
+
+Delegation guidance: T4 and T3 are safely delegable to cheaper/faster agents
+prompted with this protocol (§3 verbatim). T2 is delegable to a strong mid-tier
+executor with a T1-level review of the diff. T1 is never delegated below the
+project's most capable executor, and its artifacts get human sign-off.
+
+## 8. Shared conventions all orders rely on
 
 - **Aux namespaces:** every aux-namespace constant lives in
   `liminal_graph::store::ns` (`ILRP_INTENT`, `JUR_ALIAS`, `JUR_PLAN`,

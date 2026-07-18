@@ -12,7 +12,7 @@ mod ids;
 mod subject;
 mod time;
 
-pub use grade::IdentityGrade;
+pub use grade::{IdentityGrade, ParseGradeError};
 pub use hash::{ContentHash, ParseHashError, VersionId};
 pub use ids::{
     ActorId, BufferId, ClientId, EntityId, FederationId, GraphRevisionId, IdempotencyKey, KindId,
