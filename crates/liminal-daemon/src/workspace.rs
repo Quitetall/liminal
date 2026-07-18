@@ -4,20 +4,43 @@
 
 use camino::Utf8Path;
 use liminal_graph::GraphStore;
-use liminal_id::ClientId;
+use liminal_id::{BufferId, ClientId, JurisdictionKey, PathId, SessionEpoch, TransactionId};
 use liminal_jurisdiction::{Checker, ProfileSet, ReconciliationQueue, RepairRecord};
 use liminal_revision::{AvailableInputs, BasisPerspective, PerspectiveError, WorkspaceBasis};
 
 use crate::session::ClientSession;
 
-/// The assembled toy workspace: store + profiles + inputs.
+/// Per-open buffer bookkeeping (D06.3/D06.4): which path a buffer covers, its
+/// monotonic generation, and the durable base hash it was opened against.
+#[derive(Debug, Clone)]
+pub(crate) struct BufferState {
+    /// The client that owns this buffer (used by the save flow, M06.4).
+    #[allow(dead_code, reason = "read by the ClientSession::save fold-in at M06.4")]
+    pub(crate) client: ClientId,
+    pub(crate) path: PathId,
+    pub(crate) generation: u64,
+    pub(crate) base_file_hash: liminal_id::ContentHash,
+}
+
+/// The assembled toy workspace: store + profiles + inputs + buffer bookkeeping.
 #[derive(Debug)]
 pub struct ToyWorkspace {
     store: GraphStore,
     profiles: ProfileSet,
-    #[allow(dead_code, reason = "wired up by session plumbing at M6")]
     inputs: AvailableInputs,
+    /// The workspace root (buffers read/write files under it).
+    root: camino::Utf8PathBuf,
+    /// This process's session epoch (D06.3 — prevents generation collisions
+    /// across editor sessions over one durable subject). Computed read-only at
+    /// open; persisted lazily on the first buffer.
+    epoch: SessionEpoch,
+    /// Whether this session's epoch has been persisted to `SYS_EPOCH` yet.
+    epoch_persisted: bool,
+    /// Open buffers, keyed by id.
+    buffers: BTreeMap<BufferId, BufferState>,
 }
+
+use std::collections::BTreeMap;
 
 impl ToyWorkspace {
     /// Open the workspace rooted at `root`: state lives at `<root>/state/`;
@@ -49,10 +72,24 @@ impl ToyWorkspace {
         crate::runner::sweep_overlays(&store, root)
             .map_err(|e| WorkspaceError::Sweep(e.to_string()))?;
 
+        // D06.3: this session's epoch is one past the durable counter. It is
+        // computed read-only here and only PERSISTED when the session first
+        // opens a buffer (`register_buffer`) — so recovery-only and CLI-read
+        // opens are side-effect-free and world-digest idempotence holds.
+        let epoch = SessionEpoch(peek_epoch(&store)? + 1);
+
+        // Seed the durable input map from every ingested file (D06.5: the
+        // single source of truth for perspective resolution).
+        let inputs = seed_durable_inputs(&store, root)?;
+
         Ok(Self {
             store,
             profiles: ProfileSet::phase_minus_1(),
-            inputs: AvailableInputs::default(),
+            inputs,
+            root: root.to_owned(),
+            epoch,
+            epoch_persisted: false,
+            buffers: BTreeMap::new(),
         })
     }
 
@@ -87,14 +124,97 @@ impl ToyWorkspace {
         ReconciliationQueue { store: &self.store }
     }
 
-    /// Capture one immutable Basis under a perspective (Law 3D/3J).
+    /// Capture one immutable Basis under a perspective (Law 3D/3J). Resolves
+    /// against the current input map via `liminal_revision::resolve` (M06
+    /// Algorithm A) at the store's current transaction frontier.
     #[allow(
         clippy::needless_pass_by_value,
-        reason = "the M6 implementation moves the perspective into the captured WorkspaceBasis"
+        reason = "frozen surface: basis(perspective: BasisPerspective) (M06 §Frozen surfaces)"
     )]
     pub fn basis(&self, perspective: BasisPerspective) -> Result<WorkspaceBasis, PerspectiveError> {
-        let _ = perspective;
-        todo!("Phase -1 M6: perspective capture via liminal_revision::resolve")
+        let at = TransactionId::new();
+        liminal_revision::resolve(&self.inputs, &perspective, at)
+    }
+
+    /// The session epoch of this open (D06.3).
+    #[must_use]
+    pub(crate) fn epoch(&self) -> SessionEpoch {
+        self.epoch
+    }
+
+    /// The workspace root.
+    #[must_use]
+    pub(crate) fn root(&self) -> &Utf8Path {
+        &self.root
+    }
+
+    /// Register a freshly opened buffer's state (session plumbing). The first
+    /// buffer of a session persists the epoch (D06.3), so only buffer-producing
+    /// sessions bump the durable counter.
+    pub(crate) fn register_buffer(&mut self, id: BufferId, state: BufferState) {
+        if !self.epoch_persisted {
+            let _ = persist_epoch(&self.store, self.epoch);
+            self.epoch_persisted = true;
+        }
+        self.buffers.insert(id, state);
+    }
+
+    /// A buffer's mutable state.
+    pub(crate) fn buffer_mut(&mut self, id: BufferId) -> Option<&mut BufferState> {
+        self.buffers.get_mut(&id)
+    }
+
+    /// A buffer's state (read-only).
+    #[must_use]
+    pub(crate) fn buffer(&self, id: BufferId) -> Option<&BufferState> {
+        self.buffers.get(&id)
+    }
+
+    /// Publish a working component for a client over a subject (D06.2: the
+    /// working map holds at most one component per key; the publisher
+    /// guarantees uniqueness).
+    pub(crate) fn publish_working(
+        &mut self,
+        client: ClientId,
+        key: JurisdictionKey,
+        component: liminal_revision::BasisComponent,
+    ) {
+        self.inputs
+            .working
+            .entry(client)
+            .or_default()
+            .insert(key, component);
+    }
+
+    /// Remove a client's working claim over a subject (D06.2 divergence
+    /// fallback: the subject reverts to durable state).
+    pub(crate) fn unpublish_working(&mut self, client: ClientId, key: &JurisdictionKey) {
+        if let Some(map) = self.inputs.working.get_mut(&client) {
+            map.remove(key);
+        }
+    }
+
+    /// Record a working-holder selection for a client over a subject (AM-6.2).
+    pub(crate) fn select_working(
+        &mut self,
+        client: ClientId,
+        key: JurisdictionKey,
+        buffer: BufferId,
+    ) {
+        self.inputs
+            .working_selection
+            .entry(client)
+            .or_default()
+            .insert(key, buffer);
+    }
+
+    /// Whether a client already has a published working claim over a subject.
+    #[must_use]
+    pub(crate) fn has_working(&self, client: ClientId, key: &JurisdictionKey) -> bool {
+        self.inputs
+            .working
+            .get(&client)
+            .is_some_and(|m| m.contains_key(key))
     }
 
     /// A scripted client session ("neovim", "phone" — R4 §10). No real
@@ -127,6 +247,60 @@ impl ToyWorkspace {
     pub(crate) fn inputs_mut(&mut self) -> &mut AvailableInputs {
         &mut self.inputs
     }
+}
+
+/// Read the durable `SYS_EPOCH["epoch"]` counter WITHOUT mutating it (D06.3).
+fn peek_epoch(store: &GraphStore) -> Result<u64, WorkspaceError> {
+    Ok(store
+        .get_aux(liminal_graph::ns::SYS_EPOCH, "epoch")?
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0))
+}
+
+/// Persist this session's epoch to `SYS_EPOCH["epoch"]` (its own txn). Called
+/// once, lazily, when a session first opens a buffer.
+fn persist_epoch(store: &GraphStore, epoch: SessionEpoch) -> Result<(), WorkspaceError> {
+    let mut txn = store.begin()?;
+    txn.put_aux(
+        liminal_graph::ns::SYS_EPOCH,
+        "epoch",
+        serde_json::Value::from(epoch.0),
+    )?;
+    txn.commit(liminal_graph::TxnMeta {
+        actor: None,
+        origin: liminal_graph::Origin::Human,
+        at: liminal_id::Timestamp::now(),
+        provenance: Some("epoch:persist".into()),
+        inverse: None,
+    })?;
+    Ok(())
+}
+
+/// Seed `AvailableInputs.durable` with a `FileContent` component per ingested
+/// file (D06.5). The durable state is what every perspective starts from.
+fn seed_durable_inputs(
+    store: &GraphStore,
+    root: &Utf8Path,
+) -> Result<AvailableInputs, WorkspaceError> {
+    let mut inputs = AvailableInputs::default();
+    for (key, _) in store.scan_aux(liminal_graph::ns::SYS_BLOB)? {
+        let Some(rel) = key.strip_prefix("file/") else {
+            continue;
+        };
+        let abs = root.join(rel);
+        let Ok(bytes) = std::fs::read(&abs) else {
+            continue;
+        };
+        let path = PathId(rel.into());
+        inputs.durable.insert(
+            JurisdictionKey::Path(path.clone()),
+            liminal_revision::BasisComponent::FileContent {
+                path,
+                hash: liminal_id::ContentHash::of(&bytes),
+            },
+        );
+    }
+    Ok(inputs)
 }
 
 /// Workspace failure.

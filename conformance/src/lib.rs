@@ -12,6 +12,7 @@
 pub mod debt;
 pub mod harness;
 pub mod laws;
+pub mod memo;
 pub mod scenario;
 pub mod slo;
 

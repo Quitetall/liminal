@@ -10,6 +10,7 @@
 pub mod crash;
 pub mod digest;
 pub mod executor;
+pub mod render;
 pub mod runner;
 pub mod scenario;
 pub mod session;

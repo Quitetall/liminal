@@ -6,3 +6,4 @@
 mod m03;
 mod m04;
 mod m05;
+mod m06;
