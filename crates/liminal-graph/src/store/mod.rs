@@ -19,9 +19,12 @@
 //! `String`/[`serde_json::Value`] rather than bytes, keeping records
 //! human-inspectable (falsification > speed).
 
+mod asof;
 mod log;
 pub mod ns;
 mod snapshot;
+
+pub use asof::StateView;
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -261,38 +264,57 @@ impl GraphStore {
         })
     }
 
-    /// Read a Node at a revision. Only head reads are supported until the
-    /// as-of prototype (Phase -1.3 / M8).
+    /// Read a Node at a revision. Head reads take the in-memory fast path;
+    /// `rev < head` delegates to [`Self::state_at`] (M08.1); `rev > head` errors.
     pub fn node_at(&self, rev: GraphRevisionId, id: NodeId) -> Result<Option<Node>, StoreError> {
-        let inner = self.lock()?;
-        Self::require_head(&inner.state, rev)?;
-        Ok(inner.state.nodes.get(&id).cloned())
+        {
+            let inner = self.lock()?;
+            if rev == inner.state.head {
+                return Ok(inner.state.nodes.get(&id).cloned());
+            }
+        }
+        Ok(self.state_at(rev)?.node(id).cloned())
     }
 
-    /// Read a Relation at a revision (head-only, see [`Self::node_at`]).
+    /// Read a Relation at a revision (head fast path, else as-of; see
+    /// [`Self::node_at`]).
     pub fn relation_at(
         &self,
         rev: GraphRevisionId,
         id: RelationId,
     ) -> Result<Option<Relation>, StoreError> {
-        let inner = self.lock()?;
-        Self::require_head(&inner.state, rev)?;
-        Ok(inner.state.relations.get(&id).cloned())
+        {
+            let inner = self.lock()?;
+            if rev == inner.state.head {
+                return Ok(inner.state.relations.get(&id).cloned());
+            }
+        }
+        Ok(self.state_at(rev)?.relation(id).cloned())
     }
 
-    /// All Relations whose source is `source` (head-only, see [`Self::node_at`]).
+    /// All Relations whose source is `source` (head fast path, else as-of; see
+    /// [`Self::node_at`]).
     pub fn relations_from(
         &self,
         rev: GraphRevisionId,
         source: NodeId,
     ) -> Result<Vec<Relation>, StoreError> {
-        let inner = self.lock()?;
-        Self::require_head(&inner.state, rev)?;
-        Ok(inner
-            .state
-            .relations
-            .values()
-            .filter(|r| r.source == source)
+        {
+            let inner = self.lock()?;
+            if rev == inner.state.head {
+                return Ok(inner
+                    .state
+                    .relations
+                    .values()
+                    .filter(|r| r.source == source)
+                    .cloned()
+                    .collect());
+            }
+        }
+        Ok(self
+            .state_at(rev)?
+            .relations_from(source)
+            .into_iter()
             .cloned()
             .collect())
     }
@@ -310,6 +332,29 @@ impl GraphStore {
     /// Look up an accepted transaction.
     pub fn transaction(&self, id: TransactionId) -> Result<Option<Transaction>, StoreError> {
         Ok(self.lock()?.state.transactions.get(&id).cloned())
+    }
+
+    /// Write an EPHEMERAL auxiliary value — editor working state (buffer blobs)
+    /// — into the in-memory aux map WITHOUT appending a log record or advancing
+    /// the head revision (M08). An editor keystroke is not a durable graph
+    /// transaction: it must not bump the graph revision that `GraphSnapshot`
+    /// pins, or a buffer edit would spuriously invalidate every graph-reading
+    /// query (component-granular invalidation, v4 §7.5). Lost on reopen —
+    /// buffers are re-sent by their editor.
+    pub fn put_working_aux(
+        &self,
+        ns: &str,
+        key: &str,
+        value: serde_json::Value,
+    ) -> Result<(), StoreError> {
+        let mut inner = self.lock()?;
+        inner
+            .state
+            .aux
+            .entry(ns.to_owned())
+            .or_default()
+            .insert(key.to_owned(), value);
+        Ok(())
     }
 
     /// Read an auxiliary record committed atomically with graph state
@@ -349,17 +394,6 @@ impl GraphStore {
     #[must_use]
     pub fn dir(&self) -> &Utf8Path {
         &self.dir
-    }
-
-    fn require_head(state: &State, rev: GraphRevisionId) -> Result<(), StoreError> {
-        if rev == state.head {
-            Ok(())
-        } else {
-            Err(StoreError::UnsupportedRevision {
-                requested: rev,
-                head: state.head,
-            })
-        }
     }
 
     fn lock(&self) -> Result<std::sync::MutexGuard<'_, Inner>, StoreError> {
@@ -464,10 +498,9 @@ pub enum StoreError {
     /// silently served (v4 §92).
     #[error("store corrupt: {0}")]
     Corrupt(String),
-    /// As-of reads are not implemented until Phase -1.3 (M8).
-    #[error(
-        "only head-revision reads are supported (requested {requested:?}, head {head:?}); as-of queries are Phase -1.3"
-    )]
+    /// A revision ahead of head was requested. As-of reads (M08.1) serve any
+    /// `rev <= head`; only a future revision is unsupported.
+    #[error("revision {requested:?} is ahead of head {head:?}")]
     UnsupportedRevision {
         /// The requested revision.
         requested: GraphRevisionId,

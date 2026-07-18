@@ -26,7 +26,7 @@ anyhow = "1"                                                        # binaries a
 camino = { version = "1", features = ["serde1"] }                   # UTF-8 paths for PathId / file Holders
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] } # bins only
-uuid = { version = "1", features = ["v7", "serde"] }                # 128-bit time-ordered persistent IDs (v4 §44)
+uuid = { version = "1", features = ["v5", "v7", "serde"] }          # 128-bit persistent IDs (v4 §44); v5 = deterministic id from a well-known external source name (M08 reactor)
 blake3 = "1"                                                        # ContentHash / content addressing (v4 §19.3, §47)
 crc32fast = "1"                                                     # log record checksums (v4 §92)
 fs4 = "0.13"                                                        # advisory single-writer lock; survives SIGABRT where O_EXCL lockfiles would not

@@ -148,24 +148,16 @@ impl<'w> ClientSession<'w> {
     }
 
     /// Persist `SYS_BLOB["buf/<client>/<buffer>/<generation>"] = bytes`
-    /// (D06.4) so memoized queries can read exact generation bytes.
+    /// (D06.4) so memoized queries can read exact generation bytes. This is an
+    /// EPHEMERAL working-state write (M08): it does NOT advance the graph
+    /// revision, so a buffer edit never invalidates graph-reading queries.
     fn persist_buffer_blob(&self, buffer: BufferId, generation: u64, bytes: &[u8]) {
         let key = format!("buf/{}/{buffer}/{generation}", self.client);
-        let store = self.workspace.store();
-        if let Ok(mut txn) = store.begin() {
-            let _ = txn.put_aux(
-                SYS_BLOB,
-                &key,
-                serde_json::Value::String(String::from_utf8_lossy(bytes).into_owned()),
-            );
-            let _ = txn.commit(liminal_graph::TxnMeta {
-                actor: None,
-                origin: liminal_graph::Origin::Human,
-                at: liminal_id::Timestamp::now(),
-                provenance: Some("buffer:blob".into()),
-                inverse: None,
-            });
-        }
+        let _ = self.workspace.store().put_working_aux(
+            SYS_BLOB,
+            &key,
+            serde_json::Value::String(String::from_utf8_lossy(bytes).into_owned()),
+        );
     }
 
     /// The `ambiguity:` root-cause key for a subject (D05.5 grammar).

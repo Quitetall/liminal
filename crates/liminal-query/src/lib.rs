@@ -21,6 +21,10 @@
 //! as generic functions in the conformance suite today, years before the
 //! first real implementation plugs in.
 
+pub mod memo;
+
+pub use memo::{MemoEntry, MemoTable, entry_over_basis};
+
 use liminal_revision::{ComponentDeps, WorkspaceBasis};
 
 /// A pure revisioned computation over a declared Workspace Basis (v4 §24).

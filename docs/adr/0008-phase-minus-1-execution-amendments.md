@@ -35,6 +35,12 @@ AM-2.3 (M02): liminal_graph::store::ns module — aux-namespace constants get on
 AM-2.4 (M02): conformance `[[bin]] lim-toy` — D02.6 binary-location resolution.
 AM-2.5 (M02): test-name prefixing — recovery_never_guesses → crash_recovery_never_guesses (nextest crash-group filter). Assertions unchanged.
 AM-7.1 (M07): IdentityGrade::strength(self) -> u8 exposed pub (was private) for the M07 corpus's D07.5 worst-outcome ordering. Additive; pre-authorized by M07.md Frozen surfaces.
+AM-8.1 (M08): runner step vocabulary gains resolver_observe and query (additive).
+AM-8.2 (M08): liminal_revision::basis::graph_key() — stable map key for the GraphSnapshot component.
+AM-8.3 (M08): liminal_revision::durability module (v4 §24.1 transcription; additive).
+AM-8.4 (M08): SourceId::from_name(&str) deterministic UUIDv5 + uuid v5 feature (resolves DG-8.1).
+AM-8.5 (M08): GraphStore::put_working_aux — ephemeral unlogged aux write for buffer blobs (no head bump).
+AM-8.6 (M08): ToyWorkspace::basis inserts GraphSnapshot{head} at graph_key() (M08.2).
 
 **What would falsify or reverse this:** an M12 audit finding an amendment that
 was applied in code but not recorded here, or recorded here but not in the

@@ -90,6 +90,15 @@ pub enum BasisComponent {
     },
 }
 
+/// The stable Basis map key for the graph-store `GraphSnapshot` component
+/// (AM-8.2). Queries that read graph state record this key so a new graph
+/// revision invalidates exactly the computations that consulted the graph. The
+/// reserved documented path `.liminal/graph` addresses the graph-as-Holder.
+#[must_use]
+pub fn graph_key() -> JurisdictionKey {
+    JurisdictionKey::Path(PathId(".liminal/graph".into()))
+}
+
 /// One accepted causal frontier of a federated merge domain (v4 §7.6).
 ///
 /// Opaque until a declared merge runtime exists — Jurisdiction names and

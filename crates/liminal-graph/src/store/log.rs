@@ -115,6 +115,28 @@ impl SegmentLog {
     }
 }
 
+/// Read-only replay of every retained segment from genesis (segment 0),
+/// feeding each valid record to `apply` in revision order (M08.1 as-of reads).
+/// Unlike [`SegmentLog::recover`] this NEVER mutates the log: a torn tail on the
+/// final segment is simply ignored (the truncation offset is discarded), and the
+/// snapshot is bypassed entirely — the toy never GCs segments, so replaying the
+/// raw segments always reconstructs history from genesis (D08.1). `apply` may
+/// choose to ignore records beyond a target revision.
+pub(crate) fn replay_from_genesis(
+    dir: &Utf8Path,
+    mut apply: impl FnMut(&CommitRecord) -> Result<(), String>,
+) -> Result<(), StoreError> {
+    let segments = list_segments(dir, 0)?;
+    let last_index = segments.len().saturating_sub(1);
+    for (i, (_number, path)) in segments.iter().enumerate() {
+        let bytes = fs::read(path)?;
+        // Reuse the record framing/checksum parser; discard any torn-tail offset
+        // (read-only replay never truncates).
+        let _torn = replay_segment(&bytes, i == last_index, path, &mut apply)?;
+    }
+    Ok(())
+}
+
 /// Replay one segment's bytes. Returns `Ok(Some(offset))` if a torn tail
 /// begins at `offset` and should be truncated (only permitted on the final
 /// segment); `Ok(None)` if the segment replayed cleanly.

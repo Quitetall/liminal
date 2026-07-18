@@ -9,10 +9,12 @@
 
 mod basis;
 mod deps;
+pub mod durability;
 mod inputs;
 mod perspective;
 
-pub use basis::{BasisComponent, CausalFrontier, WorkspaceBasis};
+pub use basis::{BasisComponent, CausalFrontier, WorkspaceBasis, graph_key};
 pub use deps::ComponentDeps;
+pub use durability::{Durability, durability};
 pub use inputs::{AvailableInputs, PerspectiveError, resolve};
 pub use perspective::BasisPerspective;

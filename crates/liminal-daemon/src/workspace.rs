@@ -133,7 +133,17 @@ impl ToyWorkspace {
     )]
     pub fn basis(&self, perspective: BasisPerspective) -> Result<WorkspaceBasis, PerspectiveError> {
         let at = TransactionId::new();
-        liminal_revision::resolve(&self.inputs, &perspective, at)
+        let mut basis = liminal_revision::resolve(&self.inputs, &perspective, at)?;
+        // M08.2: every Basis pins the graph-store revision at the reserved
+        // graph_key() so graph-reading queries (backlinks, export, ai-context)
+        // record a dependency on it and can replay from a frozen Basis.
+        if let Ok(revision) = self.store.head() {
+            basis.components.insert(
+                liminal_revision::graph_key(),
+                liminal_revision::BasisComponent::GraphSnapshot { revision },
+            );
+        }
+        Ok(basis)
     }
 
     /// The session epoch of this open (D06.3).

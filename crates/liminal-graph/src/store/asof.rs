@@ -1,0 +1,95 @@
+//! As-of reads (M08.1, v4 §-1.3, §24): materialize a read-only [`StateView`] at
+//! any historical revision by replaying the retained segments from genesis. The
+//! toy never garbage-collects segments, so genesis replay is always available;
+//! O(n) is toy-fine (prohibition #8: no production store work).
+
+use liminal_id::{GraphRevisionId, NodeId, RelationId};
+
+use super::{GraphStore, State, StoreError, log};
+use crate::node::Node;
+use crate::relation::Relation;
+
+/// A read-only materialized view of graph state at one revision. Owns the
+/// `State` reconstructed at that revision; every accessor mirrors the head-read
+/// API of [`GraphStore`] but is served from the frozen view.
+#[derive(Debug)]
+pub struct StateView {
+    state: State,
+}
+
+impl StateView {
+    /// The Node with `id` at this revision, if present.
+    #[must_use]
+    pub fn node(&self, id: NodeId) -> Option<&Node> {
+        self.state.nodes.get(&id)
+    }
+
+    /// The Relation with `id` at this revision, if present.
+    #[must_use]
+    pub fn relation(&self, id: RelationId) -> Option<&Relation> {
+        self.state.relations.get(&id)
+    }
+
+    /// Every Relation whose source is `source` at this revision (id order).
+    #[must_use]
+    pub fn relations_from(&self, source: NodeId) -> Vec<&Relation> {
+        self.state
+            .relations
+            .values()
+            .filter(|r| r.source == source)
+            .collect()
+    }
+
+    /// The ordered children of `parent` at this revision.
+    #[must_use]
+    pub fn children(&self, parent: NodeId) -> &[NodeId] {
+        self.state.children.get(&parent).map_or(&[], Vec::as_slice)
+    }
+
+    /// An auxiliary record at this revision.
+    #[must_use]
+    pub fn get_aux(&self, ns: &str, key: &str) -> Option<&serde_json::Value> {
+        self.state.aux.get(ns).and_then(|m| m.get(key))
+    }
+
+    /// The revision this view was materialized at.
+    #[must_use]
+    pub fn head(&self) -> GraphRevisionId {
+        self.state.head
+    }
+}
+
+impl GraphStore {
+    /// Materialize state as of `rev` (M08.1). Replays retained segments from
+    /// genesis into a scratch `State`, applying records up to and including
+    /// `rev`. `rev == head` clones the in-memory state directly.
+    ///
+    /// # Errors
+    /// [`StoreError::UnsupportedRevision`] iff `rev` is ahead of head; I/O or
+    /// corruption errors propagate from the segment replay.
+    pub fn state_at(&self, rev: GraphRevisionId) -> Result<StateView, StoreError> {
+        let guard = self.lock()?;
+        let head = guard.state.head;
+        if rev.0 > head.0 {
+            return Err(StoreError::UnsupportedRevision {
+                requested: rev,
+                head,
+            });
+        }
+        if rev == head {
+            return Ok(StateView {
+                state: guard.state.clone(),
+            });
+        }
+
+        // Replay from genesis, stopping after the record whose revision == rev.
+        let mut state = State::default();
+        log::replay_from_genesis(self.dir(), |record| {
+            if record.revision.0 <= rev.0 {
+                state.apply_commit(record).map_err(|e| e.to_string())?;
+            }
+            Ok(())
+        })?;
+        Ok(StateView { state })
+    }
+}

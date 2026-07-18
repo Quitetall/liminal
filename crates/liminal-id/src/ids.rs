@@ -126,6 +126,17 @@ define_id!(
     /// An external source/service identity (v4 §7.5 `ExternalRevision` / `Observation`).
     SourceId, "source"
 );
+
+impl SourceId {
+    /// Derive a STABLE `SourceId` from a well-known external source name (e.g.
+    /// `"stock:acme"`), via UUIDv5 (namespaced SHA-1). Deterministic: the same
+    /// name always maps to the same id across runs and machines — required so a
+    /// frozen Basis replays byte-identically (v4 §42; M08 reactor, DG-8.1).
+    #[must_use]
+    pub fn from_name(name: &str) -> Self {
+        Self::from_uuid(Uuid::new_v5(&Uuid::NAMESPACE_OID, name.as_bytes()))
+    }
+}
 define_id!(
     /// An immutable outward-facing publication revision (v4 §7.5 `Published`).
     PublicationId, "publication"
