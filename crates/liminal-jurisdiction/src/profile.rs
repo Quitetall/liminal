@@ -107,7 +107,31 @@ impl JurisdictionProfile for ExternalFileProfile {
     }
 
     fn safety_check(&self, _plan: &RepairPlan) -> Result<SafetyEvidence, Vec<ReviewReason>> {
-        todo!("Phase -1 M4: structural disjointness at toy-paragraph granularity (R4 §6)")
+        // ── STUB (M04.2, T2). BLOCKED on DG-4.1 (see docs/execution/M04.md). ──
+        //
+        // Spec (M04 Algorithm B, ExternalFileProfile::safety_check):
+        // For each governed `WriteFile` step in `plan`:
+        //   1. Recompute the merge: `liminal_source::merge::three_way(base,
+        //      ours, current)` where
+        //        base    = SYS_BLOB[plan.basis component hash for the path],
+        //        ours    = SYS_BLOB[hash of the buffer bytes],
+        //        current = the hash-verified current file bytes.
+        //      DG-4.1: this fn only receives `&GraphStore`, which cannot read
+        //      the on-disk file. Resolve DG-4.1 first (reading (a): treat the
+        //      step's `expected_prestate` hash as `current`, no disk read).
+        //   2. If the on-disk hash != the step prestate hash → push
+        //      ReviewReason("the file changed while planning"); continue.
+        //   3. MergeOutcome::Disjoint{merged} where merged == step contents →
+        //      contributes evidence (this step is safe).
+        //   4. MergeOutcome::UniqueOverlap{overlapping} →
+        //      ReviewReason(format!("not structurally disjoint: both edits \
+        //      touch {overlapping:?}")).
+        //   5. MergeOutcome::Conflict → ReviewReason("no unique result").
+        // For each `InsertSourceId` step: content-preserving (marker only) →
+        //   contribute "id-insert: #<alias> content-preserving" to the desc.
+        // Return: no reasons → Ok(SafetyEvidence::StructurallyDisjoint {
+        //   description: <"; "-joined per-step descriptions> }); else Err(reasons).
+        todo!("Phase -1 M4: ExternalFileProfile::safety_check (Algorithm B; blocked on DG-4.1)")
     }
 }
 
@@ -158,7 +182,25 @@ impl JurisdictionProfile for GraphNativeProfile {
     }
 
     fn safety_check(&self, _plan: &RepairPlan) -> Result<SafetyEvidence, Vec<ReviewReason>> {
-        todo!("Phase -1 M4: graph-native safety predicate (R4 §6)")
+        // ── STUB (M04.2, T2). ──
+        //
+        // Spec (M04 Algorithm B, GraphNativeProfile::safety_check):
+        // Recompute condition 3b (identity-requirement) for this profile's
+        // steps: for each `RetargetRelation` step, the effective grade of the
+        // new target must satisfy `relation.requires.minimum` (use
+        // `grade_of(target, store)` plus any claim grades from InsertSourceId
+        // steps establishing that target's identity — see Algorithm B §3).
+        //   pass → Ok(SafetyEvidence::DomainValidator {
+        //     validator: "graph-native/identity-requirement".into(),
+        //     report: "targets satisfy declared identity requirements at basis".into(),
+        //   })
+        //   fail → Err(vec![ReviewReason(
+        //     "reattachment relies on a heuristic match (inferred) but the \
+        //      relation requires {req}")]).
+        // Needs the `&GraphStore` param from AM-4.1 (see DG-4.1 note — graph
+        // steps do NOT need disk access, so this half is unblocked once the
+        // signature is widened).
+        todo!("Phase -1 M4: GraphNativeProfile::safety_check (Algorithm B §3b)")
     }
 }
 

@@ -233,10 +233,51 @@ impl Checker<'_> {
 
     /// Q8: Is the repair deterministic, safe, ordered, recoverable, and
     /// reversible at the captured Basis? A unique result is necessary but not
-    /// sufficient (Law 3G; R4 §6). Full evaluation lands at M4.
+    /// sufficient (Law 3G; R4 §6).
     pub fn evaluate_repair(&self, plan: &RepairPlan) -> Result<RepairDecision, CheckerError> {
         let _ = plan;
-        todo!("Phase -1 M4: full repair evaluation (v4 §7.9 Q8, §7.7 conjunction)")
+        // ── STUB (M04.4, T1 — the killer #2 core). BLOCKED on DG-4.1. ──
+        //
+        // Implement the full v4 §7.7 conjunction (M04 Algorithm B). Collect
+        // `reasons: Vec<ReviewReason>`; return `AutoApply{evidence}` iff empty,
+        // else `NeedsReview{reasons: sorted+deduped}`. NO Reject variant.
+        //
+        // 1. ONE VALID RESULT AT THE CAPTURED BASIS
+        //    a. topo_order(&plan.into_dag)? — Err → "not a dependency DAG: {e}".
+        //    b. per step (topo order): expected_prestate must match the basis
+        //       component for its subject key, OR an earlier step's
+        //       expected_poststate on the same key (intra-plan chaining).
+        //       Mismatch → JUR053 "prestate mismatch for {subject}: {detail}".
+        //    c. WriteFile merge steps: recompute three_way(base, ours, current)
+        //       from SYS_BLOB + file; Conflict → JUR052-class
+        //       "no unique result at the captured basis".
+        // 2. PER-SUBJECT AUTHORIZATION (mutation-local, Law 3F)
+        //    a. self.authorize(plan)? — each refusal → JUR051 "unauthorized: {msg}".
+        //    b. any subject with RepairAuthorization::ReviewRequired → JUR051
+        //       "{subject}: repairs to this item always require review".
+        // 3. IDENTITY + INVARIANTS (what stops the DAG — v4 §7.7 worked example)
+        //    a. per InsertSourceId step: claim grade := Explicit if the target
+        //       block ALREADY carries alias(entity), else Inferred.
+        //    b. per RetargetRelation step: req = relation.requires.minimum;
+        //       effective grade = min(claim grades establishing target identity;
+        //       else grade_of(target)); !satisfies(req) → JUR041 "reattachment
+        //       relies on a heuristic match (inferred) but the relation
+        //       requires {req}".
+        //    c. dangling: no step may leave a PreserveAndSurface relation
+        //       dangling → JUR060.
+        // 4. DOMAIN SAFETY: group steps by governing profile; call
+        //    profile.safety_check(plan, store); Err(rs) → reasons += rs.
+        //    Evidence combination: all StructurallyDisjoint → one, descriptions
+        //    "; "-joined; mixed kinds → "mixed safety evidence; automatic
+        //    composition is not attempted in Phase -1".
+        // 5. IDEMPOTENT + REVERTIBLE: every step has an idempotency_key;
+        //    revertible := plan.inverse.is_some() OR every WriteFile prestate
+        //    blob exists in SYS_BLOB; neither → JUR052 "no revert path recorded".
+        // 6. reasons empty → AutoApply{evidence}; else NeedsReview{reasons}.
+        //
+        // Finding codes live in `checker::codes`. This is the conformance
+        // oracle for auto-apply — interpret, never compile (v4 §125).
+        todo!("Phase -1 M4: evaluate_repair conjunction (Algorithm B; blocked on DG-4.1)")
     }
 
     /// The whole-workspace check backing `lim check`. Sound workspace → empty

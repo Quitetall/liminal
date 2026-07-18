@@ -1,0 +1,65 @@
+# Phase -1 toy scenario — spec: v4 §7.7 (worked example), R4 §5/§6, R4 §10.
+#
+# ── STUB (M04.8, T3). AUTHORED SPEC — needs the `accept_repair` step
+# implemented in the runner (AM-4.2) before it will exec. ──
+#
+# This is the `dag_id_then_reattach` world (a foreign edit strips
+# `{#p-fourier}`, leaving only a heuristic match below the Relation's
+# required grade) PLUS a final `accept_repair` step: a human explicitly
+# accepts the NeedsReview two-step DAG (HumanApproval evidence, D04.5).
+# On acceptance the plan runs through the ONE IlrpDriver: insert the source
+# ID (external file step), then at Finalize retarget the Relation + delete
+# the old node + remap the alias with EntityId continuity (Algorithm A,
+# "Finalize graph ops on acceptance").
+#
+# The base DAG fixture ends at NeedsReview by design; THIS variant is the
+# one that terminates Committed, so it (not dag_id_then_reattach) is what
+# `runnable_crash_scenarios()` RUNNABLE gains at M04 and what
+# `crash_matrix_two_step_dag` drives.
+#
+# TO IMPLEMENT (runner `accept_repair` step, AM-4.2):
+#   step kind = "accept_repair" with no extra fields → look up the single
+#   persisted JUR_PLAN whose JUR_DECISION is NeedsReview; call the daemon
+#   `accept_repair(plan_id)` fn which records HumanApproval evidence and
+#   drives driver.prepare + driver.run to Committed. Assert alias `p-fourier`
+#   now maps to the candidate node and its EntityId is preserved.
+
+[scenario]
+id = "dag_accept"
+title = "Two-step repair DAG accepted: ID insert before reattach, run to Committed"
+spec = ["v4 §7.7", "R4 §5", "R4 §6", "R4 §10"]
+profiles = ["external-file", "graph-native"]
+
+[[setup.file]]
+path = "notes.md"
+text = """
+The Fourier transform decomposes a signal. {#p-fourier}
+"""
+
+[[setup.graph]]
+kind = "comment-relation"
+target = "p-fourier"
+requires_grade = "explicit"
+
+[[step]]
+# Foreign edit strips the explicit source ID.
+kind = "foreign_edit"
+path = "notes.md"
+find = " {#p-fourier}"
+replace = ""
+
+[[step]]
+# Human accepts the proposed two-step DAG (HumanApproval evidence, D04.5).
+kind = "accept_repair"
+
+[expect]
+plan_steps = ["insert_source_id", "reattach_relation"]
+auto_apply = false
+terminal = "Committed"
+checker_stdout = ""
+reconciliation_items = 0
+overlays = 0
+
+[[expect.dependency]]
+before = "insert_source_id"
+after = "reattach_relation"

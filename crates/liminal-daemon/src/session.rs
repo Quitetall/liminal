@@ -49,6 +49,29 @@ impl<'w> ClientSession<'w> {
     pub fn save(&mut self, buffer: BufferId) -> Result<RepairId, SaveError> {
         let _ = buffer;
         let _ = &self.workspace;
-        todo!("Phase -1 M2/M4: save-as-Promotion through IlrpDriver (R4 §4)")
+        // ── STUB (M04.6, T2). Spec = M04 Algorithm C. ──
+        //
+        // save IS Promotion IS a RepairPlan through the ONE IlrpDriver (R4 §4).
+        // 1. (path, base_hash, ours) = buffer state (M6 moves this into
+        //    AvailableInputs; until then read from the runner's buffer map).
+        // 2. persist SYS_BLOB[blake3(ours)] (base blob persisted at open).
+        // 3. if !holder_available(store, path) → M5 branch (stub: always avail).
+        // 4. outcome = merge::three_way(SYS_BLOB[base], ours, current file bytes):
+        //      Disjoint | UniqueOverlap → plan = save-promotion builder (merged);
+        //      Conflict → persist JUR_PLAN[draft plan carrying ours] (+ M5
+        //          Overlay + item); return Ok(plan.id) — capture never rejected.
+        // 5. one txn: JUR_PLAN[plan] + JUR_DECISION[checker.evaluate_repair(&plan)].
+        // 6. AutoApply{evidence} → driver.prepare(plan, evidence); driver.run
+        //    → expect Committed; return Ok(plan.id).
+        // 7. NeedsReview{reasons} → (M5 adds Overlay + reconciliation item);
+        //    return Ok(plan.id).
+        //
+        // Save-promotion builder (Algorithm A): one WriteFile step; prestate =
+        // observed base hash (or FileAbsent); poststate = merged-bytes hash;
+        // inverse = Some(InverseRepairPlan(one WriteFile of the OLD bytes,
+        // prestate = new hash, poststate = old hash)); subject = the FILE node.
+        // The runner's inline save logic (runner::build_save_plan) is the M02
+        // seed to fold into this path.
+        todo!("Phase -1 M4: save-as-Promotion through IlrpDriver (Algorithm C; R4 §4)")
     }
 }

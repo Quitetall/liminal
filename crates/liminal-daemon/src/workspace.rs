@@ -98,7 +98,16 @@ impl ToyWorkspace {
 
     /// All recorded repair decisions (backs `lim repairs`).
     pub fn repairs(&self) -> Result<Vec<RepairRecord>, WorkspaceError> {
-        todo!("Phase -1 M4: repair record listing (R4 §6)")
+        // ── STUB (M04.7, T3). Spec = M04 Algorithm E. ──
+        //
+        // scan_aux(ns::JUR_REPAIR) → deserialize each value as RepairRecord;
+        // sort by repair id (UUIDv7 ⇒ chronological); return. The `lim repairs`
+        // CLI additionally lists JUR_DECISION entries without a matching record
+        // ("needs review: <first ReviewReason>") and nonterminal ilrp.intent
+        // entries ("interrupted (<state>) — run recovery"), but `repairs()`
+        // itself returns only accepted RepairRecords. Zero records → empty vec
+        // (the CLI prints zero bytes on empty, Law 3E).
+        todo!("Phase -1 M4: repair record listing (Algorithm E; R4 §6)")
     }
 
     /// The underlying store (harness access).

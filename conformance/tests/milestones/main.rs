@@ -4,3 +4,4 @@
 //! finer-grained checks a work order's exit gate names.
 
 mod m03;
+mod m04;

@@ -291,7 +291,20 @@ pub fn plan_undo(
     current: &WorkspaceBasis,
 ) -> Result<RepairPlan, UndoBlocked> {
     let _ = (record, current);
-    todo!("Phase -1 M4: Basis-checked undo planning (R4 §6, §11.3)")
+    // ── STUB (M04.7, T3). Spec = M04 Algorithm D. ──
+    //
+    // 1. let inverse = record.inverse.as_ref().ok_or(UndoBlocked::NoInverse)?;
+    // 2. per inverse step, check expected_prestate against `current`:
+    //      StatePredicate::FileContent{path,hash} → current.components[Path(path)]
+    //          must carry that hash (BasisComponent::FileContent { hash, .. });
+    //      graph predicates and Any pass here (ILRP re-verifies at apply).
+    //      mismatch → Err(UndoBlocked::StaleState {
+    //          detail: format!("{path}: expected {exp8}, found {found8}") })
+    //          where exp8/found8 are the first 8 hex chars.
+    // 3. all match → Ok(inverse.clone() with basis := current.clone());
+    //    REUSE the inverse plan's step ids and plan id so a double-undo is
+    //    detected by ILRP as already-applied (idempotent).
+    todo!("Phase -1 M4: Basis-checked undo planning (Algorithm D; R4 §6, §11.3)")
 }
 
 /// Why an undo could not be planned automatically.

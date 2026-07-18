@@ -3,6 +3,26 @@
 //! `FsExecutor` implements `ExternalExecutor` against real files in a workspace
 //! root. It uses `liminal-source::file::{stage, observe}` for hash-verified
 //! staged writes.
+//!
+//! ── STUB SURFACE (M04.5, T2): `InsertSourceId` execution + AM-4.1 store handle.
+//!
+//! `WriteFile` is real (M02). `InsertSourceId` currently returns
+//! `Executor("InsertSourceId deferred to M4")`. To implement per M04
+//! Algorithm A ("InsertSourceId execution"), change `FsExecutor` to
+//! `FsExecutor<'s> { root, store: &'s GraphStore }` (AM-4.1 second half — the
+//! executor needs the store to resolve entity→alias), then in `apply` do:
+//! read bytes (hash must equal the step prestate, else `verify` already
+//! classified `Neither`); find alias `a` by scanning `ns::JUR_ALIAS` for the
+//! entry whose `.entity == m.entity`; build `new_bytes = bytes[..at.start] ++
+//! " {#a}" ++ bytes[at.start..]` (the `at: SourceRange` was computed against
+//! prestate bytes at plan time — the hash check validates the offset);
+//! `stage(&abs, &new_bytes)` then `commit_if(Some(prestate hash))`; ack with
+//! the observed poststate hash. `verify` for `InsertSourceId` mirrors
+//! `WriteFile` (prestate/poststate hash classification against the on-disk
+//! file). Also add the D04.4 rule to `IlrpDriver::run` (in
+//! liminal-jurisdiction): a plan where any file/external step depends on a
+//! `Graph(_)` step is refused with `Executor("graph-before-file ordering
+//! cannot be executed under ILRP")`.
 
 use camino::{Utf8Path, Utf8PathBuf};
 use liminal_id::Timestamp;

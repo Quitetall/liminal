@@ -7,6 +7,7 @@
 //! (R4 §7.5 Recover).
 
 mod file;
+pub mod merge;
 pub mod paragraph;
 mod range;
 

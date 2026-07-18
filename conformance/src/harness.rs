@@ -415,9 +415,11 @@ pub fn runnable_crash_scenarios() -> anyhow::Result<Vec<ScenarioScript>> {
 
 /// Scenarios whose write paths cannot be driven end-to-end yet.
 ///
-/// Shrunk by later milestones: M4 removes the three repair scenarios, M5
-/// removes the offline one. Empty (and deleted) by M5.
+/// Shrunk by later milestones: M4 removes the repair scenarios, M5 removes the
+/// offline one. Empty (and deleted) by M5. `dag_accept` (M04.8 authored) stays
+/// here until the `accept_repair` runner step (AM-4.2) lands.
 pub const NOT_YET_DRIVEN: &[&str] = &[
+    "dag_accept",
     "dag_id_then_reattach",
     "disjoint_safe_repair",
     "offline_holder_overlay",
