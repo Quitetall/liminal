@@ -654,6 +654,14 @@ pub fn recover(root: &Utf8Path) -> anyhow::Result<RecoverOutcome> {
     })
 }
 
+/// The normalized world digest of a workspace (M04 Algorithm F) — ids replaced
+/// by first-appearance ordinals, timestamps dropped. Two workspaces reached by
+/// the same interpreter path over the same inputs hash equally.
+pub fn normalized_digest(root: &Utf8Path) -> anyhow::Result<String> {
+    let ws = ToyWorkspace::open(root)?;
+    crate::digest::normalized_world_digest(root, ws.store()).map_err(|e| anyhow::anyhow!("{e}"))
+}
+
 /// Build the `lim repairs` report lines (M04 Algorithm E), sorted by repair id
 /// (UUIDv7 ⇒ chronological). Zero records + zero nonterminal intents → empty.
 ///
