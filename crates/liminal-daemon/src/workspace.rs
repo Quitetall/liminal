@@ -43,6 +43,12 @@ impl ToyWorkspace {
         };
         let _recovery_outcomes = driver.recover_all()?;
 
+        // Algorithm B (M05): age Active overlays and re-verify any whose
+        // write route returned while the process was down, BEFORE the
+        // workspace is handed to a caller.
+        crate::runner::sweep_overlays(&store, root)
+            .map_err(|e| WorkspaceError::Sweep(e.to_string()))?;
+
         Ok(Self {
             store,
             profiles: ProfileSet::phase_minus_1(),
@@ -75,7 +81,7 @@ impl ToyWorkspace {
         None
     }
 
-    /// The core Reconciliation Queue (R4 §9; agenda-free by construction).
+    /// The core Reconciliation Queue (R4 §9; no ticket-list subsystem underlies it).
     #[must_use]
     pub fn reconciliation(&self) -> ReconciliationQueue<'_> {
         ReconciliationQueue { store: &self.store }
@@ -135,6 +141,9 @@ pub enum WorkspaceError {
     /// I/O failure.
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    /// Open-time overlay sweep (Algorithm B) failed.
+    #[error("overlay sweep: {0}")]
+    Sweep(String),
 }
 
 /// Save failure. Note what is ABSENT: "Holder unavailable" is not an error —

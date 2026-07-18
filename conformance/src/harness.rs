@@ -417,16 +417,6 @@ pub fn runnable_crash_scenarios() -> anyhow::Result<Vec<ScenarioScript>> {
     Ok(out)
 }
 
-/// Scenarios whose write paths cannot be driven end-to-end yet.
-///
-/// Shrunk by later milestones: M4 removes the repair scenarios, M5 removes the
-/// offline one. Empty (and deleted) by M5. `dag_accept` (M04.8 authored) stays
-/// here until the `accept_repair` runner step (AM-4.2) lands.
-pub const NOT_YET_DRIVEN: &[&str] = &[
-    // Needs the offline-Holder / Overlay path (M5).
-    "offline_holder_overlay",
-];
-
 /// Load every authored scenario fixture, sorted by id.
 pub fn all_scenarios() -> anyhow::Result<Vec<ScenarioScript>> {
     let dir = Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures/scenarios");

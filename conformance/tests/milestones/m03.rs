@@ -167,3 +167,80 @@ fn paragraph_parser_props() {
         }
     });
 }
+
+/// D03.3 (discovered gap DG-3.1): within one commit the first `{#id}`
+/// occurrence wins; later duplicates get no alias and the checker reports
+/// JUR042. A duplicate id is captured (never rejected) but NEVER silent.
+#[test]
+fn duplicate_id_first_wins_and_surfaces_jur042() {
+    use liminal_daemon::scenario::{Expectation, ScenarioHeader, ScenarioScript, Setup, SetupFile};
+
+    let script = ScenarioScript {
+        scenario: ScenarioHeader {
+            id: "m03_duplicate_id".to_owned(),
+            title: Some("duplicate {#id} first-wins".to_owned()),
+            spec: vec!["M03 D03.3".to_owned()],
+            profiles: vec!["external-file".to_owned()],
+        },
+        setup: Setup {
+            files: vec![SetupFile {
+                path: "notes.md".to_owned(),
+                text: "alpha wins {#dup}\n\nbeta loses {#dup}\n".to_owned(),
+            }],
+            graph: Vec::new(),
+            buffers: Vec::new(),
+        },
+        steps: Vec::new(),
+        expect: Expectation::default(),
+    };
+
+    let run = ToyRun::new("m03-dup-id").expect("must create workspace");
+    let exec = run.exec_scenario(&script).expect("exec must run");
+    assert!(
+        exec.status.success(),
+        "duplicate-id capture must not be rejected (Law 3B): {}",
+        String::from_utf8_lossy(&exec.stderr)
+    );
+
+    let ws = ToyWorkspace::open(&run.root).expect("must open workspace");
+    let store = ws.store();
+
+    // First occurrence wins: the alias points at the FIRST paragraph.
+    let alias = store
+        .get_aux(liminal_graph::ns::JUR_ALIAS, "dup")
+        .unwrap()
+        .expect("dup alias must exist");
+    let winner: liminal_id::NodeId = alias["node"].as_str().unwrap().parse().unwrap();
+    let head = store.head().unwrap();
+    let node = store
+        .node_at(head, winner)
+        .unwrap()
+        .expect("winning node must exist");
+    match &node.payload {
+        liminal_graph::PayloadRef::Text(t) => {
+            assert!(t.contains("alpha wins"), "first occurrence must win: {t:?}");
+        }
+        other => panic!("unexpected payload {other:?}"),
+    }
+
+    // The losing block surfaces as exactly one JUR042 — never silent.
+    let checker = ws.checker();
+    let basis = WorkspaceBasis {
+        transaction: TransactionId::new(),
+        perspective: BasisPerspective::DurableOnly,
+        components: BTreeMap::new(),
+    };
+    let report = checker.check_workspace(&basis).expect("check must run");
+    let jur042 = report
+        .findings
+        .iter()
+        .filter(|f| f.code == "JUR042")
+        .count();
+    assert_eq!(jur042, 1, "exactly one JUR042: {:?}", report.findings);
+    assert_eq!(
+        report.findings.len(),
+        1,
+        "no other findings: {:?}",
+        report.findings
+    );
+}

@@ -474,9 +474,11 @@ dependencies = [
  "camino",
  "clap",
  "liminal-daemon",
+ "liminal-graph",
  "liminal-id",
  "liminal-jurisdiction",
  "liminal-revision",
+ "serde_json",
  "toml",
 ]
 

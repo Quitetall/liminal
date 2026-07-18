@@ -36,14 +36,11 @@ fn sound_states_are_silent() {
 /// writes become durable Overlays, never errors.
 #[test]
 fn no_edit_is_rejected() {
-    use liminal_conformance::harness::{NOT_YET_DRIVEN, ToyRun, all_scenarios};
+    use liminal_conformance::harness::{ToyRun, all_scenarios};
 
     let scenarios = all_scenarios().expect("must load scenarios");
     let mut driven = 0;
     for scenario in &scenarios {
-        if NOT_YET_DRIVEN.contains(&scenario.scenario.id.as_str()) {
-            continue;
-        }
         let run = ToyRun::new(&format!("no-reject-{}", scenario.scenario.id))
             .expect("must create workspace");
         let exec = run.exec_scenario(scenario).expect("exec must run");
@@ -229,12 +226,117 @@ fn unique_but_unsafe_candidate_is_not_auto_accepted() {
 }
 
 /// Law 3B/3I / R4 §10: an offline edit is durable as an Overlay, survives
-/// process kill, and appears in `lim overlays` (with age) WITHOUT any agenda
-/// subsystem existing.
+/// process kill, and appears in `lim overlays` (with age) WITHOUT any
+/// task-list subsystem existing.
 #[test]
-#[ignore = "Phase -1 M5: overlay durability + reconciliation queue surfacing"]
 fn offline_edit_is_durable_and_visible_in_lim_overlays() {
-    unimplemented!("scenario: fixtures/scenarios/offline_holder_overlay.scenario.toml")
+    use liminal_conformance::harness::{ToyRun, all_scenarios};
+    use liminal_daemon::ToyWorkspace;
+
+    let scenarios = all_scenarios().expect("must load scenarios");
+    let scenario = scenarios
+        .iter()
+        .find(|s| s.scenario.id == "offline_holder_overlay")
+        .expect("offline_holder_overlay must exist");
+
+    let run = ToyRun::new("offline-overlay").expect("must create workspace");
+    let exec = run.exec_scenario(scenario).expect("exec must run");
+    assert!(
+        exec.status.success(),
+        "capture is never rejected (Law 3B); stderr: {}",
+        String::from_utf8_lossy(&exec.stderr)
+    );
+
+    // Overlay present post-restart (the scenario's own last step); draft
+    // bytes fully recoverable from the overlay + its blob == the buffer edit.
+    // Independently recompute the expected merged text (base == durable file,
+    // since nothing else touched it while offline) rather than hand-deriving
+    // the toy paragraph reconstruction's exact byte layout.
+    let base_text = &scenario.setup.files[0].text;
+    let edited = base_text.replacen("decomposes a signal", "decomposes a time-domain signal", 1);
+    let expected = match liminal_source::merge::three_way(base_text, &edited, base_text) {
+        liminal_source::merge::MergeOutcome::Disjoint { merged } => merged,
+        other => panic!("expected a disjoint merge, got {other:?}"),
+    };
+    let expected = expected.as_str();
+    {
+        let ws = ToyWorkspace::open(&run.root).expect("open");
+        let store = ws.store();
+
+        let overlays = store
+            .scan_aux(liminal_graph::ns::JUR_OVERLAY)
+            .expect("scan overlays");
+        assert_eq!(overlays.len(), 1, "exactly one durable overlay");
+        let overlay: liminal_jurisdiction::Overlay =
+            serde_json::from_value(overlays[0].1.clone()).expect("decode overlay");
+        assert_eq!(overlay.state, liminal_jurisdiction::OverlayState::Active);
+        let liminal_jurisdiction::RepairOperation::WriteFile { contents, .. } = &overlay.operation
+        else {
+            panic!("offline overlay must carry a WriteFile draft");
+        };
+        assert_eq!(
+            String::from_utf8_lossy(contents).as_ref(),
+            expected,
+            "draft bytes recoverable from the overlay match the edit"
+        );
+
+        // Also recoverable via the content-addressed blob (D05.2 SYS_BLOB[ours]).
+        let hash = liminal_id::ContentHash::of(expected.as_bytes());
+        let blob = liminal_jurisdiction::blob::get(store, hash)
+            .expect("blob lookup")
+            .expect("draft blob present");
+        assert_eq!(blob, expected);
+
+        // Never silently promoted: zero reconciliation items (R4 §2.3 window).
+        let items = ws.reconciliation().items().expect("items");
+        assert_eq!(
+            items.len(),
+            0,
+            "profile-declared transient draft, no debt yet"
+        );
+
+        // The durable file itself is untouched — capture never wrote through
+        // the unavailable Holder.
+        let on_disk = std::fs::read_to_string(run.root.join("notes.md")).unwrap();
+        assert_ne!(
+            on_disk, expected,
+            "the unavailable Holder was never written"
+        );
+    }
+
+    // `lim overlays` renders exactly one everyday-vocabulary line.
+    let overlays_out = run.lim(&["overlays"]).expect("lim overlays runs");
+    assert!(overlays_out.status.success(), "lim overlays exit 0");
+    let stdout = String::from_utf8_lossy(&overlays_out.stdout);
+    let re = regex_lite_match(&stdout);
+    assert!(
+        re,
+        "lim overlays output must match '^pending sync  notes\\.md  \\d+[smhd]$', got {stdout:?}"
+    );
+
+    // The checker stays byte-silent (the overlay is not a soundness finding).
+    let check = run.check().expect("lim check must run");
+    liminal_conformance::assert_silent(&check);
+}
+
+/// Hand-rolled match for `^pending sync  notes\.md  \d+[smhd]$\n` — no regex
+/// dependency needed for one fixed-shape line.
+fn regex_lite_match(stdout: &str) -> bool {
+    let Some(line) = stdout.strip_suffix('\n') else {
+        return false;
+    };
+    if stdout.matches('\n').count() != 1 {
+        return false;
+    }
+    let Some(rest) = line.strip_prefix("pending sync  notes.md  ") else {
+        return false;
+    };
+    let Some((digits, unit)) = rest.split_at_checked(rest.len().saturating_sub(1)) else {
+        return false;
+    };
+    !digits.is_empty()
+        && digits.chars().all(|c| c.is_ascii_digit())
+        && matches!(unit, "s" | "m" | "h" | "d")
 }
 
 /// Law 3H / R4 §10: ILRP resumes correctly after termination at EVERY durable

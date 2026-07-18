@@ -85,19 +85,6 @@ fn main() -> ExitCode {
         Cmd::Repair {
             cmd: RepairCmd::Undo { repair_id },
         } => cmd::repair_undo::run(&args.workspace, &repair_id),
-        // Still stubbed for M5 (returns anyhow).
-        Cmd::Overlays { all } => bail_result(cmd::overlays::run(&args.workspace, all)),
-    }
-}
-
-/// Map a stub command's `anyhow::Result<()>` onto an exit code, printing any
-/// error to stderr.
-fn bail_result(result: anyhow::Result<()>) -> ExitCode {
-    match result {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("{e}");
-            ExitCode::from(2)
-        }
+        Cmd::Overlays { all } => cmd::overlays::run(&args.workspace, all),
     }
 }

@@ -6,20 +6,24 @@
 //! and prints terminal states.
 
 use camino::{Utf8Path, Utf8PathBuf};
-use liminal_graph::ns::{ILRP_INTENT, JUR_ALIAS, JUR_DECISION, JUR_PLAN, JUR_REPAIR, SYS_BLOB};
+use liminal_graph::ns::{
+    ILRP_INTENT, JUR_ALIAS, JUR_DECISION, JUR_OVERLAY, JUR_OVERLAY_LOG, JUR_PLAN, JUR_REPAIR,
+    SYS_BLOB, SYS_CLOCK, SYS_UNAVAILABLE,
+};
 use liminal_graph::{
     GraphStore, IdentityRequirement, Node, NodeFlags, Operation, PayloadRef, Relation,
     RelationFlags, Target,
 };
 use liminal_id::{
     ClientId, ContentHash, EntityId, IdempotencyKey, IdentityGrade, JurisdictionKey,
-    JurisdictionSubject, NodeId, PathId, RelationId, RepairId, RepairStepId, RevisionId,
-    TransactionId,
+    JurisdictionSubject, NodeId, OverlayId, PathId, ReconciliationItemId, RelationId, RepairId,
+    RepairStepId, RevisionId, Timestamp, TransactionId,
 };
 use liminal_jurisdiction::{
-    Checker, CrashInjector, ExternalExecutor, IlrpDriver, IntentState, InverseRepairPlan,
-    ProposedMutation, RepairDecision, RepairOperation, RepairPlan, RepairRecord, SafetyEvidence,
-    StatePredicate, blob,
+    Checker, CrashInjector, ExternalExecutor, IlrpDriver, IntentState, InverseRepairPlan, Overlay,
+    OverlayState, ProfileSet, ProposedMutation, ReconciliationItem, ReconciliationQueue,
+    ReconciliationStatus, RepairDecision, RepairOperation, RepairPlan, RepairRecord,
+    SafetyEvidence, StatePredicate, blob,
 };
 use liminal_revision::{BasisComponent, BasisPerspective, WorkspaceBasis};
 use liminal_source::merge::{self, MergeOutcome};
@@ -35,7 +39,7 @@ fn ingest_files(store: &GraphStore, files: &[crate::scenario::SetupFile]) -> any
     let meta = liminal_graph::TxnMeta {
         actor: None,
         origin: liminal_graph::Origin::Human,
-        at: liminal_id::Timestamp::now(),
+        at: Timestamp::now(),
         provenance: Some("setup:file".into()),
         inverse: None,
     };
@@ -88,8 +92,12 @@ fn ingest_files(store: &GraphStore, files: &[crate::scenario::SetupFile]) -> any
                 child: para_node,
                 index: i as u64,
             })?;
-            // 4. Store alias if id present.
-            if let Some(ref id) = block.id {
+            // 4. Store alias if id present. D03.3: the first occurrence wins;
+            // later duplicates get NO alias — the checker surfaces the
+            // orphaned durable-id marker as JUR042.
+            if let Some(ref id) = block.id
+                && store.get_aux(JUR_ALIAS, id)?.is_none()
+            {
                 let entity = EntityId::new();
                 txn.put_aux(
                     JUR_ALIAS,
@@ -111,7 +119,7 @@ fn ingest_graph(store: &GraphStore, graph_entries: &[SetupGraph]) -> anyhow::Res
     let meta = liminal_graph::TxnMeta {
         actor: None,
         origin: liminal_graph::Origin::Human,
-        at: liminal_id::Timestamp::now(),
+        at: Timestamp::now(),
         provenance: Some("setup:graph".into()),
         inverse: None,
     };
@@ -294,7 +302,7 @@ fn build_save_plan(
 /// heuristic reattachment is refused for automatic acceptance, so the plan +
 /// its NeedsReview decision persist for explicit acceptance (`accept_repair`).
 fn plan_foreign_changes(
-    profiles: &liminal_jurisdiction::ProfileSet,
+    profiles: &ProfileSet,
     root: &Utf8Path,
     store: &GraphStore,
 ) -> anyhow::Result<()> {
@@ -388,8 +396,187 @@ fn plan_foreign_changes(
             .map_err(|e| anyhow::anyhow!("{e}"))?;
         persist_plan(store, &plan)?;
         persist_decision(store, plan.id, &decision)?;
+
+        // Creation site (3), M05.md Data schemas: a NeedsReview DAG proposal
+        // writes TWO overlays (source-id insertion + relation endpoint) plus
+        // ONE coalesced `identity:` item (D05.5) — the plan stays actionable
+        // via `accept_repair` until explicitly accepted or discarded (D05.6).
+        if matches!(decision, RepairDecision::NeedsReview { .. }) {
+            propose_dag_review(store, profiles, &plan, &rel_path, &alias)?;
+        }
     }
     Ok(())
+}
+
+/// Build the `RepairProposed` Overlay for one plan step, dated `now` (creation
+/// sites 2/3, M05.md Data schemas): its lifecycle comes from the step
+/// subject's OWN governing profile (Law 3F — no cross-subject borrowing).
+fn review_overlay(
+    profiles: &ProfileSet,
+    store: &GraphStore,
+    subject: JurisdictionSubject,
+    base: WorkspaceBasis,
+    operation: RepairOperation,
+    plan_id: RepairId,
+    now: Timestamp,
+) -> anyhow::Result<Overlay> {
+    let profile = profiles
+        .for_subject(subject, store)
+        .ok_or_else(|| anyhow::anyhow!("no profile governs {subject}"))?;
+    let lifecycle = profile.contract_for(subject, store).lifecycle;
+    Ok(Overlay {
+        id: OverlayId::new(),
+        subject,
+        base,
+        operation,
+        created_at: now,
+        last_activity: now,
+        profile: profile.id(),
+        lifecycle,
+        state: OverlayState::RepairProposed(plan_id),
+    })
+}
+
+/// Creation site (2), M04 Algorithm C step 7 / D05.5: a single-step save plan
+/// that came back NeedsReview writes ONE Overlay plus ONE coalesced
+/// `<category>:path:<p>` item, in one transaction.
+fn propose_review(
+    store: &GraphStore,
+    profiles: &ProfileSet,
+    plan: &RepairPlan,
+) -> anyhow::Result<()> {
+    let step = plan
+        .steps
+        .values()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("NeedsReview plan has no steps"))?;
+    let path = overlay_operation_path(&step.operation)
+        .ok_or_else(|| anyhow::anyhow!("NeedsReview save plan must have a file step"))?;
+    let now = now_with_offset(store)?;
+    let overlay = review_overlay(
+        profiles,
+        store,
+        step.subject,
+        plan.basis.clone(),
+        step.operation.clone(),
+        plan.id,
+        now,
+    )?;
+    let item = ReconciliationItem {
+        id: ReconciliationItemId::new(),
+        root_cause: format!("conflict:path:{path}"),
+        subjects: vec![step.subject],
+        overlays: vec![overlay.id],
+        repairs: vec![plan.id],
+        created_at: now,
+        status: ReconciliationStatus::Pending,
+    };
+    let mut txn = store.begin()?;
+    txn.put_aux(
+        JUR_OVERLAY,
+        &overlay.id.to_string(),
+        serde_json::to_value(&overlay)?,
+    )?;
+    ReconciliationQueue { store }.upsert_coalesced(&mut txn, item)?;
+    txn.commit(save_meta())?;
+    Ok(())
+}
+
+/// Creation site (3), M05.md Data schemas: the two-step foreign-change DAG
+/// (source-id insertion + Relation reattachment) writes TWO overlays plus ONE
+/// coalesced `identity:path:<p>#<alias>` item (D05.5), in one transaction.
+fn propose_dag_review(
+    store: &GraphStore,
+    profiles: &ProfileSet,
+    plan: &RepairPlan,
+    rel_path: &PathId,
+    alias: &str,
+) -> anyhow::Result<()> {
+    let now = now_with_offset(store)?;
+    let mut overlays = Vec::with_capacity(plan.steps.len());
+    for step in plan.steps.values() {
+        overlays.push(review_overlay(
+            profiles,
+            store,
+            step.subject,
+            plan.basis.clone(),
+            step.operation.clone(),
+            plan.id,
+            now,
+        )?);
+    }
+    let item = ReconciliationItem {
+        id: ReconciliationItemId::new(),
+        root_cause: format!("identity:path:{rel_path}#{alias}"),
+        subjects: overlays.iter().map(|o| o.subject).collect(),
+        overlays: overlays.iter().map(|o| o.id).collect(),
+        repairs: vec![plan.id],
+        created_at: now,
+        status: ReconciliationStatus::Pending,
+    };
+    let mut txn = store.begin()?;
+    for overlay in &overlays {
+        txn.put_aux(
+            JUR_OVERLAY,
+            &overlay.id.to_string(),
+            serde_json::to_value(overlay)?,
+        )?;
+    }
+    ReconciliationQueue { store }.upsert_coalesced(&mut txn, item)?;
+    txn.commit(save_meta())?;
+    Ok(())
+}
+
+/// Retire every Overlay proposed for an accepted plan (D05.6: accepted repair
+/// is a departure path — the Finalize txn deletes the overlay key, history
+/// stays in the log) and resolve any reconciliation item that covered it.
+fn retire_proposed_overlays(store: &GraphStore, plan_id: RepairId) -> anyhow::Result<()> {
+    let mut txn = store.begin()?;
+    let mut any = false;
+    for (key, value) in store.scan_aux(JUR_OVERLAY)? {
+        let overlay: Overlay = serde_json::from_value(value)?;
+        if overlay.state == OverlayState::RepairProposed(plan_id) {
+            txn.delete_aux(JUR_OVERLAY, &key)?;
+            resolve_covering_item(store, &mut txn, overlay.id)?;
+            any = true;
+        }
+    }
+    if any {
+        txn.commit(save_meta())?;
+    }
+    Ok(())
+}
+
+/// Mark every `Pending`/`Blocked` reconciliation item that lists `overlay` as
+/// `Resolved` (an accepted repair or holder-return resolves its debt).
+fn resolve_covering_item(
+    store: &GraphStore,
+    txn: &mut liminal_graph::GraphTxn<'_>,
+    overlay: OverlayId,
+) -> anyhow::Result<()> {
+    let queue = ReconciliationQueue { store };
+    for mut item in queue.items()? {
+        if item.overlays.contains(&overlay) && item.status != ReconciliationStatus::Resolved {
+            item.status = ReconciliationStatus::Resolved;
+            txn.put_aux(
+                liminal_jurisdiction::reconcile::RECONCILE_NS,
+                &item.id.to_string(),
+                serde_json::to_value(&item)?,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// The workspace-relative path a repair operation targets, when it is a
+/// file-holder step (`WriteFile` / `InsertSourceId`); `None` for Graph steps.
+pub fn overlay_operation_path(op: &RepairOperation) -> Option<PathId> {
+    match op {
+        RepairOperation::WriteFile { path, .. } | RepairOperation::InsertSourceId { path, .. } => {
+            Some(path.clone())
+        }
+        RepairOperation::Graph(_) | RepairOperation::External { .. } => None,
+    }
 }
 
 /// The single ingested file's (path, current on-disk text). Toy-scale: exactly
@@ -441,11 +628,13 @@ fn accept_repair(store: &GraphStore, root: &Utf8Path) -> anyhow::Result<()> {
 
     let evidence = SafetyEvidence::HumanApproval {
         actor: liminal_id::ActorId::new(),
-        at: liminal_id::Timestamp::now(),
+        at: Timestamp::now(),
     };
     let id = driver.prepare(plan.clone(), evidence.clone())?;
     driver.run(id)?;
     record_repair(store, &plan, "id-insert-then-reattach", &evidence)?;
+    // D05.6: acceptance is a departure path — retire the proposal's overlays.
+    retire_proposed_overlays(store, plan.id)?;
     Ok(())
 }
 
@@ -552,7 +741,7 @@ pub fn build_dag_plan(i: &DagPlanInputs) -> RepairPlan {
 /// proposal. Save IS Promotion IS a RepairPlan through the ONE interpreter.
 fn perform_save<X: ExternalExecutor, C: CrashInjector>(
     driver: &IlrpDriver<'_, X, C>,
-    profiles: &liminal_jurisdiction::ProfileSet,
+    profiles: &ProfileSet,
     root: &Utf8Path,
     bases: &BTreeMap<String, String>,
     buffers: &BTreeMap<(String, String), Vec<u8>>,
@@ -626,7 +815,112 @@ fn perform_save<X: ExternalExecutor, C: CrashInjector>(
         current_bytes.as_deref().map(str::as_bytes),
         merged.as_bytes(),
     );
+
+    // D05.2: the write route may be unavailable even though the file is
+    // still readable (read-only remount). Capture never blocks (Law 3B) —
+    // persist the plan and coalesce a durable Overlay instead of driving
+    // ILRP; no decision, no reconciliation item.
+    if !holder_available(store, path)? {
+        return offline_save(store, profiles, &plan, file_node, merged.as_bytes());
+    }
+
     apply_or_review(driver, profiles, &plan)
+}
+
+/// Whether `path`'s Holder currently accepts writes (D05.1): true iff
+/// `SYS_UNAVAILABLE[path]` is absent.
+pub fn holder_available(store: &GraphStore, path: &str) -> anyhow::Result<bool> {
+    Ok(store.get_aux(SYS_UNAVAILABLE, path)?.is_none())
+}
+
+/// Offline save (D05.2/D05.3): one txn writes the plan (`JUR_PLAN`), the
+/// draft blob (`SYS_BLOB[ours]`), and a coalesced `Active` Overlay. A second
+/// offline save to the same subject updates the EXISTING Active overlay in
+/// place (same id/created_at, new operation/last_activity) and appends the
+/// prior operation to `JUR_OVERLAY_LOG` before overwriting it (D05.3: coalesce
+/// without erasing history).
+fn offline_save(
+    store: &GraphStore,
+    profiles: &ProfileSet,
+    plan: &RepairPlan,
+    file_node: NodeId,
+    ours: &[u8],
+) -> anyhow::Result<RepairId> {
+    let subject = JurisdictionSubject::Node(file_node);
+    let operation = plan
+        .steps
+        .values()
+        .next()
+        .map(|s| s.operation.clone())
+        .ok_or_else(|| anyhow::anyhow!("offline save plan has no steps"))?;
+    let now = now_with_offset(store)?;
+    let profile = profiles
+        .for_subject(subject, store)
+        .ok_or_else(|| anyhow::anyhow!("no profile governs {subject}"))?;
+    let lifecycle = profile.contract_for(subject, store).lifecycle;
+
+    let mut txn = store.begin()?;
+    txn.put_aux(JUR_PLAN, &plan.id.to_string(), serde_json::to_value(plan)?)?;
+    blob::put(&mut txn, &String::from_utf8_lossy(ours))?;
+
+    let overlay = match active_overlay_for(store, subject)? {
+        Some(mut existing) => {
+            let seq = next_overlay_log_seq(store, existing.id)?;
+            txn.put_aux(
+                JUR_OVERLAY_LOG,
+                &format!("{}/{seq:04}", existing.id),
+                serde_json::json!({"at": existing.last_activity, "operation": existing.operation}),
+            )?;
+            existing.operation = operation;
+            existing.last_activity = now;
+            existing
+        }
+        None => Overlay {
+            id: OverlayId::new(),
+            subject,
+            base: plan.basis.clone(),
+            operation,
+            created_at: now,
+            last_activity: now,
+            profile: profile.id(),
+            lifecycle,
+            state: OverlayState::Active,
+        },
+    };
+    txn.put_aux(
+        JUR_OVERLAY,
+        &overlay.id.to_string(),
+        serde_json::to_value(&overlay)?,
+    )?;
+    txn.commit(save_meta())?;
+    Ok(plan.id)
+}
+
+/// The current `Active` overlay for `subject`, if one exists (coalescing
+/// lookup for D05.3).
+fn active_overlay_for(
+    store: &GraphStore,
+    subject: JurisdictionSubject,
+) -> anyhow::Result<Option<Overlay>> {
+    for (_key, value) in store.scan_aux(JUR_OVERLAY)? {
+        let overlay: Overlay = serde_json::from_value(value)?;
+        if overlay.subject == subject && overlay.state == OverlayState::Active {
+            return Ok(Some(overlay));
+        }
+    }
+    Ok(None)
+}
+
+/// The next 4-digit zero-padded `JUR_OVERLAY_LOG` sequence number for
+/// `overlay` (D05.3: `overlay:<uuid>/0001`, incrementing).
+fn next_overlay_log_seq(store: &GraphStore, overlay: OverlayId) -> anyhow::Result<u32> {
+    let prefix = format!("{overlay}/");
+    let count = store
+        .scan_aux(JUR_OVERLAY_LOG)?
+        .into_iter()
+        .filter(|(k, _)| k.starts_with(&prefix))
+        .count();
+    Ok(u32::try_from(count + 1).unwrap_or(u32::MAX))
 }
 
 /// Evaluate a save plan through the checker conjunction, persist the plan +
@@ -635,7 +929,7 @@ fn perform_save<X: ExternalExecutor, C: CrashInjector>(
 /// steps 5–7).
 fn apply_or_review<X: ExternalExecutor, C: CrashInjector>(
     driver: &IlrpDriver<'_, X, C>,
-    profiles: &liminal_jurisdiction::ProfileSet,
+    profiles: &ProfileSet,
     plan: &RepairPlan,
 ) -> anyhow::Result<RepairId> {
     let store = driver.store;
@@ -653,8 +947,11 @@ fn apply_or_review<X: ExternalExecutor, C: CrashInjector>(
             record_repair(store, plan, "save-promotion", &evidence)?;
             Ok(plan.id)
         }
-        // Proposal persisted; nothing applied. M5 adds Overlay + queue item.
-        RepairDecision::NeedsReview { .. } => Ok(plan.id),
+        RepairDecision::NeedsReview { .. } => {
+            // Creation site (2), M04 Algorithm C step 7 (D05.2/D05.5).
+            propose_review(store, profiles, plan)?;
+            Ok(plan.id)
+        }
     }
 }
 
@@ -677,7 +974,7 @@ fn save_meta() -> liminal_graph::TxnMeta {
     liminal_graph::TxnMeta {
         actor: None,
         origin: liminal_graph::Origin::Human,
-        at: liminal_id::Timestamp::now(),
+        at: Timestamp::now(),
         provenance: Some("save".into()),
         inverse: None,
     }
@@ -733,6 +1030,281 @@ fn record_repair(
     Ok(())
 }
 
+/// D05.4: the store-resident fake clock. `now_with_offset` = real wall time
+/// plus the accumulated `SYS_CLOCK["offset_ms"]` offset — used by ALL aging
+/// math (Algorithm B) and by `lim overlays`, so a separate process observes
+/// the same advanced clock. `created_at` timestamps stay real wall time;
+/// determinism comes from day-scale offsets, not from replacing the clock.
+pub fn now_with_offset(store: &GraphStore) -> anyhow::Result<Timestamp> {
+    let offset_ms = store
+        .get_aux(SYS_CLOCK, "offset_ms")?
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    Ok(Timestamp(Timestamp::now().0 + offset_ms))
+}
+
+/// `advance_clock { by_secs }`: accumulate `by_secs * 1000` into
+/// `SYS_CLOCK["offset_ms"]` (D05.4).
+fn advance_clock(store: &GraphStore, by_secs: i64) -> anyhow::Result<()> {
+    let current = store
+        .get_aux(SYS_CLOCK, "offset_ms")?
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    let mut txn = store.begin()?;
+    txn.put_aux(
+        SYS_CLOCK,
+        "offset_ms",
+        serde_json::json!(current + by_secs * 1000),
+    )?;
+    txn.commit(save_meta())?;
+    Ok(())
+}
+
+/// The `WorkspaceBasis` file-content hash an Overlay's `base` captured for
+/// `path` (its `Path` component), if any.
+fn overlay_basis_file_hash(base: &WorkspaceBasis, path: &PathId) -> Option<ContentHash> {
+    base.components
+        .get(&JurisdictionKey::Path(path.clone()))
+        .and_then(|c| match c {
+            BasisComponent::FileContent { hash, .. } => Some(*hash),
+            _ => None,
+        })
+}
+
+/// Algorithm B, aging half: an `Active` overlay past its profile's threshold
+/// surfaces one coalesced `offline:path:<p>` item (declared-transient
+/// profiles escalate at `escalate_after`; others surface at `surface_after`).
+fn age_overlay(
+    store: &GraphStore,
+    overlay: &Overlay,
+    now: Timestamp,
+    path: &PathId,
+) -> anyhow::Result<()> {
+    let age_ms = now.0 - overlay.created_at.0;
+    let escalate_ms =
+        i64::try_from(overlay.lifecycle.escalate_after.as_millis()).unwrap_or(i64::MAX);
+    let surface_ms = i64::try_from(overlay.lifecycle.surface_after.as_millis()).unwrap_or(i64::MAX);
+    let should_surface = if overlay.lifecycle.declared_transient {
+        age_ms > escalate_ms
+    } else {
+        age_ms > surface_ms
+    };
+    if !should_surface {
+        return Ok(());
+    }
+    let item = ReconciliationItem {
+        id: ReconciliationItemId::new(),
+        root_cause: format!("offline:path:{path}"),
+        subjects: vec![overlay.subject],
+        overlays: vec![overlay.id],
+        repairs: vec![],
+        created_at: now,
+        status: ReconciliationStatus::Pending,
+    };
+    let mut txn = store.begin()?;
+    ReconciliationQueue { store }.upsert_coalesced(&mut txn, item)?;
+    txn.commit(save_meta())?;
+    Ok(())
+}
+
+/// The durable-state inputs `holder_return` re-verifies against: the file's
+/// current observed hash/bytes, and the overlay's captured basis hash.
+struct HolderReturnState {
+    current_hash: Option<ContentHash>,
+    current_bytes: Option<String>,
+    captured_hash: Option<ContentHash>,
+    merged: String,
+}
+
+/// Re-observe the durable file and rebuild the merge candidate: unchanged
+/// since capture → the draft applies as-is; drifted → redo `three_way` at a
+/// fresh basis (base = the overlay's captured durable bytes, ours = the
+/// draft, theirs = the current durable bytes).
+fn rebuild_holder_return_draft(
+    store: &GraphStore,
+    root: &Utf8Path,
+    overlay: &Overlay,
+    path: &PathId,
+    draft_text: &str,
+) -> anyhow::Result<HolderReturnState> {
+    let abs = root.join(&path.0);
+    let current = liminal_source::observe(&abs).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let current_hash = current.as_ref().map(|o| o.hash);
+    let current_bytes = if abs.exists() {
+        Some(std::fs::read_to_string(&abs)?)
+    } else {
+        None
+    };
+    let captured_hash = overlay_basis_file_hash(&overlay.base, path);
+
+    let merged = if captured_hash == current_hash {
+        draft_text.to_owned()
+    } else {
+        match (
+            captured_hash.and_then(|h| blob::get(store, h).ok().flatten()),
+            &current_bytes,
+        ) {
+            (Some(base_text), Some(current_text)) => {
+                match merge::three_way(&base_text, draft_text, current_text) {
+                    MergeOutcome::Disjoint { merged }
+                    | MergeOutcome::UniqueOverlap { merged, .. } => merged,
+                    MergeOutcome::Conflict => draft_text.to_owned(),
+                }
+            }
+            _ => draft_text.to_owned(),
+        }
+    };
+
+    Ok(HolderReturnState {
+        current_hash,
+        current_bytes,
+        captured_hash,
+        merged,
+    })
+}
+
+/// `AutoApply` half of holder-return: commit through ILRP and retire the
+/// overlay (D05.6 — accepted repair is a departure path).
+fn commit_holder_return(
+    store: &GraphStore,
+    root: &Utf8Path,
+    plan: &RepairPlan,
+    evidence: &SafetyEvidence,
+    overlay: OverlayId,
+) -> anyhow::Result<()> {
+    let executor = crate::executor::FsExecutor::with_store(root.to_owned(), store)?;
+    let crash = crate::crash::EnvCrashInjector::from_env();
+    let driver = IlrpDriver {
+        store,
+        executor: &executor,
+        crash,
+    };
+    let id = driver.prepare(plan.clone(), evidence.clone())?;
+    driver.run(id)?;
+    record_repair(store, plan, "holder-return", evidence)?;
+
+    let mut txn = store.begin()?;
+    txn.delete_aux(JUR_OVERLAY, &overlay.to_string())?;
+    resolve_covering_item(store, &mut txn, overlay)?;
+    txn.commit(save_meta())?;
+    Ok(())
+}
+
+/// `NeedsReview` half of holder-return: leave the overlay `RepairProposed`
+/// alongside one coalesced `conflict:path:<p>` item.
+fn requeue_holder_return(
+    store: &GraphStore,
+    overlay: &Overlay,
+    path: &PathId,
+    plan_id: RepairId,
+) -> anyhow::Result<()> {
+    let now = now_with_offset(store)?;
+    let mut updated = overlay.clone();
+    updated.state = OverlayState::RepairProposed(plan_id);
+    updated.last_activity = now;
+    let item = ReconciliationItem {
+        id: ReconciliationItemId::new(),
+        root_cause: format!("conflict:path:{path}"),
+        subjects: vec![overlay.subject],
+        overlays: vec![overlay.id],
+        repairs: vec![plan_id],
+        created_at: now,
+        status: ReconciliationStatus::Pending,
+    };
+    let mut txn = store.begin()?;
+    txn.put_aux(
+        JUR_OVERLAY,
+        &overlay.id.to_string(),
+        serde_json::to_value(&updated)?,
+    )?;
+    ReconciliationQueue { store }.upsert_coalesced(&mut txn, item)?;
+    txn.commit(save_meta())?;
+    Ok(())
+}
+
+/// Algorithm B, holder-return half: re-verify (and re-merge if the durable
+/// file drifted since the draft was captured) an `Active` overlay whose write
+/// route just became available, then evaluate it exactly like any other save.
+/// `AutoApply` commits through ILRP and retires the overlay (D05.6);
+/// `NeedsReview` leaves it `RepairProposed` alongside one coalesced item.
+fn holder_return(
+    store: &GraphStore,
+    root: &Utf8Path,
+    profiles: &ProfileSet,
+    overlay: &Overlay,
+    path: &PathId,
+) -> anyhow::Result<()> {
+    let file_node = match overlay.subject {
+        JurisdictionSubject::Node(n) => n,
+        JurisdictionSubject::Relation(_) => anyhow::bail!("holder-return expects a file subject"),
+    };
+    let RepairOperation::WriteFile {
+        contents: draft, ..
+    } = &overlay.operation
+    else {
+        anyhow::bail!("holder-return overlay must carry a WriteFile draft");
+    };
+    let draft_text = String::from_utf8_lossy(draft).into_owned();
+    let state = rebuild_holder_return_draft(store, root, overlay, path, &draft_text)?;
+
+    // Persist blobs so the safety predicate can recompute disjointness.
+    {
+        let mut txn = store.begin()?;
+        if let Some(c) = &state.current_bytes {
+            blob::put(&mut txn, c)?;
+        }
+        blob::put(&mut txn, &state.merged)?;
+        txn.commit(save_meta())?;
+    }
+
+    let plan = build_save_plan(
+        file_node,
+        path,
+        state.captured_hash,
+        state.current_hash,
+        state.current_bytes.as_deref().map(str::as_bytes),
+        state.merged.as_bytes(),
+    );
+
+    let checker = Checker { store, profiles };
+    let decision = checker
+        .evaluate_repair(&plan)
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    persist_plan(store, &plan)?;
+    persist_decision(store, plan.id, &decision)?;
+
+    match decision {
+        RepairDecision::AutoApply { evidence } => {
+            commit_holder_return(store, root, &plan, &evidence, overlay.id)
+        }
+        RepairDecision::NeedsReview { .. } => requeue_holder_return(store, overlay, path, plan.id),
+    }
+}
+
+/// Algorithm B: age every `Active` overlay and re-verify any whose write
+/// route has returned. Runs at workspace open (after recovery), after every
+/// scenario step, and before `lim overlays` / `lim check` render.
+pub fn sweep_overlays(store: &GraphStore, root: &Utf8Path) -> anyhow::Result<()> {
+    let profiles = ProfileSet::phase_minus_1();
+    let now = now_with_offset(store)?;
+
+    for (_key, value) in store.scan_aux(JUR_OVERLAY)? {
+        let overlay: Overlay = serde_json::from_value(value)?;
+        if overlay.state != OverlayState::Active {
+            continue;
+        }
+        let Some(path) = overlay_operation_path(&overlay.operation) else {
+            continue;
+        };
+        if holder_available(store, path.0.as_str())? {
+            holder_return(store, root, &profiles, &overlay, &path)?;
+        } else {
+            age_overlay(store, &overlay, now, &path)?;
+        }
+    }
+    Ok(())
+}
+
 /// Run one scripted scenario to completion (or to an armed crash point).
 /// Read a required string field from a step's pass-through table.
 fn field<'a>(step: &'a crate::scenario::Step, name: &str) -> anyhow::Result<&'a str> {
@@ -758,6 +1330,42 @@ fn apply_buffer_edit(
         .ok_or_else(|| anyhow::anyhow!("find text not found in buffer: {find:?}"))?;
     *buf = format!("{}{}{}", &text[..pos], replace, &text[pos + find.len()..]).into_bytes();
     Ok(())
+}
+
+/// `holder_unavailable`: the durable Holder loses its write route (D05.1).
+/// The value is fixed per the schema — `{"mode":"read-only"}`, independent of
+/// the step's own descriptive `mode` field — the file stays readable.
+fn mark_holder_unavailable(store: &GraphStore, step: &crate::scenario::Step) -> anyhow::Result<()> {
+    let path = field(step, "path")?;
+    let mut txn = store.begin()?;
+    txn.put_aux(
+        SYS_UNAVAILABLE,
+        path,
+        serde_json::json!({"mode": "read-only"}),
+    )?;
+    txn.commit(save_meta())?;
+    Ok(())
+}
+
+/// `holder_available`: the durable Holder's write route returns (D05.1).
+/// Deletes the `SYS_UNAVAILABLE` key; the generic post-step sweep (Algorithm
+/// B) then re-verifies any Active overlay waiting on this path.
+fn mark_holder_available(store: &GraphStore, step: &crate::scenario::Step) -> anyhow::Result<()> {
+    let path = field(step, "path")?;
+    let mut txn = store.begin()?;
+    txn.delete_aux(SYS_UNAVAILABLE, path)?;
+    txn.commit(save_meta())?;
+    Ok(())
+}
+
+/// `advance_clock { by_secs }` (D05.4; AM-5.1).
+fn apply_advance_clock(store: &GraphStore, step: &crate::scenario::Step) -> anyhow::Result<()> {
+    let by_secs = step
+        .extra
+        .get("by_secs")
+        .and_then(toml::Value::as_integer)
+        .ok_or_else(|| anyhow::anyhow!("advance_clock missing by_secs"))?;
+    advance_clock(store, by_secs)
 }
 
 /// `foreign_edit`: a foreign tool rewrites the durable file directly (v4 §8.5).
@@ -808,19 +1416,12 @@ pub fn exec<X: ExternalExecutor, C: CrashInjector>(
         bases.insert(file.path.clone(), file.text.clone());
     }
 
-    let ws = ToyWorkspace::open(root)?;
-    let profiles = liminal_jurisdiction::ProfileSet::phase_minus_1();
+    let mut ws = ToyWorkspace::open(root)?;
+    let profiles = ProfileSet::phase_minus_1();
 
     // Ingest files and graph entries (M03).
     ingest_files(ws.store(), &scenario.setup.files)?;
     ingest_graph(ws.store(), &scenario.setup.graph)?;
-
-    let store = ws.store();
-    let driver = IlrpDriver {
-        store,
-        executor: &executor,
-        crash,
-    };
 
     for step in &scenario.steps {
         match step.kind.as_str() {
@@ -831,18 +1432,37 @@ pub fn exec<X: ExternalExecutor, C: CrashInjector>(
                 // `{#id}` vanished gets a two-step repair DAG proposed (M04.3
                 // ingest::foreign_change). Refused for AUTOMATIC acceptance
                 // (heuristic reattachment), so it persists as NeedsReview.
-                plan_foreign_changes(&profiles, root, store)?;
+                plan_foreign_changes(&profiles, root, ws.store())?;
             }
             "save" => {
                 let client = field(step, "client")?;
                 let path = field(step, "path")?;
+                let store = ws.store();
+                let driver = IlrpDriver {
+                    store,
+                    executor: &executor,
+                    crash: &crash,
+                };
                 perform_save(&driver, &profiles, root, &bases, &buffers, client, path)?;
             }
-            "accept_repair" => accept_repair(store, root)?,
+            "accept_repair" => accept_repair(ws.store(), root)?,
+            "holder_unavailable" => mark_holder_unavailable(ws.store(), step)?,
+            "holder_available" => mark_holder_available(ws.store(), step)?,
+            "advance_clock" => apply_advance_clock(ws.store(), step)?,
+            // AM-5.1: drop + reopen the workspace — the store's advisory lock
+            // is exclusive, so the old handle must release it first. Exercises
+            // open-time sweep/recovery in-process (D05.1: SYS_UNAVAILABLE
+            // survives; Algorithm B).
+            "daemon_restart" => {
+                drop(ws);
+                ws = ToyWorkspace::open(root)?;
+            }
             other => anyhow::bail!("step kind {other:?} not implemented until M3/M4"),
         }
+        sweep_overlays(ws.store(), root)?;
     }
 
+    let store = ws.store();
     if let Some(ref expected) = scenario.expect.terminal {
         let normalize = |s: &str| s.to_lowercase().replace('-', "");
         let expected_norm = normalize(expected);
@@ -1009,7 +1629,7 @@ fn tempdir_for(label: &str) -> anyhow::Result<Utf8PathBuf> {
     let dir = Utf8PathBuf::from(std::env::temp_dir().to_str().unwrap()).join(format!(
         "liminal-d044-{label}-{}-{:x}",
         std::process::id(),
-        liminal_id::Timestamp::now().0
+        Timestamp::now().0
     ));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir)?;

@@ -9,7 +9,7 @@
 //! prove an optimized path equivalent (v4 §125).
 
 use liminal_graph::ns::{JUR_ALIAS, JUR_OVERLAY};
-use liminal_graph::{GraphStore, Relation};
+use liminal_graph::{GraphStore, NodeFlags, Relation};
 use liminal_id::{JurisdictionKey, JurisdictionSubject, NodeId, OverlayId};
 use liminal_revision::{BasisComponent, BasisPerspective, WorkspaceBasis};
 
@@ -354,16 +354,27 @@ impl Checker<'_> {
             findings.extend(self.identity_satisfies_relations(node, basis)?);
         }
 
-        // JUR050: one per unresolved overlay.
-        for overlay_id in self.unresolved_overlays(None)? {
-            findings.push(Finding {
-                subject: JurisdictionSubject::Node(NodeId::from_uuid(overlay_id.as_uuid())),
-                code: codes::UNRESOLVED_OVERLAY,
-                message: format!("unresolved overlay {overlay_id}"),
-            });
+        // JUR050: one per CONTESTED overlay — a genuinely unsound state ILRP
+        // recovery could not resolve (v4 §7.8 step 5: "never guess"). Routine
+        // `Active`/`RepairProposed` drafts are surfaced via `lim overlays` and
+        // the Reconciliation Queue, not amplified here (R4 §2.3: the checker
+        // does not duplicate the queue's one visible incident per root cause;
+        // sound-but-offline/reviewable sessions stay checker-silent).
+        for (_key, value) in self.store.scan_aux(JUR_OVERLAY)? {
+            let overlay: crate::overlay::Overlay = serde_json::from_value(value).map_err(|e| {
+                CheckerError::Store(liminal_graph::StoreError::Corrupt(e.to_string()))
+            })?;
+            if overlay.state == OverlayState::Contested {
+                findings.push(Finding {
+                    subject: overlay.subject,
+                    code: codes::UNRESOLVED_OVERLAY,
+                    message: format!("contested overlay {}", overlay.id),
+                });
+            }
         }
 
-        // JUR042: aliases claimed by two or more live blocks.
+        // JUR042: identity-ambiguous aliases (multi-claimed nodes and
+        // first-wins duplicate orphans).
         findings.extend(self.ambiguous_aliases()?);
 
         findings
@@ -371,9 +382,12 @@ impl Checker<'_> {
         Ok(CheckReport { findings })
     }
 
-    /// Detect aliases claimed by two or more live nodes (JUR042). In the toy
-    /// each alias maps to exactly one node; a duplicate is a data error the
-    /// checker must surface rather than panic on.
+    /// Detect identity-ambiguous states (JUR042). Two observable residues in
+    /// the toy: a node claimed by two or more aliases (a stale alias that was
+    /// never retired), and — the first-wins residue of D03.3 — a live node
+    /// carrying `HAS_DURABLE_ID` that no alias claims: its `{#id}` lost a
+    /// duplicate race at ingestion, so its identity is ambiguous. Either way
+    /// the checker must surface it rather than stay silent or panic.
     fn ambiguous_aliases(&self) -> Result<Vec<Finding>, CheckerError> {
         use std::collections::BTreeMap;
         let mut by_node: BTreeMap<String, Vec<String>> = BTreeMap::new();
@@ -383,7 +397,7 @@ impl Checker<'_> {
             }
         }
         let mut findings = Vec::new();
-        for (node_str, aliases) in by_node {
+        for (node_str, aliases) in &by_node {
             if aliases.len() > 1
                 && let Ok(node) = node_str.parse::<NodeId>()
             {
@@ -391,6 +405,22 @@ impl Checker<'_> {
                     subject: JurisdictionSubject::Node(node),
                     code: codes::IDENTITY_AMBIGUOUS,
                     message: format!("node {node_str} claimed by aliases {aliases:?}"),
+                });
+            }
+        }
+        for node in self.store.nodes()? {
+            if node.flags.contains(NodeFlags::HAS_DURABLE_ID)
+                && !node.flags.contains(NodeFlags::TOMBSTONE)
+                && !by_node.contains_key(&node.id.to_string())
+            {
+                findings.push(Finding {
+                    subject: JurisdictionSubject::Node(node.id),
+                    code: codes::IDENTITY_AMBIGUOUS,
+                    message: format!(
+                        "node {} carries a durable-id marker but no alias claims it \
+                         (its id lost a first-wins duplicate race)",
+                        node.id
+                    ),
                 });
             }
         }

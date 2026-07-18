@@ -18,9 +18,11 @@ anyhow.workspace = true
 camino.workspace = true
 clap.workspace = true
 liminal-daemon.workspace = true
+liminal-graph.workspace = true
 liminal-id.workspace = true
 liminal-jurisdiction.workspace = true
 liminal-revision.workspace = true
+serde_json.workspace = true
 toml.workspace = true
 
 [lints]

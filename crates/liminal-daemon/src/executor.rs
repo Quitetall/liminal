@@ -12,7 +12,7 @@
 //!   is enforced in `IlrpDriver::prepare`, not here.
 
 use camino::{Utf8Path, Utf8PathBuf};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use liminal_graph::GraphStore;
 use liminal_id::{EntityId, Timestamp};
@@ -26,26 +26,32 @@ use liminal_source::{self as file, FileObservation};
 ///
 /// Carries an `entity → alias` snapshot of `JUR_ALIAS` captured at construction
 /// (AM-4.1: the executor needs to resolve which durable id an `InsertSourceId`
-/// step serializes). Rebuilt fresh per exec/recover, so it is current.
+/// step serializes), and a snapshot of `SYS_UNAVAILABLE` (D05.1: defense in
+/// depth — a Holder marked unavailable refuses `apply` even if a caller
+/// reached the executor without going through the runner's offline-save
+/// branch). Rebuilt fresh per exec/recover, so both snapshots are current.
 #[derive(Debug)]
 pub struct FsExecutor {
     root: Utf8PathBuf,
     entity_alias: BTreeMap<EntityId, String>,
+    unavailable: BTreeSet<String>,
 }
 
 impl FsExecutor {
     /// Create an executor rooted at `root` with an empty alias map (WriteFile
-    /// steps do not need it).
+    /// steps do not need it) and no unavailable Holders recorded.
     #[must_use]
     pub fn new(root: Utf8PathBuf) -> Self {
         Self {
             root,
             entity_alias: BTreeMap::new(),
+            unavailable: BTreeSet::new(),
         }
     }
 
     /// Create an executor whose alias map is a snapshot of `JUR_ALIAS` in
-    /// `store` (needed for `InsertSourceId` execution).
+    /// `store` (needed for `InsertSourceId` execution), and whose unavailable
+    /// set is a snapshot of `SYS_UNAVAILABLE` (D05.1).
     pub fn with_store(root: Utf8PathBuf, store: &GraphStore) -> Result<Self, IlrpError> {
         let mut entity_alias = BTreeMap::new();
         for (alias, value) in store
@@ -58,7 +64,18 @@ impl FsExecutor {
                 entity_alias.insert(entity, alias);
             }
         }
-        Ok(Self { root, entity_alias })
+        let mut unavailable = BTreeSet::new();
+        for (path, _) in store
+            .scan_aux(liminal_graph::ns::SYS_UNAVAILABLE)
+            .map_err(IlrpError::Store)?
+        {
+            unavailable.insert(path);
+        }
+        Ok(Self {
+            root,
+            entity_alias,
+            unavailable,
+        })
     }
 
     /// Absolute path from a workspace-relative path.
@@ -151,6 +168,12 @@ impl ExternalExecutor for FsExecutor {
                 ));
             }
         };
+
+        // D05.1 defense in depth: a Holder marked unavailable refuses apply
+        // even if the caller bypassed the runner's own offline-save branch.
+        if self.unavailable.contains(path.0.as_str()) {
+            return Err(IlrpError::Executor(format!("holder unavailable: {path}")));
+        }
 
         let abs = self.abs(&path.0);
         let staged =
