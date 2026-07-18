@@ -111,6 +111,30 @@ pub fn three_way(base: &str, ours: &str, theirs: &str) -> MergeOutcome {
     }
 }
 
+/// Slots that `merged` changed relative to `current` in a block `current` had
+/// already changed vs `base` — i.e. slots BOTH sides touched (DG-4.1 resolution).
+///
+/// This lets a safety predicate detect structural non-disjointness from
+/// `(base, current, merged)` alone, without the raw "ours" buffer: a slot
+/// overlaps iff `current != base` there AND `merged != current` there. Empty
+/// result ⇒ the merge is structurally disjoint (auto-safe, R4 §6).
+#[must_use]
+pub fn overlap_slots(base: &str, current: &str, merged: &str) -> Vec<String> {
+    let base_slots = slot_map(base);
+    let current_slots = slot_map(current);
+    let merged_slots = slot_map(merged);
+    let mut overlapping = Vec::new();
+    for key in slot_order(current) {
+        let b = base_slots.get(&key);
+        let c = current_slots.get(&key);
+        let m = merged_slots.get(&key);
+        if c != b && m != c {
+            overlapping.push(key);
+        }
+    }
+    overlapping
+}
+
 /// The reconstructable source text of a block: its text plus the `{#id}` marker
 /// appended to the last line when present (so a merged block round-trips).
 fn block_source(block: &Block) -> String {
@@ -278,6 +302,26 @@ mod tests {
             }
             other => panic!("expected Disjoint, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn overlap_slots_detects_both_touched_block() {
+        // #a changed vs base and the merge kept a value differing from base's
+        // → overlap. #b changed only on one side → not an overlap here.
+        let base = "one {#a}\n\ntwo {#b}";
+        let current = "ONE {#a}\n\ntwo {#b}"; // durable file: #a edited
+        let merged = "MERGED-A {#a}\n\nTWO {#b}"; // merge touched #a and #b
+        let over = overlap_slots(base, current, merged);
+        assert_eq!(over, vec!["a".to_string()]);
+    }
+
+    #[test]
+    fn overlap_slots_empty_when_disjoint() {
+        // current edited #a; merge edited only #b → no slot both-touched.
+        let base = "one {#a}\n\ntwo {#b}";
+        let current = "ONE {#a}\n\ntwo {#b}";
+        let merged = "ONE {#a}\n\nTWO {#b}";
+        assert!(overlap_slots(base, current, merged).is_empty());
     }
 
     #[test]

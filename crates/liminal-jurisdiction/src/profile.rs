@@ -7,14 +7,16 @@ use std::time::Duration;
 
 use liminal_graph::{GraphStore, kind};
 use liminal_id::{IdentityGrade, JurisdictionSubject, NodeId, PathId};
+use liminal_source::merge::{self, MergeOutcome};
 use serde::{Deserialize, Serialize};
 
+use crate::blob;
 use crate::contract::{
     ContinuityPolicy, DanglingPolicy, ForeignEditPolicy, HolderResolution, JurisdictionContract,
     LifecyclePolicy, MutationPolicy, RepairAuthorization, SafetyRequirement, SubjectSelector,
 };
 use crate::holder::Holder;
-use crate::repair::{RepairPlan, ReviewReason, SafetyEvidence};
+use crate::repair::{RepairOperation, RepairPlan, ReviewReason, SafetyEvidence, StatePredicate};
 
 /// Stable profile identity (used in Overlay records and conformance reports).
 /// `Cow` so built-in profiles are const-constructible while deserialized
@@ -45,8 +47,15 @@ pub trait JurisdictionProfile {
     ) -> JurisdictionContract;
 
     /// The profile-specific safety predicate: a unique result is necessary but
-    /// NOT sufficient for automatic acceptance (Law 3G; R4 §6).
-    fn safety_check(&self, plan: &RepairPlan) -> Result<SafetyEvidence, Vec<ReviewReason>>;
+    /// NOT sufficient for automatic acceptance (Law 3G; R4 §6). Takes the store
+    /// (AM-4.1) so file predicates can recompute disjointness from content-
+    /// addressed `SYS_BLOB` blobs (DG-4.1 reading (a): no disk read — the plan's
+    /// prestate hash is the authoritative current durable state).
+    fn safety_check(
+        &self,
+        plan: &RepairPlan,
+        store: &GraphStore,
+    ) -> Result<SafetyEvidence, Vec<ReviewReason>>;
 }
 
 /// External-file profile (v4 §7.6): the requesting client's buffer is the
@@ -106,33 +115,94 @@ impl JurisdictionProfile for ExternalFileProfile {
         }
     }
 
-    fn safety_check(&self, _plan: &RepairPlan) -> Result<SafetyEvidence, Vec<ReviewReason>> {
-        // ── STUB (M04.2, T2). BLOCKED on DG-4.1 (see docs/execution/M04.md). ──
-        //
-        // Spec (M04 Algorithm B, ExternalFileProfile::safety_check):
-        // For each governed `WriteFile` step in `plan`:
-        //   1. Recompute the merge: `liminal_source::merge::three_way(base,
-        //      ours, current)` where
-        //        base    = SYS_BLOB[plan.basis component hash for the path],
-        //        ours    = SYS_BLOB[hash of the buffer bytes],
-        //        current = the hash-verified current file bytes.
-        //      DG-4.1: this fn only receives `&GraphStore`, which cannot read
-        //      the on-disk file. Resolve DG-4.1 first (reading (a): treat the
-        //      step's `expected_prestate` hash as `current`, no disk read).
-        //   2. If the on-disk hash != the step prestate hash → push
-        //      ReviewReason("the file changed while planning"); continue.
-        //   3. MergeOutcome::Disjoint{merged} where merged == step contents →
-        //      contributes evidence (this step is safe).
-        //   4. MergeOutcome::UniqueOverlap{overlapping} →
-        //      ReviewReason(format!("not structurally disjoint: both edits \
-        //      touch {overlapping:?}")).
-        //   5. MergeOutcome::Conflict → ReviewReason("no unique result").
-        // For each `InsertSourceId` step: content-preserving (marker only) →
-        //   contribute "id-insert: #<alias> content-preserving" to the desc.
-        // Return: no reasons → Ok(SafetyEvidence::StructurallyDisjoint {
-        //   description: <"; "-joined per-step descriptions> }); else Err(reasons).
-        todo!("Phase -1 M4: ExternalFileProfile::safety_check (Algorithm B; blocked on DG-4.1)")
+    fn safety_check(
+        &self,
+        plan: &RepairPlan,
+        store: &GraphStore,
+    ) -> Result<SafetyEvidence, Vec<ReviewReason>> {
+        // M04 Algorithm B (ExternalFileProfile). Structural disjointness at
+        // toy-paragraph granularity (R4 §6): a UNIQUE merge is necessary but
+        // NOT sufficient — the merge must not touch any block the durable file
+        // already changed. Overlap is computed from (base, current, merged)
+        // via `merge::overlap_slots` (DG-4.1 reading (a): the step prestate
+        // hash IS the current durable bytes; no disk read).
+        let mut descriptions: Vec<String> = Vec::new();
+        let mut reasons: Vec<ReviewReason> = Vec::new();
+
+        for step in plan.steps.values() {
+            match &step.operation {
+                RepairOperation::WriteFile { path, contents } => {
+                    // base = the buffer's base blob = the plan basis component
+                    // for this path; current = the step prestate hash's blob;
+                    // merged = the WriteFile contents.
+                    let current_hash = match &step.expected_prestate {
+                        StatePredicate::FileContent { hash, .. } => Some(*hash),
+                        StatePredicate::FileAbsent { .. } => None,
+                        _ => {
+                            reasons.push(ReviewReason(format!(
+                                "unexpected prestate for file step on {path}"
+                            )));
+                            continue;
+                        }
+                    };
+                    let base_hash = basis_file_hash(plan, path);
+
+                    let base = base_hash.and_then(|h| blob::get(store, h).ok().flatten());
+                    let current = current_hash.and_then(|h| blob::get(store, h).ok().flatten());
+                    let merged = String::from_utf8_lossy(contents).into_owned();
+
+                    match (base, current) {
+                        (Some(base), Some(current)) => {
+                            let over = merge::overlap_slots(&base, &current, &merged);
+                            if over.is_empty() {
+                                // Confirm a unique three-way result exists too.
+                                match merge::three_way(&base, &current, &merged) {
+                                    MergeOutcome::Conflict => reasons.push(ReviewReason(
+                                        "no unique result at the captured basis".into(),
+                                    )),
+                                    _ => descriptions
+                                        .push(format!("{path}: structurally disjoint save")),
+                                }
+                            } else {
+                                reasons.push(ReviewReason(format!(
+                                    "not structurally disjoint: both edits touch {over:?}"
+                                )));
+                            }
+                        }
+                        // First-write or missing base blob: nothing to overlap
+                        // against — a fresh file save is structurally disjoint.
+                        _ => descriptions.push(format!("{path}: new-file save")),
+                    }
+                }
+                RepairOperation::InsertSourceId { path, .. } => {
+                    // Marker-only insertion is content-preserving.
+                    descriptions.push(format!("{path}: id-insert content-preserving"));
+                }
+                // Graph/External steps are not governed by this file profile.
+                _ => {}
+            }
+        }
+
+        if reasons.is_empty() {
+            Ok(SafetyEvidence::StructurallyDisjoint {
+                description: descriptions.join("; "),
+            })
+        } else {
+            Err(reasons)
+        }
     }
+}
+
+/// The base file hash a plan captured (its `WorkspaceBasis` `ObjectContent`
+/// component — the buffer's base blob, distinct from the current `Path`
+/// component), if any. `_path` is unused in the single-file toy but kept for
+/// the multi-file M6 signature.
+fn basis_file_hash(plan: &RepairPlan, _path: &PathId) -> Option<liminal_id::ContentHash> {
+    use liminal_revision::BasisComponent;
+    plan.basis.components.values().find_map(|c| match c {
+        BasisComponent::ObjectContent { hash } => Some(*hash),
+        _ => None,
+    })
 }
 
 /// Graph-native profile (v4 §7.6): graph transactions hold Jurisdiction; text
@@ -181,26 +251,68 @@ impl JurisdictionProfile for GraphNativeProfile {
         }
     }
 
-    fn safety_check(&self, _plan: &RepairPlan) -> Result<SafetyEvidence, Vec<ReviewReason>> {
-        // ── STUB (M04.2, T2). ──
-        //
-        // Spec (M04 Algorithm B, GraphNativeProfile::safety_check):
-        // Recompute condition 3b (identity-requirement) for this profile's
-        // steps: for each `RetargetRelation` step, the effective grade of the
-        // new target must satisfy `relation.requires.minimum` (use
-        // `grade_of(target, store)` plus any claim grades from InsertSourceId
-        // steps establishing that target's identity — see Algorithm B §3).
-        //   pass → Ok(SafetyEvidence::DomainValidator {
-        //     validator: "graph-native/identity-requirement".into(),
-        //     report: "targets satisfy declared identity requirements at basis".into(),
-        //   })
-        //   fail → Err(vec![ReviewReason(
-        //     "reattachment relies on a heuristic match (inferred) but the \
-        //      relation requires {req}")]).
-        // Needs the `&GraphStore` param from AM-4.1 (see DG-4.1 note — graph
-        // steps do NOT need disk access, so this half is unblocked once the
-        // signature is widened).
-        todo!("Phase -1 M4: GraphNativeProfile::safety_check (Algorithm B §3b)")
+    fn safety_check(
+        &self,
+        plan: &RepairPlan,
+        store: &GraphStore,
+    ) -> Result<SafetyEvidence, Vec<ReviewReason>> {
+        // M04 Algorithm B §3b (GraphNativeProfile): every RetargetRelation step
+        // must leave the relation's identity requirement satisfied. The new
+        // target's effective grade is raised to Explicit when a sibling
+        // InsertSourceId step in the same plan serializes that target's id
+        // (the reattach chains after the marker insertion); otherwise it is the
+        // durable grade_of the target — heuristic/Inferred when no marker exists.
+        let mut reasons: Vec<ReviewReason> = Vec::new();
+
+        // Targets that a same-plan InsertSourceId step promotes to Explicit.
+        let insert_targets: std::collections::BTreeSet<NodeId> = plan
+            .steps
+            .values()
+            .filter_map(|s| match &s.operation {
+                RepairOperation::InsertSourceId { .. } => match s.subject {
+                    JurisdictionSubject::Node(n) => Some(n),
+                    JurisdictionSubject::Relation(_) => None,
+                },
+                _ => None,
+            })
+            .collect();
+
+        for step in plan.steps.values() {
+            let RepairOperation::Graph(liminal_graph::Operation::RetargetRelation { id, target }) =
+                &step.operation
+            else {
+                continue;
+            };
+            let Ok(Some(relation)) = store.relation_at(store.head().unwrap_or_default(), *id)
+            else {
+                continue;
+            };
+            let Some(req) = relation.requires else {
+                continue;
+            };
+            let target_node = target.node();
+            let effective = if insert_targets.contains(&target_node) {
+                IdentityGrade::Explicit
+            } else {
+                grade_of(JurisdictionSubject::Node(target_node), store)
+            };
+            if !effective.satisfies(req.minimum) {
+                reasons.push(ReviewReason(format!(
+                    "reattachment relies on a heuristic match ({effective:?}) but the \
+                     relation requires {:?}",
+                    req.minimum
+                )));
+            }
+        }
+
+        if reasons.is_empty() {
+            Ok(SafetyEvidence::DomainValidator {
+                validator: "graph-native/identity-requirement".into(),
+                report: "targets satisfy declared identity requirements at basis".into(),
+            })
+        } else {
+            Err(reasons)
+        }
     }
 }
 

@@ -83,9 +83,54 @@ fn promotion_uses_the_same_repair_interpreter() {
 /// merge INSIDE one paragraph, the repair must be offered for review, not
 /// applied.
 #[test]
-#[ignore = "Phase -1 M4: domain safety predicate (structural disjointness)"]
 fn unique_but_unsafe_candidate_is_not_auto_accepted() {
-    unimplemented!("scenario: fixtures/scenarios/unsafe_unique_merge.scenario.toml")
+    use liminal_conformance::harness::{ToyRun, all_scenarios};
+    use liminal_daemon::ToyWorkspace;
+
+    let scenarios = all_scenarios().expect("must load scenarios");
+    let scenario = scenarios
+        .iter()
+        .find(|s| s.scenario.id == "unsafe_unique_merge")
+        .expect("unsafe_unique_merge must exist");
+
+    let run = ToyRun::new("unsafe-unique").expect("must create workspace");
+    let exec = run.exec_scenario(scenario).expect("exec must run");
+    assert!(
+        exec.status.success(),
+        "capture is never rejected (Law 3B); stderr: {}",
+        String::from_utf8_lossy(&exec.stderr)
+    );
+
+    // The decision must be NeedsReview (determinism ≠ safety) — no ILRP intent
+    // was prepared, and the durable file is unchanged from its foreign-edited
+    // state (nothing auto-applied). Scope the workspace so its exclusive store
+    // lock is released before the `lim check` subprocess runs.
+    {
+        let ws = ToyWorkspace::open(&run.root).expect("must open workspace");
+        let store = ws.store();
+        let decisions = store
+            .scan_aux(liminal_graph::ns::JUR_DECISION)
+            .expect("scan decisions");
+        assert_eq!(decisions.len(), 1, "exactly one repair decision");
+        let decision: liminal_jurisdiction::RepairDecision =
+            serde_json::from_value(decisions[0].1.clone()).expect("decode decision");
+        assert!(
+            matches!(
+                decision,
+                liminal_jurisdiction::RepairDecision::NeedsReview { .. }
+            ),
+            "unique-but-unsafe merge must NOT auto-apply, got {decision:?}"
+        );
+        let intents = store
+            .scan_aux(liminal_graph::ns::ILRP_INTENT)
+            .expect("scan intents");
+        assert!(intents.is_empty(), "nothing auto-applied → no ILRP intent");
+    }
+
+    // `lim check` stays silent (the reconciliation item is the single incident;
+    // the checker does not amplify it — R4 §2.3).
+    let check = run.check().expect("lim check must run");
+    liminal_conformance::assert_silent(&check);
 }
 
 /// Law 3B/3I / R4 §10: an offline edit is durable as an Overlay, survives

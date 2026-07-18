@@ -18,6 +18,7 @@
 //!
 //! Spec: v4 §7.2–7.11; R4 §4–9.
 
+pub mod blob;
 pub mod checker;
 pub mod contract;
 pub mod explain;

@@ -419,11 +419,12 @@ pub fn runnable_crash_scenarios() -> anyhow::Result<Vec<ScenarioScript>> {
 /// offline one. Empty (and deleted) by M5. `dag_accept` (M04.8 authored) stays
 /// here until the `accept_repair` runner step (AM-4.2) lands.
 pub const NOT_YET_DRIVEN: &[&str] = &[
+    // Need the foreign-change DAG planner (M04.3 ingest::foreign_change) and
+    // the accept_repair step (AM-4.2), respectively.
     "dag_accept",
     "dag_id_then_reattach",
-    "disjoint_safe_repair",
+    // Needs the offline-Holder / Overlay path (M5).
     "offline_holder_overlay",
-    "unsafe_unique_merge",
 ];
 
 /// Load every authored scenario fixture, sorted by id.
