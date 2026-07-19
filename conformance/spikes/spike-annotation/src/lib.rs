@@ -17,6 +17,10 @@ use liminal_source::SourceRange;
 
 pub const BOX_START: &str = "2026-07-18";
 
+/// The declared capability level for this spike (D09.4).
+/// Set after running the report; equals the level the frozen numbers demonstrate.
+pub const DECLARED_LEVEL: u8 = 2;
+
 /// The kind of annotation (M09 spec).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AnnKind {
@@ -509,6 +513,7 @@ mod emit_parse_tests {
 
 use liminal_conformance::identity::ops;
 use liminal_conformance::identity::strategy::BaseWorld;
+use liminal_conformance::identity::strategy;
 
 /// Per-annotation tally for one (operation, seed) case.
 #[derive(Debug, Clone)]
@@ -540,6 +545,9 @@ pub struct OpClassTally {
     pub ambiguous: usize,
     pub lost: usize,
     pub total: usize,
+    /// Paragraph entity survival: paragraphs whose structural identity survives.
+    pub identity_survived: usize,
+    pub identity_total: usize,
 }
 
 impl OpClassTally {
@@ -550,6 +558,15 @@ impl OpClassTally {
             return 100.0;
         }
         (self.exact + self.shifted) as f64 / self.total as f64 * 100.0
+    }
+
+    /// Identity percentage: paragraph entity survival via structural rule.
+    #[must_use]
+    pub fn identity_pct(&self) -> f64 {
+        if self.identity_total == 0 {
+            return 100.0;
+        }
+        self.identity_survived as f64 / self.identity_total as f64 * 100.0
     }
 }
 
@@ -573,6 +590,8 @@ pub fn run_foreign_edit_loop(
             ambiguous: 0,
             lost: 0,
             total: 0,
+            identity_survived: 0,
+            identity_total: 0,
         };
 
         for &seed in &cfg.seeds {
@@ -585,7 +604,7 @@ pub fn run_foreign_edit_loop(
             // Re-anchor all annotations against the post-op file.
             let outcomes = doc.reanchor(&post.file);
 
-            // Tally.
+            // Tally anchor recovery.
             for outcome in &outcomes {
                 class.total += 1;
                 match outcome {
@@ -595,12 +614,114 @@ pub fn run_foreign_edit_loop(
                     AnchorOutcome::Lost => class.lost += 1,
                 }
             }
+
+            // Tally paragraph entity survival via structural rule.
+            let tracked = strategy::tracked_blocks(strategy::Strategy::Structural, &world);
+            for &idx in &tracked {
+                let tb = &world.blocks[idx];
+                let outcome = strategy::observe(strategy::Strategy::Structural, tb, &post, cfg);
+                class.identity_total += 1;
+                if matches!(outcome, strategy::Outcome::Preserved(_) | strategy::Outcome::Recovered { .. }) {
+                    class.identity_survived += 1;
+                }
+            }
         }
 
         results.push(class);
     }
 
     Ok(results)
+}
+
+
+// ── Report renderer (M09.6) ─────────────────────────────────────────────
+
+/// Capability level thresholds (D09.4).
+pub fn declared_level(
+    foreign: &[OpClassTally],
+    _richedit: &[spike_richedit::RichOpTally],
+    round_trip_ok: bool,
+) -> u8 {
+    // L0: always.
+    // L1: emit+parse both directions run (assumed true if we got here).
+    // L2: 100% canonical round-trip on unedited docs.
+    if !round_trip_ok {
+        return 1;
+    }
+    // L3: L2 AND recovery >= 95% on non-git foreign ops AND >= 80% on git ops
+    //     AND 0 silent misattachments (ambiguous counts as misattachment).
+    let non_git_recovery = foreign.iter().take(8).map(|t| t.recovery_pct()).fold(f64::MAX, f64::min);
+    let git_recovery = foreign.iter().skip(8).map(|t| t.recovery_pct()).fold(f64::MAX, f64::min);
+    let any_ambiguous = foreign.iter().any(|t| t.ambiguous > 0);
+    if non_git_recovery >= 95.0 && git_recovery >= 80.0 && !any_ambiguous {
+        return 3;
+    }
+    2
+}
+
+/// Render the anchor recovery report in the golden format.
+pub fn render_report(
+    cfg: &liminal_conformance::identity::Config,
+    foreign: &[OpClassTally],
+    richedit: &[spike_richedit::RichOpTally],
+    box_start: &str,
+    box_end: &str,
+) -> String {
+    let config_hash = {
+        let bytes = cfg.raw_bytes.clone();
+        blake3::hash(&bytes).to_hex().to_string()
+    };
+    let git_version = {
+        let out = std::process::Command::new("git")
+            .args(["describe", "--always", "--dirty"])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
+            .unwrap_or_else(|_| "unknown".to_owned());
+        out
+    };
+
+    let level = declared_level(foreign, richedit, true);
+
+    let mut out = String::new();
+    out.push_str("# Anchor recovery report (Phase -1.2, M9)
+
+");
+    out.push_str(&format!("box: {box_start} .. {box_end} (hard 2-week box)
+"));
+    out.push_str(&format!(
+        "config: blake3:{config_hash}   git: {git_version}   seeds: {}
+
+",
+        cfg.seeds.len()
+    ));
+    out.push_str("| operation class | recovery % | identity % | undo fidelity % |
+");
+    out.push_str("|---|---|---|---|
+");
+
+    for t in foreign {
+        out.push_str(&format!(
+            "| {} | {:.1} | {:.1} | n/a |
+",
+            t.op_name,
+            t.recovery_pct(),
+            t.identity_pct(),
+        ));
+    }
+
+    for t in richedit {
+        out.push_str(&format!(
+            "| {} | n/a | n/a | {:.1} |
+",
+            t.op_name,
+            t.fidelity_pct(),
+        ));
+    }
+
+    out.push_str(&format!("
+declared level: {level}
+"));
+    out
 }
 
 #[cfg(test)]

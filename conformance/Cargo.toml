@@ -41,6 +41,8 @@ toml.workspace = true
 [dev-dependencies]
 insta.workspace = true
 proptest.workspace = true
+spike-annotation = { path = "spikes/spike-annotation" }
+spike-richedit = { path = "spikes/spike-richedit" }
 
 [lints]
 workspace = true
