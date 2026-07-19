@@ -638,6 +638,11 @@ fn accept_repair(store: &GraphStore, root: &Utf8Path) -> anyhow::Result<()> {
     };
     let id = driver.prepare(plan.clone(), evidence.clone())?;
     driver.run(id)?;
+    // DG-8.3: `InsertSourceId` mutates the file on disk without carrying the
+    // landed bytes in-plan, so the save-time mirror (`refresh_file_blobs`)
+    // never sees it — re-read the landed files here or the `file/<path>` blob
+    // is a stale pre-acceptance echo.
+    refresh_inserted_file_blobs(store, root, &plan)?;
     record_repair(store, &plan, "id-insert-then-reattach", &evidence)?;
     // D05.6: acceptance is a departure path — retire the proposal's overlays.
     retire_proposed_overlays(store, plan.id)?;
@@ -989,6 +994,39 @@ fn refresh_file_blobs(store: &GraphStore, plan: &RepairPlan) -> anyhow::Result<(
             SYS_BLOB,
             &format!("file/{path}"),
             serde_json::Value::String(String::from_utf8_lossy(contents).into_owned()),
+        )?;
+    }
+    txn.commit(save_meta())?;
+    Ok(())
+}
+
+/// The accepted-repair counterpart of [`refresh_file_blobs`] (DG-8.3):
+/// `InsertSourceId` steps land bytes the plan does not carry, so the mirror
+/// must read the landed file back from disk AFTER the driver commits. A no-op
+/// for plans with no `InsertSourceId` step.
+fn refresh_inserted_file_blobs(
+    store: &GraphStore,
+    root: &Utf8Path,
+    plan: &RepairPlan,
+) -> anyhow::Result<()> {
+    let paths: std::collections::BTreeSet<&PathId> = plan
+        .steps
+        .values()
+        .filter_map(|step| match &step.operation {
+            RepairOperation::InsertSourceId { path, .. } => Some(path),
+            _ => None,
+        })
+        .collect();
+    if paths.is_empty() {
+        return Ok(());
+    }
+    let mut txn = store.begin()?;
+    for path in paths {
+        let bytes = std::fs::read(root.join(&path.0))?;
+        txn.put_aux(
+            SYS_BLOB,
+            &format!("file/{path}"),
+            serde_json::Value::String(String::from_utf8_lossy(&bytes).into_owned()),
         )?;
     }
     txn.commit(save_meta())?;

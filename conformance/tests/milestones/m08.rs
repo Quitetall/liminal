@@ -569,3 +569,118 @@ fn replay_from_frozen_basis_is_deterministic() {
         "workspace_export must replay byte-identically from the frozen durable basis"
     );
 }
+
+/// DG-8.3 (T1 review): after `accept_repair` lands an `InsertSourceId` plan,
+/// the `SYS_BLOB["file/<path>"]` mirror must hold the LANDED bytes — the
+/// on-disk file with the inserted id — not a stale echo. The fixture's one
+/// foreign edit strips the id AND appends a paragraph: candidate matching is
+/// exact-text, so the target paragraph must stay byte-identical, while the
+/// appended text makes the landed file differ from the ingest bytes (the
+/// stock `dag_accept` pure-strip fixture restores the ORIGINAL bytes
+/// verbatim, which cannot distinguish stale from fresh).
+#[test]
+fn file_blob_fresh_after_accept_repair() {
+    use liminal_daemon::scenario::{
+        Expectation, ScenarioHeader, ScenarioScript, Setup, SetupFile, SetupGraph, Step,
+    };
+    let mut foreign = toml::Table::new();
+    foreign.insert("path".into(), toml::Value::String("notes.md".into()));
+    foreign.insert("find".into(), toml::Value::String(" {#p-fourier}\n".into()));
+    foreign.insert(
+        "replace".into(),
+        toml::Value::String("\n\nA foreign paragraph appended offline.\n".into()),
+    );
+    let script = ScenarioScript {
+        scenario: ScenarioHeader {
+            id: "m08_blob_fresh_accept".to_owned(),
+            title: Some("reworded foreign edit + accepted DAG leaves fresh file blob".to_owned()),
+            spec: vec!["M08.3".to_owned(), "DG-8.3".to_owned()],
+            profiles: vec!["external-file".to_owned(), "graph-native".to_owned()],
+        },
+        setup: Setup {
+            files: vec![SetupFile {
+                path: "notes.md".to_owned(),
+                text: "The Fourier transform decomposes a signal. {#p-fourier}\n".to_owned(),
+            }],
+            graph: vec![SetupGraph {
+                kind: "comment-relation".to_owned(),
+                target: Some("p-fourier".to_owned()),
+                requires_grade: Some("explicit".to_owned()),
+                extra: toml::Table::new(),
+            }],
+            buffers: Vec::new(),
+        },
+        steps: vec![
+            Step {
+                kind: "foreign_edit".to_owned(),
+                extra: foreign,
+            },
+            Step {
+                kind: "accept_repair".to_owned(),
+                extra: toml::Table::new(),
+            },
+        ],
+        expect: Expectation::default(),
+    };
+
+    let run = ToyRun::new("m08-blob-fresh").expect("workspace");
+    let exec = run.exec_scenario(&script).expect("exec must run");
+    assert!(
+        exec.status.success(),
+        "accepted DAG must run Committed; stderr: {}",
+        String::from_utf8_lossy(&exec.stderr)
+    );
+
+    let ws = ToyWorkspace::open(&run.root).expect("open");
+    let disk = std::fs::read_to_string(run.root.join("notes.md")).expect("landed file");
+    assert!(
+        disk.contains("A foreign paragraph appended offline") && disk.contains("{#p-fourier}"),
+        "acceptance must land the foreign-appended text WITH the re-inserted id: {disk:?}"
+    );
+    let blob = ws
+        .store()
+        .get_aux(liminal_graph::ns::SYS_BLOB, "file/notes.md")
+        .expect("scan")
+        .expect("file blob must exist");
+    assert_eq!(
+        blob.as_str().expect("file blob must be a string"),
+        disk,
+        "file blob must mirror the landed on-disk bytes, not a stale echo"
+    );
+}
+
+/// T1 review of M08.8: `freeze` must refuse to capture file bytes that no
+/// longer match the basis-pinned hash — a frozen payload must never silently
+/// contradict its own Basis.
+#[test]
+fn freeze_rejects_stale_file_bytes() {
+    let scenarios = all_scenarios().expect("must load scenarios");
+    let scenario = scenarios
+        .iter()
+        .find(|s| s.scenario.id == "four_consumers")
+        .expect("four_consumers fixture must exist");
+    let run = ToyRun::new("m08-freeze-stale").expect("workspace");
+    let exec = run.exec_scenario(scenario).expect("exec must run");
+    assert!(exec.status.success());
+
+    let ws = ToyWorkspace::open(&run.root).expect("open");
+    let basis = ws
+        .basis(BasisPerspective::DurableOnly)
+        .expect("durable basis");
+    assert!(
+        freeze(&basis, &ws).is_ok(),
+        "untampered freeze must succeed"
+    );
+
+    // Tamper with the durable file AFTER the basis pinned its hash.
+    let path = run.root.join("notes.md");
+    let mut bytes = std::fs::read(&path).expect("notes.md exists");
+    bytes.extend_from_slice(b"\ntampered after basis capture\n");
+    std::fs::write(&path, bytes).expect("tamper write");
+
+    let err = freeze(&basis, &ws).expect_err("freeze must refuse stale bytes");
+    assert!(
+        err.to_string().contains("basis-pinned hash"),
+        "error must name the hash pin: {err}"
+    );
+}

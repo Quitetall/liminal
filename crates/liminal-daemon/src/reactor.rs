@@ -112,11 +112,13 @@ fn external_value_node(store: &GraphStore) -> Result<NodeId, WorkspaceError> {
     Ok(id)
 }
 
-/// Metadata for reactor-driven graph transactions.
+/// Metadata for reactor-driven graph transactions. Origin is `Remote` — an
+/// observation comes from an external service, not a human edit (v4 §84
+/// origin vocabulary).
 fn reactor_meta() -> liminal_graph::TxnMeta {
     liminal_graph::TxnMeta {
         actor: None,
-        origin: liminal_graph::Origin::Human,
+        origin: liminal_graph::Origin::Remote,
         at: Timestamp::now(),
         provenance: Some("resolver:observe".into()),
         inverse: None,

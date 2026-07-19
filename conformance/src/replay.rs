@@ -145,8 +145,15 @@ pub fn freeze(basis: &WorkspaceBasis, workspace: &ToyWorkspace) -> anyhow::Resul
                     .get_aux(ns::SYS_BLOB, &key)?
                     .unwrap_or(serde_json::Value::Null)
             }
-            BasisComponent::FileContent { path, .. } => {
+            BasisComponent::FileContent { path, hash } => {
                 let bytes = std::fs::read(workspace.root().join(&path.0))?;
+                let actual = liminal_id::ContentHash::of(&bytes);
+                anyhow::ensure!(
+                    actual == *hash,
+                    "freeze: {path} on disk no longer matches the basis-pinned hash \
+                     (pinned {hash}, found {actual}) — a freeze must capture exactly \
+                     the bytes the Basis recorded, never whatever is there now"
+                );
                 serde_json::Value::String(String::from_utf8_lossy(&bytes).into_owned())
             }
             BasisComponent::GraphSnapshot { revision } => {
