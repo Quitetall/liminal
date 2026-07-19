@@ -38,14 +38,19 @@ pub const SESSION_TIMEOUT_MS: u64 = 1_800_000;
 /// explicit bracket, or `"<session>#<n>"` for the nth implicit sub-session
 /// derived from one `session` field's activity stream.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct SessionSpan {
-    id: String,
-    start: u64,
-    end: u64,
+pub struct SessionSpan {
+    /// Span id (see type doc).
+    pub id: String,
+    /// First covered logical ms.
+    pub start: u64,
+    /// Last covered logical ms (inclusive).
+    pub end: u64,
 }
 
 impl SessionSpan {
-    fn contains(&self, at: u64) -> bool {
+    /// Whether a logical timestamp falls inside this span (inclusive).
+    #[must_use]
+    pub fn contains(&self, at: u64) -> bool {
         at >= self.start && at <= self.end
     }
 }
@@ -96,12 +101,21 @@ pub fn count(events: &[TraceEvent]) -> DenominatorCounts {
 /// transactions are independent). Otherwise the edit starts a new
 /// transaction.
 fn coalesce_transactions(events: &[TraceEvent]) -> u64 {
-    let mut txns = 0u64;
+    transaction_starts(events).len() as u64
+}
+
+/// The event indices at which a new semantic transaction STARTS (D11.1) —
+/// the per-event attribution [`per_event_ops`] uses (each transaction is one
+/// op, carried by its opening `buffer_edit`). `len()` == the frozen `txns`
+/// count.
+#[must_use]
+pub fn transaction_starts(events: &[TraceEvent]) -> Vec<usize> {
+    let mut starts = Vec::new();
     let mut barrier: u64 = 0;
     // buffer -> (at of last edit, barrier value at that edit)
     let mut open: HashMap<&str, (u64, u64)> = HashMap::new();
 
-    for event in events {
+    for (i, event) in events.iter().enumerate() {
         match event {
             TraceEvent::BufferEdit { at, buffer, .. } => {
                 let starts_new = match open.get(buffer.as_str()) {
@@ -111,19 +125,39 @@ fn coalesce_transactions(events: &[TraceEvent]) -> u64 {
                     None => true,
                 };
                 if starts_new {
-                    txns += 1;
+                    starts.push(i);
                 }
                 open.insert(buffer.as_str(), (*at, barrier));
             }
             _ => barrier += 1,
         }
     }
-    txns
+    starts
+}
+
+/// Per-event Jurisdiction-sensitive-operation attribution (Algorithm A +
+/// D11.1), index-aligned with `events`: entry `i` is the number of ops event
+/// `i` contributes — Algorithm A's per-row count, plus one for each
+/// `buffer_edit` that OPENS a semantic transaction. The sum equals the
+/// frozen [`count`]`.ops` (unit-asserted below; the golden guards the total).
+#[must_use]
+pub fn per_event_ops(events: &[TraceEvent]) -> Vec<u64> {
+    let mut per_event = base_event_ops(events);
+    for i in transaction_starts(events) {
+        per_event[i] += 1;
+    }
+    per_event
 }
 
 /// Algorithm A: every event type's Jurisdiction-sensitive-operation count.
 /// `txns` is the D11.1-coalesced transaction count (each = 1 op).
 fn count_ops(events: &[TraceEvent], txns: u64) -> u64 {
+    base_event_ops(events).iter().sum::<u64>() + txns
+}
+
+/// Algorithm A's per-row op counts, index-aligned with `events` — every row
+/// EXCEPT the transaction ops (which [`per_event_ops`] layers on top).
+fn base_event_ops(events: &[TraceEvent]) -> Vec<u64> {
     // Every git_op's own (cause_category, cause_key) — a file_change_external
     // sharing one of these is the BYTE DELIVERY of that already-counted op,
     // not a new one.
@@ -153,9 +187,9 @@ fn count_ops(events: &[TraceEvent], txns: u64) -> u64 {
     let mut unavailable: BTreeSet<&str> = BTreeSet::new();
     let mut pending_draft: BTreeSet<&str> = BTreeSet::new();
 
-    let mut ops = 0u64;
+    let mut per_event = Vec::with_capacity(events.len());
     for event in events {
-        ops += match event {
+        per_event.push(match event {
             TraceEvent::TraceHeader { .. }
             | TraceEvent::SessionOpen { .. }
             | TraceEvent::SessionClose { .. }
@@ -188,9 +222,9 @@ fn count_ops(events: &[TraceEvent], txns: u64) -> u64 {
                 unavailable.remove(holder.as_str());
                 u64::from(pending_draft.remove(holder.as_str()))
             }
-        };
+        });
     }
-    ops + txns
+    per_event
 }
 
 /// D11.2: derive the trace's resolved sessions.
@@ -206,6 +240,15 @@ fn count_ops(events: &[TraceEvent], txns: u64) -> u64 {
 /// (without an open) is used as a hard boundary on its respective end; this
 /// partial-bracket case is not spelled out verbatim by the order (M11.md
 /// Discovered gaps, DG-11.2).
+///
+/// Public as [`session_spans`] for the M11.5 pipeline's session-attributed
+/// metrics; `len()` == the frozen `sessions` count.
+#[must_use]
+pub fn session_spans(events: &[TraceEvent]) -> Vec<SessionSpan> {
+    resolve_sessions(events)
+}
+
+/// See [`session_spans`].
 fn resolve_sessions(events: &[TraceEvent]) -> Vec<SessionSpan> {
     let mut open_at: HashMap<&str, u64> = HashMap::new();
     let mut close_at: HashMap<&str, u64> = HashMap::new();
@@ -304,6 +347,35 @@ mod tests {
 
     fn labeled_dir() -> Utf8PathBuf {
         Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures/traces/labeled")
+    }
+
+    /// The M11.5 per-event exposure is an attribution VIEW over the same
+    /// frozen counting: `per_event_ops` sums to `count().ops` and
+    /// `session_spans` has `count().sessions` entries, on every labeled
+    /// fixture (whose totals the M11.3 golden freezes).
+    #[test]
+    fn per_event_attribution_sums_to_frozen_totals() {
+        for name in [
+            "coalesce-basic",
+            "session-timeout",
+            "git-rootcause",
+            "offline-transient",
+        ] {
+            let path = labeled_dir().join(format!("{name}.trace.ndjson"));
+            let ndjson = std::fs::read_to_string(&path).expect("fixture readable");
+            let trace = Trace::parse(&ndjson).expect("fixture parses");
+            let counts = count(&trace.events);
+            assert_eq!(
+                per_event_ops(&trace.events).iter().sum::<u64>(),
+                counts.ops,
+                "{name}: per-event ops must sum to the frozen total"
+            );
+            assert_eq!(
+                session_spans(&trace.events).len() as u64,
+                counts.sessions,
+                "{name}: session spans must match the frozen session count"
+            );
+        }
     }
 
     /// Smoke test: all four hand-labeled denominator fixtures (Algorithm D)

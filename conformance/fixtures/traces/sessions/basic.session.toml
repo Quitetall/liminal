@@ -1,0 +1,57 @@
+# Dev-corpus session script (M11 Algorithm B, `tracegen session`): one
+# ordinary sound editing session — open, two coalescing edit bursts, two
+# clean promotions, close. Dev stand-in only; held-out session traces come
+# from independently supplied scripts (POLICY.md §1).
+
+[scenario]
+id = "session-basic"
+title = "Ordinary sound session: edits and saves promote cleanly"
+spec = ["v4 §7.4", "R4 §2.3"]
+profiles = ["external-file", "graph-native"]
+
+[[setup.file]]
+path = "notes.md"
+text = """
+The Fourier transform decomposes a signal
+into its constituent frequencies. {#p-fourier}
+
+The Laplace transform generalizes it
+to the complex plane. {#p-laplace}
+"""
+
+[[setup.graph]]
+kind = "comment-relation"
+target = "p-fourier"
+requires_grade = "explicit"
+
+[[setup.buffer]]
+client = "neovim"
+path = "notes.md"
+
+[[step]]
+kind = "buffer_edit"
+client = "neovim"
+path = "notes.md"
+find = "into its constituent frequencies."
+replace = "into its constituent frequency components."
+
+[[step]]
+kind = "save"
+client = "neovim"
+path = "notes.md"
+
+[[step]]
+# dt 2500 > COALESCE_GAP_MS: this edit opens a NEW semantic transaction.
+kind = "buffer_edit"
+client = "neovim"
+path = "notes.md"
+find = "to the complex plane."
+replace = "to the whole complex plane."
+dt = 2500
+
+[[step]]
+kind = "save"
+client = "neovim"
+path = "notes.md"
+
+[expect]

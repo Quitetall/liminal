@@ -1,0 +1,54 @@
+# Dev-corpus session script (M11 Algorithm B, `tracegen session`): two
+# clients over ONE file (the toy's single-FILE-node world), editing
+# disjoint blocks — the second promotion three-way-merges over the first's
+# landed bytes and still auto-applies. Two clients = two sessions (D11.2).
+
+[scenario]
+id = "session-multiclient"
+title = "Two clients, disjoint blocks: both promotions auto-apply"
+spec = ["v4 §7.4", "R4 §2.3"]
+profiles = ["external-file", "graph-native"]
+
+[[setup.file]]
+path = "notes.md"
+text = """
+The Fourier transform decomposes a signal
+into its constituent frequencies. {#p-fourier}
+
+The Laplace transform generalizes it
+to the complex plane. {#p-laplace}
+"""
+
+[[setup.buffer]]
+client = "neovim"
+path = "notes.md"
+
+[[setup.buffer]]
+client = "phone"
+path = "notes.md"
+
+[[step]]
+kind = "buffer_edit"
+client = "neovim"
+path = "notes.md"
+find = "decomposes a signal"
+replace = "decomposes a time-domain signal"
+
+[[step]]
+kind = "save"
+client = "neovim"
+path = "notes.md"
+
+[[step]]
+kind = "buffer_edit"
+client = "phone"
+path = "notes.md"
+find = "to the complex plane."
+replace = "to the entire complex plane."
+
+[[step]]
+kind = "save"
+client = "phone"
+path = "notes.md"
+
+[expect]

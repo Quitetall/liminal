@@ -1,0 +1,9 @@
+{"type":"trace_header","version":1,"trace_id":"offline-aged-b.external-file","source":"offline-script:offline-aged-b.external-file","capture_tool":"tracegen","consent":"synthetic","profile":"external-file","setup":{"files":[{"path":"notes.md","contents":"The draft paragraph awaiting sync. {#p-draft}\n"}],"graph":[]}}
+{"type":"session_open","at":0,"session":"offline","client":"phone"}
+{"type":"buffer_open","at":500,"session":"offline","client":"phone","buffer":"b1","path":"notes.md"}
+{"type":"holder_unavailable","at":1000,"holder":"notes.md","cause_category":"holder","cause_key":"notes.md@1000"}
+{"type":"buffer_edit","at":1500,"session":"offline","buffer":"b1","range":{"start":0,"end":46},"insert":"The draft paragraph awaiting sync, edited while offline. {#p-draft}\n"}
+{"type":"save","at":2000,"session":"offline","buffer":"b1"}
+{"type":"clock_advance","at":90000000}
+{"type":"holder_available","at":90000500,"holder":"notes.md"}
+{"type":"session_close","at":90001000,"session":"offline"}

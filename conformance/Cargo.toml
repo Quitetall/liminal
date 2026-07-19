@@ -21,6 +21,10 @@ path = "src/bin/lim-toy.rs"
 name = "tracegen"
 path = "src/bin/tracegen.rs"
 
+[[bin]]
+name = "scorecard"
+path = "src/bin/scorecard.rs"
+
 [dependencies]
 anyhow.workspace = true
 blake3.workspace = true

@@ -1,0 +1,11 @@
+{"type":"trace_header","version":1,"trace_id":"session-multiclient.external-file","source":"session-script:session-multiclient.external-file","capture_tool":"tracegen","consent":"synthetic","profile":"external-file","setup":{"files":[{"path":"notes.md","contents":"The Fourier transform decomposes a signal\ninto its constituent frequencies. {#p-fourier}\n\nThe Laplace transform generalizes it\nto the complex plane. {#p-laplace}\n"}],"graph":[]}}
+{"type":"session_open","at":0,"session":"neovim","client":"neovim"}
+{"type":"session_open","at":0,"session":"phone","client":"phone"}
+{"type":"buffer_open","at":500,"session":"neovim","client":"neovim","buffer":"b1","path":"notes.md"}
+{"type":"buffer_open","at":1000,"session":"phone","client":"phone","buffer":"b2","path":"notes.md"}
+{"type":"buffer_edit","at":1500,"session":"neovim","buffer":"b1","range":{"start":22,"end":41},"insert":"decomposes a time-domain signal"}
+{"type":"save","at":2000,"session":"neovim","buffer":"b1"}
+{"type":"buffer_edit","at":2500,"session":"phone","buffer":"b2","range":{"start":127,"end":148},"insert":"to the entire complex plane."}
+{"type":"save","at":3000,"session":"phone","buffer":"b2"}
+{"type":"session_close","at":3500,"session":"neovim"}
+{"type":"session_close","at":4000,"session":"phone"}

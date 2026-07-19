@@ -89,7 +89,32 @@ fn denominator_counts_golden() {
 /// runs end-to-end over the DEV corpus and emits the six per-profile metrics
 /// (`liminal_conformance::Scorecard`).
 #[test]
-#[ignore = "Phase -1 M11: end-to-end conformance scorecard"]
 fn scorecard_runs_end_to_end() {
-    unimplemented!("run pipeline over corpora dev split; assert Scorecard shape per profile")
+    let corpus = Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("corpora/dev");
+    for profile in ["external-file", "graph-native"] {
+        let (scorecard, drafts) = liminal_conformance::pipeline::run(&corpus, profile)
+            .unwrap_or_else(|e| panic!("pipeline must run for {profile}: {e}"));
+        assert_eq!(scorecard.profile, profile);
+        assert_eq!(scorecard.corpus, "dev");
+        assert!(
+            (0.0..=1.0).contains(&scorecard.auto_resolution_rate),
+            "auto_resolution_rate must be a rate, got {}",
+            scorecard.auto_resolution_rate
+        );
+        assert!(
+            (0.0..=1.0).contains(&scorecard.intervention_free_session_rate),
+            "intervention_free_session_rate must be a rate, got {}",
+            scorecard.intervention_free_session_rate
+        );
+        // The dev corpus exercises the declared-transient path (Algorithm D
+        // requires offline traces per profile), and the drafts land in the
+        // SIDE report — never in a Scorecard field (frozen surface).
+        assert!(
+            drafts.declared >= 1,
+            "dev corpus must exercise the transient-draft path"
+        );
+        // The whole scorecard is JSON-serializable (the scorecard bin's
+        // per-profile output contract, AM-11.2).
+        serde_json::to_value(&scorecard).expect("scorecard serializes");
+    }
 }
