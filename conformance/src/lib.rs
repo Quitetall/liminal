@@ -14,6 +14,7 @@ pub mod harness;
 pub mod identity;
 pub mod laws;
 pub mod memo;
+pub mod pandoc;
 pub mod replay;
 pub mod scenario;
 pub mod slo;
