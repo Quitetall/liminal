@@ -6,7 +6,7 @@
 
 [workspace]
 resolver = "3"
-members = ["crates/*", "conformance", "benches"]
+members = ["crates/*", "conformance", "benches", "conformance/spikes/*"]
 
 [workspace.package]
 version = "0.0.0"                                       # pre-publication; the first publish is a deliberate bump (ADR-0002)

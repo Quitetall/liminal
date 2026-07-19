@@ -57,3 +57,4 @@ work order.
 - **No ledger** — rejected because silent deviations to frozen surfaces would
   accumulate unchecked, and Phase -1's conclusions depend on the scaffold
   matching the spec.
+AM-9.1 (M09): workspace `members` gains `"conformance/spikes/*"` (two publish=false spike crates; D09.1).

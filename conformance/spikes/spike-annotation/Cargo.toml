@@ -1,0 +1,16 @@
+[package]
+name = "spike-annotation"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97"
+license = "Apache-2.0"
+publish = false
+description = "Phase -1 M09 spike: annotated-source round-trip + anchor recovery measurement"
+
+[dependencies]
+anyhow = "1"
+blake3 = "1"
+liminal-conformance = { path = "../.." }
+liminal-id = { path = "../../../crates/liminal-id" }
+liminal-source = { path = "../../../crates/liminal-source" }
+rand = { version = "0.9", default-features = false, features = ["small_rng", "std", "std_rng"] }
