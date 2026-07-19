@@ -279,3 +279,40 @@ fn zstd_compressed_trace_replays_identically() {
     );
     assert_eq!(raw_drafts, zst_drafts);
 }
+
+/// DG-11.4: a real history transitions paths dir→file and file→dir, and
+/// deletions are never replayed — the stale shape must yield to what the
+/// history says the path is NOW.
+#[test]
+fn imported_trace_with_dir_file_transitions_replays() {
+    let root = Utf8PathBuf::from(std::env::temp_dir().to_str().expect("utf8"))
+        .join(format!("liminal-m11-dirfile-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let corpus = root.join("corpus");
+    std::fs::create_dir_all(&corpus).expect("mkdir");
+
+    let trace = concat!(
+        r##"{"type":"trace_header","version":1,"trace_id":"dir-file","source":"synthetic","capture_tool":"test","consent":"public-git","profile":"external-file","setup":{"files":[{"path":"notes.md","contents":"hello\n"}],"graph":[]}}"##,
+        "\n",
+        // x becomes a directory (file added beneath it)…
+        r##"{"type":"file_change_external","at":60000,"path":"x/child.md","contents":"child\n","cause_category":"git","cause_key":"commit@60000"}"##,
+        "\n",
+        // …then x becomes a FILE (dir→file transition; deletion of the dir was never delivered).
+        r##"{"type":"file_change_external","at":120000,"path":"x","contents":"x is a file now\n","cause_category":"git","cause_key":"commit@120000"}"##,
+        "\n",
+        // y is a file…
+        r##"{"type":"file_change_external","at":180000,"path":"y","contents":"y file\n","cause_category":"git","cause_key":"commit@180000"}"##,
+        "\n",
+        // …then y becomes a DIRECTORY (file→dir; a child lands beneath it).
+        r##"{"type":"file_change_external","at":240000,"path":"y/child.md","contents":"y child\n","cause_category":"git","cause_key":"commit@240000"}"##,
+        "\n",
+    );
+    std::fs::write(corpus.join("dir-file.trace.ndjson"), trace).expect("write trace");
+
+    let (scorecard, _drafts) =
+        liminal_conformance::pipeline::run(&corpus, "external-file").expect("replay must succeed");
+    assert!(
+        (scorecard.auto_resolution_rate - 1.0).abs() < f64::EPSILON,
+        "clean foreign transitions must auto-resolve: {scorecard:?}"
+    );
+}

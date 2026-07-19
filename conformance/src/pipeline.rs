@@ -367,7 +367,27 @@ pub fn replay_trace(trace: &Trace) -> anyhow::Result<TraceReplay> {
                 // directory that never existed at setup). A foreign add is
                 // an edit from nothing: create parents + an empty file, and
                 // the `find:""` whole-content replace below lands the bytes.
+                //
+                // DG-11.4: real histories also transition a path dir→file
+                // and file→dir. Deletions are never replayed, so a stale
+                // counterpart can block the write: a directory sitting where
+                // the file must land, or a file sitting where an ancestor
+                // directory must exist. The history says the path is a file
+                // NOW — clear the stale shape and proceed.
                 let abs = root.join(path);
+                if abs.is_dir() {
+                    std::fs::remove_dir_all(&abs)?;
+                }
+                let mut ancestor = abs.parent();
+                while let Some(a) = ancestor {
+                    if a == root {
+                        break;
+                    }
+                    if a.is_file() {
+                        std::fs::remove_file(a)?;
+                    }
+                    ancestor = a.parent();
+                }
                 if !abs.exists() {
                     if let Some(parent) = abs.parent() {
                         std::fs::create_dir_all(parent)?;
