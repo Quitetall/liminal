@@ -947,6 +947,7 @@ fn apply_or_review<X: ExternalExecutor, C: CrashInjector>(
         RepairDecision::AutoApply { evidence } => {
             let id = driver.prepare(plan.clone(), evidence.clone())?;
             driver.run(id)?;
+            refresh_file_blobs(store, plan)?;
             record_repair(store, plan, "save-promotion", &evidence)?;
             Ok(plan.id)
         }
@@ -956,6 +957,39 @@ fn apply_or_review<X: ExternalExecutor, C: CrashInjector>(
             Ok(plan.id)
         }
     }
+}
+
+/// M08.3: standardize `file/<path>` in `SYS_BLOB` the same way
+/// `persist_buffer_blob` standardizes `buf/<client>/<buffer>/<generation>` —
+/// refresh it at the moment content actually becomes durable. Buffer blobs
+/// refresh on every edit (D06.4); this is the save-time counterpart: once a
+/// `save` step's `WriteFile` steps land on disk via ILRP, mirror the same
+/// bytes into `SYS_BLOB["file/<path>"]` so a fresh process's file-blob scan
+/// (`seed_durable_inputs`, `file_paths`) is never reading a stale ingest-time
+/// echo. A no-op when `plan` carries no `WriteFile` step (e.g. the
+/// id-then-reattach DAG, which is graph + `InsertSourceId` only).
+fn refresh_file_blobs(store: &GraphStore, plan: &RepairPlan) -> anyhow::Result<()> {
+    let writes: Vec<(&PathId, &[u8])> = plan
+        .steps
+        .values()
+        .filter_map(|step| match &step.operation {
+            RepairOperation::WriteFile { path, contents } => Some((path, contents.as_slice())),
+            _ => None,
+        })
+        .collect();
+    if writes.is_empty() {
+        return Ok(());
+    }
+    let mut txn = store.begin()?;
+    for (path, contents) in writes {
+        txn.put_aux(
+            SYS_BLOB,
+            &format!("file/{path}"),
+            serde_json::Value::String(String::from_utf8_lossy(contents).into_owned()),
+        )?;
+    }
+    txn.commit(save_meta())?;
+    Ok(())
 }
 
 /// The FILE node governing a path (via its SYS_BLOB `file/<path>` ingestion).
