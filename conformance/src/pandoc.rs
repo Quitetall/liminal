@@ -285,3 +285,93 @@ mod tests {
         );
     }
 }
+
+/// The pinned `pandoc --version` first line (D10.3).
+pub const PANDOC_PINNED: &str = "pandoc 3.6.1";
+
+/// D10.3: the version pin. The first line of `pandoc --version` must equal
+/// [`PANDOC_PINNED`]; a missing binary or a version mismatch PANICS — no
+/// silent skip, no `#[ignore]`. A skipped loss report would fake Law 8.
+///
+/// # Panics
+/// When `pandoc` is missing or reports any other version.
+pub fn assert_pandoc_pinned() {
+    let found = match std::process::Command::new("pandoc")
+        .arg("--version")
+        .output()
+    {
+        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .trim()
+            .to_owned(),
+        Ok(out) => format!("pandoc exited {}", out.status),
+        Err(e) => format!("no pandoc binary ({e})"),
+    };
+    assert!(
+        found == PANDOC_PINNED,
+        "M10 requires pandoc 3.6.1 (pacman -S pandoc); found {found}. \
+         Update the pin + regenerate the golden if intentionally upgrading."
+    );
+}
+
+/// The D10.2 CLI round trip's outputs.
+#[derive(Debug, Clone)]
+pub struct PandocRoundTrip {
+    /// `roundtrip.md` — the markdown the Pandoc writer produced.
+    pub markdown: String,
+    /// `ast2.json` — the AST the Pandoc reader produced from that markdown.
+    pub ast2_json: String,
+}
+
+/// Run the D10.2 pipeline in `dir`: write `ast.json`, then
+/// `pandoc -f json -t markdown-smart --wrap=none -o roundtrip.md ast.json`,
+/// then `pandoc -f markdown-smart -t json -o ast2.json roundtrip.md`.
+/// Asserts the D10.3 pin first.
+///
+/// # Errors
+/// Propagates IO failures and non-zero pandoc exits (with stderr attached).
+pub fn run_pandoc(ast_json: &str, dir: &camino::Utf8Path) -> anyhow::Result<PandocRoundTrip> {
+    assert_pandoc_pinned();
+    std::fs::create_dir_all(dir)?;
+    std::fs::write(dir.join("ast.json"), ast_json)?;
+
+    let step = |args: &[&str]| -> anyhow::Result<()> {
+        let out = std::process::Command::new("pandoc")
+            .current_dir(dir)
+            .args(args)
+            .output()?;
+        anyhow::ensure!(
+            out.status.success(),
+            "pandoc {args:?} failed ({}): {}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr)
+        );
+        Ok(())
+    };
+    step(&[
+        "-f",
+        "json",
+        "-t",
+        "markdown-smart",
+        "--wrap=none",
+        "-o",
+        "roundtrip.md",
+        "ast.json",
+    ])?;
+    step(&[
+        "-f",
+        "markdown-smart",
+        "-t",
+        "json",
+        "-o",
+        "ast2.json",
+        "roundtrip.md",
+    ])?;
+
+    Ok(PandocRoundTrip {
+        markdown: std::fs::read_to_string(dir.join("roundtrip.md"))?,
+        ast2_json: std::fs::read_to_string(dir.join("ast2.json"))?,
+    })
+}
