@@ -42,7 +42,7 @@ fn heldout_manifest_locked() {
 #[test]
 fn denominator_counts_golden() {
     use std::fmt::Write as _;
-    let root = camino::Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut rendered = String::from(
         "# §7.4 denominator counts — hand-labeled traces (M11.3, FROZEN)\n\n\
          Regenerate deliberately with BLESS_DENOMINATOR_COUNTS=1; a change\n\
