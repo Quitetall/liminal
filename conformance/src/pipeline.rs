@@ -619,7 +619,7 @@ fn corpus_traces(corpus_dir: &Utf8Path) -> anyhow::Result<Vec<Utf8PathBuf>> {
 /// # Errors
 /// IO/decompression failures, or non-UTF-8 decompressed content.
 pub fn read_trace_file(path: &Utf8Path) -> anyhow::Result<String> {
-    if path.as_str().ends_with(".zst") {
+    if path.extension() == Some("zst") {
         let file = std::fs::File::open(path)?;
         let bytes = zstd::decode_all(std::io::BufReader::new(file))?;
         Ok(String::from_utf8(bytes)?)
