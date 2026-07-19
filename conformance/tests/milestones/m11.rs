@@ -267,7 +267,9 @@ fn zstd_compressed_trace_replays_identically() {
         liminal_conformance::pipeline::run(&raw_corpus, "external-file").expect("raw replays");
     let (zst_score, zst_drafts) =
         liminal_conformance::pipeline::run(&zst_corpus, "external-file").expect("zst replays");
-    assert_eq!(
+    assert!(
+        (raw_score.auto_resolution_rate - zst_score.auto_resolution_rate).abs() < f64::EPSILON,
+        "rates must match: {} vs {}",
         raw_score.auto_resolution_rate,
         zst_score.auto_resolution_rate
     );
