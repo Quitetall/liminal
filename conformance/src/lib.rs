@@ -18,6 +18,7 @@ pub mod pandoc;
 pub mod replay;
 pub mod scenario;
 pub mod slo;
+pub mod trace;
 
 pub use debt::{DebtReport, scan_workspace_debt};
 pub use harness::{
@@ -25,3 +26,4 @@ pub use harness::{
 };
 pub use scenario::{Expectation, ScenarioScript, SetupFile, SetupGraph, Step};
 pub use slo::Scorecard;
+pub use trace::{Trace, TraceEvent, TraceParseError};
