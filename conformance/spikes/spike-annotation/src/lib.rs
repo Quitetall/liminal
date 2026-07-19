@@ -504,3 +504,137 @@ mod emit_parse_tests {
         }
     }
 }
+
+// ── M09.4: Foreign-edit loop (11 ops × 8 seeds) ────────────────────────
+
+use liminal_conformance::identity::ops;
+use liminal_conformance::identity::strategy::BaseWorld;
+
+/// Per-annotation tally for one (operation, seed) case.
+#[derive(Debug, Clone)]
+pub struct AnnotationTally {
+    pub exact: usize,
+    pub shifted: usize,
+    pub ambiguous: usize,
+    pub lost: usize,
+    pub total: usize,
+}
+
+impl AnnotationTally {
+    /// Recovery percentage: (Exact + Shifted) / total × 100.
+    #[must_use]
+    pub fn recovery_pct(&self) -> f64 {
+        if self.total == 0 {
+            return 100.0;
+        }
+        (self.exact + self.shifted) as f64 / self.total as f64 * 100.0
+    }
+}
+
+/// Per-operation-class tally across all seeds.
+#[derive(Debug, Clone)]
+pub struct OpClassTally {
+    pub op_name: String,
+    pub exact: usize,
+    pub shifted: usize,
+    pub ambiguous: usize,
+    pub lost: usize,
+    pub total: usize,
+}
+
+impl OpClassTally {
+    /// Recovery percentage across all seeds for this operation class.
+    #[must_use]
+    pub fn recovery_pct(&self) -> f64 {
+        if self.total == 0 {
+            return 100.0;
+        }
+        (self.exact + self.shifted) as f64 / self.total as f64 * 100.0
+    }
+}
+
+/// Run the full foreign-edit loop: 11 ops × 8 seeds over annotated docs.
+///
+/// Returns per-operation-class tallies (recovery counts).
+///
+/// # Errors
+/// Propagates git-runbook failures.
+pub fn run_foreign_edit_loop(
+    cfg: &liminal_conformance::identity::Config,
+) -> anyhow::Result<Vec<OpClassTally>> {
+    let world = BaseWorld::build(&cfg.template);
+    let mut results = Vec::new();
+
+    for &op in &cfg.operations {
+        let mut class = OpClassTally {
+            op_name: op.name().to_owned(),
+            exact: 0,
+            shifted: 0,
+            ambiguous: 0,
+            lost: 0,
+            total: 0,
+        };
+
+        for &seed in &cfg.seeds {
+            // Build annotated doc from the template with this seed.
+            let doc = AnnotatedDoc::build(&cfg.template, seed)?;
+
+            // Apply the M07 foreign operation to get the post-op file.
+            let post = ops::apply(op, &world, seed, cfg)?;
+
+            // Re-anchor all annotations against the post-op file.
+            let outcomes = doc.reanchor(&post.file);
+
+            // Tally.
+            for outcome in &outcomes {
+                class.total += 1;
+                match outcome {
+                    AnchorOutcome::Exact => class.exact += 1,
+                    AnchorOutcome::Shifted(_) => class.shifted += 1,
+                    AnchorOutcome::Ambiguous => class.ambiguous += 1,
+                    AnchorOutcome::Lost => class.lost += 1,
+                }
+            }
+        }
+
+        results.push(class);
+    }
+
+    Ok(results)
+}
+
+#[cfg(test)]
+mod foreign_edit_tests {
+    use super::*;
+
+    /// M09.4: the foreign-edit loop runs to completion and produces tallies
+    /// for all 11 operations.
+    #[test]
+    fn foreign_loop_completes() {
+        let cfg = liminal_conformance::identity::Config::load().expect("load config");
+        let results = run_foreign_edit_loop(&cfg).expect("foreign loop");
+        assert_eq!(results.len(), 11, "expected 11 operation classes");
+        for r in &results {
+            assert!(r.total > 0, "{} has zero annotations", r.op_name);
+            assert_eq!(
+                r.total,
+                cfg.seeds.len() * 3 * 3,
+                "{}: expected {} annotations (3 blocks × 3 kinds × {} seeds)",
+                r.op_name,
+                cfg.seeds.len() * 9,
+                cfg.seeds.len()
+            );
+        }
+    }
+
+    /// M09.4: unedited docs are 100% exact (baseline sanity check).
+    #[test]
+    fn unedited_baseline_is_perfect() {
+        let cfg = liminal_conformance::identity::Config::load().expect("load config");
+        let doc = AnnotatedDoc::build(&cfg.template, 33).expect("build");
+        let outcomes = doc.reanchor(&cfg.template);
+        for o in &outcomes {
+            assert_eq!(*o, AnchorOutcome::Exact);
+        }
+    }
+}
