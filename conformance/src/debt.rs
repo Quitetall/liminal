@@ -123,12 +123,20 @@ mod tests {
             "at minimum the 12 R4 §10 gate tests must be declared, found {}",
             report.total_ignored()
         );
+        // The meter must partition the backlog by phase and find a non-empty,
+        // well-formed set. This originally pinned "Phase -1 must be visible",
+        // but M11.8 completed Phase -1 (its ignored count is now 0 by design —
+        // M12.4 targets exactly that), so the assertion is re-expressed as the
+        // property it was really testing: the phase partition is populated and
+        // every key is a real phase label (DG-11.5).
         assert!(
-            report
-                .ignored_by_phase
-                .keys()
-                .any(|k| k.starts_with("Phase -1")),
-            "Phase -1 backlog must be visible: {:?}",
+            !report.ignored_by_phase.is_empty()
+                && report
+                    .ignored_by_phase
+                    .keys()
+                    .all(|k| k.starts_with("Phase ")),
+            "the phase-partitioned backlog must be populated with real phase \
+             labels: {:?}",
             report.ignored_by_phase
         );
     }

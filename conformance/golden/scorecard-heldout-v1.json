@@ -1,0 +1,40 @@
+{
+  "external-file": {
+    "scorecard": {
+      "auto_resolution_rate": 1.0,
+      "corpus": "heldout/v1",
+      "intervention_free_session_rate": 1.0,
+      "manual_contract_authoring": 0,
+      "max_visible_incidents_per_root_cause": 1,
+      "profile": "external-file",
+      "sound_checker_output_bytes": 0,
+      "sound_session_diagnostics": 0,
+      "unexpected_reconciliation_items": 0
+    },
+    "transient_drafts": {
+      "aged_into_debt": 1,
+      "declared": 1,
+      "reconciled_within_window": 0
+    },
+    "violations": []
+  },
+  "graph-native": {
+    "scorecard": {
+      "auto_resolution_rate": 1.0,
+      "corpus": "heldout/v1",
+      "intervention_free_session_rate": 1.0,
+      "manual_contract_authoring": 0,
+      "max_visible_incidents_per_root_cause": 1,
+      "profile": "graph-native",
+      "sound_checker_output_bytes": 0,
+      "sound_session_diagnostics": 0,
+      "unexpected_reconciliation_items": 0
+    },
+    "transient_drafts": {
+      "aged_into_debt": 1,
+      "declared": 1,
+      "reconciled_within_window": 0
+    },
+    "violations": []
+  }
+}
