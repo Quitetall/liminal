@@ -363,7 +363,18 @@ pub fn replay_trace(trace: &Trace) -> anyhow::Result<TraceReplay> {
             TraceEvent::FileChangeExternal { path, contents, .. }
             | TraceEvent::FormatterRewrite { path, contents, .. } => {
                 foreign_paths.push(path.clone());
-                let current = std::fs::read_to_string(root.join(path))?;
+                // DG-11.3: an imported real history can ADD a file (in a
+                // directory that never existed at setup). A foreign add is
+                // an edit from nothing: create parents + an empty file, and
+                // the `find:""` whole-content replace below lands the bytes.
+                let abs = root.join(path);
+                if !abs.exists() {
+                    if let Some(parent) = abs.parent() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                    std::fs::write(&abs, b"")?;
+                }
+                let current = std::fs::read_to_string(&abs)?;
                 runner.step(&step(
                     "foreign_edit",
                     &[

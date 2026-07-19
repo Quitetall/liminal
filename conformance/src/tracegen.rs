@@ -519,3 +519,165 @@ pub fn adversarial_trace(op_name: &str, seed: u64, opts: &GenOptions) -> anyhow:
     ];
     ndjson(&events)
 }
+
+/// `tracegen import <repo-dir> <out>` (AM-11.5; Algorithm D: "≥1 imported
+/// real public-repo history, provenance in header"): walk an EXISTING
+/// clone's **first-parent** history oldest-first — the trace models a
+/// workspace tracking the default branch, so a merge commit delivers its
+/// full mainline diff as ONE `git_op` (side-branch interior commits never
+/// touched this workspace's files). Emission mirrors [`git_trace`]: base
+/// commit → `setup.files`; commit k → `git_op` + one `file_change_external`
+/// per Added/Modified file (same cause pair) at `k × 60_000` ms. Deleted
+/// paths stay in the `git_op` files list (they ARE foreign-edit ingestions,
+/// Algorithm A) but get no byte delivery — there are no bytes to deliver.
+/// Non-UTF-8 blobs are skipped from delivery and setup, with the skip COUNT
+/// recorded in the header `source` string (no silent caps). `ext_filter`
+/// (lowercased extensions, empty = everything) restricts the imported file
+/// set — a corpus-shaping policy choice recorded at assembly time.
+///
+/// # Errors
+/// Git failures, an empty history, or an unwritable diff walk.
+#[allow(clippy::too_many_lines)]
+pub fn import_trace(
+    repo: &Utf8Path,
+    source: &str,
+    opts: &GenOptions,
+    max_commits: Option<usize>,
+    ext_filter: &[String],
+) -> anyhow::Result<String> {
+    use std::fmt::Write as _;
+    let in_scope = |path: &str| -> bool {
+        ext_filter.is_empty()
+            || path
+                .rsplit_once('.')
+                .is_some_and(|(_, ext)| ext_filter.iter().any(|e| e.eq_ignore_ascii_case(ext)))
+    };
+    // Raw-bytes `git show`, None for non-UTF-8.
+    let show_utf8 = |spec: &str| -> anyhow::Result<Option<String>> {
+        let out = std::process::Command::new("git")
+            .current_dir(repo)
+            .args(["show", spec])
+            .output()?;
+        anyhow::ensure!(
+            out.status.success(),
+            "git show {spec} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        Ok(String::from_utf8(out.stdout).ok())
+    };
+
+    let mut shas: Vec<String> = git_out(
+        repo,
+        &["log", "--reverse", "--first-parent", "--format=%H", "HEAD"],
+    )?
+    .lines()
+    .map(str::to_owned)
+    .collect();
+    anyhow::ensure!(!shas.is_empty(), "empty git history in {repo}");
+    if let Some(max) = max_commits {
+        shas.truncate(max.max(1));
+    }
+    let head = shas.last().expect("non-empty").clone();
+
+    let mut skipped_non_utf8 = 0u64;
+
+    // Base commit -> setup.files (full tree, filtered).
+    let mut setup_files = Vec::new();
+    for path in git_out(repo, &["ls-tree", "-r", "--name-only", &shas[0]])?.lines() {
+        if !in_scope(path) {
+            continue;
+        }
+        match show_utf8(&format!("{}:{path}", shas[0]))? {
+            Some(contents) => setup_files.push(TraceSetupFile {
+                path: path.to_owned(),
+                contents,
+            }),
+            None => skipped_non_utf8 += 1,
+        }
+    }
+
+    let mut events = Vec::new();
+    for (k, sha) in shas.iter().enumerate().skip(1) {
+        let at = (k as u64) * 60_000;
+        let parent_count = git_out(repo, &["log", "-1", "--format=%P", sha])?
+            .split_whitespace()
+            .count();
+        let kind = if parent_count >= 2 {
+            GitOpKind::Merge
+        } else {
+            GitOpKind::Commit
+        };
+        let cause_key = format!("{}@{at}", kind_wire(kind));
+
+        // Changed vs the first parent, renames as delete+add (--no-renames).
+        let mut files = Vec::new();
+        let mut deliveries: Vec<(String, String)> = Vec::new();
+        for line in git_out(
+            repo,
+            &[
+                "diff",
+                "--name-status",
+                "--no-renames",
+                &format!("{sha}^"),
+                sha,
+            ],
+        )?
+        .lines()
+        {
+            let Some((status, path)) = line.split_once('\t') else {
+                continue;
+            };
+            if !in_scope(path) {
+                continue;
+            }
+            files.push(path.to_owned());
+            if status.starts_with('D') {
+                continue; // counted, never delivered — no bytes exist.
+            }
+            match show_utf8(&format!("{sha}:{path}"))? {
+                Some(contents) => deliveries.push((path.to_owned(), contents)),
+                None => skipped_non_utf8 += 1,
+            }
+        }
+
+        events.push(TraceEvent::GitOp {
+            at,
+            op: kind,
+            files,
+            cause_category: CauseCategory::Git,
+            cause_key: cause_key.clone(),
+        });
+        for (path, contents) in deliveries {
+            events.push(TraceEvent::FileChangeExternal {
+                at,
+                path,
+                contents,
+                cause_category: CauseCategory::Git,
+                cause_key: cause_key.clone(),
+            });
+        }
+    }
+
+    let mut full_source = format!(
+        "{source} base:{} head:{head} commits:{}",
+        shas[0],
+        shas.len()
+    );
+    if skipped_non_utf8 > 0 {
+        let _ = write!(full_source, " skipped-non-utf8:{skipped_non_utf8}");
+    }
+    let mut header_event = header(
+        opts,
+        full_source,
+        TraceSetup {
+            files: setup_files,
+            graph: Vec::new(),
+        },
+    );
+    if let TraceEvent::TraceHeader { consent, .. } = &mut header_event {
+        *consent = Consent::PublicGit;
+    }
+    let mut all = vec![header_event];
+    all.extend(events);
+    ndjson(&all)
+}

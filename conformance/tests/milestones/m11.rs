@@ -207,3 +207,34 @@ fn gen_manifest_output_passes_verifier() {
     let second = std::fs::read_to_string(dir.join("MANIFEST.b3")).expect("reread manifest");
     assert_eq!(first, second, "regeneration must be idempotent");
 }
+
+/// DG-11.3 (T1 review of the import path): a real public-repo history can
+/// ADD a file in a directory that never existed at setup — the replay maps
+/// it to a foreign add (create parents + whole-content foreign_edit) rather
+/// than failing on the missing file.
+#[test]
+fn imported_trace_with_added_nested_file_replays() {
+    let root = Utf8PathBuf::from(std::env::temp_dir().to_str().expect("utf8"))
+        .join(format!("liminal-m11-import-add-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).expect("mkdir");
+
+    let trace = concat!(
+        r##"{"type":"trace_header","version":1,"trace_id":"import-add","source":"synthetic","capture_tool":"test","consent":"public-git","profile":"external-file","setup":{"files":[{"path":"notes.md","contents":"hello\n"}],"graph":[]}}"##,
+        "\n",
+        r##"{"type":"git_op","at":60000,"op":"commit","files":["new-dir/added.md"],"cause_category":"git","cause_key":"commit@60000"}"##,
+        "\n",
+        r##"{"type":"file_change_external","at":60000,"path":"new-dir/added.md","contents":"# fresh\n","cause_category":"git","cause_key":"commit@60000"}"##,
+        "\n",
+    );
+    let corpus = root.join("corpus");
+    std::fs::create_dir_all(&corpus).expect("mkdir corpus");
+    std::fs::write(corpus.join("import-add.trace.ndjson"), trace).expect("write trace");
+
+    let (scorecard, _drafts) =
+        liminal_conformance::pipeline::run(&corpus, "external-file").expect("replay must succeed");
+    assert!(
+        (scorecard.auto_resolution_rate - 1.0).abs() < f64::EPSILON,
+        "a clean foreign add must auto-resolve: {scorecard:?}"
+    );
+}
