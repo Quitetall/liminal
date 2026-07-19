@@ -10,3 +10,6 @@ pub const FILE: KindId = KindId(1);
 pub const PARAGRAPH: KindId = KindId(2);
 /// A graph-native comment Relation.
 pub const COMMENT: KindId = KindId(3);
+/// A node holding a `MaterializeExternal` observation (M08.6, v4 §8.6). Toy:
+/// at most one per scenario, mirroring the single FILE node convention.
+pub const EXTERNAL_VALUE: KindId = KindId(4);

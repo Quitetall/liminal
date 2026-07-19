@@ -11,6 +11,7 @@ pub mod crash;
 pub mod digest;
 pub mod executor;
 pub mod queries;
+pub mod reactor;
 pub mod render;
 pub mod runner;
 pub mod scenario;

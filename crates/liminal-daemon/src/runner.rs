@@ -17,7 +17,7 @@ use liminal_graph::{
 use liminal_id::{
     ClientId, ContentHash, EntityId, IdempotencyKey, IdentityGrade, JurisdictionKey,
     JurisdictionSubject, NodeId, OverlayId, PathId, ReconciliationItemId, RelationId, RepairId,
-    RepairStepId, RevisionId, Timestamp, TransactionId,
+    RepairStepId, RevisionId, SourceId, Timestamp, TransactionId,
 };
 use liminal_jurisdiction::{
     Checker, CrashInjector, ExternalExecutor, IlrpDriver, IntentState, InverseRepairPlan, Overlay,
@@ -25,11 +25,13 @@ use liminal_jurisdiction::{
     ReconciliationStatus, RepairDecision, RepairOperation, RepairPlan, RepairRecord,
     SafetyEvidence, StatePredicate, blob,
 };
+use liminal_resolver::ReplayableResolver;
 use liminal_revision::{BasisComponent, BasisPerspective, WorkspaceBasis};
 use liminal_source::merge::{self, MergeOutcome};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+use crate::reactor::{Observation, ScriptedStockResolver, parse_utc_timestamp};
 use crate::scenario::{ScenarioScript, SetupGraph};
 use crate::workspace::ToyWorkspace;
 
@@ -1405,6 +1407,34 @@ fn apply_advance_clock(store: &GraphStore, step: &crate::scenario::Step) -> anyh
     advance_clock(store, by_secs)
 }
 
+/// `resolver_observe { source, price, at }` (M08.6, AM-8.1): script one
+/// effectful observation through `ScriptedStockResolver::observe` (D08.5's
+/// demo `ReplayableResolver`), then inject it as a graph transaction
+/// (`ToyWorkspace::inject_observation`, M08 Algorithm B).
+fn apply_resolver_observe(
+    ws: &mut ToyWorkspace,
+    step: &crate::scenario::Step,
+) -> anyhow::Result<()> {
+    let source_name = field(step, "source")?;
+    let price = step
+        .extra
+        .get("price")
+        .and_then(toml::Value::as_float)
+        .ok_or_else(|| anyhow::anyhow!("resolver_observe missing price"))?;
+    let at = field(step, "at")?;
+
+    let source = SourceId::from_name(source_name);
+    let observed_at = parse_utc_timestamp(at)?;
+    let mut resolver = ScriptedStockResolver::scripted(vec![Observation {
+        source,
+        observed_at,
+        payload: serde_json::json!({ "price": price }),
+    }]);
+    let observed = resolver.observe(&source);
+    ws.inject_observation(observed)?;
+    Ok(())
+}
+
 /// `foreign_edit`: a foreign tool rewrites the durable file directly (v4 §8.5).
 fn apply_foreign_edit(step: &crate::scenario::Step, root: &Utf8Path) -> anyhow::Result<()> {
     let (path, find, replace) = (
@@ -1482,6 +1512,7 @@ pub fn exec<X: ExternalExecutor, C: CrashInjector>(
                 };
                 perform_save(&driver, &profiles, root, &bases, &buffers, client, path)?;
             }
+            "resolver_observe" => apply_resolver_observe(&mut ws, step)?,
             "accept_repair" => accept_repair(ws.store(), root)?,
             "holder_unavailable" => mark_holder_unavailable(ws.store(), step)?,
             "holder_available" => mark_holder_available(ws.store(), step)?,
