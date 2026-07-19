@@ -1,12 +1,20 @@
-//! M08.7 exit-gate born-passing test: four consumers, two dirty buffers, one
-//! materialized observation — each consumer selects its OWN perspective
-//! explicitly (v4 §7.5's provenance rule) and sees exactly what that
-//! perspective promises, never another client's intent (v4 §24).
+//! M08.7/M08.8 exit-gate born-passing tests.
+//!
+//! `four_consumers_two_dirty_buffers` (M08.7): four consumers, two dirty
+//! buffers, one materialized observation — each consumer selects its OWN
+//! perspective explicitly (v4 §7.5's provenance rule) and sees exactly what
+//! that perspective promises, never another client's intent (v4 §24).
+//!
+//! `replay_from_frozen_basis_is_deterministic` (M08.8, Algorithm C): the same
+//! four queries, re-executed against a [`FrozenWorld`] loaded from frozen
+//! JSON after the workspace directory is deleted, reproduce byte-identical
+//! output (v4 §42, §112).
 
 use liminal_conformance::harness::{ToyRun, all_scenarios};
+use liminal_conformance::replay::{FrozenWorld, freeze};
 use liminal_daemon::ToyWorkspace;
 use liminal_daemon::queries::{
-    AiContextStub, Backlinks, LiveWorld, RenderBlock, WorkspaceExport, perspective_label,
+    AiContextStub, Backlinks, LiveWorld, RenderBlock, WorkspaceExport, World, perspective_label,
 };
 use liminal_id::{BufferId, ClientId, JurisdictionKey, NodeId, PathId};
 use liminal_query::Query;
@@ -379,5 +387,185 @@ fn four_consumers_two_dirty_buffers() {
         &neovim_label,
         &phone_label,
         &durable_label,
+    );
+}
+
+/// The four consumers' outputs over one `World` (live or frozen).
+struct FourOutputs {
+    preview: String,
+    ai_context: String,
+    backlinks: String,
+    export: String,
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "test glue over the four consumer queries"
+)]
+fn run_four<W: World>(
+    world: &W,
+    node: NodeId,
+    neovim_basis: &WorkspaceBasis,
+    phone_basis: &WorkspaceBasis,
+    durable_basis: &WorkspaceBasis,
+    neovim_label: &str,
+    phone_label: &str,
+    durable_label: &str,
+) -> FourOutputs {
+    let mut deps = ComponentDeps::default();
+    let preview = RenderBlock {
+        world,
+        node,
+        perspective_label: neovim_label.to_owned(),
+    }
+    .execute(neovim_basis, &mut deps);
+
+    let mut deps = ComponentDeps::default();
+    let ai_context = AiContextStub {
+        world,
+        focus: node,
+        perspective_label: phone_label.to_owned(),
+    }
+    .execute(phone_basis, &mut deps);
+
+    let mut deps = ComponentDeps::default();
+    let backlinks = Backlinks {
+        world,
+        node,
+        perspective_label: durable_label.to_owned(),
+    }
+    .execute(durable_basis, &mut deps);
+
+    let mut deps = ComponentDeps::default();
+    let export = WorkspaceExport {
+        world,
+        perspective_label: durable_label.to_owned(),
+    }
+    .execute(durable_basis, &mut deps);
+
+    FourOutputs {
+        preview,
+        ai_context,
+        backlinks,
+        export,
+    }
+}
+
+/// M08.8 Algorithm C, exit-gate: run the scenario, capture the four outputs
+/// live, freeze each consulted Basis, DELETE the workspace directory, then
+/// re-execute the same four queries against `FrozenWorld` — byte-identical
+/// output is the final-gate requirement (v4 §42, §112: "resolver/query
+/// replay with frozen inputs is deterministic").
+#[test]
+fn replay_from_frozen_basis_is_deterministic() {
+    let scenarios = all_scenarios().expect("must load scenarios");
+    let scenario = scenarios
+        .iter()
+        .find(|s| s.scenario.id == "four_consumers")
+        .expect("four_consumers fixture must exist");
+
+    let run = ToyRun::new("m08-replay").expect("workspace");
+    let exec = run.exec_scenario(scenario).expect("exec must run");
+    assert!(
+        exec.status.success(),
+        "capture never rejected (Law 3B); stderr: {}",
+        String::from_utf8_lossy(&exec.stderr)
+    );
+
+    let mut ws = ToyWorkspace::open(&run.root).expect("open");
+    let node = node_for(&ws, "p-fourier");
+    let (neovim, phone, _phone_buffer) = open_dirty_clients(&mut ws);
+
+    let neovim_label = perspective_label(
+        &BasisPerspective::ClientScoped { client: neovim },
+        Some("neovim"),
+    );
+    let phone_label = perspective_label(
+        &BasisPerspective::ClientScoped { client: phone },
+        Some("phone"),
+    );
+    let durable_label = perspective_label(&BasisPerspective::DurableOnly, None);
+
+    let neovim_basis = ws
+        .basis(BasisPerspective::ClientScoped { client: neovim })
+        .expect("neovim basis");
+    let phone_basis = ws
+        .basis(BasisPerspective::ClientScoped { client: phone })
+        .expect("phone basis");
+    let durable_basis = ws
+        .basis(BasisPerspective::DurableOnly)
+        .expect("durable basis");
+
+    let live = {
+        let world = LiveWorld::new(ws.store(), ws.root());
+        run_four(
+            &world,
+            node,
+            &neovim_basis,
+            &phone_basis,
+            &durable_basis,
+            &neovim_label,
+            &phone_label,
+            &durable_label,
+        )
+    };
+
+    // Freeze each consulted Basis (durable serves both backlinks and export).
+    let frozen_neovim = freeze(&neovim_basis, &ws).expect("freeze neovim basis");
+    let frozen_phone = freeze(&phone_basis, &ws).expect("freeze phone basis");
+    let frozen_durable = freeze(&durable_basis, &ws).expect("freeze durable basis");
+
+    // Release the store's advisory lock (M05 AM-5.1's own drop pattern),
+    // then delete the workspace directory entirely.
+    drop(ws);
+    std::fs::remove_dir_all(&run.root).expect("delete the workspace directory");
+    assert!(!run.root.exists(), "workspace directory must be gone");
+
+    let neovim_world = FrozenWorld::load(&frozen_neovim).expect("load frozen neovim world");
+    let phone_world = FrozenWorld::load(&frozen_phone).expect("load frozen phone world");
+    let durable_world = FrozenWorld::load(&frozen_durable).expect("load frozen durable world");
+
+    // Each frozen basis was captured for exactly one consumer's query — run
+    // only that one against its own frozen world (a `FrozenWorld` frozen for
+    // one perspective carries no OTHER perspective's blobs to answer with).
+    let replayed_preview = RenderBlock {
+        world: &neovim_world,
+        node,
+        perspective_label: neovim_label.clone(),
+    }
+    .execute(neovim_world.basis(), &mut ComponentDeps::default());
+    let replayed_ai_context = AiContextStub {
+        world: &phone_world,
+        focus: node,
+        perspective_label: phone_label.clone(),
+    }
+    .execute(phone_world.basis(), &mut ComponentDeps::default());
+    let replayed_backlinks = Backlinks {
+        world: &durable_world,
+        node,
+        perspective_label: durable_label.clone(),
+    }
+    .execute(durable_world.basis(), &mut ComponentDeps::default());
+    let replayed_export = WorkspaceExport {
+        world: &durable_world,
+        perspective_label: durable_label.clone(),
+    }
+    .execute(durable_world.basis(), &mut ComponentDeps::default());
+
+    assert_eq!(
+        live.preview, replayed_preview,
+        "render_block must replay byte-identically from the frozen neovim basis"
+    );
+    assert_eq!(
+        live.ai_context, replayed_ai_context,
+        "ai_context_stub must replay byte-identically from the frozen phone basis"
+    );
+    assert_eq!(
+        live.backlinks, replayed_backlinks,
+        "backlinks must replay byte-identically from the frozen durable basis"
+    );
+    assert_eq!(
+        live.export, replayed_export,
+        "workspace_export must replay byte-identically from the frozen durable basis"
     );
 }

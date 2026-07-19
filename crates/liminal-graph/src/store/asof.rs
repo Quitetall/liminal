@@ -3,6 +3,8 @@
 //! toy never garbage-collects segments, so genesis replay is always available;
 //! O(n) is toy-fine (prohibition #8: no production store work).
 
+use std::collections::BTreeMap;
+
 use liminal_id::{GraphRevisionId, NodeId, RelationId};
 
 use super::{GraphStore, State, StoreError, log};
@@ -71,6 +73,32 @@ impl StateView {
     #[must_use]
     pub fn head(&self) -> GraphRevisionId {
         self.state.head
+    }
+
+    /// Build a `StateView` from raw parts (M08.8, AM-8.12): the frozen-replay
+    /// counterpart to [`GraphStore::state_at`], which materializes one by
+    /// replaying the log. A frozen-basis replay world has no live store and
+    /// no log to replay against, so it builds its `StateView` synthetically
+    /// from already-deserialized parts instead. `transactions` is always
+    /// empty — no `StateView` accessor reads it.
+    #[must_use]
+    pub fn synthetic(
+        head: GraphRevisionId,
+        nodes: BTreeMap<NodeId, Node>,
+        relations: BTreeMap<RelationId, Relation>,
+        children: BTreeMap<NodeId, Vec<NodeId>>,
+        aux: BTreeMap<String, BTreeMap<String, serde_json::Value>>,
+    ) -> Self {
+        Self {
+            state: State {
+                head,
+                nodes,
+                relations,
+                children,
+                transactions: BTreeMap::new(),
+                aux,
+            },
+        }
     }
 }
 
