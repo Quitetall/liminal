@@ -1,0 +1,14 @@
+The Fourier transform decomposes a signal
+into its constituent frequencies.
+
+The Laplace transform generalizes it
+to the complex plane. {#p-laplace}
+
+Every signal admits a spectral decomposition
+unique up to a constant phase. {#p-spectral}
+
+Convolution in the time domain corresponds
+to multiplication in frequency space.
+
+The sampling theorem bounds the frequencies
+a discrete signal can faithfully represent. {#p-sampling}

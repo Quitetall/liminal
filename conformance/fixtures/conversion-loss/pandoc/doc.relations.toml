@@ -1,0 +1,20 @@
+# M10 conversion-loss fixture — relations component (v4 §-1.4, §14, §107).
+#
+# Two graph-native comment Relations over the ids in doc.paragraph.txt, in
+# the M03 setup vocabulary: the same `[[graph]]` shape as a `*.scenario.toml`
+# fixture's `[[setup.graph]]` table (liminal_daemon::scenario::{Setup,
+# SetupGraph}), so this file parses directly as a `Setup` (its `files` and
+# `buffers` default empty). Per D10.1 these are the constructs the Pandoc
+# adapter DECLARES lost at emit time — they are ingested into the toy graph
+# but no code path in `conformance::pandoc::emit` models them, so they never
+# reach the Pandoc AST (Law 8: loss is visible, never silent).
+
+[[graph]]
+kind = "comment-relation"
+target = "p-laplace"
+requires_grade = "explicit"
+
+[[graph]]
+kind = "comment-relation"
+target = "p-sampling"
+requires_grade = "explicit"
