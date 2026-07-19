@@ -423,6 +423,30 @@ pub fn all_scenarios() -> anyhow::Result<Vec<ScenarioScript>> {
     ScenarioScript::load_dir(&dir)
 }
 
+/// Generate a held-out corpus manifest (M11.6, AM-11.1): walk `version_dir`,
+/// BLAKE3 every regular file EXCEPT `MANIFEST.b3` itself, and write
+/// `MANIFEST.b3` as `<hex>  <relative-path>` (two spaces) per line, sorted
+/// by path, LF, trailing newline — exactly the format
+/// [`verify_heldout_manifest`] consumes, so the output round-trips the
+/// verifier by construction (tested: `gen_manifest_output_passes_verifier`).
+///
+/// # Errors
+/// IO failures walking or writing.
+pub fn generate_heldout_manifest(version_dir: &Utf8Path) -> anyhow::Result<()> {
+    let mut hashes = BTreeMap::new();
+    collect_hashes(version_dir, version_dir, &mut hashes)?;
+    hashes.remove("MANIFEST.b3");
+    let mut out = String::new();
+    for (rel, hash) in &hashes {
+        out.push_str(hash);
+        out.push_str("  ");
+        out.push_str(rel);
+        out.push('\n');
+    }
+    std::fs::write(version_dir.join("MANIFEST.b3"), out)?;
+    Ok(())
+}
+
 /// Verify a locked held-out corpus directory against its BLAKE3 manifest
 /// (`MANIFEST.b3`: `<hex>  <relative-path>` per line, sorted by path).
 /// Any drift is a process violation (v4 §7.4: locked corpora are never tuned

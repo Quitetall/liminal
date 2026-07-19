@@ -25,6 +25,10 @@ path = "src/bin/tracegen.rs"
 name = "scorecard"
 path = "src/bin/scorecard.rs"
 
+[[bin]]
+name = "gen-manifest"
+path = "src/bin/gen_manifest.rs"
+
 [dependencies]
 anyhow.workspace = true
 blake3.workspace = true

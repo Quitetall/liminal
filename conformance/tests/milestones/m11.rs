@@ -5,6 +5,8 @@
 //! cases (D11.1–D11.3). `denominator_counts_golden` — the frozen golden
 //! snapshot over these same fixtures — was M11.3 (T1).
 //! M11.4: the `tracegen git` smoke test (Algorithm B; AM-11.3).
+//! M11.6: the `gen-manifest` ↔ `verify_heldout_manifest` round trip
+//! (AM-11.1).
 
 use camino::Utf8PathBuf;
 use liminal_conformance::denominator::{self, SESSION_TIMEOUT_MS};
@@ -166,4 +168,42 @@ fn tracegen_git_produces_replayable_trace() {
         }
     }
     assert!(saw_git_op, "a git trace must contain at least one git_op");
+}
+
+/// M11.6 (AM-11.1): `generate_heldout_manifest`'s output round-trips
+/// `verify_heldout_manifest` — BLAKE3 per file, `<hex>  <relpath>` two-space
+/// sorted lines, the manifest excluding itself — including nested
+/// directories, and regeneration over an already-manifested tree is stable
+/// (the manifest never hashes itself into the next manifest).
+#[test]
+fn gen_manifest_output_passes_verifier() {
+    let dir = Utf8PathBuf::from(std::env::temp_dir().to_str().expect("utf8 tmp"))
+        .join(format!("liminal-m11-genmanifest-{}/v9", std::process::id()));
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir).expect("clean scratch");
+    }
+    std::fs::create_dir_all(dir.join("git")).expect("mkdirs");
+    std::fs::write(dir.join("a.trace.ndjson"), "{}\n").expect("write");
+    std::fs::write(dir.join("git/b.trace.ndjson"), "{\"x\":1}\n").expect("write");
+
+    liminal_conformance::harness::generate_heldout_manifest(&dir).expect("generate");
+    liminal_conformance::harness::verify_heldout_manifest(&dir)
+        .expect("generated manifest must round-trip the verifier");
+
+    let first = std::fs::read_to_string(dir.join("MANIFEST.b3")).expect("read manifest");
+    assert_eq!(
+        first.lines().count(),
+        2,
+        "two files, two lines — the manifest never lists itself"
+    );
+    for line in first.lines() {
+        let (hash, rel) = line.split_once("  ").expect("two-space separator");
+        assert_eq!(hash.len(), 64, "BLAKE3 hex");
+        assert!(!rel.contains("MANIFEST"), "the manifest excludes itself");
+    }
+
+    // Regeneration over the already-manifested tree is byte-stable.
+    liminal_conformance::harness::generate_heldout_manifest(&dir).expect("regenerate");
+    let second = std::fs::read_to_string(dir.join("MANIFEST.b3")).expect("reread manifest");
+    assert_eq!(first, second, "regeneration must be idempotent");
 }
