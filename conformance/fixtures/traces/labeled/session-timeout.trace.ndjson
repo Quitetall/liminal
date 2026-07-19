@@ -1,0 +1,5 @@
+{"type":"trace_header","version":1,"trace_id":"session-timeout","source":"hand-labeled","capture_tool":"manual","consent":"synthetic","profile":"external-file","setup":{"files":[{"path":"notes.md","contents":"hello\n"}],"graph":[]}}
+{"type":"buffer_open","at":0,"session":"s1","client":"dev","buffer":"b1","path":"notes.md"}
+{"type":"buffer_edit","at":100,"session":"s1","buffer":"b1","range":{"start":0,"end":0},"insert":"a"}
+{"type":"buffer_edit","at":1800100,"session":"s1","buffer":"b1","range":{"start":1,"end":1},"insert":"b"}
+{"type":"save","at":1800200,"session":"s1","buffer":"b1"}

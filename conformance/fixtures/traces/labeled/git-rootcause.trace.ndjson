@@ -1,0 +1,4 @@
+{"type":"trace_header","version":1,"trace_id":"git-rootcause","source":"hand-labeled","capture_tool":"manual","consent":"synthetic","profile":"external-file","setup":{"files":[{"path":"a.md","contents":"a\n"},{"path":"b.md","contents":"b\n"}],"graph":[]}}
+{"type":"git_op","at":60000,"op":"commit","files":["a.md","b.md"],"cause_category":"git","cause_key":"commit@60000"}
+{"type":"file_change_external","at":60001,"path":"a.md","contents":"a2\n","cause_category":"git","cause_key":"commit@60000"}
+{"type":"file_change_external","at":60002,"path":"b.md","contents":"b2\n","cause_category":"git","cause_key":"commit@60000"}

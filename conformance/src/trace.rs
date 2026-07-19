@@ -460,10 +460,10 @@ impl Trace {
                 found: header.type_tag(),
             });
         }
-        if let TraceEvent::TraceHeader { version, .. } = &header {
-            if *version != SUPPORTED_VERSION {
-                return Err(TraceParseError::UnsupportedVersion { found: *version });
-            }
+        if let TraceEvent::TraceHeader { version, .. } = &header
+            && *version != SUPPORTED_VERSION
+        {
+            return Err(TraceParseError::UnsupportedVersion { found: *version });
         }
 
         let mut events = Vec::new();
@@ -510,6 +510,9 @@ mod tests {
     }
 
     #[test]
+    // Long only because it enumerates all 12 non-header event kinds once
+    // each — the whole point of the test.
+    #[allow(clippy::too_many_lines)]
     fn trace_parser_round_trips_every_event_type() {
         let mut lines = vec![header_line()];
         lines.push(

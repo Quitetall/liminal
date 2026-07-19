@@ -1,0 +1,7 @@
+{"type":"trace_header","version":1,"trace_id":"offline-transient","source":"hand-labeled","capture_tool":"manual","consent":"synthetic","profile":"external-file","setup":{"files":[{"path":"notes.md","contents":"hello\n"}],"graph":[]}}
+{"type":"buffer_open","at":0,"session":"s1","client":"dev","buffer":"b1","path":"notes.md"}
+{"type":"holder_unavailable","at":1000,"holder":"notes.md","cause_category":"holder","cause_key":"notes.md@1000"}
+{"type":"buffer_edit","at":1500,"session":"s1","buffer":"b1","range":{"start":0,"end":0},"insert":"offline edit"}
+{"type":"save","at":2000,"session":"s1","buffer":"b1"}
+{"type":"clock_advance","at":1000000}
+{"type":"holder_available","at":1000100,"holder":"notes.md"}

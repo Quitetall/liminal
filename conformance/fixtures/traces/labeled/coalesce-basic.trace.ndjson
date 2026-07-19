@@ -1,0 +1,9 @@
+{"type":"trace_header","version":1,"trace_id":"coalesce-basic","source":"hand-labeled","capture_tool":"manual","consent":"synthetic","profile":"external-file","setup":{"files":[{"path":"notes.md","contents":"hello\n"}],"graph":[]}}
+{"type":"session_open","at":0,"session":"s1","client":"dev"}
+{"type":"buffer_open","at":100,"session":"s1","client":"dev","buffer":"b1","path":"notes.md"}
+{"type":"buffer_edit","at":1000,"session":"s1","buffer":"b1","range":{"start":0,"end":0},"insert":"a"}
+{"type":"buffer_edit","at":2999,"session":"s1","buffer":"b1","range":{"start":1,"end":1},"insert":"b"}
+{"type":"buffer_edit","at":4999,"session":"s1","buffer":"b1","range":{"start":2,"end":2},"insert":"c"}
+{"type":"save","at":5000,"session":"s1","buffer":"b1"}
+{"type":"buffer_edit","at":5500,"session":"s1","buffer":"b1","range":{"start":3,"end":3},"insert":"d"}
+{"type":"session_close","at":6000,"session":"s1"}

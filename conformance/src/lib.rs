@@ -10,6 +10,7 @@
 //! fixtures are plain TOML/NDJSON a second implementation could consume.
 
 pub mod debt;
+pub mod denominator;
 pub mod harness;
 pub mod identity;
 pub mod laws;
@@ -21,6 +22,7 @@ pub mod slo;
 pub mod trace;
 
 pub use debt::{DebtReport, scan_workspace_debt};
+pub use denominator::DenominatorCounts;
 pub use harness::{
     CrashState, HitTrace, RecoveryReport, ToyRun, assert_silent, runnable_crash_scenarios,
 };
