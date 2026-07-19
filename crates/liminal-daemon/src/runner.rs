@@ -1606,6 +1606,208 @@ fn apply_foreign_edit(step: &crate::scenario::Step, root: &Utf8Path) -> anyhow::
     Ok(())
 }
 
+/// The per-step scenario runner seam (AM-11.4): the SAME setup + step
+/// machinery `exec` has always run, factored so a caller (the M11 trace
+/// pipeline) can apply steps ONE AT A TIME and observe the workspace
+/// between them — checker findings, reconciliation items, overlay
+/// dispositions — per event, as v4 §-1.5's scorecard requires. `exec`
+/// delegates here; its behavior is unchanged.
+#[derive(Debug)]
+pub struct StepRunner<X: ExternalExecutor, C: CrashInjector> {
+    root: Utf8PathBuf,
+    /// Always `Some` between public calls; `Option` only so `daemon_restart`
+    /// can DROP the old handle (releasing the store's exclusive advisory
+    /// lock) strictly before reopening — the same drop-then-open order
+    /// `exec` has always used (AM-5.1).
+    ws: Option<ToyWorkspace>,
+    profiles: ProfileSet,
+    buffers: BTreeMap<(String, String), Vec<u8>>,
+    /// Base text per path, captured BEFORE any foreign edit (the buffer's
+    /// base for three-way merges).
+    bases: BTreeMap<String, String>,
+    executor: X,
+    crash: C,
+}
+
+impl<X: ExternalExecutor, C: CrashInjector> StepRunner<X, C> {
+    /// Set up a workspace exactly as `exec` always has: write setup files,
+    /// seed setup buffers from disk, capture bases from setup text, open,
+    /// ingest files + graph, and reopen once (AM-8.11).
+    ///
+    /// # Errors
+    /// IO/store failures during setup or ingest.
+    pub fn open(
+        root: &Utf8Path,
+        setup: &crate::scenario::Setup,
+        executor: X,
+        crash: C,
+    ) -> anyhow::Result<Self> {
+        // Write setup files to disk.
+        for file in &setup.files {
+            let path = root.join(&file.path);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(&path, file.text.as_bytes())?;
+        }
+
+        let mut buffers: BTreeMap<(String, String), Vec<u8>> = BTreeMap::new();
+        for buf in &setup.buffers {
+            let path = root.join(&buf.path);
+            buffers.insert(
+                (buf.client.clone(), buf.path.clone()),
+                std::fs::read(&path)?,
+            );
+        }
+
+        // Base text per path, captured BEFORE any foreign edit (the buffer's base).
+        let mut bases: BTreeMap<String, String> = BTreeMap::new();
+        for file in &setup.files {
+            bases.insert(file.path.clone(), file.text.clone());
+        }
+
+        let ws = ToyWorkspace::open(root)?;
+        let profiles = ProfileSet::phase_minus_1();
+
+        // Ingest files and graph entries (M03).
+        ingest_files(ws.store(), &setup.files)?;
+        ingest_graph(ws.store(), &setup.graph)?;
+
+        // M08.7: `seed_durable_inputs` (D06.5) runs at `open`, BEFORE the ingest
+        // above — so this session's own `AvailableInputs` still lacks the
+        // just-ingested file component. Reopen once, mirroring a fresh process
+        // over the persisted store (the same gotcha `queries.rs`'s own unit
+        // tests route around by opening twice, and the same reopen the
+        // `daemon_restart` step already exercises, M05 AM-5.1). Inert for any
+        // scenario that never calls `ws.basis()`/`AvailableInputs` — recovery and
+        // the overlay sweep are no-ops with nothing pending yet.
+        drop(ws);
+        let ws = ToyWorkspace::open(root)?;
+
+        Ok(Self {
+            root: root.to_owned(),
+            ws: Some(ws),
+            profiles,
+            buffers,
+            bases,
+            executor,
+            crash,
+        })
+    }
+
+    /// The always-present workspace handle (see the `ws` field doc).
+    fn ws(&self) -> &ToyWorkspace {
+        self.ws
+            .as_ref()
+            .expect("StepRunner workspace is always present")
+    }
+
+    /// Register a buffer mid-stream (M11 pipeline: `buffer_open→open_buffer`)
+    /// over the file's CURRENT durable bytes — exactly what `open`'s
+    /// setup-buffer seeding does at time zero. The path's merge base is
+    /// captured on FIRST registration only (matching `exec`, where bases come
+    /// from setup and are never overwritten).
+    ///
+    /// # Errors
+    /// IO failure reading the file.
+    pub fn open_buffer(&mut self, client: &str, path: &str) -> anyhow::Result<()> {
+        let abs = self.root.join(path);
+        let bytes = std::fs::read(&abs)?;
+        self.bases
+            .entry(path.to_owned())
+            .or_insert_with(|| String::from_utf8_lossy(&bytes).into_owned());
+        self.buffers
+            .insert((client.to_owned(), path.to_owned()), bytes);
+        Ok(())
+    }
+
+    /// Apply ONE scenario step, then run the post-step overlay sweep — the
+    /// body of `exec`'s loop, verbatim.
+    ///
+    /// # Errors
+    /// Unknown step kinds and any step/store/IO failure.
+    pub fn step(&mut self, step: &crate::scenario::Step) -> anyhow::Result<()> {
+        match step.kind.as_str() {
+            "buffer_edit" => apply_buffer_edit(step, &mut self.buffers)?,
+            "foreign_edit" => {
+                apply_foreign_edit(step, &self.root)?;
+                // Reconcile immediately: any comment Relation whose target's
+                // `{#id}` vanished gets a two-step repair DAG proposed (M04.3
+                // ingest::foreign_change). Refused for AUTOMATIC acceptance
+                // (heuristic reattachment), so it persists as NeedsReview.
+                plan_foreign_changes(&self.profiles, &self.root, self.ws().store())?;
+            }
+            "save" => {
+                let client = field(step, "client")?;
+                let path = field(step, "path")?;
+                let store = self.ws().store();
+                let driver = IlrpDriver {
+                    store,
+                    executor: &self.executor,
+                    crash: &self.crash,
+                };
+                perform_save(
+                    &driver,
+                    &self.profiles,
+                    &self.root,
+                    &self.bases,
+                    &self.buffers,
+                    client,
+                    path,
+                )?;
+            }
+            "resolver_observe" => {
+                let ws = self
+                    .ws
+                    .as_mut()
+                    .expect("StepRunner workspace is always present");
+                apply_resolver_observe(ws, step)?;
+            }
+            "query" => {
+                let ws = self
+                    .ws
+                    .as_mut()
+                    .expect("StepRunner workspace is always present");
+                apply_query(ws, &self.buffers, step)?;
+            }
+            "accept_repair" => accept_repair(self.ws().store(), &self.root)?,
+            "holder_unavailable" => mark_holder_unavailable(self.ws().store(), step)?,
+            "holder_available" => mark_holder_available(self.ws().store(), step)?,
+            "advance_clock" => apply_advance_clock(self.ws().store(), step)?,
+            // AM-5.1: drop + reopen the workspace — the store's advisory lock
+            // is exclusive, so the old handle must release it first. Exercises
+            // open-time sweep/recovery in-process (D05.1: SYS_UNAVAILABLE
+            // survives; Algorithm B).
+            "daemon_restart" => {
+                self.ws = None; // drop first: release the advisory lock
+                self.ws = Some(ToyWorkspace::open(&self.root)?);
+            }
+            other => anyhow::bail!("step kind {other:?} not implemented until M3/M4"),
+        }
+        sweep_overlays(self.ws().store(), &self.root)?;
+        Ok(())
+    }
+
+    /// The current workspace (replaced across `daemon_restart` steps).
+    #[must_use]
+    pub fn workspace(&self) -> &ToyWorkspace {
+        self.ws()
+    }
+
+    /// Mutable workspace access (`resolver_observe→inject_observation`).
+    pub fn workspace_mut(&mut self) -> &mut ToyWorkspace {
+        self.ws
+            .as_mut()
+            .expect("StepRunner workspace is always present")
+    }
+
+    /// The workspace root.
+    #[must_use]
+    pub fn root(&self) -> &Utf8Path {
+        &self.root
+    }
+}
+
 /// Run one scripted scenario to completion (or to an armed crash point).
 pub fn exec<X: ExternalExecutor, C: CrashInjector>(
     root: &Utf8Path,
@@ -1613,88 +1815,14 @@ pub fn exec<X: ExternalExecutor, C: CrashInjector>(
     executor: X,
     crash: C,
 ) -> anyhow::Result<()> {
-    // Write setup files to disk.
-    for file in &scenario.setup.files {
-        let path = root.join(&file.path);
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(&path, file.text.as_bytes())?;
-    }
-
-    let mut buffers: BTreeMap<(String, String), Vec<u8>> = BTreeMap::new();
-    for buf in &scenario.setup.buffers {
-        let path = root.join(&buf.path);
-        buffers.insert(
-            (buf.client.clone(), buf.path.clone()),
-            std::fs::read(&path)?,
-        );
-    }
-
-    // Base text per path, captured BEFORE any foreign edit (the buffer's base).
-    let mut bases: BTreeMap<String, String> = BTreeMap::new();
-    for file in &scenario.setup.files {
-        bases.insert(file.path.clone(), file.text.clone());
-    }
-
-    let mut ws = ToyWorkspace::open(root)?;
-    let profiles = ProfileSet::phase_minus_1();
-
-    // Ingest files and graph entries (M03).
-    ingest_files(ws.store(), &scenario.setup.files)?;
-    ingest_graph(ws.store(), &scenario.setup.graph)?;
-
-    // M08.7: `seed_durable_inputs` (D06.5) runs at `open`, BEFORE the ingest
-    // above — so this session's own `AvailableInputs` still lacks the
-    // just-ingested file component. Reopen once, mirroring a fresh process
-    // over the persisted store (the same gotcha `queries.rs`'s own unit
-    // tests route around by opening twice, and the same reopen the
-    // `daemon_restart` step already exercises, M05 AM-5.1). Inert for any
-    // scenario that never calls `ws.basis()`/`AvailableInputs` — recovery and
-    // the overlay sweep are no-ops with nothing pending yet.
-    drop(ws);
-    ws = ToyWorkspace::open(root)?;
-
+    let mut runner = StepRunner::open(root, &scenario.setup, executor, crash)?;
     for step in &scenario.steps {
-        match step.kind.as_str() {
-            "buffer_edit" => apply_buffer_edit(step, &mut buffers)?,
-            "foreign_edit" => {
-                apply_foreign_edit(step, root)?;
-                // Reconcile immediately: any comment Relation whose target's
-                // `{#id}` vanished gets a two-step repair DAG proposed (M04.3
-                // ingest::foreign_change). Refused for AUTOMATIC acceptance
-                // (heuristic reattachment), so it persists as NeedsReview.
-                plan_foreign_changes(&profiles, root, ws.store())?;
-            }
-            "save" => {
-                let client = field(step, "client")?;
-                let path = field(step, "path")?;
-                let store = ws.store();
-                let driver = IlrpDriver {
-                    store,
-                    executor: &executor,
-                    crash: &crash,
-                };
-                perform_save(&driver, &profiles, root, &bases, &buffers, client, path)?;
-            }
-            "resolver_observe" => apply_resolver_observe(&mut ws, step)?,
-            "query" => apply_query(&mut ws, &buffers, step)?,
-            "accept_repair" => accept_repair(ws.store(), root)?,
-            "holder_unavailable" => mark_holder_unavailable(ws.store(), step)?,
-            "holder_available" => mark_holder_available(ws.store(), step)?,
-            "advance_clock" => apply_advance_clock(ws.store(), step)?,
-            // AM-5.1: drop + reopen the workspace — the store's advisory lock
-            // is exclusive, so the old handle must release it first. Exercises
-            // open-time sweep/recovery in-process (D05.1: SYS_UNAVAILABLE
-            // survives; Algorithm B).
-            "daemon_restart" => {
-                drop(ws);
-                ws = ToyWorkspace::open(root)?;
-            }
-            other => anyhow::bail!("step kind {other:?} not implemented until M3/M4"),
-        }
-        sweep_overlays(ws.store(), root)?;
+        runner.step(step)?;
     }
+    let ws = runner
+        .ws
+        .take()
+        .expect("StepRunner workspace is always present");
 
     let store = ws.store();
     if let Some(ref expected) = scenario.expect.terminal {

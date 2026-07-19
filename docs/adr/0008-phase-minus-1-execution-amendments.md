@@ -52,6 +52,7 @@ AM-9.2 (M09): phases.md Phase 0 task list gains task 12 — re-measure annotated
 AM-11.1 (M11): conformance `[[bin]] gen-manifest` — heldout MANIFEST.b3 generator (D11.6: conformance bin, no new lim subcommand). Pre-declared in M11.md Amendments.
 AM-11.2 (M11): conformance `[[bin]] scorecard` — the §7.4/R4 §2.3 scorecard pipeline runner (D11.6). Pre-declared in M11.md Amendments.
 AM-11.3 (M11): conformance `[[bin]] tracegen` — the five Algorithm-B importers/generators (D11.6). Pre-declared in M11.md Amendments.
+AM-11.4 (M11): liminal_daemon::runner::StepRunner — exec's setup + step loop factored into a public per-step seam (open/open_buffer/step) so the M11.5 pipeline can collect observables per event through the ONE runner; exec delegates, behavior unchanged.
 
 **What would falsify or reverse this:** an M12 audit finding an amendment that
 was applied in code but not recorded here, or recorded here but not in the
