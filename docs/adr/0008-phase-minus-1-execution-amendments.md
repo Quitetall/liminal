@@ -46,6 +46,7 @@ AM-8.8 (M08.3): runner::refresh_file_blobs — refreshes SYS_BLOB["file/<path>"]
 AM-8.9 (M08.6): liminal_graph::kind::EXTERNAL_VALUE — a new node kind constant for the MaterializeExternal target (toy: at most one per scenario).
 AM-8.10 (M08.7): ToyWorkspace::root() widened pub(crate) -> pub, like store() — needed outside liminal-daemon to build a LiveWorld.
 AM-8.11 (M08.7): runner::exec reopens ToyWorkspace once after ingest_files/ingest_graph — seed_durable_inputs runs at open, before exec's own ingest, so a continuous exec session never saw the just-ingested file's component until apply_query's ws.basis() call (the first scenario-runner path to resolve a Basis in-process). Verified inert for every existing scenario.
+AM-8.12 (M08.8): liminal_graph::StateView::synthetic(...) — new pub constructor building a StateView from raw parts; FrozenWorld (a different crate) has no other way to construct one since state_at's log-replay path is unavailable once the workspace is deleted. Additive.
 AM-9.1 (M09): workspace `members` gains `"conformance/spikes/*"` (two publish=false spike crates; D09.1).
 AM-9.2 (M09): phases.md Phase 0 task list gains task 12 — re-measure annotated-source anchor recovery over the real CST; the M09.7 L2 demotion stands until a new boxed report says otherwise. User-ratified 2026-07-18.
 
