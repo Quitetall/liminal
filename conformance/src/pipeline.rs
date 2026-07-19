@@ -601,13 +601,31 @@ fn corpus_traces(corpus_dir: &Utf8Path) -> anyhow::Result<Vec<Utf8PathBuf>> {
             };
             if path.is_dir() {
                 stack.push(path);
-            } else if path.as_str().ends_with(".trace.ndjson") {
+            } else if path.as_str().ends_with(".trace.ndjson")
+                || path.as_str().ends_with(".trace.ndjson.zst")
+            {
                 found.push(path);
             }
         }
     }
     found.sort();
     Ok(found)
+}
+
+/// Read one corpus trace file, transparently decompressing `.zst` (AM-11.6:
+/// large imported histories are stored zstd-compressed in-tree — the
+/// MANIFEST freezes the COMPRESSED bytes; this is the only decode site).
+///
+/// # Errors
+/// IO/decompression failures, or non-UTF-8 decompressed content.
+pub fn read_trace_file(path: &Utf8Path) -> anyhow::Result<String> {
+    if path.as_str().ends_with(".zst") {
+        let file = std::fs::File::open(path)?;
+        let bytes = zstd::decode_all(std::io::BufReader::new(file))?;
+        Ok(String::from_utf8(bytes)?)
+    } else {
+        Ok(std::fs::read_to_string(path)?)
+    }
 }
 
 /// Algorithm C entry: replay every trace in `corpus_dir` whose header
@@ -627,7 +645,7 @@ pub fn run(
     let mut matched = 0u64;
 
     for path in corpus_traces(corpus_dir)? {
-        let ndjson = std::fs::read_to_string(&path)?;
+        let ndjson = read_trace_file(&path)?;
         let trace =
             Trace::parse(&ndjson).map_err(|e| anyhow::anyhow!("{path}: corpus defect: {e}"))?;
         let TraceEvent::TraceHeader {

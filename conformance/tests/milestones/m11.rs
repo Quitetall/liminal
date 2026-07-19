@@ -238,3 +238,42 @@ fn imported_trace_with_added_nested_file_replays() {
         "a clean foreign add must auto-resolve: {scorecard:?}"
     );
 }
+
+/// AM-11.6: a `.trace.ndjson.zst` corpus member decompresses transparently
+/// through the one decode site and replays identically to its raw form.
+#[test]
+fn zstd_compressed_trace_replays_identically() {
+    let root = Utf8PathBuf::from(std::env::temp_dir().to_str().expect("utf8"))
+        .join(format!("liminal-m11-zst-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let raw_corpus = root.join("raw");
+    let zst_corpus = root.join("zst");
+    std::fs::create_dir_all(&raw_corpus).expect("mkdir");
+    std::fs::create_dir_all(&zst_corpus).expect("mkdir");
+
+    let trace = concat!(
+        r##"{"type":"trace_header","version":1,"trace_id":"zst-roundtrip","source":"synthetic","capture_tool":"test","consent":"public-git","profile":"external-file","setup":{"files":[{"path":"notes.md","contents":"hello\n"}],"graph":[]}}"##,
+        "\n",
+        r##"{"type":"git_op","at":60000,"op":"commit","files":["notes.md"],"cause_category":"git","cause_key":"commit@60000"}"##,
+        "\n",
+        r##"{"type":"file_change_external","at":60000,"path":"notes.md","contents":"changed\n","cause_category":"git","cause_key":"commit@60000"}"##,
+        "\n",
+    );
+    std::fs::write(raw_corpus.join("t.trace.ndjson"), trace).expect("write raw");
+    let compressed = zstd::encode_all(trace.as_bytes(), 19).expect("compress");
+    std::fs::write(zst_corpus.join("t.trace.ndjson.zst"), compressed).expect("write zst");
+
+    let (raw_score, raw_drafts) =
+        liminal_conformance::pipeline::run(&raw_corpus, "external-file").expect("raw replays");
+    let (zst_score, zst_drafts) =
+        liminal_conformance::pipeline::run(&zst_corpus, "external-file").expect("zst replays");
+    assert_eq!(
+        raw_score.auto_resolution_rate,
+        zst_score.auto_resolution_rate
+    );
+    assert_eq!(
+        raw_score.sound_checker_output_bytes,
+        zst_score.sound_checker_output_bytes
+    );
+    assert_eq!(raw_drafts, zst_drafts);
+}
