@@ -35,7 +35,10 @@ use crate::workspace::ToyWorkspace;
 
 /// Ingest setup files: parse paragraphs, create FILE/PARAGRAPH nodes, store
 /// aliases (M03 Data schemas).
-fn ingest_files(store: &GraphStore, files: &[crate::scenario::SetupFile]) -> anyhow::Result<()> {
+pub(crate) fn ingest_files(
+    store: &GraphStore,
+    files: &[crate::scenario::SetupFile],
+) -> anyhow::Result<()> {
     let meta = liminal_graph::TxnMeta {
         actor: None,
         origin: liminal_graph::Origin::Human,
@@ -115,7 +118,7 @@ fn ingest_files(store: &GraphStore, files: &[crate::scenario::SetupFile]) -> any
 }
 
 /// Ingest setup graph entries: COMMENT nodes + relations (M03 Data schemas).
-fn ingest_graph(store: &GraphStore, graph_entries: &[SetupGraph]) -> anyhow::Result<()> {
+pub(crate) fn ingest_graph(store: &GraphStore, graph_entries: &[SetupGraph]) -> anyhow::Result<()> {
     let meta = liminal_graph::TxnMeta {
         actor: None,
         origin: liminal_graph::Origin::Human,

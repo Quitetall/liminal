@@ -46,6 +46,21 @@ impl StateView {
         self.state.children.get(&parent).map_or(&[], Vec::as_slice)
     }
 
+    /// Every Node at this revision, in id order.
+    pub fn nodes(&self) -> impl Iterator<Item = &Node> {
+        self.state.nodes.values()
+    }
+
+    /// Every Relation at this revision, in id order.
+    pub fn relations(&self) -> impl Iterator<Item = &Relation> {
+        self.state.relations.values()
+    }
+
+    /// Every auxiliary record in namespace `ns` at this revision, in key order.
+    pub fn scan_aux(&self, ns: &str) -> impl Iterator<Item = (&String, &serde_json::Value)> {
+        self.state.aux.get(ns).into_iter().flat_map(|m| m.iter())
+    }
+
     /// An auxiliary record at this revision.
     #[must_use]
     pub fn get_aux(&self, ns: &str, key: &str) -> Option<&serde_json::Value> {

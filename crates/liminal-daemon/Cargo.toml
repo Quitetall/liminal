@@ -20,6 +20,7 @@ clap.workspace = true
 liminal-graph.workspace = true
 liminal-id.workspace = true
 liminal-jurisdiction.workspace = true
+liminal-query.workspace = true
 liminal-revision.workspace = true
 liminal-source.workspace = true
 serde.workspace = true

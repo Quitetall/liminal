@@ -529,6 +529,7 @@ dependencies = [
  "liminal-graph",
  "liminal-id",
  "liminal-jurisdiction",
+ "liminal-query",
  "liminal-revision",
  "liminal-source",
  "serde",
