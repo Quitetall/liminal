@@ -306,3 +306,201 @@ mod tests {
         );
     }
 }
+
+// ── M09.3: Projection emit/parse + round-trip measurement ──────────────
+
+/// Serialized annotation (for emit/parse round-trip). Omits the Anchor
+/// because the anchor is a capture-time artifact — it's recomputed from
+/// the text + range at parse time.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SerializedAnnotation {
+    pub id: u32,
+    pub range_start: u64,
+    pub range_end: u64,
+    pub kind: String,
+    pub payload: String,
+}
+
+/// The serialized form: text + annotation sidecar.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SerializedDoc {
+    pub text: String,
+    pub annotations: Vec<SerializedAnnotation>,
+}
+
+/// Emit an AnnotatedDoc to its serialized form (text + sidecar).
+///
+/// The Anchor is NOT serialized — it's a capture-time artifact recomputed
+/// from (text, range) at parse time.
+#[must_use]
+pub fn emit(doc: &AnnotatedDoc) -> SerializedDoc {
+    SerializedDoc {
+        text: doc.text.clone(),
+        annotations: doc
+            .annotations
+            .iter()
+            .map(|a| SerializedAnnotation {
+                id: a.id,
+                range_start: a.range.start,
+                range_end: a.range.end,
+                kind: a.kind.name().to_owned(),
+                payload: a.payload.clone(),
+            })
+            .collect(),
+    }
+}
+
+/// Parse a serialized form back into an AnnotatedDoc.
+///
+/// Recomputes the Anchor from (text, range) — this is the round-trip
+/// contract: the anchor is derived, not stored.
+pub fn parse(serialized: &SerializedDoc) -> anyhow::Result<AnnotatedDoc> {
+    let annotations = serialized
+        .annotations
+        .iter()
+        .map(|sa| {
+            let kind = match sa.kind.as_str() {
+                "mark" => AnnKind::Mark,
+                "link" => AnnKind::Link,
+                "comment" => AnnKind::Comment,
+                other => return Err(anyhow::anyhow!("unknown annotation kind: {other:?}")),
+            };
+            let range = SourceRange {
+                start: sa.range_start,
+                end: sa.range_end,
+            };
+            // Recompute anchor from the text + range (the round-trip contract).
+            let anchor = Anchor::capture(
+                serialized.text.as_bytes(),
+                sa.range_start as usize,
+                (sa.range_end - sa.range_start) as usize,
+            );
+            Ok(Annotation {
+                id: sa.id,
+                range,
+                kind,
+                payload: sa.payload.clone(),
+                anchor,
+            })
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    Ok(AnnotatedDoc {
+        text: serialized.text.clone(),
+        annotations,
+    })
+}
+
+/// Canonical round-trip: parse(emit(doc)) == doc on the supported subset.
+///
+/// Comparison is by (text, range, kind, payload) — NOT by anchor bytes,
+/// because the anchor is a derived artifact. Two docs built from the same
+/// (text, range) will always have identical anchors.
+#[must_use]
+pub fn canonical_eq(a: &AnnotatedDoc, b: &AnnotatedDoc) -> bool {
+    if a.text != b.text {
+        return false;
+    }
+    if a.annotations.len() != b.annotations.len() {
+        return false;
+    }
+    a.annotations
+        .iter()
+        .zip(b.annotations.iter())
+        .all(|(x, y)| {
+            x.id == y.id
+                && x.range == y.range
+                && x.kind == y.kind
+                && x.payload == y.payload
+                // Anchor equality: the derived anchor must match.
+                && x.anchor == y.anchor
+        })
+}
+
+/// Emit idempotency: emit(parse(emit(doc))) == emit(doc).
+#[must_use]
+pub fn emit_idempotent(doc: &AnnotatedDoc) -> bool {
+    let s1 = emit(doc);
+    let Ok(parsed) = parse(&s1) else {
+        return false;
+    };
+    let s2 = emit(&parsed);
+    // Serialized forms must be byte-identical.
+    s1.text == s2.text
+        && s1.annotations.len() == s2.annotations.len()
+        && s1
+            .annotations
+            .iter()
+            .zip(s2.annotations.iter())
+            .all(|(x, y)| {
+                x.id == y.id
+                    && x.range_start == y.range_start
+                    && x.range_end == y.range_end
+                    && x.kind == y.kind
+                    && x.payload == y.payload
+            })
+}
+
+#[cfg(test)]
+mod emit_parse_tests {
+    use super::*;
+
+    fn template() -> String {
+        liminal_conformance::identity::Config::load()
+            .expect("load config")
+            .template
+    }
+
+    /// M09.3: parse(emit(doc)) == doc on unedited corpus (L2 requirement).
+    #[test]
+    fn round_trip_canonical() {
+        let t = template();
+        for seed in liminal_conformance::identity::Config::load()
+            .expect("load config")
+            .seeds
+        {
+            let doc = AnnotatedDoc::build(&t, seed).expect("build");
+            let emitted = emit(&doc);
+            let parsed = parse(&emitted).expect("parse");
+            assert!(
+                canonical_eq(&doc, &parsed),
+                "round-trip failed for seed {seed}"
+            );
+        }
+    }
+
+    /// M09.3: emit(parse(emit(doc))) == emit(doc) (idempotency).
+    #[test]
+    fn emit_is_idempotent() {
+        let t = template();
+        for seed in liminal_conformance::identity::Config::load()
+            .expect("load config")
+            .seeds
+        {
+            let doc = AnnotatedDoc::build(&t, seed).expect("build");
+            assert!(
+                emit_idempotent(&doc),
+                "emit not idempotent for seed {seed}"
+            );
+        }
+    }
+
+    /// M09.3: round-trip preserves all annotation fields.
+    #[test]
+    fn round_trip_preserves_fields() {
+        let t = template();
+        let doc = AnnotatedDoc::build(&t, 33).expect("build");
+        let emitted = emit(&doc);
+        let parsed = parse(&emitted).expect("parse");
+
+        assert_eq!(doc.text, parsed.text);
+        assert_eq!(doc.annotations.len(), parsed.annotations.len());
+        for (a, b) in doc.annotations.iter().zip(parsed.annotations.iter()) {
+            assert_eq!(a.id, b.id);
+            assert_eq!(a.range, b.range);
+            assert_eq!(a.kind, b.kind);
+            assert_eq!(a.payload, b.payload);
+            assert_eq!(a.anchor, b.anchor);
+        }
+    }
+}
