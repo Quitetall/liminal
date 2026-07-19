@@ -1,4 +1,308 @@
-//! Phase -1 M09 spike: annotated-source round-trip + anchor recovery measurement.
+//! Phase -1 M09 spike 1: annotated-source round-trip + anchor recovery measurement.
 //!
 //! This is a throwaway spike — `publish = false`, no workspace lints,
-//! trivially deletable at box end.
+//! trivially deletable at box end. `#[allow(...)]` blocks are acceptable
+//! (non-production).
+//!
+//! # Spec
+//! - Types: `Annotation`, `AnnKind`, `AnnotatedDoc`
+//! - Each annotation carries one M07 `Anchor`
+//! - After foreign edit → re-anchor → outcome ∈ {Exact, Shifted, Ambiguous, Lost}
+//! - Projection: paragraphs → PARAGRAPH nodes, annotations → Relations
+//! - Measurement: emit/parse round-trip on unedited corpus (L2), then
+//!   11 foreign ops × 8 seeds (recovery/identity tallies)
+
+use liminal_conformance::identity::strategy::Anchor;
+use liminal_source::SourceRange;
+
+pub const BOX_START: &str = "2026-07-18";
+
+/// The kind of annotation (M09 spec).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AnnKind {
+    /// A mark/highlight annotation.
+    Mark,
+    /// A hyperlink annotation.
+    Link,
+    /// A comment annotation.
+    Comment,
+}
+
+impl AnnKind {
+    /// All annotation kinds.
+    pub const ALL: [AnnKind; 3] = [AnnKind::Mark, AnnKind::Link, AnnKind::Comment];
+
+    /// String name for rendering.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            AnnKind::Mark => "mark",
+            AnnKind::Link => "link",
+            AnnKind::Comment => "comment",
+        }
+    }
+}
+
+/// One annotation on the source document.
+///
+/// Each annotation carries a byte `range` in the source, a `kind`, a
+/// `payload` (text content of the mark/link/comment), and an M07 `Anchor`
+/// captured at base for recovery measurement after foreign edits.
+#[derive(Debug, Clone)]
+pub struct Annotation {
+    pub id: u32,
+    pub range: SourceRange,
+    pub kind: AnnKind,
+    pub payload: String,
+    /// The M07 revision anchor, captured at base over `range`.
+    pub anchor: Anchor,
+}
+
+/// The annotated source document.
+///
+/// `text` is the raw source bytes. `annotations` are the semantic overlays.
+/// After a foreign edit, the text changes but annotations retain their
+/// base anchors — re-anchoring measures recovery quality.
+#[derive(Debug, Clone)]
+pub struct AnnotatedDoc {
+    pub text: String,
+    pub annotations: Vec<Annotation>,
+}
+
+/// The outcome of re-anchoring one annotation after a foreign edit.
+///
+/// This is the spike's measurement unit — not an identity grade, but a
+/// direct anchor-recovery verdict.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AnchorOutcome {
+    /// Anchor recovered at the exact same byte offset with matching contexts.
+    Exact,
+    /// Anchor recovered at a different offset (confidence 0.0–1.0).
+    Shifted(f32),
+    /// Multiple candidate locations — ambiguous.
+    Ambiguous,
+    /// No candidate — annotation lost.
+    Lost,
+}
+
+impl AnchorOutcome {
+    /// Whether this outcome counts as "recovered" for the L3 threshold
+    /// (Exact or Shifted).
+    #[must_use]
+    pub fn is_recovered(self) -> bool {
+        matches!(self, AnchorOutcome::Exact | AnchorOutcome::Shifted(_))
+    }
+
+    /// Render for the report table.
+    #[must_use]
+    pub fn render(self) -> String {
+        match self {
+            AnchorOutcome::Exact => "Exact".to_owned(),
+            AnchorOutcome::Shifted(c) => format!("Shifted({c:.2})"),
+            AnchorOutcome::Ambiguous => "Ambiguous".to_owned(),
+            AnchorOutcome::Lost => "Lost".to_owned(),
+        }
+    }
+}
+
+impl AnnotatedDoc {
+    /// Build an annotated document from raw text, with 3 annotations per
+    /// paragraph block (one Mark, one Link, one Comment at seeded ranges).
+    ///
+    /// Returns the annotated doc and the M07 Config used for seeding.
+    ///
+    /// # Errors
+    /// Returns an error if the M07 config cannot be loaded.
+    pub fn build(template: &str, seed: u64) -> anyhow::Result<Self> {
+        use rand::rngs::SmallRng;
+        use rand::{Rng, SeedableRng};
+
+        let blocks = liminal_source::paragraph::parse(template);
+        let mut annotations = Vec::new();
+        let mut ann_id = 0u32;
+        let mut rng = SmallRng::seed_from_u64(seed);
+
+        for block in &blocks {
+            let block_len = (block.range.end - block.range.start) as usize;
+            if block_len < 2 {
+                // Too short for meaningful annotations — skip.
+                continue;
+            }
+            let _text_bytes = &template.as_bytes()[block.range.start as usize..block.range.end as usize];
+
+            for kind in AnnKind::ALL {
+                // Seeded range within the block.
+                let offset = rng.random_range(0..block_len.saturating_sub(1).max(1));
+                let max_len = (block_len - offset).min(block_len / 2 + 1).max(1);
+                let len = rng.random_range(1..=max_len);
+                let abs_start = block.range.start as usize + offset;
+                let abs_end = (abs_start + len).min(template.len());
+                let range = SourceRange {
+                    start: abs_start as u64,
+                    end: abs_end as u64,
+                };
+                let anchor = Anchor::capture(template.as_bytes(), abs_start, abs_end - abs_start);
+
+                annotations.push(Annotation {
+                    id: ann_id,
+                    range,
+                    kind,
+                    payload: format!("{}-{ann_id}", kind.name()),
+                    anchor,
+                });
+                ann_id += 1;
+            }
+        }
+
+        Ok(AnnotatedDoc {
+            text: template.to_owned(),
+            annotations,
+        })
+    }
+
+    /// Re-anchor every annotation against `new_text` using the M07 five-step
+    /// recovery ladder (simplified for the spike: step 1 = exact span + context
+    /// at offset, step 2 = ctx∥bytes∥ctx anywhere, step 3 = bytes alone).
+    ///
+    /// Returns per-annotation outcomes.
+    #[must_use]
+    pub fn reanchor(&self, new_text: &str) -> Vec<AnchorOutcome> {
+        use liminal_conformance::identity::strategy::count_occurrences;
+
+        let new_bytes = new_text.as_bytes();
+        self.annotations
+            .iter()
+            .map(|ann| {
+                let base_bytes = self.text.as_bytes();
+                let anchored = ann.anchor.anchored(base_bytes);
+                let off = ann.anchor.byte_offset as usize;
+                let len = ann.anchor.len as usize;
+                let cb = &ann.anchor.ctx_before;
+                let ca = &ann.anchor.ctx_after;
+
+                // Step 1: exact span + both contexts at the recorded offset.
+                if off + len <= new_bytes.len()
+                    && new_bytes[off..off + len] == *anchored
+                    && off >= cb.len()
+                    && new_bytes[off - cb.len()..off] == *cb
+                    && off + len + ca.len() <= new_bytes.len()
+                    && new_bytes[off + len..off + len + ca.len()] == *ca
+                {
+                    return AnchorOutcome::Exact;
+                }
+
+                // Step 2: ctx_before ∥ anchored ∥ ctx_after occurrences anywhere.
+                let mut with_ctx = Vec::with_capacity(cb.len() + anchored.len() + ca.len());
+                with_ctx.extend_from_slice(cb);
+                with_ctx.extend_from_slice(anchored);
+                with_ctx.extend_from_slice(ca);
+                match count_occurrences(new_bytes, &with_ctx) {
+                    1 => return AnchorOutcome::Shifted(0.9),
+                    n if n >= 2 => return AnchorOutcome::Ambiguous,
+                    _ => {}
+                }
+
+                // Step 3: anchored bytes alone.
+                match count_occurrences(new_bytes, anchored) {
+                    1 => AnchorOutcome::Shifted(0.6),
+                    0 => AnchorOutcome::Lost,
+                    _ => AnchorOutcome::Ambiguous,
+                }
+            })
+            .collect()
+    }
+}
+
+/// Re-anchor one annotation individually (for unit testing).
+#[must_use]
+pub fn reanchor_annotation(ann: &Annotation, base: &str, new_text: &str) -> AnchorOutcome {
+    let doc = AnnotatedDoc {
+        text: base.to_owned(),
+        annotations: vec![ann.clone()],
+    };
+    let outcomes = doc.reanchor(new_text);
+    outcomes.into_iter().next().unwrap_or(AnchorOutcome::Lost)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn template() -> String {
+        liminal_conformance::identity::Config::load()
+            .expect("load config")
+            .template
+    }
+
+    /// M09.2: AnnotatedDoc::build produces 3 annotations per block.
+    #[test]
+    fn build_produces_three_per_block() {
+        let t = template();
+        let blocks = liminal_source::paragraph::parse(&t);
+        let doc = AnnotatedDoc::build(&t, 11).expect("build");
+        assert_eq!(doc.annotations.len(), blocks.len() * 3);
+    }
+
+    /// M09.2: each block gets one Mark, one Link, one Comment.
+    #[test]
+    fn each_kind_present_per_block() {
+        let t = template();
+        let blocks = liminal_source::paragraph::parse(&t);
+        let doc = AnnotatedDoc::build(&t, 22).expect("build");
+        for (bi, _block) in blocks.iter().enumerate() {
+            let slice = &doc.annotations[bi * 3..bi * 3 + 3];
+            let mut kinds: Vec<_> = slice.iter().map(|a| a.kind).collect();
+            kinds.sort_by_key(|k| k.name());
+            assert_eq!(kinds, vec![AnnKind::Comment, AnnKind::Link, AnnKind::Mark]);
+        }
+    }
+
+    /// M09.2: re-anchoring against unedited text is always Exact.
+    #[test]
+    fn unedited_is_exact() {
+        let t = template();
+        let doc = AnnotatedDoc::build(&t, 33).expect("build");
+        let outcomes = doc.reanchor(&t);
+        for (i, outcome) in outcomes.iter().enumerate() {
+            assert_eq!(
+                *outcome,
+                AnchorOutcome::Exact,
+                "annotation {i} not Exact on unedited text"
+            );
+        }
+    }
+
+    /// M09.2: different seeds produce different annotation ranges.
+    #[test]
+    fn different_seeds_diverge() {
+        let t = template();
+        let a = AnnotatedDoc::build(&t, 11).expect("build a");
+        let b = AnnotatedDoc::build(&t, 44).expect("build b");
+        // At least one annotation should differ in range.
+        let any_diff = a
+            .annotations
+            .iter()
+            .zip(b.annotations.iter())
+            .any(|(x, y)| x.range != y.range);
+        assert!(any_diff, "seeds 11 and 44 produced identical ranges");
+    }
+
+    /// M09.2: re-anchor against a modified file finds the shifted bytes.
+    #[test]
+    fn reanchor_finds_shifted() {
+        let t = template();
+        let doc = AnnotatedDoc::build(&t, 55).expect("build");
+        // Insert bytes at the very front — all anchors should shift.
+        let modified = format!("PREFIX\n{t}");
+        let outcomes = doc.reanchor(&modified);
+        // At least some should be Shifted or Exact (the ones whose context
+        // still matches — small corpus may have some Exact even after prefix).
+        let any_shifted = outcomes.iter().any(|o| matches!(o, AnchorOutcome::Shifted(_)));
+        // We inserted a prefix, so the exact offsets won't match; at least
+        // some should be recovered via context search.
+        assert!(
+            any_shifted || outcomes.iter().all(|o| *o == AnchorOutcome::Exact),
+            "expected at least some Shifted outcomes after prefix insert"
+        );
+    }
+}
