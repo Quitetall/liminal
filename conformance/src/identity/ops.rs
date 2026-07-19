@@ -246,7 +246,7 @@ impl Doc {
 
 /// The Holder-controlled source of one block: its text with the `{#id}` marker
 /// re-appended to the last line (the inverse of the M03 parser).
-fn block_source(text: &str, id: Option<&str>) -> String {
+pub(crate) fn block_source(text: &str, id: Option<&str>) -> String {
     match id {
         Some(id) => format!("{text} {{#{id}}}"),
         None => text.to_owned(),
@@ -379,7 +379,7 @@ fn op_formatter_rewrite(world: &BaseWorld) -> OpOutput {
 }
 
 /// Greedy word-wrap to width 72 over whitespace-collapsed input.
-fn wrap72(s: &str) -> String {
+pub(crate) fn wrap72(s: &str) -> String {
     let mut lines: Vec<String> = Vec::new();
     let mut cur = String::new();
     for w in s.split_whitespace() {

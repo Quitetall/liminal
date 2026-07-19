@@ -20,6 +20,7 @@ pub mod replay;
 pub mod scenario;
 pub mod slo;
 pub mod trace;
+pub mod tracegen;
 
 pub use debt::{DebtReport, scan_workspace_debt};
 pub use denominator::DenominatorCounts;

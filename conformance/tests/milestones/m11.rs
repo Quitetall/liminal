@@ -3,8 +3,8 @@
 //! M11.1: the NDJSON trace parser rejects unknown fields (D11.5).
 //! M11.2: the labeled-fixture coalescing / session / git-delivery boundary
 //! cases (D11.1–D11.3). `denominator_counts_golden` — the frozen golden
-//! snapshot over these same fixtures — is M11.3, a T1 act, and is NOT
-//! flipped here.
+//! snapshot over these same fixtures — was M11.3 (T1).
+//! M11.4: the `tracegen git` smoke test (Algorithm B; AM-11.3).
 
 use camino::Utf8PathBuf;
 use liminal_conformance::denominator::{self, SESSION_TIMEOUT_MS};
@@ -113,4 +113,57 @@ fn git_delivery_events_not_double_counted() {
         "1 git_op over 2 files = 2 ops; the 2 delivery file_change_external \
          events must add 0, never bringing the total to 4"
     );
+}
+
+/// M11.4 smoke (Algorithm B): `tracegen git <op-script> <out>` produces a
+/// parseable NDJSON trace — mandatory synthetic `m7-script:` header,
+/// monotone nondecreasing `at`, at least one `git_op`, and every git
+/// `file_change_external` sharing a prior `git_op`'s exact cause pair (the
+/// byte-delivery contract Algorithm A's double-count guard keys on).
+#[test]
+fn tracegen_git_produces_replayable_trace() {
+    let out = Utf8PathBuf::from(std::env::temp_dir().to_str().expect("utf8 tmp")).join(format!(
+        "liminal-m11-tracegen-{}/git-merge-11.trace.ndjson",
+        std::process::id()
+    ));
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_tracegen"))
+        .args(["git", "git_merge@11", out.as_str()])
+        .status()
+        .expect("tracegen spawns");
+    assert!(status.success(), "tracegen git must exit 0");
+
+    let ndjson = std::fs::read_to_string(&out).expect("trace written");
+    let trace = Trace::parse(&ndjson).expect("tracegen output must parse as a valid trace");
+
+    let TraceEvent::TraceHeader {
+        source, consent, ..
+    } = &trace.header
+    else {
+        panic!("line 1 must be trace_header");
+    };
+    assert_eq!(source, "m7-script:git_merge@11");
+    assert_eq!(*consent, Consent::Synthetic);
+
+    let mut prev_at = 0u64;
+    let mut git_causes = Vec::new();
+    let mut saw_git_op = false;
+    for event in &trace.events {
+        let at = event.at().expect("every non-header event carries at");
+        assert!(at >= prev_at, "at must be monotone nondecreasing");
+        prev_at = at;
+        match event {
+            TraceEvent::GitOp { cause_key, .. } => {
+                saw_git_op = true;
+                git_causes.push(cause_key.clone());
+            }
+            TraceEvent::FileChangeExternal { cause_key, .. } => {
+                assert!(
+                    git_causes.contains(cause_key),
+                    "a git trace's delivery event must repeat a prior git_op's cause pair"
+                );
+            }
+            other => panic!("unexpected event kind in a git trace: {}", other.type_tag()),
+        }
+    }
+    assert!(saw_git_op, "a git trace must contain at least one git_op");
 }

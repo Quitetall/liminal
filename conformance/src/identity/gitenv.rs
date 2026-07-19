@@ -194,6 +194,24 @@ pub fn run_git_op(
     rng: &mut SmallRng,
     cfg: &Config,
 ) -> anyhow::Result<OpOutput> {
+    run_git_op_with_repo(op, world, seed, rng, cfg).map(|(out, _repo)| out)
+}
+
+/// [`run_git_op`], additionally returning the hermetic case repo's path so a
+/// caller can walk its history afterwards (M11 Algorithm B: `tracegen git`
+/// replays an M07 op script and walks `git log --reverse` diffs). The repo
+/// is a scratch temp dir; the caller may read it freely and need not clean
+/// it up (same lifetime rules as every other [`case_tmpdir`] case).
+///
+/// # Errors
+/// Propagates any git command failure or a below-floor `git`.
+pub fn run_git_op_with_repo(
+    op: Operation,
+    world: &BaseWorld,
+    seed: u64,
+    rng: &mut SmallRng,
+    cfg: &Config,
+) -> anyhow::Result<(OpOutput, Utf8PathBuf)> {
     let repo = case_tmpdir(&format!("{}-seed{seed}", op.name()))?;
 
     // 1-2: init + base commit.
@@ -275,11 +293,14 @@ pub fn run_git_op(
 
     // 8: read the post-op file.
     let file = std::fs::read_to_string(repo.join("notes.md"))?;
-    Ok(OpOutput {
-        file,
-        sidecar_moved: true,
-        policy: Some(policy),
-    })
+    Ok((
+        OpOutput {
+            file,
+            sidecar_moved: true,
+            policy: Some(policy),
+        },
+        repo,
+    ))
 }
 
 /// Pick a seeded conflict policy from the configured list.
