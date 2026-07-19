@@ -43,6 +43,9 @@ reports + level ADR; the M11 corpus, denominators, and scorecard pipeline;
 9. Publish fixture-format + torture-corpus documentation.
 10. Write the threat model (supersedes SECURITY.md's placeholder).
 11. Record prior-art adoption decisions (v4 §118A).
+12. Re-measure annotated-source anchor recovery over the real CST (Phase 1
+    input); merge-class ≥95% is the L3 bar; new time-box, new report — the M09
+    L2 demotion stands until then (AM-9.2, M09.7 verdict).
 
 **Gating tests:** all of `phase_minus_1.rs` and both
 `slo::*_graduates_on_heldout_corpus` stay green; `heldout_manifest_locked`;

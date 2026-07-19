@@ -17,7 +17,9 @@ use liminal_graph::ns::SYS_BLOB;
 use liminal_graph::{GraphStore, StateView, kind};
 use liminal_id::{GraphRevisionId, JurisdictionKey, NodeId, PathId, RelationId};
 use liminal_query::Query;
-use liminal_revision::{BasisComponent, BasisPerspective, ComponentDeps, WorkspaceBasis, graph_key};
+use liminal_revision::{
+    BasisComponent, BasisPerspective, ComponentDeps, WorkspaceBasis, graph_key,
+};
 
 /// The read surface a query runs against. Both the live workspace and the
 /// frozen-basis replay world (M08.8) implement it, so a query cannot tell which
@@ -441,10 +443,7 @@ to the complex plane. {#p-laplace}
     }
 
     fn node_for(ws: &ToyWorkspace, alias: &str) -> NodeId {
-        ws.store()
-            .get_aux(JUR_ALIAS, alias)
-            .unwrap()
-            .unwrap()["node"]
+        ws.store().get_aux(JUR_ALIAS, alias).unwrap().unwrap()["node"]
             .as_str()
             .unwrap()
             .parse()
@@ -490,9 +489,7 @@ to the complex plane. {#p-laplace}
             b
         };
         let _ = buffer;
-        let basis = ws
-            .basis(BasisPerspective::ClientScoped { client })
-            .unwrap();
+        let basis = ws.basis(BasisPerspective::ClientScoped { client }).unwrap();
         let world = LiveWorld::new(ws.store(), ws.root());
         let q = RenderBlock {
             world: &world,
@@ -501,7 +498,10 @@ to the complex plane. {#p-laplace}
         };
         let mut deps = ComponentDeps::default();
         let out = q.execute(&basis, &mut deps);
-        assert!(out.contains("NEOVIM-EDIT"), "buffer edit not visible: {out}");
+        assert!(
+            out.contains("NEOVIM-EDIT"),
+            "buffer edit not visible: {out}"
+        );
         assert!(out.contains("client-scoped:neovim"), "{out}");
     }
 
@@ -550,7 +550,10 @@ to the complex plane. {#p-laplace}
         let out = q.execute(&basis, &mut deps);
         assert!(out.contains("{#p-fourier}"), "{out}");
         assert!(out.contains("{#p-laplace}"), "{out}");
-        assert!(!out.contains("DIRTY"), "dirty buffer leaked into export: {out}");
+        assert!(
+            !out.contains("DIRTY"),
+            "dirty buffer leaked into export: {out}"
+        );
     }
 
     #[test]
@@ -566,9 +569,7 @@ to the complex plane. {#p-laplace}
                 "PHONE-EDIT frequencies. {#p-fourier}\n\nThe Laplace transform generalizes it\nto the complex plane. {#p-laplace}\n",
             );
         }
-        let basis = ws
-            .basis(BasisPerspective::ClientScoped { client })
-            .unwrap();
+        let basis = ws.basis(BasisPerspective::ClientScoped { client }).unwrap();
         let world = LiveWorld::new(ws.store(), ws.root());
         let q = AiContextStub {
             world: &world,

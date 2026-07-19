@@ -41,6 +41,8 @@ AM-8.3 (M08): liminal_revision::durability module (v4 §24.1 transcription; addi
 AM-8.4 (M08): SourceId::from_name(&str) deterministic UUIDv5 + uuid v5 feature (resolves DG-8.1).
 AM-8.5 (M08): GraphStore::put_working_aux — ephemeral unlogged aux write for buffer blobs (no head bump).
 AM-8.6 (M08): ToyWorkspace::basis inserts GraphSnapshot{head} at graph_key() (M08.2).
+AM-9.1 (M09): workspace `members` gains `"conformance/spikes/*"` (two publish=false spike crates; D09.1).
+AM-9.2 (M09): phases.md Phase 0 task list gains task 12 — re-measure annotated-source anchor recovery over the real CST; the M09.7 L2 demotion stands until a new boxed report says otherwise. User-ratified 2026-07-18.
 
 **What would falsify or reverse this:** an M12 audit finding an amendment that
 was applied in code but not recorded here, or recorded here but not in the
@@ -57,4 +59,3 @@ work order.
 - **No ledger** — rejected because silent deviations to frozen surfaces would
   accumulate unchecked, and Phase -1's conclusions depend on the scaffold
   matching the spec.
-AM-9.1 (M09): workspace `members` gains `"conformance/spikes/*"` (two publish=false spike crates; D09.1).

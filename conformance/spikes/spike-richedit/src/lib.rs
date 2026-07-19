@@ -12,6 +12,12 @@
 //! - Concurrency: one interleaved concurrent op between op and undo
 //! - Measurement: undo-fidelity tally across 8 seeds
 
+#![allow(
+    clippy::all,
+    clippy::pedantic,
+    reason = "D09.1: spike crates are lints-off, non-production, deletable at box end"
+)]
+
 use liminal_conformance::identity::Config;
 use liminal_graph::Operation as GraphOp;
 use liminal_graph::{Node, NodeFlags, PayloadRef};
@@ -167,11 +173,25 @@ impl RichDoc {
     }
 
     fn next_node_id(&self) -> NodeId {
-        node_id(self.blocks.iter().map(|b| b.id.as_uuid().as_u128() as u64).max().unwrap_or(0) + 1)
+        node_id(
+            self.blocks
+                .iter()
+                .map(|b| b.id.as_uuid().as_u128() as u64)
+                .max()
+                .unwrap_or(0)
+                + 1,
+        )
     }
 
     fn next_relation_id(&self) -> RelationId {
-        relation_id(self.marks.iter().map(|m| (m.id.as_uuid().as_u128() as u64).saturating_sub(1_000_000)).max().unwrap_or(0) + 1)
+        relation_id(
+            self.marks
+                .iter()
+                .map(|m| (m.id.as_uuid().as_u128() as u64).saturating_sub(1_000_000))
+                .max()
+                .unwrap_or(0)
+                + 1,
+        )
     }
 }
 
@@ -225,11 +245,19 @@ fn op_insert_text(doc: &mut RichDoc, rng: &mut SmallRng) -> RichTxn {
     let snippet = format!("<ins-{}>", rng.random_range(100..999));
     let new_text = format!("{}{}{}", &block.text[..ins], snippet, &block.text[ins..]);
 
-    let forward = vec![GraphOp::SetPayload { id: bid, payload: PayloadRef::Text(new_text.clone()) }];
-    let inverse = vec![GraphOp::SetPayload { id: bid, payload: PayloadRef::Text(block.text.clone()) }];
+    let forward = vec![GraphOp::SetPayload {
+        id: bid,
+        payload: PayloadRef::Text(new_text.clone()),
+    }];
+    let inverse = vec![GraphOp::SetPayload {
+        id: bid,
+        payload: PayloadRef::Text(block.text.clone()),
+    }];
 
     // Capture mark ranges BEFORE mutation for undo.
-    let mark_restores: Vec<_> = doc.marks.iter()
+    let mark_restores: Vec<_> = doc
+        .marks
+        .iter()
         .filter(|m| m.target == bid)
         .map(|m| (m.id, m.range))
         .collect();
@@ -251,7 +279,11 @@ fn op_insert_text(doc: &mut RichDoc, rng: &mut SmallRng) -> RichTxn {
         }
     }
 
-    RichTxn { forward, inverse, mark_restores }
+    RichTxn {
+        forward,
+        inverse,
+        mark_restores,
+    }
 }
 
 fn op_delete_range(doc: &mut RichDoc, rng: &mut SmallRng) -> RichTxn {
@@ -259,18 +291,30 @@ fn op_delete_range(doc: &mut RichDoc, rng: &mut SmallRng) -> RichTxn {
     let block = doc.block(bid).unwrap().clone();
     let len = block.text.len();
     if len < 2 {
-        return RichTxn { forward: vec![], inverse: vec![], mark_restores: vec![] };
+        return RichTxn {
+            forward: vec![],
+            inverse: vec![],
+            mark_restores: vec![],
+        };
     }
     let start = rng.random_range(0..len - 1);
     let end = rng.random_range(start + 1..=len);
     let del_len = end - start;
     let new_text = format!("{}{}", &block.text[..start], &block.text[end..]);
 
-    let forward = vec![GraphOp::SetPayload { id: bid, payload: PayloadRef::Text(new_text.clone()) }];
-    let inverse = vec![GraphOp::SetPayload { id: bid, payload: PayloadRef::Text(block.text.clone()) }];
+    let forward = vec![GraphOp::SetPayload {
+        id: bid,
+        payload: PayloadRef::Text(new_text.clone()),
+    }];
+    let inverse = vec![GraphOp::SetPayload {
+        id: bid,
+        payload: PayloadRef::Text(block.text.clone()),
+    }];
 
     // Capture mark ranges BEFORE mutation for undo.
-    let mark_restores: Vec<_> = doc.marks.iter()
+    let mark_restores: Vec<_> = doc
+        .marks
+        .iter()
         .filter(|m| m.target == bid)
         .map(|m| (m.id, m.range))
         .collect();
@@ -294,7 +338,11 @@ fn op_delete_range(doc: &mut RichDoc, rng: &mut SmallRng) -> RichTxn {
         }
     }
 
-    RichTxn { forward, inverse, mark_restores }
+    RichTxn {
+        forward,
+        inverse,
+        mark_restores,
+    }
 }
 
 fn op_add_mark(doc: &mut RichDoc, rng: &mut SmallRng) -> RichTxn {
@@ -310,24 +358,41 @@ fn op_add_mark(doc: &mut RichDoc, rng: &mut SmallRng) -> RichTxn {
         None
     };
 
-    let mark = Mark { id: rid, target: bid, range, kind: "comment", payload: format!("new-mark-{}", rng.random_range(0..999)) };
+    let mark = Mark {
+        id: rid,
+        target: bid,
+        range,
+        kind: "comment",
+        payload: format!("new-mark-{}", rng.random_range(0..999)),
+    };
 
     let graph_relation = liminal_graph::Relation {
         id: rid,
         source: bid,
-        target: liminal_graph::Target::Anchored { node: bid, anchor: liminal_graph::AnchorRef { description: format!("{range:?}") } },
+        target: liminal_graph::Target::Anchored {
+            node: bid,
+            anchor: liminal_graph::AnchorRef {
+                description: format!("{range:?}"),
+            },
+        },
         kind: KindId(0),
         payload: PayloadRef::Text(mark.payload.clone()),
         revision: RevisionId(0),
         flags: liminal_graph::RelationFlags::default(),
         requires: None,
     };
-    let forward = vec![GraphOp::AddRelation { relation: graph_relation }];
+    let forward = vec![GraphOp::AddRelation {
+        relation: graph_relation,
+    }];
     let inverse = vec![GraphOp::RemoveRelation { id: rid }];
 
     doc.marks.push(mark);
 
-    RichTxn { forward, inverse, mark_restores: vec![] }
+    RichTxn {
+        forward,
+        inverse,
+        mark_restores: vec![],
+    }
 }
 
 fn op_split_block(doc: &mut RichDoc, rng: &mut SmallRng) -> RichTxn {
@@ -335,7 +400,11 @@ fn op_split_block(doc: &mut RichDoc, rng: &mut SmallRng) -> RichTxn {
     let block = doc.block(bid).unwrap().clone();
     let len = block.text.len();
     if len < 4 {
-        return RichTxn { forward: vec![], inverse: vec![], mark_restores: vec![] };
+        return RichTxn {
+            forward: vec![],
+            inverse: vec![],
+            mark_restores: vec![],
+        };
     }
     let split_at = rng.random_range(1..len - 1);
     let first_text = block.text[..split_at].to_owned();
@@ -343,17 +412,33 @@ fn op_split_block(doc: &mut RichDoc, rng: &mut SmallRng) -> RichTxn {
     let new_id = doc.next_node_id();
 
     // Capture mark ranges BEFORE mutation for undo.
-    let mark_restores: Vec<_> = doc.marks.iter()
-        .map(|m| (m.id, m.range))
-        .collect();
+    let mark_restores: Vec<_> = doc.marks.iter().map(|m| (m.id, m.range)).collect();
 
     let forward = vec![
-        GraphOp::CreateNode { node: Node { id: new_id, kind: KindId(0), payload: PayloadRef::Text(second_text.clone()), revision: RevisionId(0), flags: NodeFlags::default() } },
-        GraphOp::SetPayload { id: bid, payload: PayloadRef::Text(first_text.clone()) },
-        GraphOp::InsertChild { parent: bid, child: new_id, index: 0 },
+        GraphOp::CreateNode {
+            node: Node {
+                id: new_id,
+                kind: KindId(0),
+                payload: PayloadRef::Text(second_text.clone()),
+                revision: RevisionId(0),
+                flags: NodeFlags::default(),
+            },
+        },
+        GraphOp::SetPayload {
+            id: bid,
+            payload: PayloadRef::Text(first_text.clone()),
+        },
+        GraphOp::InsertChild {
+            parent: bid,
+            child: new_id,
+            index: 0,
+        },
     ];
     let inverse = vec![
-        GraphOp::SetPayload { id: bid, payload: PayloadRef::Text(block.text.clone()) },
+        GraphOp::SetPayload {
+            id: bid,
+            payload: PayloadRef::Text(block.text.clone()),
+        },
         GraphOp::DeleteNode { id: new_id },
     ];
 
@@ -363,7 +448,13 @@ fn op_split_block(doc: &mut RichDoc, rng: &mut SmallRng) -> RichTxn {
         if mark.target == bid {
             if let Some((s, e)) = mark.range {
                 if s >= split_at {
-                    new_marks.push(Mark { id: mark.id, target: new_id, range: Some((s - split_at, e - split_at)), kind: mark.kind, payload: mark.payload.clone() });
+                    new_marks.push(Mark {
+                        id: mark.id,
+                        target: new_id,
+                        range: Some((s - split_at, e - split_at)),
+                        kind: mark.kind,
+                        payload: mark.payload.clone(),
+                    });
                     mark.range = Some((0, 0));
                 } else if e > split_at {
                     mark.range = Some((s, split_at));
@@ -374,13 +465,20 @@ fn op_split_block(doc: &mut RichDoc, rng: &mut SmallRng) -> RichTxn {
 
     let bm = doc.block_mut(bid).unwrap();
     bm.text = first_text;
-    doc.blocks.push(Block { id: new_id, text: second_text });
+    doc.blocks.push(Block {
+        id: new_id,
+        text: second_text,
+    });
     if let Some(pos) = doc.root_order.iter().position(|&id| id == bid) {
         doc.root_order.insert(pos + 1, new_id);
     }
     doc.marks.extend(new_marks);
 
-    RichTxn { forward, inverse, mark_restores }
+    RichTxn {
+        forward,
+        inverse,
+        mark_restores,
+    }
 }
 
 fn op_join_block(doc: &mut RichDoc, rng: &mut SmallRng) -> RichTxn {
@@ -397,29 +495,49 @@ fn op_join_block(doc: &mut RichDoc, rng: &mut SmallRng) -> RichTxn {
         })
         .collect();
     if candidates.is_empty() {
-        return RichTxn { forward: vec![], inverse: vec![], mark_restores: vec![] };
+        return RichTxn {
+            forward: vec![],
+            inverse: vec![],
+            mark_restores: vec![],
+        };
     }
     let pos = candidates[rng.random_range(0..candidates.len())];
 
     let first_id = doc.root_order[pos];
     let second_id = doc.root_order[pos + 1];
     // Capture mark ranges BEFORE mutation for undo.
-    let mark_restores: Vec<_> = doc.marks.iter()
-        .map(|m| (m.id, m.range))
-        .collect();
+    let mark_restores: Vec<_> = doc.marks.iter().map(|m| (m.id, m.range)).collect();
 
     let first = doc.block(first_id).unwrap().clone();
     let second = doc.block(second_id).unwrap().clone();
     let joined_text = format!("{}{}", first.text, second.text);
 
     let forward = vec![
-        GraphOp::SetPayload { id: first_id, payload: PayloadRef::Text(joined_text.clone()) },
+        GraphOp::SetPayload {
+            id: first_id,
+            payload: PayloadRef::Text(joined_text.clone()),
+        },
         GraphOp::DeleteNode { id: second_id },
     ];
     let inverse = vec![
-        GraphOp::SetPayload { id: first_id, payload: PayloadRef::Text(first.text.clone()) },
-        GraphOp::CreateNode { node: Node { id: second_id, kind: KindId(0), payload: PayloadRef::Text(second.text.clone()), revision: RevisionId(0), flags: NodeFlags::default() } },
-        GraphOp::InsertChild { parent: first_id, child: second_id, index: 0 },
+        GraphOp::SetPayload {
+            id: first_id,
+            payload: PayloadRef::Text(first.text.clone()),
+        },
+        GraphOp::CreateNode {
+            node: Node {
+                id: second_id,
+                kind: KindId(0),
+                payload: PayloadRef::Text(second.text.clone()),
+                revision: RevisionId(0),
+                flags: NodeFlags::default(),
+            },
+        },
+        GraphOp::InsertChild {
+            parent: first_id,
+            child: second_id,
+            index: 0,
+        },
     ];
 
     let offset = first.text.len();
@@ -438,7 +556,11 @@ fn op_join_block(doc: &mut RichDoc, rng: &mut SmallRng) -> RichTxn {
     doc.blocks.retain(|b| b.id != second_id);
     doc.root_order.remove(pos + 1);
 
-    RichTxn { forward, inverse, mark_restores }
+    RichTxn {
+        forward,
+        inverse,
+        mark_restores,
+    }
 }
 
 /// Undo the last operation by replaying its inverse graph ops + mark restores.
@@ -460,7 +582,11 @@ pub fn undo(doc: &mut RichDoc, pre_snapshot: &DocSnapshot) -> UndoOutcome {
     }
 
     let post = doc.snapshot();
-    if post == *pre_snapshot { UndoOutcome::Faithful } else { UndoOutcome::Diverged }
+    if post == *pre_snapshot {
+        UndoOutcome::Faithful
+    } else {
+        UndoOutcome::Diverged
+    }
 }
 
 fn apply_graph_op_inverse(doc: &mut RichDoc, op: &GraphOp) {
@@ -474,7 +600,10 @@ fn apply_graph_op_inverse(doc: &mut RichDoc, op: &GraphOp) {
         }
         GraphOp::CreateNode { node } => {
             if !doc.blocks.iter().any(|b| b.id == node.id) {
-                let text = match &node.payload { PayloadRef::Text(t) => t.clone(), _ => String::new() };
+                let text = match &node.payload {
+                    PayloadRef::Text(t) => t.clone(),
+                    _ => String::new(),
+                };
                 doc.blocks.push(Block { id: node.id, text });
                 if !doc.root_order.contains(&node.id) {
                     doc.root_order.push(node.id);
@@ -514,7 +643,9 @@ pub struct RichOpTally {
 impl RichOpTally {
     pub fn fidelity_pct(&self) -> f64 {
         let total = self.undo_total + self.concurrent_undo_total;
-        if total == 0 { return 100.0; }
+        if total == 0 {
+            return 100.0;
+        }
         (self.undo_faithful + self.concurrent_undo_faithful) as f64 / total as f64 * 100.0
     }
 }
@@ -527,8 +658,12 @@ pub fn run_richedit_loop(cfg: &Config) -> Vec<RichOpTally> {
     for &op in &RichOp::ALL {
         let mut tally = RichOpTally {
             op_name: op.name().to_owned(),
-            undo_faithful: 0, undo_diverged: 0, undo_total: 0,
-            concurrent_undo_faithful: 0, concurrent_undo_diverged: 0, concurrent_undo_total: 0,
+            undo_faithful: 0,
+            undo_diverged: 0,
+            undo_total: 0,
+            concurrent_undo_faithful: 0,
+            concurrent_undo_diverged: 0,
+            concurrent_undo_total: 0,
         };
 
         for &seed in &cfg.seeds {
@@ -556,7 +691,8 @@ pub fn run_richedit_loop(cfg: &Config) -> Vec<RichOpTally> {
                 let txn = apply_rich_op(&mut doc, op, seed);
                 if !txn.forward.is_empty() {
                     doc.undo_stack.push(txn);
-                    let _concurrent = apply_rich_op(&mut doc, RichOp::InsertText, seed.wrapping_add(777));
+                    let _concurrent =
+                        apply_rich_op(&mut doc, RichOp::InsertText, seed.wrapping_add(777));
                     let outcome = undo(&mut doc, &pre);
                     tally.concurrent_undo_total += 1;
                     match outcome {
@@ -580,7 +716,9 @@ pub fn run_richedit_loop(cfg: &Config) -> Vec<RichOpTally> {
 mod tests {
     use super::*;
 
-    fn cfg() -> Config { Config::load().expect("load config") }
+    fn cfg() -> Config {
+        Config::load().expect("load config")
+    }
 
     #[test]
     fn template_produces_blocks_and_marks() {
@@ -660,7 +798,12 @@ mod tests {
                 let mut doc = RichDoc::from_template(&c.template, seed);
                 let txn = apply_rich_op(&mut doc, op, seed);
                 if !txn.forward.is_empty() {
-                    assert!(!txn.inverse.is_empty(), "{} seed {}: forward but no inverse", op.name(), seed);
+                    assert!(
+                        !txn.inverse.is_empty(),
+                        "{} seed {}: forward but no inverse",
+                        op.name(),
+                        seed
+                    );
                 }
             }
         }

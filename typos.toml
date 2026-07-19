@@ -6,6 +6,8 @@
 OT = "OT"
 # Stenographic macro from the spec's Rust pack: `fpr` = public Result-returning fn (v4 §30).
 fpr = "fpr"
+# M07 identity-matrix code abbreviates "strategy" as `strat`/`strat_idx`.
+strat = "strat"
 
 [files]
 extend-exclude = [

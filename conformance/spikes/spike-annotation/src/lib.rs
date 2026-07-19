@@ -12,6 +12,12 @@
 //! - Measurement: emit/parse round-trip on unedited corpus (L2), then
 //!   11 foreign ops × 8 seeds (recovery/identity tallies)
 
+#![allow(
+    clippy::all,
+    clippy::pedantic,
+    reason = "D09.1: spike crates are lints-off, non-production, deletable at box end"
+)]
+
 use liminal_conformance::identity::strategy::Anchor;
 use liminal_source::SourceRange;
 
@@ -132,7 +138,8 @@ impl AnnotatedDoc {
                 // Too short for meaningful annotations — skip.
                 continue;
             }
-            let _text_bytes = &template.as_bytes()[block.range.start as usize..block.range.end as usize];
+            let _text_bytes =
+                &template.as_bytes()[block.range.start as usize..block.range.end as usize];
 
             for kind in AnnKind::ALL {
                 // Seeded range within the block.
@@ -301,7 +308,9 @@ mod tests {
         let outcomes = doc.reanchor(&modified);
         // At least some should be Shifted or Exact (the ones whose context
         // still matches — small corpus may have some Exact even after prefix).
-        let any_shifted = outcomes.iter().any(|o| matches!(o, AnchorOutcome::Shifted(_)));
+        let any_shifted = outcomes
+            .iter()
+            .any(|o| matches!(o, AnchorOutcome::Shifted(_)));
         // We inserted a prefix, so the exact offsets won't match; at least
         // some should be recovered via context search.
         assert!(
@@ -482,10 +491,7 @@ mod emit_parse_tests {
             .seeds
         {
             let doc = AnnotatedDoc::build(&t, seed).expect("build");
-            assert!(
-                emit_idempotent(&doc),
-                "emit not idempotent for seed {seed}"
-            );
+            assert!(emit_idempotent(&doc), "emit not idempotent for seed {seed}");
         }
     }
 
@@ -512,8 +518,8 @@ mod emit_parse_tests {
 // ── M09.4: Foreign-edit loop (11 ops × 8 seeds) ────────────────────────
 
 use liminal_conformance::identity::ops;
-use liminal_conformance::identity::strategy::BaseWorld;
 use liminal_conformance::identity::strategy;
+use liminal_conformance::identity::strategy::BaseWorld;
 
 /// Per-annotation tally for one (operation, seed) case.
 #[derive(Debug, Clone)]
@@ -621,7 +627,10 @@ pub fn run_foreign_edit_loop(
                 let tb = &world.blocks[idx];
                 let outcome = strategy::observe(strategy::Strategy::Structural, tb, &post, cfg);
                 class.identity_total += 1;
-                if matches!(outcome, strategy::Outcome::Preserved(_) | strategy::Outcome::Recovered { .. }) {
+                if matches!(
+                    outcome,
+                    strategy::Outcome::Preserved(_) | strategy::Outcome::Recovered { .. }
+                ) {
                     class.identity_survived += 1;
                 }
             }
@@ -632,7 +641,6 @@ pub fn run_foreign_edit_loop(
 
     Ok(results)
 }
-
 
 // ── Report renderer (M09.6) ─────────────────────────────────────────────
 
@@ -650,8 +658,16 @@ pub fn declared_level(
     }
     // L3: L2 AND recovery >= 95% on non-git foreign ops AND >= 80% on git ops
     //     AND 0 silent misattachments (ambiguous counts as misattachment).
-    let non_git_recovery = foreign.iter().take(8).map(|t| t.recovery_pct()).fold(f64::MAX, f64::min);
-    let git_recovery = foreign.iter().skip(8).map(|t| t.recovery_pct()).fold(f64::MAX, f64::min);
+    let non_git_recovery = foreign
+        .iter()
+        .take(8)
+        .map(|t| t.recovery_pct())
+        .fold(f64::MAX, f64::min);
+    let git_recovery = foreign
+        .iter()
+        .skip(8)
+        .map(|t| t.recovery_pct())
+        .fold(f64::MAX, f64::min);
     let any_ambiguous = foreign.iter().any(|t| t.ambiguous > 0);
     if non_git_recovery >= 95.0 && git_recovery >= 80.0 && !any_ambiguous {
         return 3;
@@ -683,21 +699,29 @@ pub fn render_report(
     let level = declared_level(foreign, richedit, true);
 
     let mut out = String::new();
-    out.push_str("# Anchor recovery report (Phase -1.2, M9)
+    out.push_str(
+        "# Anchor recovery report (Phase -1.2, M9)
 
-");
-    out.push_str(&format!("box: {box_start} .. {box_end} (hard 2-week box)
-"));
+",
+    );
+    out.push_str(&format!(
+        "box: {box_start} .. {box_end} (hard 2-week box)
+"
+    ));
     out.push_str(&format!(
         "config: blake3:{config_hash}   git: {git_version}   seeds: {}
 
 ",
         cfg.seeds.len()
     ));
-    out.push_str("| operation class | recovery % | identity % | undo fidelity % |
-");
-    out.push_str("|---|---|---|---|
-");
+    out.push_str(
+        "| operation class | recovery % | identity % | undo fidelity % |
+",
+    );
+    out.push_str(
+        "|---|---|---|---|
+",
+    );
 
     for t in foreign {
         out.push_str(&format!(
@@ -718,9 +742,11 @@ pub fn render_report(
         ));
     }
 
-    out.push_str(&format!("
+    out.push_str(&format!(
+        "
 declared level: {level}
-"));
+"
+    ));
     out
 }
 

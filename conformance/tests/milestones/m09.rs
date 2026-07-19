@@ -9,9 +9,11 @@
 //! numbers via D09.4 and asserts it equals `spike_annotation::DECLARED_LEVEL`.
 
 use camino::Utf8PathBuf;
-use spike_annotation::{render_report, declared_level, run_foreign_edit_loop, emit, parse, AnnotatedDoc};
-use spike_richedit::run_richedit_loop;
 use liminal_conformance::identity::Config;
+use spike_annotation::{
+    AnnotatedDoc, declared_level, emit, parse, render_report, run_foreign_edit_loop,
+};
+use spike_richedit::run_richedit_loop;
 
 /// The workspace root (conformance/ has a parent).
 fn repo_root() -> Utf8PathBuf {
@@ -59,7 +61,13 @@ fn build_report() -> String {
     // Spike 2: rich-edit loop (5 ops × 8 seeds).
     let richedit = run_richedit_loop(&cfg);
 
-    render_report(&cfg, &foreign, &richedit, spike_annotation::BOX_START, "2026-07-18")
+    render_report(
+        &cfg,
+        &foreign,
+        &richedit,
+        spike_annotation::BOX_START,
+        "2026-07-18",
+    )
 }
 
 /// Check round-trip on unedited docs (L2 prerequisite).
