@@ -375,3 +375,190 @@ pub fn run_pandoc(ast_json: &str, dir: &camino::Utf8Path) -> anyhow::Result<Pand
         ast2_json: std::fs::read_to_string(dir.join("ast2.json"))?,
     })
 }
+
+/// The adapter's declared capability level (D10.4): **Level 1** — import/
+/// export with declared loss. Asserted equal to the level recomputed from
+/// the frozen measurements by `declared_level_matches_loss_report` (M10.4);
+/// Level 2 is NOT declared (comment Relations do not survive).
+pub const DECLARED_LEVEL: u8 = 1;
+
+/// The six measured dimensions of the loss report (M10 Data schemas).
+#[derive(Debug, Clone)]
+pub struct LossMeasurement {
+    /// `(id, text)` pairs on the emit side (`normalize(emit(fixture))`).
+    pub pairs_in: Vec<(Option<String>, String)>,
+    /// `(id, text)` pairs after the CLI round trip (`normalize(ast2)`).
+    pub pairs_out: Vec<(Option<String>, String)>,
+    /// Comment Relations ingested from the fixture (declared loss at emit).
+    pub relations_in: usize,
+    /// Whether the probe `RawBlock` survived `ast2.json` byte-identical.
+    pub probe_survived: bool,
+    /// Informative: `markdown → json → markdown` byte-stable on the
+    /// paragraph-only subset.
+    pub second_pass_stable: bool,
+}
+
+impl LossMeasurement {
+    /// Ids on the emit side.
+    #[must_use]
+    pub fn ids_in(&self) -> usize {
+        self.pairs_in.iter().filter(|(id, _)| id.is_some()).count()
+    }
+
+    /// Ids surviving positionally after the round trip.
+    #[must_use]
+    pub fn ids_survived(&self) -> usize {
+        self.pairs_in
+            .iter()
+            .zip(&self.pairs_out)
+            .filter(|((a, _), (b, _))| a.is_some() && a == b)
+            .count()
+    }
+
+    /// Positional text matches (whitespace-normalized by construction).
+    #[must_use]
+    pub fn text_survived(&self) -> usize {
+        self.pairs_in
+            .iter()
+            .zip(&self.pairs_out)
+            .filter(|((_, a), (_, b))| a == b)
+            .count()
+    }
+
+    /// D10.4: Level 1 iff blocks, order, text, and id survival are all 100%
+    /// AND every non-surviving construct (the comment Relations) is declared
+    /// `may_discard` — which holds by construction here (D10.1 declares them
+    /// lost at emit). Any dimension short of 100% → Level 0.
+    #[must_use]
+    pub fn declared_level(&self) -> u8 {
+        let all_exact = self.pairs_in.len() == self.pairs_out.len()
+            && self.text_survived() == self.pairs_in.len()
+            && self.ids_survived() == self.ids_in()
+            && self.probe_survived;
+        u8::from(all_exact)
+    }
+}
+
+/// Run the full M10 measurement procedure (Algorithms 1–5) over the fixture
+/// directory, using `workdir` for the pandoc CLI round trip.
+///
+/// # Errors
+/// Propagates fixture IO/parse failures and pipeline failures.
+pub fn measure(
+    fixture_dir: &camino::Utf8Path,
+    workdir: &camino::Utf8Path,
+) -> anyhow::Result<LossMeasurement> {
+    let text = std::fs::read_to_string(fixture_dir.join("doc.paragraph.txt"))?;
+    let blocks = liminal_source::paragraph::parse(&text);
+
+    let relations: liminal_daemon::scenario::Setup = toml::from_str(&std::fs::read_to_string(
+        fixture_dir.join("doc.relations.toml"),
+    )?)?;
+
+    let ast = emit(&blocks);
+    let ast_json = serde_json::to_string(&ast)?;
+    let round = run_pandoc(&ast_json, workdir)?;
+    let ast2 = reimport(&round.ast2_json)?;
+
+    let probe_survived = ast2
+        .blocks
+        .iter()
+        .any(|b| matches!(b, Block::RawBlock(fmt, raw) if fmt == "html" && raw == PROBE_RAW_HTML));
+
+    // Informative second pass: markdown → json → markdown byte-stable.
+    let second = run_pandoc(&round.ast2_json, &workdir.join("second-pass"))?;
+    let second_pass_stable = second.markdown == round.markdown;
+
+    Ok(LossMeasurement {
+        pairs_in: normalize(&ast),
+        pairs_out: normalize(&ast2),
+        relations_in: relations.graph.len(),
+        probe_survived,
+        second_pass_stable,
+    })
+}
+
+/// Render the loss report (M10 Data schemas: "the snapshot IS the report").
+#[must_use]
+pub fn loss_report(m: &LossMeasurement) -> String {
+    use std::fmt::Write as _;
+    let n_in = m.pairs_in.len();
+    let n_out = m.pairs_out.len();
+    let ids_in = m.ids_in();
+    let ids_survived = m.ids_survived();
+    let text_survived = m.text_survived();
+    let order_ok = text_survived == n_in && n_in == n_out;
+
+    let verdict = |ok: bool, good: &str| {
+        if ok {
+            good.to_owned()
+        } else {
+            "LOSS".to_owned()
+        }
+    };
+    let mut out = String::new();
+    out.push_str("# Pandoc adapter loss report (Phase -1.4)\n\n");
+    out.push_str(
+        "pandoc: 3.6.1 (pinned) | pipeline: graph -> pandoc-json -> \
+         markdown-smart(--wrap=none) -> pandoc-json -> graph\n",
+    );
+    out.push_str("corpus: conformance/fixtures/conversion-loss/pandoc/\n\n");
+    out.push_str("| dimension          | in | out | survived | verdict       |\n");
+    out.push_str("|--------------------|----|-----|----------|---------------|\n");
+    let mut row = |dim: &str, i: String, o: String, s: String, v: String| {
+        let _ = writeln!(out, "| {dim:<18} | {i:>2} | {o:>3} | {s:<8} | {v:<13} |");
+    };
+    row(
+        "blocks",
+        n_in.to_string(),
+        n_out.to_string(),
+        format!("{n_out}/{n_in}"),
+        verdict(n_in == n_out, "exact"),
+    );
+    row(
+        "block order",
+        "-".into(),
+        "-".into(),
+        if order_ok { "preserved" } else { "BROKEN" }.into(),
+        verdict(order_ok, "exact"),
+    );
+    row(
+        "ids",
+        ids_in.to_string(),
+        ids_survived.to_string(),
+        format!("{ids_survived}/{ids_in}"),
+        verdict(ids_survived == ids_in, "exact"),
+    );
+    row(
+        "text (normalized)",
+        n_in.to_string(),
+        text_survived.to_string(),
+        format!("{text_survived}/{n_in}"),
+        verdict(text_survived == n_in, "exact"),
+    );
+    row(
+        "comment relations",
+        m.relations_in.to_string(),
+        "0".into(),
+        format!("0/{}", m.relations_in),
+        "DECLARED LOSS".into(),
+    );
+    row(
+        "foreign raw block",
+        "1".into(),
+        u8::from(m.probe_survived).to_string(),
+        format!("{}/1", u8::from(m.probe_survived)),
+        verdict(m.probe_survived, "preserved"),
+    );
+    let _ = writeln!(
+        out,
+        "\ndeclared capability level: {} (import/export, declared loss)   [v4 \u{a7}8.4]",
+        m.declared_level()
+    );
+    let _ = writeln!(
+        out,
+        "paragraph-only subset second-pass stable: {}              (informative)",
+        if m.second_pass_stable { "yes" } else { "no" }
+    );
+    out
+}

@@ -4,10 +4,29 @@
 /// The -1.4 spike, made permanent: toy Resolved-Graph → Pandoc JSON AST →
 /// back, with measured loss equal to the committed golden report
 /// (`conformance/golden/pandoc_loss.md`) and ID survival recorded honestly.
+/// The report carries no volatile lines (the pandoc version is pinned), so
+/// the comparison is byte-exact; regenerate deliberately with
+/// `BLESS_PANDOC_REPORT=1` and review the diff (a golden is spec).
 #[test]
-#[ignore = "Phase -1 M10: Pandoc adapter-boundary spike"]
 fn pandoc_roundtrip_loss_matches_golden() {
-    unimplemented!("drive `pandoc` CLI; compare loss report byte-exactly to golden")
+    let root = camino::Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let fixture = root.join("fixtures/conversion-loss/pandoc");
+    let workdir = camino::Utf8PathBuf::from(std::env::temp_dir().to_str().expect("utf8 tmp"))
+        .join(format!("liminal-m10-loss-{}", std::process::id()));
+    let measurement =
+        liminal_conformance::pandoc::measure(&fixture, &workdir).expect("measurement runs");
+    let rendered = liminal_conformance::pandoc::loss_report(&measurement);
+
+    let golden_path = root.join("golden/pandoc_loss.md");
+    if std::env::var("BLESS_PANDOC_REPORT").is_ok() || !golden_path.exists() {
+        std::fs::write(&golden_path, &rendered).expect("write golden");
+    }
+    let golden = std::fs::read_to_string(&golden_path).expect("read pandoc_loss.md golden");
+    assert_eq!(
+        rendered, golden,
+        "pandoc loss report drifted from the committed golden; if intended, \
+         regenerate with BLESS_PANDOC_REPORT=1 and review the diff"
+    );
 }
 
 /// Unknown constructs survive import as namespaced opaque Nodes with source
