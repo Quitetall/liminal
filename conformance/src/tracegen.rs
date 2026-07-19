@@ -565,6 +565,28 @@ pub fn import_trace(
         );
         Ok(String::from_utf8(out.stdout).ok())
     };
+    // NUL-separated raw git output: real histories contain filenames with
+    // trailing whitespace and non-ASCII bytes (tldr's early history has a
+    // committed `ls.md   `), which line-based parsing silently corrupts —
+    // `-z` is the only lossless framing. Non-UTF-8 NAMES are skipped and
+    // counted like non-UTF-8 contents.
+    let git_z = |args: &[&str]| -> anyhow::Result<Vec<String>> {
+        let out = std::process::Command::new("git")
+            .current_dir(repo)
+            .args(args)
+            .output()?;
+        anyhow::ensure!(
+            out.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        Ok(out
+            .stdout
+            .split(|&b| b == 0)
+            .filter(|s| !s.is_empty())
+            .map(|s| String::from_utf8_lossy(s).into_owned())
+            .collect())
+    };
 
     let mut shas: Vec<String> = git_out(
         repo,
@@ -581,15 +603,15 @@ pub fn import_trace(
 
     let mut skipped_non_utf8 = 0u64;
 
-    // Base commit -> setup.files (full tree, filtered).
+    // Base commit -> setup.files (full tree, filtered; NUL framing).
     let mut setup_files = Vec::new();
-    for path in git_out(repo, &["ls-tree", "-r", "--name-only", &shas[0]])?.lines() {
-        if !in_scope(path) {
+    for path in git_z(&["ls-tree", "-r", "--name-only", "-z", &shas[0]])? {
+        if !in_scope(&path) {
             continue;
         }
         match show_utf8(&format!("{}:{path}", shas[0]))? {
             Some(contents) => setup_files.push(TraceSetupFile {
-                path: path.to_owned(),
+                path: path.clone(),
                 contents,
             }),
             None => skipped_non_utf8 += 1,
@@ -612,30 +634,26 @@ pub fn import_trace(
         // Changed vs the first parent, renames as delete+add (--no-renames).
         let mut files = Vec::new();
         let mut deliveries: Vec<(String, String)> = Vec::new();
-        for line in git_out(
-            repo,
-            &[
-                "diff",
-                "--name-status",
-                "--no-renames",
-                &format!("{sha}^"),
-                sha,
-            ],
-        )?
-        .lines()
-        {
-            let Some((status, path)) = line.split_once('\t') else {
-                continue;
-            };
+        // `-z` framing: STATUS NUL PATH NUL … — lossless for dirty names.
+        let tokens = git_z(&[
+            "diff",
+            "--name-status",
+            "--no-renames",
+            "-z",
+            &format!("{sha}^"),
+            sha,
+        ])?;
+        for pair in tokens.chunks_exact(2) {
+            let (status, path) = (&pair[0], &pair[1]);
             if !in_scope(path) {
                 continue;
             }
-            files.push(path.to_owned());
+            files.push(path.clone());
             if status.starts_with('D') {
                 continue; // counted, never delivered — no bytes exist.
             }
             match show_utf8(&format!("{sha}:{path}"))? {
-                Some(contents) => deliveries.push((path.to_owned(), contents)),
+                Some(contents) => deliveries.push((path.clone(), contents)),
                 None => skipped_non_utf8 += 1,
             }
         }
