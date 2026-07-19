@@ -152,9 +152,11 @@ impl ToyWorkspace {
         self.epoch
     }
 
-    /// The workspace root.
+    /// The workspace root (M08.7 AM-8.10: widened to `pub` — like `store()`,
+    /// callers outside `liminal-daemon` need it to build a `LiveWorld` over an
+    /// opened workspace, e.g. the `four_consumers` milestone test).
     #[must_use]
-    pub(crate) fn root(&self) -> &Utf8Path {
+    pub fn root(&self) -> &Utf8Path {
         &self.root
     }
 

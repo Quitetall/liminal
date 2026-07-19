@@ -25,6 +25,7 @@ use liminal_jurisdiction::{
     ReconciliationStatus, RepairDecision, RepairOperation, RepairPlan, RepairRecord,
     SafetyEvidence, StatePredicate, blob,
 };
+use liminal_query::Query;
 use liminal_resolver::ReplayableResolver;
 use liminal_revision::{BasisComponent, BasisPerspective, WorkspaceBasis};
 use liminal_source::merge::{self, MergeOutcome};
@@ -1435,6 +1436,121 @@ fn apply_resolver_observe(
     Ok(())
 }
 
+/// `query { query, perspective, node?, client?, path? }` (M08.7, AM-8.1):
+/// execute one of the four M08.4 queries against the CURRENT workspace state
+/// and persist its canonical output at
+/// `SYS_BLOB["query/<query>:<perspective-label>"]` — the m08 milestone test
+/// reads it back (and, for `workspace_export`, compares it against an
+/// independently re-executed durable export).
+///
+/// `perspective = "client"` opens a FRESH `ClientSession` buffer over the
+/// runner's own tracked scratch bytes (`buffers` — the same bytes `save`
+/// reads as "ours") so the query sees precisely what the scenario's
+/// `buffer_edit` steps have produced so far, without perturbing the
+/// save-flow's own bookkeeping. `perspective = "durable"` needs no client.
+fn apply_query(
+    ws: &mut ToyWorkspace,
+    buffers: &BTreeMap<(String, String), Vec<u8>>,
+    step: &crate::scenario::Step,
+) -> anyhow::Result<()> {
+    let query_name = field(step, "query")?.to_owned();
+    let node_alias = step.extra.get("node").and_then(|v| v.as_str());
+
+    let (perspective, label) = match field(step, "perspective")? {
+        "durable" => (
+            BasisPerspective::DurableOnly,
+            crate::queries::perspective_label(&BasisPerspective::DurableOnly, None),
+        ),
+        "client" => {
+            let client_name = field(step, "client")?;
+            let path = field(step, "path")?;
+            let bytes = buffers
+                .get(&(client_name.to_owned(), path.to_owned()))
+                .ok_or_else(|| {
+                    anyhow::anyhow!("query: no tracked buffer for {client_name}/{path}")
+                })?;
+            let text = String::from_utf8_lossy(bytes).into_owned();
+            let client = ClientId::new();
+            {
+                let mut session = ws.client(client);
+                let buffer = session.open_buffer(PathId(path.into()));
+                session.edit(buffer, &text);
+            }
+            let perspective = BasisPerspective::ClientScoped { client };
+            let label = crate::queries::perspective_label(&perspective, Some(client_name));
+            (perspective, label)
+        }
+        other => anyhow::bail!("query: unknown perspective {other:?}"),
+    };
+
+    let basis = ws.basis(perspective)?;
+    let store = ws.store();
+    let world = crate::queries::LiveWorld::new(store, ws.root());
+    let mut deps = liminal_revision::ComponentDeps::default();
+    let output = match query_name.as_str() {
+        "render_block" => {
+            let node = node_for_alias(
+                store,
+                node_alias.ok_or_else(|| anyhow::anyhow!("render_block query needs a node"))?,
+            )?;
+            crate::queries::RenderBlock {
+                world: &world,
+                node,
+                perspective_label: label.clone(),
+            }
+            .execute(&basis, &mut deps)
+        }
+        "backlinks" => {
+            let node = node_for_alias(
+                store,
+                node_alias.ok_or_else(|| anyhow::anyhow!("backlinks query needs a node"))?,
+            )?;
+            crate::queries::Backlinks {
+                world: &world,
+                node,
+                perspective_label: label.clone(),
+            }
+            .execute(&basis, &mut deps)
+        }
+        "workspace_export" => crate::queries::WorkspaceExport {
+            world: &world,
+            perspective_label: label.clone(),
+        }
+        .execute(&basis, &mut deps),
+        "ai_context_stub" => {
+            let node = node_for_alias(
+                store,
+                node_alias.ok_or_else(|| anyhow::anyhow!("ai_context_stub query needs a node"))?,
+            )?;
+            crate::queries::AiContextStub {
+                world: &world,
+                focus: node,
+                perspective_label: label.clone(),
+            }
+            .execute(&basis, &mut deps)
+        }
+        other => anyhow::bail!("query: unknown query kind {other:?}"),
+    };
+
+    let key = format!("query/{query_name}:{label}");
+    let mut txn = store.begin()?;
+    txn.put_aux(SYS_BLOB, &key, serde_json::Value::String(output))?;
+    txn.commit(save_meta())?;
+    Ok(())
+}
+
+/// The node an `{#alias}` durable id names (`JUR_ALIAS[alias]["node"]`).
+fn node_for_alias(store: &GraphStore, alias: &str) -> anyhow::Result<NodeId> {
+    let value = store
+        .get_aux(JUR_ALIAS, alias)?
+        .ok_or_else(|| anyhow::anyhow!("no alias {alias:?}"))?;
+    value["node"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("alias {alias:?} has no node"))?
+        .parse()
+        .map_err(|e| anyhow::anyhow!("bad node id for alias {alias:?}: {e}"))
+}
+
 /// `foreign_edit`: a foreign tool rewrites the durable file directly (v4 §8.5).
 fn apply_foreign_edit(step: &crate::scenario::Step, root: &Utf8Path) -> anyhow::Result<()> {
     let (path, find, replace) = (
@@ -1490,6 +1606,17 @@ pub fn exec<X: ExternalExecutor, C: CrashInjector>(
     ingest_files(ws.store(), &scenario.setup.files)?;
     ingest_graph(ws.store(), &scenario.setup.graph)?;
 
+    // M08.7: `seed_durable_inputs` (D06.5) runs at `open`, BEFORE the ingest
+    // above — so this session's own `AvailableInputs` still lacks the
+    // just-ingested file component. Reopen once, mirroring a fresh process
+    // over the persisted store (the same gotcha `queries.rs`'s own unit
+    // tests route around by opening twice, and the same reopen the
+    // `daemon_restart` step already exercises, M05 AM-5.1). Inert for any
+    // scenario that never calls `ws.basis()`/`AvailableInputs` — recovery and
+    // the overlay sweep are no-ops with nothing pending yet.
+    drop(ws);
+    ws = ToyWorkspace::open(root)?;
+
     for step in &scenario.steps {
         match step.kind.as_str() {
             "buffer_edit" => apply_buffer_edit(step, &mut buffers)?,
@@ -1513,6 +1640,7 @@ pub fn exec<X: ExternalExecutor, C: CrashInjector>(
                 perform_save(&driver, &profiles, root, &bases, &buffers, client, path)?;
             }
             "resolver_observe" => apply_resolver_observe(&mut ws, step)?,
+            "query" => apply_query(&mut ws, &buffers, step)?,
             "accept_repair" => accept_repair(ws.store(), root)?,
             "holder_unavailable" => mark_holder_unavailable(ws.store(), step)?,
             "holder_available" => mark_holder_available(ws.store(), step)?,

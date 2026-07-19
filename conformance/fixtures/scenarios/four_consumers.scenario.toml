@@ -1,0 +1,91 @@
+# Phase -1 toy scenario — spec: v4 §24 (query properties), §7.5 (perspectives,
+# the provenance rule), §8.6 (effect reactor). M08.7.
+#
+# Four consumers over one workspace with two dirty clients and one
+# materialized external observation: an interactive preview (neovim's own
+# dirty text), an AI context build (phone's own dirty text), a cross-document
+# query (durable graph state only), and a durable export (durable graph state
+# only — no dirty buffer leaks in). Each consumer selects its OWN perspective
+# explicitly (v4 §7.5 last rule) — no consumer ever guesses another client's
+# intent, and the durable-only consumers never see either dirty buffer.
+
+[scenario]
+id = "four_consumers"
+title = "Four consumers, two dirty buffers, one observation: perspective-selected queries"
+spec = ["v4 §24", "v4 §7.5", "v4 §8.6"]
+profiles = ["external-file"]
+
+[[setup.file]]
+path = "notes.md"
+text = """
+The Fourier transform decomposes a signal
+into its constituent frequencies. {#p-fourier}
+
+The Laplace transform generalizes it
+to the complex plane. {#p-laplace}
+
+An anonymous paragraph with no durable id.
+"""
+
+[[setup.graph]]
+kind = "comment-relation"
+target = "p-fourier"
+requires_grade = "explicit"
+body = "see also"
+
+[[setup.buffer]]
+client = "neovim"
+path = "notes.md"
+
+[[setup.buffer]]
+client = "phone"
+path = "notes.md"
+
+[[step]]
+kind = "buffer_edit"
+client = "neovim"
+path = "notes.md"
+find = "The Fourier transform decomposes a signal"
+replace = "NEOVIM-EDIT decomposes a signal"
+
+[[step]]
+kind = "buffer_edit"
+client = "phone"
+path = "notes.md"
+find = "into its constituent frequencies."
+replace = "PHONE-EDIT constituent frequencies."
+
+[[step]]
+kind = "resolver_observe"
+source = "stock:acme"
+price = 42.17
+at = "2026-01-01T00:00:00Z"
+
+[[step]]
+kind = "query"
+query = "render_block"
+node = "p-fourier"
+perspective = "client"
+client = "neovim"
+path = "notes.md"
+
+[[step]]
+kind = "query"
+query = "ai_context_stub"
+node = "p-fourier"
+perspective = "client"
+client = "phone"
+path = "notes.md"
+
+[[step]]
+kind = "query"
+query = "backlinks"
+node = "p-fourier"
+perspective = "durable"
+
+[[step]]
+kind = "query"
+query = "workspace_export"
+perspective = "durable"
+
+[expect]
