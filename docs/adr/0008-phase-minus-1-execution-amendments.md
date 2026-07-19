@@ -49,6 +49,9 @@ AM-8.11 (M08.7): runner::exec reopens ToyWorkspace once after ingest_files/inges
 AM-8.12 (M08.8): liminal_graph::StateView::synthetic(...) — new pub constructor building a StateView from raw parts; FrozenWorld (a different crate) has no other way to construct one since state_at's log-replay path is unavailable once the workspace is deleted. Additive.
 AM-9.1 (M09): workspace `members` gains `"conformance/spikes/*"` (two publish=false spike crates; D09.1).
 AM-9.2 (M09): phases.md Phase 0 task list gains task 12 — re-measure annotated-source anchor recovery over the real CST; the M09.7 L2 demotion stands until a new boxed report says otherwise. User-ratified 2026-07-18.
+AM-11.1 (M11): conformance `[[bin]] gen-manifest` — heldout MANIFEST.b3 generator (D11.6: conformance bin, no new lim subcommand). Pre-declared in M11.md Amendments.
+AM-11.2 (M11): conformance `[[bin]] scorecard` — the §7.4/R4 §2.3 scorecard pipeline runner (D11.6). Pre-declared in M11.md Amendments.
+AM-11.3 (M11): conformance `[[bin]] tracegen` — the five Algorithm-B importers/generators (D11.6). Pre-declared in M11.md Amendments.
 
 **What would falsify or reverse this:** an M12 audit finding an amendment that
 was applied in code but not recorded here, or recorded here but not in the
