@@ -41,6 +41,11 @@ AM-8.3 (M08): liminal_revision::durability module (v4 §24.1 transcription; addi
 AM-8.4 (M08): SourceId::from_name(&str) deterministic UUIDv5 + uuid v5 feature (resolves DG-8.1).
 AM-8.5 (M08): GraphStore::put_working_aux — ephemeral unlogged aux write for buffer blobs (no head bump).
 AM-8.6 (M08): ToyWorkspace::basis inserts GraphSnapshot{head} at graph_key() (M08.2).
+AM-8.7 (M08.4): liminal_daemon::queries::World seam (LiveWorld now, FrozenWorld at M08.8); StateView gains nodes()/relations()/scan_aux(); runner::ingest_files/ingest_graph widened to pub(crate).
+AM-8.8 (M08.3): runner::refresh_file_blobs — refreshes SYS_BLOB["file/<path>"] to a save's landed bytes, called from apply_or_review's AutoApply arm.
+AM-8.9 (M08.6): liminal_graph::kind::EXTERNAL_VALUE — a new node kind constant for the MaterializeExternal target (toy: at most one per scenario).
+AM-8.10 (M08.7): ToyWorkspace::root() widened pub(crate) -> pub, like store() — needed outside liminal-daemon to build a LiveWorld.
+AM-8.11 (M08.7): runner::exec reopens ToyWorkspace once after ingest_files/ingest_graph — seed_durable_inputs runs at open, before exec's own ingest, so a continuous exec session never saw the just-ingested file's component until apply_query's ws.basis() call (the first scenario-runner path to resolve a Basis in-process). Verified inert for every existing scenario.
 AM-9.1 (M09): workspace `members` gains `"conformance/spikes/*"` (two publish=false spike crates; D09.1).
 AM-9.2 (M09): phases.md Phase 0 task list gains task 12 — re-measure annotated-source anchor recovery over the real CST; the M09.7 L2 demotion stands until a new boxed report says otherwise. User-ratified 2026-07-18.
 
