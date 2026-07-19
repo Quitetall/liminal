@@ -36,10 +36,53 @@ fn heldout_manifest_locked() {
 /// operation and session counts — the denominators are frozen BEFORE any
 /// profile tuning (v4 §7.4: keystroke coalescing into semantic transactions,
 /// 30-minute session timeout, root-cause incident coalescing).
+/// The golden is regenerated deliberately with `BLESS_DENOMINATOR_COUNTS=1`
+/// and reviewed line-by-line (a golden is spec; M11.3 is a T1 act) —
+/// changing a count afterward is a corpus-version bump, never an edit.
 #[test]
-#[ignore = "Phase -1 M11: trace format + §7.4 denominator implementation"]
 fn denominator_counts_golden() {
-    unimplemented!("replay hand-labeled traces; compare counts to conformance/golden/")
+    use std::fmt::Write as _;
+    let root = camino::Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut rendered = String::from(
+        "# §7.4 denominator counts — hand-labeled traces (M11.3, FROZEN)\n\n\
+         Regenerate deliberately with BLESS_DENOMINATOR_COUNTS=1; a change\n\
+         here is a corpus-version bump, never an edit (v4 §7.4; POLICY.md).\n",
+    );
+    for name in [
+        "coalesce-basic",
+        "session-timeout",
+        "git-rootcause",
+        "offline-transient",
+    ] {
+        let path = root.join(format!("fixtures/traces/labeled/{name}.trace.ndjson"));
+        let ndjson = std::fs::read_to_string(&path).expect("labeled fixture exists");
+        let trace = liminal_conformance::trace::Trace::parse(&ndjson).expect("fixture parses");
+        let counts = liminal_conformance::denominator::count(&trace.events);
+        let _ = write!(
+            rendered,
+            "\n## {name}\n\nops: {}\ntxns: {}\nsessions: {}\n",
+            counts.ops, counts.txns, counts.sessions
+        );
+        if counts.incidents_by_cause.is_empty() {
+            rendered.push_str("incidents: none\n");
+        } else {
+            for (cause, n) in &counts.incidents_by_cause {
+                let _ = writeln!(rendered, "incident: {cause} = {n}");
+            }
+        }
+    }
+
+    let golden_path = root.join("golden/denominator_counts.md");
+    if std::env::var("BLESS_DENOMINATOR_COUNTS").is_ok() || !golden_path.exists() {
+        std::fs::write(&golden_path, &rendered).expect("write golden");
+    }
+    let golden = std::fs::read_to_string(&golden_path).expect("read denominator_counts.md");
+    assert_eq!(
+        rendered, golden,
+        "denominator counts drifted from the frozen golden — the D11.1-D11.3 \
+         constants are spec; if this is a deliberate corpus-version bump, \
+         regenerate with BLESS_DENOMINATOR_COUNTS=1 and review the diff"
+    );
 }
 
 /// -1.5: the full pipeline — importers, replay, denominators, scorecard —
