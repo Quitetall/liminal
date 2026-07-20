@@ -639,11 +639,26 @@ fn representation_fixture_rejects_malformed_cases() {
     let valid = include_str!("../fixtures/phase0/representation-examples.toml");
     assert!(parse_representation_fixture(valid).is_ok());
 
+    let empty_nodes = r#"
+version = 1
+
+[[example]]
+id = "empty"
+domain = "prose"
+node = []
+relation = []
+"#;
+    let empty_nodes_error = parse_representation_fixture(empty_nodes)
+        .expect_err("an example with no nodes must fail its explicit invariant");
+    assert!(
+        empty_nodes_error.contains("has no nodes"),
+        "empty-node case hit wrong rejection path: {empty_nodes_error}"
+    );
+
     let malformed = [
         valid.replacen("id = \"code\"", "id = \"prose\"", 1),
         valid.replacen("alias = \"paragraph\"", "alias = \"document\"", 1),
         valid.replacen("to = \"paragraph\"", "to = \"missing\"", 1),
-        valid.replacen("[[example.node]]", "[[example.absent_node]]", 2),
         valid.replacen("domain = \"prose\"", "domain = \"unknown\"", 1),
         valid.replacen(
             "minimum_identity = \"anchored\"",
@@ -1259,6 +1274,76 @@ fn assert_phase_minus_1_identity_and_projection_evidence() -> Result<(), String>
     Ok(())
 }
 
+fn assert_phase_minus_1_goldens_unchanged() -> Result<(), String> {
+    use liminal_conformance::identity::Config;
+    use liminal_conformance::identity::matrix::{Matrix, redact_git_line};
+
+    let root = camino::Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let config = Config::load().map_err(|error| error.to_string())?;
+
+    let identity = Matrix::build(&config).map_err(|error| error.to_string())?;
+    let identity_golden = std::fs::read_to_string(root.join("golden/identity_matrix.md"))
+        .map_err(|error| error.to_string())?;
+    if redact_git_line(&identity.render()) != redact_git_line(&identity_golden) {
+        return Err("identity matrix differs from its committed golden".into());
+    }
+
+    let foreign =
+        spike_annotation::run_foreign_edit_loop(&config).map_err(|error| error.to_string())?;
+    let rich = spike_richedit::run_richedit_loop(&config);
+    let anchor_report = spike_annotation::render_report(
+        &config,
+        &foreign,
+        &rich,
+        spike_annotation::BOX_START,
+        "2026-07-18",
+    );
+    let anchor_golden = std::fs::read_to_string(root.join("golden/anchor_recovery.md"))
+        .map_err(|error| error.to_string())?;
+    if redact_anchor_report(&anchor_report) != redact_anchor_report(&anchor_golden) {
+        return Err("anchor-recovery report differs from its committed golden".into());
+    }
+
+    liminal_conformance::pandoc::assert_pandoc_pinned();
+    let workdir = phase0_temp_dir(15_011)?;
+    let _ = std::fs::remove_dir_all(&workdir);
+    let measurement = liminal_conformance::pandoc::measure(
+        &root.join("fixtures/conversion-loss/pandoc"),
+        &workdir,
+    )
+    .map_err(|error| error.to_string())?;
+    let _ = std::fs::remove_dir_all(&workdir);
+    let pandoc_report = liminal_conformance::pandoc::loss_report(&measurement);
+    let pandoc_golden = std::fs::read_to_string(root.join("golden/pandoc_loss.md"))
+        .map_err(|error| error.to_string())?;
+    if pandoc_report != pandoc_golden {
+        return Err("Pandoc loss report differs from its committed golden".into());
+    }
+
+    Ok(())
+}
+
+fn redact_anchor_report(report: &str) -> String {
+    let mut redacted = String::with_capacity(report.len());
+    for line in report.lines() {
+        if line.starts_with("box: ") {
+            redacted.push_str("box: [boxed] (hard 2-week box)\n");
+        } else if line.starts_with("config: ") {
+            if let Some(git_pos) = line.find("git: ") {
+                redacted.push_str(&line[..git_pos]);
+                redacted.push_str("git: [redacted]\n");
+            } else {
+                redacted.push_str(line);
+                redacted.push('\n');
+            }
+        } else {
+            redacted.push_str(line);
+            redacted.push('\n');
+        }
+    }
+    redacted
+}
+
 fn assert_fixture_inventory_governed() -> Result<(), String> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -1571,6 +1656,7 @@ fn transform_contract_schema_rejects_malformed_cases() {
 #[test]
 fn projection_laws_and_identity_ceilings_are_frozen() {
     assert_phase_minus_1_identity_and_projection_evidence().unwrap();
+    assert_phase_minus_1_goldens_unchanged().unwrap();
     let kernel = include_str!("../../spec/kernel.md");
     let ir = include_str!("../../spec/ir.md");
     let syntax = include_str!("../../spec/syntax.md");
