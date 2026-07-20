@@ -189,32 +189,37 @@ fn no_agenda_symbols() {
     }
     hits.sort();
 
-    // The one permitted residue: the `fn no_ag<>enda_symbols()` definition.
+    // Two exact coordinate residues: this frozen gate plus M12's frozen final
+    // gate asserting absence. AM-12.4 forbids prefix, wildcard, substring, and
+    // whole-file allowances.
     let this_file = Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/milestones/m05.rs");
-    let allowed: Vec<String> = hits
-        .iter()
-        .filter(|h| h.starts_with(this_file.as_str()))
-        .cloned()
+    let final_file = Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/gate_final.rs");
+    let self_signature = "fn no_".to_owned() + &needle + "_symbols() {";
+    let final_signature = "fn overlay_debt_visible_without_".to_owned() + &needle + "() {";
+    let mut allowed = vec![
+        exact_coordinate(&this_file, &self_signature),
+        exact_coordinate(&final_file, &final_signature),
+    ];
+    allowed.sort();
+    assert_eq!(
+        hits, allowed,
+        "forbidden subsystem token found outside the two exact frozen signatures"
+    );
+}
+
+fn exact_coordinate(path: &Utf8PathBuf, signature: &str) -> String {
+    let text = std::fs::read_to_string(path).expect("read exact allow-list source");
+    let matches: Vec<_> = text
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| *line == signature)
         .collect();
     assert_eq!(
-        allowed.len(),
+        matches.len(),
         1,
-        "exactly one permitted residue (this gate's own frozen name) expected; got: {allowed:?}"
+        "exact allow-list signature must occur once in {path}: {signature:?}"
     );
-
-    let forbidden: Vec<&String> = hits
-        .iter()
-        .filter(|h| !h.starts_with(this_file.as_str()))
-        .collect();
-    assert!(
-        forbidden.is_empty(),
-        "the forbidden subsystem token is not permitted until Phase 5 (R4 §9); found:\n{}",
-        forbidden
-            .iter()
-            .map(|s| s.as_str())
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
+    format!("{path}:{}", matches[0].0 + 1)
 }
 
 fn scan_for_needle(dir: &Utf8PathBuf, needle: &str, hits: &mut Vec<String>) {

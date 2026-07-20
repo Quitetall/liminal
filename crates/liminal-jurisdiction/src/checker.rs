@@ -68,6 +68,29 @@ pub struct Checker<'w> {
 }
 
 impl Checker<'_> {
+    /// Enumerate every Node and Relation subject present in the workspace
+    /// (v4 Part XXII final gate; AM-12.1).
+    ///
+    /// Final-gate audits use this whole-store surface instead of sampling
+    /// aliases or known kinds, so an ungoverned subject cannot stay hidden.
+    pub fn subjects(&self) -> Result<Vec<JurisdictionSubject>, CheckerError> {
+        let mut subjects = self
+            .store
+            .nodes()?
+            .into_iter()
+            .map(|node| JurisdictionSubject::Node(node.id))
+            .chain(
+                self.store
+                    .relations()?
+                    .into_iter()
+                    .map(|relation| JurisdictionSubject::Relation(relation.id)),
+            )
+            .collect::<Vec<_>>();
+        subjects.sort_unstable();
+        subjects.dedup();
+        Ok(subjects)
+    }
+
     /// The governing Contract for a subject (dispatch + `contract_for`).
     pub(crate) fn contract_for(
         &self,

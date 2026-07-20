@@ -350,8 +350,9 @@ impl ProfileSet {
         self.profiles.iter().map(AsRef::as_ref)
     }
 
-    /// Dispatch by subject kind (D03.4): FILE/PARAGRAPH → external-file;
-    /// COMMENT → graph-native; Relations → graph-native; other → None.
+    /// Dispatch by subject kind (D03.4, AM-12.3): FILE/PARAGRAPH →
+    /// external-file; COMMENT/EXTERNAL_VALUE → graph-native; Relations →
+    /// graph-native; other → None.
     #[must_use]
     pub fn for_subject(
         &self,
@@ -363,7 +364,9 @@ impl ProfileSet {
                 let node = store.node_at(store.head().ok()?, node_id).ok()??;
                 match node.kind {
                     kind::FILE | kind::PARAGRAPH => self.get(&ProfileId::of("external-file")),
-                    kind::COMMENT => self.get(&ProfileId::of("graph-native")),
+                    kind::COMMENT | kind::EXTERNAL_VALUE => {
+                        self.get(&ProfileId::of("graph-native"))
+                    }
                     _ => None,
                 }
             }
@@ -383,6 +386,13 @@ pub fn grade_of(subject: JurisdictionSubject, store: &GraphStore) -> IdentityGra
             let Ok(Some(node)) = store.node_at(head, node_id) else {
                 return IdentityGrade::Ephemeral;
             };
+            // AM-12.3: external values are Holder-managed observations even
+            // when their JSON payload is stored through PayloadRef::Object.
+            // Payload content-addressing identifies bytes, not continuing
+            // external-value entity identity.
+            if node.kind == kind::EXTERNAL_VALUE {
+                return IdentityGrade::Managed;
+            }
             // Object payload → ContentAddressed (overrides).
             if matches!(node.payload, liminal_graph::PayloadRef::Object(_)) {
                 return IdentityGrade::ContentAddressed;
