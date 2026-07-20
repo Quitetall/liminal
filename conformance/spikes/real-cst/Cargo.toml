@@ -1,0 +1,15 @@
+[package]
+name = "spike-real-cst"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97"
+license = "Apache-2.0"
+publish = false
+description = "Phase 0 M17 spike: real-CST incremental anchor recovery measurement"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tree-sitter = "=0.26.3"
+tree-sitter-md = { version = "=0.5.3", features = ["parser"] }

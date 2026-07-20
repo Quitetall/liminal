@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "merge-paragraph-gap",
+      "edit_class": "merge",
+      "seed": 17001,
+      "base": "# Merge one\n\nAlpha carries merge-anchor-01.\n\nOmega closes.\n",
+      "edited": "# Merge one\n\nAlpha carries merge-anchor-01. Omega closes.\n",
+      "anchor": "merge-anchor-01",
+      "expected": "recovered",
+      "declared_loss": null,
+      "malformed": false
+    },
+    {
+      "id": "merge-list-continuation",
+      "edit_class": "merge",
+      "seed": 17002,
+      "base": "- first merge-anchor-02\n\n  continuation\n",
+      "edited": "- first merge-anchor-02 continuation\n",
+      "anchor": "merge-anchor-02",
+      "expected": "recovered",
+      "declared_loss": null,
+      "malformed": false
+    },
+    {
+      "id": "merge-blockquote-lines",
+      "edit_class": "merge",
+      "seed": 17003,
+      "base": "> quoted merge-anchor-03\n>\n> second line\n",
+      "edited": "> quoted merge-anchor-03 second line\n",
+      "anchor": "merge-anchor-03",
+      "expected": "recovered",
+      "declared_loss": null,
+      "malformed": false
+    },
+    {
+      "id": "merge-heading-body",
+      "edit_class": "merge",
+      "seed": 17004,
+      "base": "## merge-anchor-04\n\nBody text.\n",
+      "edited": "## merge-anchor-04 Body text.\n",
+      "anchor": "merge-anchor-04",
+      "expected": "recovered",
+      "declared_loss": null,
+      "malformed": false
+    },
+    {
+      "id": "merge-emphasis-boundary",
+      "edit_class": "merge",
+      "seed": 17005,
+      "base": "Before *merge-anchor-05*\n\nafter.\n",
+      "edited": "Before *merge-anchor-05* after.\n",
+      "anchor": "merge-anchor-05",
+      "expected": "recovered",
+      "declared_loss": null,
+      "malformed": false
+    },
+    {
+      "id": "merge-code-boundary",
+      "edit_class": "merge",
+      "seed": 17006,
+      "base": "Use `merge-anchor-06`\n\nthen continue.\n",
+      "edited": "Use `merge-anchor-06` then continue.\n",
+      "anchor": "merge-anchor-06",
+      "expected": "recovered",
+      "declared_loss": null,
+      "malformed": false
+    },
+    {
+      "id": "merge-link-boundary",
+      "edit_class": "merge",
+      "seed": 17007,
+      "base": "See [merge-anchor-07](https://example.invalid/a).\n\nNext.\n",
+      "edited": "See [merge-anchor-07](https://example.invalid/a). Next.\n",
+      "anchor": "merge-anchor-07",
+      "expected": "recovered",
+      "declared_loss": null,
+      "malformed": false
+    },
+    {
+      "id": "merge-table-adjacent",
+      "edit_class": "merge",
+      "seed": 17008,
+      "base": "merge-anchor-08\n\n| a | b |\n|---|---|\n| 1 | 2 |\n",
+      "edited": "merge-anchor-08 | a | b |\n|---|---|\n| 1 | 2 |\n",
+      "anchor": "merge-anchor-08",
+      "expected": "recovered",
+      "declared_loss": null,
+      "malformed": false
+    },
+    {
+      "id": "move-section",
+      "edit_class": "move",
+      "seed": 17101,
+      "base": "# A\n\nmove-anchor-01 remains.\n\n# B\n\nOther.\n",
+      "edited": "# B\n\nOther.\n\n# A\n\nmove-anchor-01 remains.\n",
+      "anchor": "move-anchor-01",
+      "expected": "recovered",
+      "declared_loss": null,
+      "malformed": false
+    },
+    {
+      "id": "split-paragraph",
+      "edit_class": "split",
+      "seed": 17102,
+      "base": "Before split-anchor-01 after.\n",
+      "edited": "Before\n\nsplit-anchor-01 after.\n",
+      "anchor": "split-anchor-01",
+      "expected": "recovered",
+      "declared_loss": null,
+      "malformed": false
+    },
+    {
+      "id": "insert-prefix",
+      "edit_class": "insert",
+      "seed": 17103,
+      "base": "Text with insert-anchor-01.\n",
+      "edited": "Preface.\n\nText with insert-anchor-01.\n",
+      "anchor": "insert-anchor-01",
+      "expected": "recovered",
+      "declared_loss": null,
+      "malformed": false
+    },
+    {
+      "id": "wrap-mark",
+      "edit_class": "mark",
+      "seed": 17104,
+      "base": "A mark-anchor-01 survives.\n",
+      "edited": "A **mark-anchor-01** survives.\n",
+      "anchor": "mark-anchor-01",
+      "expected": "recovered",
+      "declared_loss": null,
+      "malformed": false
+    },
+    {
+      "id": "duplicate-anchor-negative",
+      "edit_class": "duplicate",
+      "seed": 17201,
+      "base": "Only duplicate-anchor-01 here.\n",
+      "edited": "duplicate-anchor-01 here and duplicate-anchor-01 there.\n",
+      "anchor": "duplicate-anchor-01",
+      "expected": "ambiguous",
+      "declared_loss": "foreign edit creates two CST-compatible exact candidates",
+      "malformed": false
+    },
+    {
+      "id": "delete-anchor-negative",
+      "edit_class": "delete",
+      "seed": 17202,
+      "base": "Delete delete-anchor-01 now.\n",
+      "edited": "Delete the selected phrase now.\n",
+      "anchor": "delete-anchor-01",
+      "expected": "lost",
+      "declared_loss": "foreign edit removes every byte of the anchored selection",
+      "malformed": false
+    },
+    {
+      "id": "malformed-unclosed-fence",
+      "edit_class": "malformed",
+      "seed": 17301,
+      "base": "Before malformed-anchor-01.\n",
+      "edited": "```lim\nmalformed-anchor-01\n",
+      "anchor": "malformed-anchor-01",
+      "expected": "recovered",
+      "declared_loss": null,
+      "malformed": true
+    },
+    {
+      "id": "malformed-unclosed-link",
+      "edit_class": "malformed",
+      "seed": 17302,
+      "base": "Before malformed-anchor-02.\n",
+      "edited": "[malformed-anchor-02](unterminated\n",
+      "anchor": "malformed-anchor-02",
+      "expected": "recovered",
+      "declared_loss": null,
+      "malformed": true
+    },
+    {
+      "id": "malformed-nul-byte",
+      "edit_class": "malformed",
+      "seed": 17303,
+      "base": "Before malformed-anchor-03.\n",
+      "edited": "Before \u0000 malformed-anchor-03 after.\n",
+      "anchor": "malformed-anchor-03",
+      "expected": "recovered",
+      "declared_loss": null,
+      "malformed": true
+    }
+  ]
+}

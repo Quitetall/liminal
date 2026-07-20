@@ -1858,9 +1858,11 @@ fn prior_art_dispositions_are_accepted() {
 /// comparing incremental recovery with an independent full-reparse oracle.
 /// Fails closed on panic, graph/loss divergence, boundary loss, or bad undo.
 #[test]
-#[ignore = "Phase 0 M17: real-CST spike oracle"]
 fn real_cst_spike_oracle_handles_synthetic_cases() {
-    unimplemented!("exercise the real-CST oracle with synthetic cases");
+    let measurement = spike_real_cst::run_frozen_measurement()
+        .expect("the frozen real-CST measurement must execute without panic or oracle drift");
+    spike_real_cst::verify_synthetic_coverage(&measurement)
+        .expect("positive, negative, malformed, and panic-capture coverage must be explicit");
 }
 
 /// Recomputes the sorted real-CST results, counts, Wilson interval, inventory hash,
