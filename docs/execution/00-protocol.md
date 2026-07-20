@@ -48,16 +48,17 @@ needed item does not exist):
 2. Write the amendment into the work order's **Amendments** section as
    `AM-<milestone>.<n>`: what changes, why the frozen shape cannot work, which call
    sites are affected.
-3. Append one line to `docs/adr/0008-phase-minus-1-execution-amendments.md`
-   (created at M01 from `docs/adr/template.md`):
+3. Record the amendment in the active phase ledger. Phase -1 used the historical
+   `docs/adr/0008-phase-minus-1-execution-amendments.md`; Phase 0+ uses the
+   mutable `docs/execution/phase<n>-amendments.md` ledger and ratifies or reverts
+   every row in one immutable ADR at that phase's final gate. Entry format:
    `AM-<m>.<n> (M<nn>): <one sentence>`.
 4. Only then edit code.
 
 Purely **additive** items (new modules, new pub fns, new trait impls on existing
 types, new constants, struct fields added with `#[serde(default)]`) are
 pre-authorized when the work order lists them; list any others in Amendments anyway
-for the audit trail. Every AM is ratified or reverted at M12 (the amendment-ledger
-ADR audit).
+for the audit trail. Every AM is ratified or reverted at the active phase gate.
 
 ## 3. Ambiguity procedure
 
@@ -118,7 +119,7 @@ backlog test — the ignored set is the backlog; it shrinks only by passing.
   mix steps.
 - Amendments commit separately, **before** the code that needs them:
   `M<nn> amendment AM-<m>.<n>: <summary>` (includes the work-order Amendments entry
-  and the ADR-0008 line).
+  and the active phase-ledger entry; ADR-0008 is used only for Phase -1 history).
 - Commit bodies cite spec sections (`v4 §7.8`, `R4 §10`) for anything semantically
   load-bearing.
 
@@ -182,5 +183,7 @@ project's most capable executor, and its artifacts get human sign-off.
 - **Crash-matrix scope:** `runnable_crash_scenarios()` in
   `conformance/src/harness.rs` is the single source of truth for which scenarios
   the derived crash matrix covers. M02 seeds it; M04 appends.
-- **Amendment ledger:** `docs/adr/0008-phase-minus-1-execution-amendments.md`,
-  one line per AM, audited at M12.
+- **Amendment ledger:** Phase -1's closed historical ledger is
+  `docs/adr/0008-phase-minus-1-execution-amendments.md`. Phase 0+ uses
+  `docs/execution/phase<n>-amendments.md`, one line per AM, audited and disposed
+  by immutable ADR at the active phase gate.
