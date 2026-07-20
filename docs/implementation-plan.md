@@ -1,7 +1,8 @@
 # Liminal implementation plan
 
 **Status:** committed deliverable, maintained for the life of the project.
-**Current phase:** Phase -1 — the Jurisdiction, identity, repair, and projection **falsification laboratory** (v4 Part XXII; R4 §10).
+**Current phase:** Phase 0 — constitution, profiles, corpus, and conformance laws
+(v4 Part XXII), authorized by ADR-0013 after the Phase -1 falsification gate.
 **Canonical spec:** [`spec/v4/liminal_master_architecture_plan_v4.md`](../spec/v4/liminal_master_architecture_plan_v4.md) (cited as "v4 §N") and [`spec/v4/liminal_architecture_revision_4.md`](../spec/v4/liminal_architecture_revision_4.md) (cited as "R4 §N").
 
 ---

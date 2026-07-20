@@ -2,9 +2,10 @@
 
 This directory contains **execution-grade work orders**: every decision is pre-made,
 so any executor — a junior developer or an AI agent — implements mechanically. The
-work orders `M01.md`–`M12.md` cover Phase -1 in full mechanical detail; `phases.md`
-holds the Phase 0–12 work breakdown; `template.md` is the mandatory skeleton for
-every future order. This file is the contract the executor operates under.
+work orders `M01.md`–`M12.md` cover Phase -1 in full mechanical detail;
+`M13.md`–`M17.md` cover Phase 0; `phases.md` holds the Phase 0–12 work breakdown;
+`template.md` is the mandatory skeleton for every future order. This file is the
+contract the executor operates under.
 
 Spec citations: "v4 §N" = `spec/v4/liminal_master_architecture_plan_v4.md`;
 "R4 §N" = `spec/v4/liminal_architecture_revision_4.md`. The spec is canonical;

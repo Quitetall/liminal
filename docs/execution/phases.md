@@ -47,19 +47,23 @@ reports + level ADR; the M11 corpus, denominators, and scorecard pipeline;
     input); merge-class ≥95% is the L3 bar; new time-box, new report — the M09
     L2 demotion stands until then (AM-9.2, M09.7 verdict).
 
-**Gating tests:** all of `phase_minus_1.rs` and both
-`slo::*_graduates_on_heldout_corpus` stay green; `heldout_manifest_locked`;
-born-at-gate: a no-new-primitive representation test (prose/code/table/image/
-audio-interval/external-value via Node+Relation only), an
-every-example-resolves test, and the sound-session
-zero-diagnostic/zero-item/zero-authoring test.
+**Gating tests:** all of `phase_minus_1.rs`, both
+`slo::*_graduates_on_heldout_corpus`, and `heldout_manifest_locked` stay green.
+At the M12 gate, `conformance/tests/phase0.rs` adds 18 born-ignored tests: the
+roadmap's no-new-primitive, every-example-resolves, and sound-session conjunction,
+plus strict negative-fixture, live-shape, crash-inventory, ADR, transform-schema,
+threat-model, real-CST measurement, adversarial-review-packet, and Phase 0
+go/no-go checks assigned exactly across M13–M17.
 
 **Pre-known ADRs:** §119 source grammar (decide BEFORE the Phase 1 CST); §122
 Salsa-vs-custom (before the Phase 1 query engine); §125 optimization boundary
 reaffirmed; §121 interim: stable debug JSON only.
 
-*Mechanical work orders for this phase are authored at the preceding gate, using
-template.md.*
+**Mechanical work orders:** [M13](M13.md) constitutional kernel and governed
+examples; [M14](M14.md) repair/recovery/Overlay/Basis laws; [M15](M15.md)
+identity/projection/transform contracts and boundary ADRs; [M16](M16.md)
+conformance/corpus/security/prior art; [M17](M17.md) real-CST measurement and the
+Phase 0 gate. Authored at the M12 gate from `template.md`.
 
 ## Phase 1 — External-file source→HTML vertical slice
 
