@@ -1,0 +1,317 @@
+version = 1
+
+[[example]]
+id = "prose"
+domain = "prose"
+
+[[example.node]]
+alias = "document"
+role = "document"
+kind = "FILE"
+payload = ""
+expected_profile = "external-file"
+expected_holder = "file:examples/prose.md"
+minimum_identity = "anchored"
+
+[[example.node]]
+alias = "paragraph"
+role = "paragraph"
+kind = "PARAGRAPH"
+payload = "hello"
+expected_profile = "external-file"
+expected_holder = "file:examples/prose.md"
+minimum_identity = "anchored"
+
+[[example.relation]]
+role = "contains"
+kind = "COMMENT"
+from = "document"
+to = "paragraph"
+payload = "contains"
+expected_profile = "graph-native"
+expected_holder = "graph"
+minimum_identity = "managed"
+
+[[example]]
+id = "code"
+domain = "code"
+
+[[example.node]]
+alias = "document"
+role = "document"
+kind = "FILE"
+payload = ""
+expected_profile = "external-file"
+expected_holder = "file:examples/code.md"
+minimum_identity = "anchored"
+
+[[example.node]]
+alias = "code-block"
+role = "code-block"
+kind = "PARAGRAPH"
+payload = '{"language":"rust","text":"fn main() {}"}'
+expected_profile = "external-file"
+expected_holder = "file:examples/code.md"
+minimum_identity = "anchored"
+
+[[example.relation]]
+role = "contains"
+kind = "COMMENT"
+from = "document"
+to = "code-block"
+payload = "contains"
+expected_profile = "graph-native"
+expected_holder = "graph"
+minimum_identity = "managed"
+
+[[example]]
+id = "table"
+domain = "table"
+
+[[example.node]]
+alias = "document"
+role = "document"
+kind = "FILE"
+payload = ""
+expected_profile = "external-file"
+expected_holder = "file:examples/table.md"
+minimum_identity = "anchored"
+
+[[example.node]]
+alias = "table"
+role = "table"
+kind = "PARAGRAPH"
+payload = "table"
+expected_profile = "external-file"
+expected_holder = "file:examples/table.md"
+minimum_identity = "anchored"
+
+[[example.node]]
+alias = "row-1"
+role = "row"
+kind = "PARAGRAPH"
+payload = "row 1"
+expected_profile = "external-file"
+expected_holder = "file:examples/table.md"
+minimum_identity = "anchored"
+
+[[example.node]]
+alias = "row-2"
+role = "row"
+kind = "PARAGRAPH"
+payload = "row 2"
+expected_profile = "external-file"
+expected_holder = "file:examples/table.md"
+minimum_identity = "anchored"
+
+[[example.node]]
+alias = "cell-1-1"
+role = "cell"
+kind = "PARAGRAPH"
+payload = "A"
+expected_profile = "external-file"
+expected_holder = "file:examples/table.md"
+minimum_identity = "anchored"
+
+[[example.node]]
+alias = "cell-1-2"
+role = "cell"
+kind = "PARAGRAPH"
+payload = "B"
+expected_profile = "external-file"
+expected_holder = "file:examples/table.md"
+minimum_identity = "anchored"
+
+[[example.node]]
+alias = "cell-2-1"
+role = "cell"
+kind = "PARAGRAPH"
+payload = "C"
+expected_profile = "external-file"
+expected_holder = "file:examples/table.md"
+minimum_identity = "anchored"
+
+[[example.node]]
+alias = "cell-2-2"
+role = "cell"
+kind = "PARAGRAPH"
+payload = "D"
+expected_profile = "external-file"
+expected_holder = "file:examples/table.md"
+minimum_identity = "anchored"
+
+[[example.relation]]
+role = "contains"
+kind = "COMMENT"
+from = "document"
+to = "table"
+payload = "contains"
+expected_profile = "graph-native"
+expected_holder = "graph"
+minimum_identity = "managed"
+
+[[example.relation]]
+role = "contains"
+kind = "COMMENT"
+from = "table"
+to = "row-1"
+payload = "contains"
+expected_profile = "graph-native"
+expected_holder = "graph"
+minimum_identity = "managed"
+
+[[example.relation]]
+role = "contains"
+kind = "COMMENT"
+from = "table"
+to = "row-2"
+payload = "contains"
+expected_profile = "graph-native"
+expected_holder = "graph"
+minimum_identity = "managed"
+
+[[example.relation]]
+role = "contains"
+kind = "COMMENT"
+from = "row-1"
+to = "cell-1-1"
+payload = "contains"
+expected_profile = "graph-native"
+expected_holder = "graph"
+minimum_identity = "managed"
+
+[[example.relation]]
+role = "contains"
+kind = "COMMENT"
+from = "row-1"
+to = "cell-1-2"
+payload = "contains"
+expected_profile = "graph-native"
+expected_holder = "graph"
+minimum_identity = "managed"
+
+[[example.relation]]
+role = "contains"
+kind = "COMMENT"
+from = "row-2"
+to = "cell-2-1"
+payload = "contains"
+expected_profile = "graph-native"
+expected_holder = "graph"
+minimum_identity = "managed"
+
+[[example.relation]]
+role = "contains"
+kind = "COMMENT"
+from = "row-2"
+to = "cell-2-2"
+payload = "contains"
+expected_profile = "graph-native"
+expected_holder = "graph"
+minimum_identity = "managed"
+
+[[example.relation]]
+role = "next"
+kind = "COMMENT"
+from = "row-1"
+to = "row-2"
+payload = "next"
+expected_profile = "graph-native"
+expected_holder = "graph"
+minimum_identity = "managed"
+
+[[example]]
+id = "image"
+domain = "image"
+
+[[example.node]]
+alias = "document"
+role = "document"
+kind = "FILE"
+payload = ""
+expected_profile = "external-file"
+expected_holder = "file:examples/image.md"
+minimum_identity = "anchored"
+
+[[example.node]]
+alias = "image-reference"
+role = "image-reference"
+kind = "PARAGRAPH"
+payload = '{"alt":"diagram","mime":"image/png","sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}'
+expected_profile = "external-file"
+expected_holder = "file:examples/image.md"
+minimum_identity = "anchored"
+
+[[example.relation]]
+role = "embeds"
+kind = "COMMENT"
+from = "document"
+to = "image-reference"
+payload = "embeds"
+expected_profile = "graph-native"
+expected_holder = "graph"
+minimum_identity = "managed"
+
+[[example]]
+id = "audio-interval"
+domain = "audio-interval"
+
+[[example.node]]
+alias = "document"
+role = "document"
+kind = "FILE"
+payload = ""
+expected_profile = "external-file"
+expected_holder = "file:examples/audio.md"
+minimum_identity = "anchored"
+
+[[example.node]]
+alias = "audio-interval"
+role = "audio-interval"
+kind = "PARAGRAPH"
+payload = '{"end_ms":2048,"sha256":"abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789","start_ms":1024}'
+expected_profile = "external-file"
+expected_holder = "file:examples/audio.md"
+minimum_identity = "anchored"
+
+[[example.relation]]
+role = "contains"
+kind = "COMMENT"
+from = "document"
+to = "audio-interval"
+payload = "contains"
+expected_profile = "graph-native"
+expected_holder = "graph"
+minimum_identity = "managed"
+
+[[example]]
+id = "external-value"
+domain = "external-value"
+
+[[example.node]]
+alias = "external-source"
+role = "external-source"
+kind = "EXTERNAL_VALUE"
+payload = '{"observed_at":"2026-01-01T00:00:00Z","revision":"r1","source_id":"stock:acme","value":"ACME"}'
+expected_profile = "graph-native"
+expected_holder = "graph"
+minimum_identity = "managed"
+
+[[example.node]]
+alias = "value"
+role = "value"
+kind = "EXTERNAL_VALUE"
+payload = '{"observed_at":"2026-01-01T00:00:00Z","revision":"r1","source_id":"stock:acme","value":"42"}'
+expected_profile = "graph-native"
+expected_holder = "graph"
+minimum_identity = "managed"
+
+[[example.relation]]
+role = "materializes"
+kind = "COMMENT"
+from = "external-source"
+to = "value"
+payload = "materializes"
+expected_profile = "graph-native"
+expected_holder = "graph"
+minimum_identity = "managed"

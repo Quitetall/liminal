@@ -1,142 +1,223 @@
-# Kernel — semantic kernel, laws, and Jurisdiction
+# Kernel — normative constitutional chapter
 
-**Scope.** The semantic kernel (Node and Relation, everything else derived),
-the architectural constitution (goals, non-goals, laws), Jurisdiction as the
-deliberate complexity sink — Contracts, Workspace Basis, RepairPlans, ILRP,
-the checker, Overlay lifecycle — the editing and projection modes, the
-physical representation that keeps the two-primitive model fast, and the
-identity model. This is the part of the spec the Phase -1 falsification
-laboratory exists to attack.
+**Status:** normative Phase 0 chapter. Canonical authority remains
+`spec/v4/liminal_master_architecture_plan_v4.md` and
+`spec/v4/liminal_architecture_revision_4.md`; a conflict is a defect and the
+canonical v4/R4 text wins until an accepted ADR resolves it.
 
-This file is a curated index into the canonical text in `spec/v4/`. On any
-conflict the canonical text wins. Citation forms: `v4 §N`, `R4 §N`.
+This chapter states the smallest semantic model and the ownership rules every
+implementation must preserve. Normative words use their RFC 2119 meanings.
 
-## Part I — Architectural constitution
+## Constitution
 
-- **Goals** — what Liminal is for: a local-first, multimodal, revisioned
-  graph runtime under one semantic model. v4 §1.
-- **Non-goals** — what Liminal deliberately refuses to be. v4 §2.
-- **Architectural laws** — the sixteen laws plus the 3A–3J Jurisdiction
-  corollaries; every crate and test cites the law it serves. v4 §3.
-  - Law 1 — only Nodes and Relations are semantically fundamental.
-  - Law 2 / 2A — semantic minimalism ≠ physical uniformity; a tiny kernel
-    does not make the total system simple.
-  - Law 3 — Jurisdiction resolves every independently governable semantic
-    address at a Workspace Basis; corollaries 3A (no accidental
-    Jurisdiction), 3B (capture is never rejected), 3C (no silent acceptance
-    or Holder change), 3D (one immutable Workspace Basis per computation),
-    3E (zero authoring, zero sound-state noise), 3F (cross-Jurisdiction
-    repair is mutation-local), 3G (Promotion is repair; determinism is not
-    safety), 3H (cross-Holder repair is intent-logged, ordered, idempotent,
-    resumable), 3I (Overlay debt remains visible), 3J (independent dirty
-    buffers never form a chimeric Basis).
-  - Law 4 — personalization may change representation, never interpretation.
-  - Law 5 — effects are explicit.
-  - Law 6 — abstraction towers disappear before hot execution.
-  - Law 7 — existing tools may hold Jurisdiction, not merely integrate.
-  - Law 8 — every conversion declares loss.
-  - Law 9 — offline is a normal operating condition.
-  - Law 10 — human and AI projections are separate compiler targets.
-  - Law 11 — Unix modularity is an interface property, not process overhead.
-  - Law 12 — identity strength must match Relation durability.
-  - Law 13 — logical entity identity ≠ immutable version identity.
-  - Law 14 — risk-retirement order precedes dependency order (the law that
-    mandates Phase -1 and forbids optimization now).
-  - Law 15 — generated information carries provenance.
-  - Law 16 — the system remains recoverable without its richest runtime.
+Liminal MUST remain a local-first, multimodal, revisioned graph runtime under
+one semantic model (v4 §1). It is not a universal database, a replacement for
+domain merge algorithms, a mandatory editor, or a license to hide conversion
+loss (v4 §2).
 
-## Part II — The semantic kernel
+Sixteen laws bind every phase (v4 §3):
 
-- **Node** — an identifiable unit of state; `kind`/`revision`/`flags` are
-  physical fast paths, not extra semantics. v4 §4; identity policy §4.1,
-  payload storage §4.2, logical-versus-physical granularity §4.3.
-- **Relation** — a typed association, dependency, order, invariant, or
-  contract between Nodes. v4 §5; binary edges with reified n-ary
-  relationships §5.1, physically privileged containment and order §5.2,
-  revision-aware anchored Relations §5.3, Relation as maintained invariant
-  §5.4.
-- **Everything else is derived** — Document, Workspace, Text, Resource,
-  Schema, Transformation, Macro, Compiler, Formatter, View, History, and
-  Synchronization are all constructions over Nodes and Relations, never new
-  primitives. v4 §6.
+1. Only Nodes and Relations are semantically fundamental.
+2. Semantic minimalism does not require physical uniformity, and a small kernel
+   does not make the whole system simple.
+3. Jurisdiction resolves every independently governable semantic address at one
+   immutable Workspace Basis. Capture is never rejected; Holder changes are
+   never silent; ordinary sound work requires zero policy authoring and emits
+   zero Jurisdiction noise; repair authorization is mutation-local; Promotion
+   is repair; cross-Holder repair is ordered and recoverable; Overlay debt stays
+   visible; independent dirty buffers never form a chimeric Basis.
+4. Personalization may change representation, never interpretation.
+5. Effects are explicit.
+6. Abstraction towers disappear before hot execution.
+7. Existing tools may hold Jurisdiction rather than merely integrate.
+8. Every conversion declares loss.
+9. Offline operation is normal.
+10. Human and AI projections are separate compiler targets.
+11. Unix modularity is an interface property, not process overhead.
+12. Identity strength matches Relation durability.
+13. Logical entity identity differs from immutable version identity.
+14. Risk-retirement order precedes dependency order.
+15. Generated information carries provenance.
+16. State remains recoverable without the richest runtime.
 
-## Part III — Jurisdiction, source, identity, and projections
+No optimization, parser, compiler, or product surface may weaken these laws.
+Phase -1 evidence is the current reference-semantic oracle; optimized paths
+remain forbidden until differential evidence satisfies v4 §125.
 
-- **Jurisdiction is the deliberate complexity sink** — ownership, write
-  routing, identity, external edits, and replication get one typed home; no
-  other subsystem may create an independent ownership model. v4 §7.
-- **Vocabulary tiers** — everyday draft/save/sync language for users;
-  Jurisdiction/Holder/Overlay/Promotion for advanced surfaces; Contract and
-  Basis vocabulary confined to `lim jurisdiction explain` and maintainer
-  docs. v4 §7.1; R4 §3.
-- **Subjects and the reduction of facets** — Jurisdiction governs Nodes and
-  Relations; there is no third subject. v4 §7.2.
-- **Jurisdiction Contracts** — internal policy data (scope, resolution,
-  mutation, continuity, lifecycle), authored by profiles, never common-case
-  user authoring. v4 §7.3.
-- **Profile coverage and ergonomics conformance** — coverage is measured
-  against trace denominators, not asserted. v4 §7.4; R4 §2.
-- **Workspace Basis and Perspectives** — every computation reads one
-  immutable Basis; ClientScoped / DurableOnly / Published / Federated
-  perspectives keep concurrent working state from becoming a chimera.
-  v4 §7.5; R4 §8.
-- **Standard Jurisdiction profiles** — the profile catalogue; Phase -1
-  implements exactly two (external-file, graph-native). v4 §7.6; R4 §10.
-- **RepairPlans, Promotion, and safety** — repairs are dependency DAGs of
-  mutation-local proposals; Promotion is the user-facing name for a
-  successful repair; determinism is not safety, so unique-but-unsafe
-  candidates are never auto-accepted. v4 §7.7; R4 §4, §5, §6.
-- **Intent-Logged Repair Protocol (ILRP)** — Prepare / Apply / Acknowledge /
-  Finalize / Recover; cross-Holder work is intent-logged, idempotent, and
-  resumable after a crash at every durable boundary. v4 §7.8; R4 §7.
-- **Jurisdiction Checker** — the eight questions; a sound workspace produces
-  zero output. v4 §7.9.
-- **Overlay lifecycle and Jurisdiction debt** — an unaccepted draft is a
-  durable Overlay that stays visible until repaired, discarded, or archived;
-  the Reconciliation Queue precedes any agenda subsystem. v4 §7.10; R4 §9.
-- **Initial domain Jurisdiction matrix** — which Holder governs which domain
-  at the start. v4 §7.11.
-- **Editing and projection modes** — portable file mode §8.1, managed
-  textual projection §8.2, rich graph mode §8.3, projection capability
-  levels §8.4, exact source preservation and foreign edits §8.5, the pure
-  incremental engine and effect reactor §8.6. v4 §8.
+## Semantic kernel
 
-## Identity model
+A **Node** is one identifiable unit of state (v4 §4). Its kind, revision,
+physical flags, and payload association are physical fields, not additional
+semantic primitives. A **Relation** is one identifiable typed association,
+dependency, order, invariant, or contract between Nodes (v4 §5). Binary edges
+MAY reify n-ary relationships as Nodes; containment and order MAY receive
+specialized storage; anchored targets MUST remain revision-aware.
 
-- **Entity, version, anchor, alias** — four distinct concepts; content
-  hashes identify versions, EntityIds provide lineage. v4 §19.
-- **Identity grades** — Ephemeral / Anchored / Inferred / Explicit /
-  Managed / External / Content-addressed; Relations declare the minimum
-  grade they require. v4 §19.1.
-- **No magical round-trip guarantee** — logical identity under arbitrary
-  foreign edits is information-theoretically unavailable without Holder
-  cooperation; heuristics are recovery aids, never proof. v4 §19.2.
-- **Immutable versions and lineage** — content-addressed VersionIds with
-  visible, reviewable inferred continuity. v4 §19.3.
+Documents, workspaces, text, resources, schemas, transformations, views,
+history, synchronization, domain rows, blocks, media regions, and external
+observations MUST be represented as Nodes and Relations or physical payloads of
+them (v4 §§4–6). A schema address becomes a Node or Relation when it needs its
+own identity, history, Relation, or Jurisdiction. No third subject type exists.
 
-See `spec/syntax.md` for how identity appears in surface syntax.
+Production state MUST NOT introduce an independently governable facet object.
+`liminal_graph::Node`, `liminal_graph::Relation`, and
+`liminal_id::JurisdictionSubject` are the current executable shapes. The
+Phase 0 representation fixture independently tests six domain topologies and
+scans production Rust for a prohibited third primitive.
 
-## Part IX — Physical representation
+## Jurisdiction Contract
 
-- **Logical graph, specialized stores** — one uniform logical graph over
-  many physical stores. v4 §43.
-- **Node layout** — typed columns and compact headers instead of universal
-  string-keyed maps; 128-bit persistent IDs map to dense handles. v4 §44.
-- **Relation layout** — each relation family compiles to its own structure
-  (sequences, adjacency, inverted indexes, interval trees, …). v4 §45.
-- **Text subsystem** — text is physically privileged; individual characters
-  are never ordinary graph allocations. v4 §46.
-- **Resources** — bulk payloads live in a content-addressed object store.
-  v4 §47.
-- **Zero-cost abstraction definition** — what "zero cost" does and does not
-  promise. v4 §48.
-- **JIT and Cranelift** — reserved for demonstrated repeated computation.
-  v4 §49.
-- **Memory and startup** — skeleton-first loading, deferred decoding,
-  profile-compiled binaries. v4 §50.
+Jurisdiction is the sole ownership and repair policy model (v4 §7; R4 §1).
+Every independently governable Node or Relation MUST resolve through exactly one
+profile to a Contract at the selected Workspace Basis. An ungoverned subject is
+invalid stable state.
 
-Phase -1 note: everything in Part IX is *vocabulary*, not license to build —
-Law 14 (v4 §3, Part XXII) forbids optimization until the interpretive
-reference semantics survive the falsification gates (R4 §10).
+A Contract is data with five policy groups (v4 §7.3):
 
-Status: index only — becomes a self-contained chapter at Phase 0.
+- `scope` selects the governed subject;
+- `resolution` names candidate Holders, read precedence, fallback, and any
+  declared merge runtime;
+- `mutation` names the write route, foreign-edit policy, repair authorization,
+  and safety requirement;
+- `continuity` names required identity and dangling behavior;
+- `lifecycle` names visibility/escalation policy and whether debt is declared
+  transient.
+
+Contracts MUST be supplied by profiles in the ordinary case. User-authored
+Contract data is an advanced escape hatch, never a prerequisite for routine
+work. `liminal_jurisdiction::Checker` is the interpretive oracle and MUST answer
+Holder, write-route, merge-runtime, identity, Overlay, Perspective,
+authorization, and repair-safety questions. Sound state MUST produce empty
+diagnostic byte strings.
+
+Repair authority is conjunctive and mutation-local (Law 3F): every mutated
+subject's own Contract authorizes its mutation; one subject cannot confer
+authority over another. Capture remains nonblocking. Unsafe or unavailable
+mutations become reviewable durable state rather than rejection or silent loss.
+
+## Workspace Basis
+
+Every computation MUST read one immutable `WorkspaceBasis` (v4 §7.5; R4 §8).
+Its transaction and selected components record the exact graph, file, object,
+buffer, external revision, and observation inputs used. Dependency tracking may
+be component-granular, but the logical Basis is one coherent input vector.
+
+Four Perspectives constrain selection:
+
+- `ClientScoped(client)` MAY select working buffer components only from that
+  client;
+- `DurableOnly` selects no unsaved client buffer;
+- `Published` selects declared published state;
+- `Federated(domain)` delegates causal selection to that domain's declared
+  merge runtime.
+
+Ambiguous or requester-less computation MUST fail closed to `DurableOnly`.
+Graph-native state remains Graph-held under client-scoped reads. Two dirty
+clients over one file form two intentional working snapshots plus durable state,
+never one chimeric snapshot. Component changes invalidate only computations that
+recorded those components.
+
+## Profiles
+
+A Jurisdiction profile supplies Contracts and domain safety predicates. Stable
+profile claims MUST be measured against frozen operation/session denominators
+and locked acceptance evidence (v4 §§7.4, 7.6; R4 §§2, 10). Passing self-authored
+fixtures alone is insufficient.
+
+Phase 0 has exactly two executable profiles:
+
+| Subject | Profile | Durable Holder | Minimum grade |
+|---|---|---|---|
+| `FILE` Node | external-file | owning file | Anchored |
+| `PARAGRAPH` Node | external-file | owning file | Anchored |
+| `COMMENT` Relation | graph-native | graph | Managed |
+| `EXTERNAL_VALUE` Node | graph-native | graph | Managed |
+| any Relation in the Phase -1 toy | graph-native | graph | Managed |
+
+Any other live kind is `Ungoverned` until an accepted profile decision supplies
+its Contract. `EXTERNAL_VALUE` is graph-native because its source of truth is a
+graph transaction produced by the observation reactor; its Managed grade lasts
+only while that Holder observes and maintains it (ADR-0009, ADR-0014 and the
+ADR-0008 amendment trail).
+
+## Identity
+
+Entity identity, immutable version identity, anchors, and aliases are distinct
+(v4 §19; Laws 12–13). Content hashes identify immutable bytes or semantic
+versions; they do not prove continuing entity identity. Heuristic recovery may
+produce evidence and confidence but MUST NOT claim logical continuity.
+
+Identity grades form the Phase 0 evidence order:
+
+`Ephemeral < Anchored < Inferred < Explicit < Managed < External < ContentAddressed`.
+
+Relations declare their minimum acceptable target grade. A subject's declared
+grade MUST NOT exceed its worst demonstrated outcome. ADR-0009 freezes current
+ceilings: anonymous external-file subjects are Anchored; graph-native subjects
+and external observations are Managed. Explicit source identifiers MAY reach
+Explicit only where durable source evidence exists. A content-addressed payload
+does not upgrade its continuing entity identity.
+
+Delete/recreate, duplication, foreign rewrites, and history operations may make
+continuity unknowable. Such cases MUST surface ambiguity or loss; they MUST NOT
+be converted into false certainty. Phase -1 identity goldens remain the evidence
+oracle until a later accepted measurement supersedes them without rewriting
+history.
+
+## Representation
+
+Logical graph uniformity permits specialized physical stores (v4 §§43–48).
+Typed Node columns, specialized Relation families, privileged text structures,
+and content-addressed bulk resources are valid physical optimizations when they
+preserve Node/Relation semantics. Individual characters need not be graph
+allocations. Physical kind, revision, flag, and payload slots remain
+associations on a Node or Relation, not new semantic entities.
+
+`conformance/fixtures/phase0/representation-examples.toml` version 1 freezes six
+governed examples: prose, Rust code, table, image reference, audio interval, and
+synchronized external value. Each example MUST provide its exact topology,
+payload constraints, profile, concrete Holder, and minimum identity. Domain
+labels alone prove nothing. Relations lower semantic roles through `COMMENT`
+with role text in payload until future domain kinds are accepted. Node roles are
+fixture-only labels and MUST NOT be persisted as primitives.
+
+Canonical JSON payloads MUST use stable key ordering and exact declared fields.
+Resource hashes are 64 lowercase hexadecimal characters. Audio intervals use
+unsigned `start_ms < end_ms`. External observations name source, revision,
+observation time, and value. Unknown fixture fields, kinds, profiles, grades,
+domains, duplicate aliases, and dangling endpoints fail closed.
+
+## Vocabulary
+
+Routine user surfaces SHOULD say draft, save, sync, apply, publish, file,
+document, repository, service, device, recovered edit, and pending change
+(v4 §7.1; R4 §3). Advanced surfaces MAY say Jurisdiction, Holder, Overlay, and
+Promotion. Contract and Workspace Basis vocabulary is reserved for explain
+commands, specifications, diagnostics requiring precision, and maintainer tools.
+
+Promotion is not a second lifecycle or state machine. It is user-facing
+vocabulary for an accepted `RepairPlan` whose result moves an Overlay into its
+intended durable Holder or merge domain (R4 §4). Overlay aging changes
+visibility, not durability. Reconciliation Queue is the only Phase 0 debt
+surface; no agenda subsystem exists.
+
+### Requirement-to-evidence map
+
+| Requirement | Executable type or authority | Conformance evidence |
+|---|---|---|
+| only Nodes and Relations | `liminal_graph::{Node, Relation}`; v4 §§4–6 | `kernel_represents_six_examples_without_new_primitive` |
+| every subject governed | `JurisdictionSubject`, `ProfileSet`, `Checker` | `every_phase0_example_resolves_with_declared_identity`, `every_toy_subject_names_its_holder` |
+| strict representation schema | Phase 0 fixture v1; M13 schema | `representation_fixture_rejects_malformed_cases` |
+| immutable coherent Basis | `WorkspaceBasis`, `BasisPerspective` | `three_perspectives_three_snapshots`, `prop_no_chimeric_basis` |
+| component invalidation | `BasisComponent`, `ComponentDeps` | `invalidation_component_scoped` |
+| capture never rejected | Law 3B; interpretive Checker | `capture_never_rejected` |
+| sound state silent | Law 3E; R4 §2 | `sound_workspace_is_silent` |
+| identity claims bounded | ADR-0009; `IdentityGrade` | `claims_never_exceed_evidence`, `identity_grade_ceilings_match_adr` |
+| conversion loss declared | Law 8; projection reports | `pandoc_roundtrip_loss_report_golden`, `canonical_roundtrip_and_richer_limits_measured` |
+| effects outside queries | v4 §8.6; reactor transaction boundary | `query_paths_are_effect_free`, `replay_from_frozen_basis_is_deterministic` |
+| repair is mutation-local and recoverable | v4 §§7.7–7.8; R4 §§4–7 | `cross_holder_repair_is_ordered_resumable_idempotent_revertible` |
+| Overlay debt visible without agenda | v4 §7.10; R4 §9 | `overlay_debt_visible_without_agenda`, `no_agenda_symbols` |
+
+Later Phase 0 milestones add normative repair, recovery, projection, and security
+tables to this chapter. They may clarify these rules but cannot weaken them
+without an immutable ADR.
