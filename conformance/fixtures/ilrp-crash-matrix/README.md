@@ -1,52 +1,40 @@
-# ILRP crash-matrix fixtures
+# ILRP crash-matrix inventory
 
-**Populated by:** M2 (single-step promotion, killer experiment #1) and M4
-(two-step repair DAG). Empty until then by design.
+**Populated by:** M2 (single-step promotion) and M4 (two-step repair DAG).
 
-**Spec:** v4 §7.8 (Intent-Logged Repair Protocol), v4 Law 3H, R4 §7,
-R4 §10 ("the daemon is terminated after every ILRP durable boundary").
+**Spec:** v4 §7.8, Law 3H, R4 §§7, 10.
 
-## What lives here
+## Coverage authority
 
-One expected-outcome table per crash-tested scenario: the expected
-terminal state and durable-world digest for every
-`(scenario, fault point, occurrence)` triple.
+This directory documents the inventory contract. No hand-authored matrix case
+file defines executable coverage. Runnable fixtures under
+`conformance/fixtures/scenarios/` declare expected terminal state; a sound
+baseline trace supplies every `(scenario, fault point, occurrence)` case.
 
-- **Fault points** are the ILRP durable boundaries named by R4 §10:
-  intent commit, external apply, acknowledgement, before graph
-  finalization, and after graph finalization but before the completion
-  notification.
-- **Occurrence** is the nth time a boundary fires within the scenario —
-  a two-step DAG hits the external-apply boundary twice, and each hit is
-  a distinct crash case.
-- **Expected terminal** is one of `Committed`, `NeedsReview`, or
-  `Aborted` — never a hidden half-state (R4 §10).
-- **World digest** is a content hash over the recovered durable world
-  (files + graph store + intent log). Recovery must be idempotent:
-  recovering twice yields equal digests.
+- **Fault point** is one of the five registered ILRP durable boundaries: intent
+  commit, external apply, acknowledgement, before graph finalization, and after
+  graph finalization but before notification.
+- **Occurrence** is the nth firing in the baseline. A two-step DAG can hit one
+  boundary twice; both observations become distinct crash cases.
+- **Expected terminal** comes from scenario `expect.terminal` and is one of
+  `Committed`, `NeedsReview`, or `Aborted`.
+- **World digest** is computed from recovered files, graph store, and intent
+  log. Committed recovery must match the sound baseline. Every case must produce
+  equal first- and second-recovery digests.
 
-The matrix cases themselves are *derived*, not hand-enumerated: the
-harness records a hit trace from an uncrashed baseline run and turns
-every observed `(point, occurrence)` into a kill case, so a newly added
-durable boundary cannot be silently untested. These fixtures pin the
-*expected outcomes* the derived cases must reach.
-
-## Format (sketch, finalized at M2)
-
-`<scenario>.matrix.toml` — one `[[case]]` per triple:
-
-```toml
-[[case]]
-fault_point = "external_apply"
-occurrence = 1
-terminal = "NeedsReview"
-world_digest = "blake3:…"
-```
+`ToyRun::baseline` records ordered hits. `HitTrace::enumerate_faults` returns
+that full inventory. `ToyRun::crash_matrix` kills at every derived pair, proves
+the point fired, recovers to a non-empty terminal set, compares expected state,
+checks the durable world, rejects staged leftovers, and repeats recovery for
+idempotence. Adding a hand-listed case cannot increase coverage.
 
 ## Consuming tests
 
-`tests/phase_minus_1.rs::crash_ilrp_resumes_after_kill_at_every_boundary`,
-plus the milestone tests `crash_matrix_promote_single_step` (M2) and
-`crash_matrix_two_step_dag` (M4), and the harness-level
-`recovery_never_guesses` (a third-state file must land in `NeedsReview`
-with zero bytes lost — v4 §7.8 step 5: "never guess").
+- `tests/phase0.rs::ilrp_fixture_inventory_covers_every_durable_boundary`
+- `tests/phase_minus_1.rs::crash_ilrp_resumes_after_kill_at_every_boundary`
+- `tests/crash.rs::crash_matrix_promote_single_step`
+- `tests/crash.rs::crash_matrix_two_step_dag`
+- `tests/crash.rs::crash_recovery_never_guesses`
+
+Third-state recovery must land in `NeedsReview`, preserve all bytes, and remain
+idempotent. Recovery never guesses.

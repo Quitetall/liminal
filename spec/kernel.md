@@ -95,6 +95,51 @@ subject's own Contract authorizes its mutation; one subject cannot confer
 authority over another. Capture remains nonblocking. Unsafe or unavailable
 mutations become reviewable durable state rather than rejection or silent loss.
 
+**K-RPR-01 — repair decision shape.** `AutoApply | NeedsReview`. There is no
+Reject outcome. Auto-application requires every row below at the mutation's
+captured Basis; one failed row produces NeedsReview and durable evidence.
+
+| Conjunct | Required evidence |
+|---|---|
+| one valid result | exact prestate or an earlier step's proven poststate |
+| authorization | every mutated subject's own Contract authorizes its step |
+| identity/invariants | every resulting target meets incoming requirements |
+| domain safety | `StructuralDisjointness | DomainValidator | HumanApproval` |
+| idempotency | stable key and poststate verification for every step |
+| recorded undo | inverse plan or retained preimage, checked at a new Basis |
+
+**K-RPR-03 — safety requirement shape.** `StructuralDisjointness |
+DomainValidator | HumanApproval`.
+
+**K-RPR-02 — repair record fields.** `applied_steps | evidence | input_basis |
+inverse | repair | resulting_basis | selected_rule`. Accepted repair records
+MUST preserve every field and MUST support Basis-checked undo; stale bytes are
+never restored unconditionally.
+
+**K-ILRP-01 — intent state shape.** `Prepared | Applying | ExternalApplied |
+Finalizing | Committed | NeedsReview | Aborted`.
+
+| Current | Permitted next states |
+|---|---|
+| Prepared | Applying, NeedsReview, Aborted |
+| Applying | ExternalApplied, NeedsReview, Aborted |
+| ExternalApplied | Finalizing, NeedsReview |
+| Finalizing | Committed, NeedsReview |
+| Committed | none; terminal |
+| NeedsReview | none; terminal until a new reviewed plan |
+| Aborted | none; terminal |
+
+**K-ILRP-02 — recovery prestate shape.** `Prestate | Poststate | Neither`.
+Prestate permits idempotent apply; Poststate permits acknowledge/resume without
+reapplying; Neither MUST stop, retain bytes, and produce NeedsReview. Recovery
+MUST never guess.
+
+**K-ILRP-03 — durable boundary names.** `ilrp/after_intent_commit |
+ilrp/after_external_apply | ilrp/after_ack | ilrp/before_finalize |
+ilrp/after_finalize_before_notify`. Executable crash cases derive from every
+observed `(boundary, occurrence)` pair; this explanatory list cannot define or
+limit coverage.
+
 ## Workspace Basis
 
 Every computation MUST read one immutable `WorkspaceBasis` (v4 §7.5; R4 §8).
@@ -116,6 +161,22 @@ Graph-native state remains Graph-held under client-scoped reads. Two dirty
 clients over one file form two intentional working snapshots plus durable state,
 never one chimeric snapshot. Component changes invalidate only computations that
 recorded those components.
+
+**K-BAS-01 — Perspective shape.** `ClientScoped | DurableOnly | Published |
+Federated`.
+
+| Perspective | Eligible components | Ambiguity rule |
+|---|---|---|
+| ClientScoped | requesting client's buffers plus durable fallbacks | never select another client's buffer |
+| DurableOnly | file, graph, object, external revision, observation | ignore every dirty buffer |
+| Published | declared immutable publication inputs | fail if publication revision is unavailable |
+| Federated | one frontier from declared merge runtime | fail closed when no runtime/frontier exists |
+
+**K-BAS-02 — Basis component shape.** `BufferGeneration | FileContent |
+GitCommit | GraphSnapshot | ObjectContent | ExternalRevision | Observation`.
+
+**K-BAS-03 — Workspace Basis fields.** `components | perspective |
+transaction`.
 
 ## Profiles
 
@@ -200,6 +261,21 @@ vocabulary for an accepted `RepairPlan` whose result moves an Overlay into its
 intended durable Holder or merge domain (R4 §4). Overlay aging changes
 visibility, not durability. Reconciliation Queue is the only Phase 0 debt
 surface; no agenda subsystem exists.
+
+**K-OVL-01 — Overlay state shape.** `Active | RepairProposed | Contested |
+Archived | Discarded`.
+
+| State | Queue visibility | Allowed transition actor/action |
+|---|---|---|
+| Active | visible after lifecycle threshold | system may propose repair; user may discard/archive |
+| RepairProposed | visible | accepted repair, user review, discard, or archive |
+| Contested | visible and review-required | user accepts a new plan, discards, or archives |
+| Archived | searchable history | explicit user archival only |
+| Discarded | audit history | explicit user discard only |
+
+**K-OVL-02 — Reconciliation item fields.** `created_at | id | overlays |
+repairs | root_cause | status | subjects`. Aging MUST NOT delete an Overlay or
+hide it past its policy window.
 
 ### Requirement-to-evidence map
 

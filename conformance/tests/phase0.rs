@@ -713,22 +713,317 @@ fn every_phase0_example_resolves_with_declared_identity() {
     }
 }
 
+fn published_shape_anchors() -> Vec<(&'static str, String)> {
+    vec![
+        ("K-RPR-01", repair_decision_shape()),
+        ("K-RPR-02", repair_record_fields()),
+        ("K-RPR-03", safety_requirement_shape()),
+        ("K-ILRP-01", intent_state_shape()),
+        ("K-ILRP-02", prestate_match_shape()),
+        ("K-ILRP-03", crash_boundary_shape()),
+        ("K-BAS-01", basis_perspective_shape()),
+        ("K-BAS-02", basis_component_shape()),
+        ("K-BAS-03", json_fields(&sample_basis())),
+        ("K-OVL-01", overlay_state_shape()),
+        ("K-OVL-02", reconciliation_item_fields()),
+    ]
+}
+
+fn variant_name(value: &impl std::fmt::Debug) -> String {
+    format!("{value:?}")
+        .split([' ', '{', '('])
+        .next()
+        .expect("Debug variant name")
+        .to_owned()
+}
+
+fn variant_shape(values: &[impl std::fmt::Debug]) -> String {
+    values
+        .iter()
+        .map(variant_name)
+        .collect::<Vec<_>>()
+        .join(" | ")
+}
+
+fn repair_decision_shape() -> String {
+    use liminal_jurisdiction::{RepairDecision, ReviewReason, SafetyEvidence};
+    variant_shape(&[
+        RepairDecision::AutoApply {
+            evidence: SafetyEvidence::StructurallyDisjoint {
+                description: String::new(),
+            },
+        },
+        RepairDecision::NeedsReview {
+            reasons: vec![ReviewReason(String::new())],
+        },
+    ])
+}
+
+fn safety_requirement_shape() -> String {
+    use liminal_jurisdiction::SafetyRequirement;
+    variant_shape(&[
+        SafetyRequirement::StructuralDisjointness,
+        SafetyRequirement::DomainValidator(String::new()),
+        SafetyRequirement::HumanApproval,
+    ])
+}
+
+fn intent_state_shape() -> String {
+    use liminal_jurisdiction::IntentState::*;
+    variant_shape(&[
+        Prepared,
+        Applying,
+        ExternalApplied,
+        Finalizing,
+        Committed,
+        NeedsReview,
+        Aborted,
+    ])
+}
+
+fn prestate_match_shape() -> String {
+    use liminal_jurisdiction::PrestateMatch::*;
+    variant_shape(&[Prestate, Poststate, Neither])
+}
+
+fn crash_boundary_shape() -> String {
+    liminal_jurisdiction::CrashPoint::all()
+        .iter()
+        .map(|point| point.name())
+        .collect::<Vec<_>>()
+        .join(" | ")
+}
+
+fn basis_perspective_shape() -> String {
+    use liminal_revision::{BasisPerspective, CausalFrontier};
+    variant_shape(&[
+        BasisPerspective::ClientScoped {
+            client: liminal_id::ClientId::new(),
+        },
+        BasisPerspective::DurableOnly,
+        BasisPerspective::Published {
+            revision: liminal_id::PublicationId::new(),
+        },
+        BasisPerspective::Federated {
+            domain: liminal_id::FederationId::new(),
+            frontier: CausalFrontier(Vec::new()),
+        },
+    ])
+}
+
+fn basis_component_shape() -> String {
+    use liminal_id::{
+        BufferId, ClientId, GraphRevisionId, ObjectId, PathId, RevisionToken, SessionEpoch,
+        SourceId, Timestamp,
+    };
+    use liminal_revision::BasisComponent;
+    let hash = liminal_id::ContentHash::of(b"shape");
+    variant_shape(&[
+        BasisComponent::BufferGeneration {
+            client: ClientId::new(),
+            buffer: BufferId::new(),
+            epoch: SessionEpoch(0),
+            generation: 0,
+            content_hash: None,
+            base_file_hash: None,
+        },
+        BasisComponent::FileContent {
+            path: PathId("shape".into()),
+            hash,
+        },
+        BasisComponent::GitCommit {
+            oid: ObjectId(String::new()),
+        },
+        BasisComponent::GraphSnapshot {
+            revision: GraphRevisionId(0),
+        },
+        BasisComponent::ObjectContent { hash },
+        BasisComponent::ExternalRevision {
+            source: SourceId::new(),
+            token: RevisionToken(String::new()),
+        },
+        BasisComponent::Observation {
+            source: SourceId::new(),
+            observed_at: Timestamp(0),
+            hash,
+        },
+    ])
+}
+
+fn overlay_state_shape() -> String {
+    use liminal_jurisdiction::OverlayState;
+    variant_shape(&[
+        OverlayState::Active,
+        OverlayState::RepairProposed(liminal_id::RepairId::new()),
+        OverlayState::Contested,
+        OverlayState::Archived,
+        OverlayState::Discarded,
+    ])
+}
+
+fn sample_basis() -> liminal_revision::WorkspaceBasis {
+    liminal_revision::WorkspaceBasis {
+        transaction: liminal_id::TransactionId::new(),
+        perspective: liminal_revision::BasisPerspective::DurableOnly,
+        components: std::collections::BTreeMap::new(),
+    }
+}
+
+fn repair_record_fields() -> String {
+    let basis = sample_basis();
+    let record = liminal_jurisdiction::RepairRecord {
+        repair: liminal_id::RepairId::new(),
+        input_basis: basis.clone(),
+        selected_rule: String::new(),
+        evidence: liminal_jurisdiction::SafetyEvidence::StructurallyDisjoint {
+            description: String::new(),
+        },
+        applied_steps: Vec::new(),
+        resulting_basis: basis,
+        inverse: None,
+    };
+    json_fields(&record)
+}
+
+fn reconciliation_item_fields() -> String {
+    let item = liminal_jurisdiction::ReconciliationItem {
+        id: liminal_id::ReconciliationItemId::new(),
+        root_cause: String::new(),
+        subjects: Vec::new(),
+        overlays: Vec::new(),
+        repairs: Vec::new(),
+        created_at: liminal_id::Timestamp(0),
+        status: liminal_jurisdiction::ReconciliationStatus::Pending,
+    };
+    json_fields(&item)
+}
+
+fn json_fields(value: &impl serde::Serialize) -> String {
+    let value = serde_json::to_value(value).expect("serialize live shape");
+    let mut fields = value
+        .as_object()
+        .expect("live shape serializes as object")
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    fields.sort();
+    fields.join(" | ")
+}
+
+fn assert_derived_crash_inventory() -> Result<(), String> {
+    use liminal_conformance::harness::{ToyRun, runnable_crash_scenarios};
+
+    let scenarios = runnable_crash_scenarios().map_err(|error| error.to_string())?;
+    if scenarios.is_empty() {
+        return Err("no runnable crash scenarios".into());
+    }
+    let mut observed_boundaries = BTreeSet::new();
+    for scenario in &scenarios {
+        let run = ToyRun::new(&format!("phase0-inventory-{}", scenario.scenario.id))
+            .map_err(|error| error.to_string())?;
+        let trace = run.baseline(scenario).map_err(|error| error.to_string())?;
+        let derived = trace.enumerate_faults();
+        if derived.is_empty() || derived != trace.hits {
+            return Err(format!(
+                "scenario {} did not derive every observed crash case",
+                scenario.scenario.id
+            ));
+        }
+        let unique = derived.iter().cloned().collect::<BTreeSet<_>>();
+        if unique.len() != derived.len() {
+            return Err(format!(
+                "scenario {} repeated a boundary occurrence",
+                scenario.scenario.id
+            ));
+        }
+        observed_boundaries.extend(derived.into_iter().map(|(name, _)| name));
+        std::fs::remove_dir_all(&run.root).map_err(|error| error.to_string())?;
+
+        ToyRun::crash_matrix(scenario).map_err(|error| error.to_string())?;
+    }
+
+    let registered = liminal_jurisdiction::CrashPoint::all()
+        .iter()
+        .map(|point| point.name().to_owned())
+        .collect::<BTreeSet<_>>();
+    if observed_boundaries != registered {
+        return Err(format!(
+            "derived boundaries {observed_boundaries:?} differ from registered {registered:?}"
+        ));
+    }
+    Ok(())
+}
+
 /// Compares every normative repair, ILRP, Overlay, and Basis table row with live
 /// serde examples and enum debug names as an independent shape oracle.
 /// Fails closed on a missing, duplicated, or live-shape-divergent table anchor.
 #[test]
-#[ignore = "Phase 0 M14: normative contract publication"]
 fn published_contract_matches_live_repair_and_basis_shapes() {
-    unimplemented!("match published contract to live repair and basis shapes");
+    let kernel = include_str!("../../spec/kernel.md");
+    let normalized_kernel = kernel.split_whitespace().collect::<Vec<_>>().join(" ");
+    let anchors = published_shape_anchors();
+    for (anchor, live_shape) in anchors {
+        assert_eq!(
+            kernel.match_indices(anchor).count(),
+            1,
+            "normative anchor {anchor:?} must occur exactly once"
+        );
+        assert!(
+            normalized_kernel.contains(&live_shape),
+            "normative anchor {anchor:?} lacks live shape {live_shape:?}"
+        );
+    }
+    assert_intent_transition_table();
+}
+
+fn assert_intent_transition_table() {
+    use liminal_jurisdiction::IntentState::{
+        Aborted, Applying, Committed, ExternalApplied, Finalizing, NeedsReview, Prepared,
+    };
+    let states = [
+        Prepared,
+        Applying,
+        ExternalApplied,
+        Finalizing,
+        Committed,
+        NeedsReview,
+        Aborted,
+    ];
+    let permitted = [
+        (Prepared, Applying),
+        (Prepared, NeedsReview),
+        (Prepared, Aborted),
+        (Applying, ExternalApplied),
+        (Applying, NeedsReview),
+        (Applying, Aborted),
+        (ExternalApplied, Finalizing),
+        (ExternalApplied, NeedsReview),
+        (Finalizing, Committed),
+        (Finalizing, NeedsReview),
+    ];
+
+    for current in states {
+        for next in states {
+            assert_eq!(
+                current.may_transition_to(next),
+                permitted.contains(&(current, next)),
+                "published ILRP transition table drifted at {current:?} -> {next:?}"
+            );
+        }
+        assert_eq!(
+            current.is_terminal(),
+            matches!(current, Committed | NeedsReview | Aborted),
+            "published ILRP terminal set drifted at {current:?}"
+        );
+    }
 }
 
 /// Derives crash cases from non-empty `ToyRun::baseline` hits and checks the
 /// independent `crash_matrix` covers every `(point, occurrence)` exactly.
 /// Fails closed on empty terminals, unknown boundaries, or non-idempotent recovery.
 #[test]
-#[ignore = "Phase 0 M14: derived crash inventory"]
 fn ilrp_fixture_inventory_covers_every_durable_boundary() {
-    unimplemented!("cover every durable ILRP boundary");
+    assert_derived_crash_inventory().unwrap();
 }
 
 /// Serializes live `TransformContract` values and checks all eight schema fields
