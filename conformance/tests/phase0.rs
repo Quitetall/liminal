@@ -1344,6 +1344,142 @@ fn redact_anchor_report(report: &str) -> String {
     redacted
 }
 
+fn assert_phase1_boundary_adrs() -> Result<(), String> {
+    let adrs = [
+        (
+            "0015",
+            include_str!("../../docs/adr/0015-select-phase-1-source-grammar.md"),
+            "# 0015. Select Phase 1 source grammar",
+            "**Decision:** option 3. Begin Phase 1 with the constrained Markdown-compatible frontend",
+        ),
+        (
+            "0016",
+            include_str!(
+                "../../docs/adr/0016-use-stable-debug-json-as-interim-graph-interchange.md"
+            ),
+            "# 0016. Use stable debug JSON as interim graph interchange",
+            "Use versioned stable debug JSON as the only Phase 1 graph interchange.",
+        ),
+        (
+            "0017",
+            include_str!("../../docs/adr/0017-select-phase-1-incremental-engine.md"),
+            "# 0017. Select Phase 1 incremental engine",
+            "**Decision:** option 1. Salsa retires less novel infrastructure risk",
+        ),
+        (
+            "0018",
+            include_str!("../../docs/adr/0018-preserve-interpretive-jurisdiction-oracles.md"),
+            "# 0018. Preserve interpretive Jurisdiction oracles through Phase 1",
+            "Keep interpretive implementations as conformance oracles throughout Phase 1.",
+        ),
+    ];
+    let index = include_str!("../../docs/adr/README.md");
+    for (number, adr, title, decision) in adrs {
+        assert_accepted_adr(number, adr, title, decision, index)?;
+    }
+    Ok(())
+}
+
+fn assert_accepted_adr(
+    number: &str,
+    adr: &str,
+    title: &str,
+    decision: &str,
+    index: &str,
+) -> Result<(), String> {
+    if adr.lines().filter(|line| *line == title).count() != 1 {
+        return Err(format!("ADR-{number} lacks its unique frozen title"));
+    }
+    if adr
+        .lines()
+        .filter(|line| *line == "- **Status:** accepted")
+        .count()
+        != 1
+    {
+        return Err(format!("ADR-{number} is not uniquely accepted"));
+    }
+    if adr.contains("user decision required")
+        || adr.contains("user acceptance required")
+        || adr.contains("user review required")
+        || adr.contains("**Status:** proposed")
+    {
+        return Err(format!(
+            "ADR-{number} retains an unresolved decision marker"
+        ));
+    }
+    let normalized = normalize_markdown_words(adr);
+    if normalized.matches(decision).count() != 1 {
+        return Err(format!(
+            "ADR-{number} lacks exactly one approved decision {decision:?}"
+        ));
+    }
+    let index_prefix = format!("| [{number}]");
+    let index_rows = index
+        .lines()
+        .filter(|line| line.starts_with(&index_prefix) && line.ends_with("| accepted |"))
+        .count();
+    if index_rows != 1 {
+        return Err(format!(
+            "ADR-{number} index status is not uniquely accepted"
+        ));
+    }
+    Ok(())
+}
+
+fn assert_prior_art_dispositions() -> Result<(), String> {
+    let adr = include_str!("../../docs/adr/0019-dispose-phase-0-prior-art-commitments.md");
+    let index = include_str!("../../docs/adr/README.md");
+    assert_accepted_adr(
+        "0019",
+        adr,
+        "# 0019. Dispose Phase 0 prior-art commitments",
+        "Accept all six dispositions as architectural boundaries.",
+        index,
+    )?;
+
+    let matrix = adr
+        .split_once("## Disposition matrix\n")
+        .map(|(_, tail)| tail)
+        .and_then(|tail| tail.split_once("\n## Decision").map(|(table, _)| table))
+        .ok_or("ADR-0019 lacks a bounded disposition matrix")?;
+    let expected = [
+        "Salsa",
+        "Automerge and Peritext",
+        "AtJSON",
+        "Pandoc",
+        "Unison",
+        "Datomic",
+    ];
+    let mut found = Vec::new();
+    for line in matrix.lines().filter(|line| line.starts_with("| ")) {
+        if line.starts_with("| Reference ") || line.starts_with("|---") {
+            continue;
+        }
+        let fields = line
+            .trim_matches('|')
+            .split('|')
+            .map(str::trim)
+            .collect::<Vec<_>>();
+        if fields.len() != 5 || fields.iter().any(|field| field.is_empty()) {
+            return Err(format!("invalid prior-art disposition row: {line}"));
+        }
+        if !matches!(fields[1], "Adopt" | "Adapt" | "Defer" | "Reject") {
+            return Err(format!("invalid disposition {:?}", fields[1]));
+        }
+        found.push(fields[0]);
+    }
+    if found != expected {
+        return Err(format!(
+            "prior-art inventory differs: expected {expected:?}, got {found:?}"
+        ));
+    }
+    Ok(())
+}
+
+fn normalize_markdown_words(markdown: &str) -> String {
+    markdown.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 fn assert_fixture_inventory_governed() -> Result<(), String> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -1682,9 +1818,8 @@ fn projection_laws_and_identity_ceilings_are_frozen() {
 /// §125 boundary before any parser, engine, or compiled-plan implementation.
 /// Fails closed on a missing, proposed, rejected, duplicated, or ambiguous choice.
 #[test]
-#[ignore = "Phase 0 M15: accepted boundary ADRs"]
 fn phase1_boundary_adrs_are_accepted_and_unambiguous() {
-    unimplemented!("require accepted unambiguous Phase 1 boundary ADRs");
+    assert_phase1_boundary_adrs().unwrap();
 }
 
 /// Conjoins byte-empty diagnostics, zero unexpected items, zero manual Contract
@@ -1715,9 +1850,8 @@ fn phase0_threat_model_covers_every_trust_boundary() {
 /// requiring one Adopt, Adapt, Defer, or Reject disposition and falsifier each.
 /// Fails closed on an omitted, duplicated, unaccepted, or unfalsifiable entry.
 #[test]
-#[ignore = "Phase 0 M16: accepted prior-art ADR"]
 fn prior_art_dispositions_are_accepted() {
-    unimplemented!("require accepted prior-art dispositions");
+    assert_prior_art_dispositions().unwrap();
 }
 
 /// Exercises frozen positive, negative, malformed, and panic-capture cases while

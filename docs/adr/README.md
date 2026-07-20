@@ -32,11 +32,11 @@ cannot name its own kill-condition is not a decision, it is a hope.
 | [0012](0012-ratify-phase-minus-1-amendment-ledger.md) | Ratify the Phase -1 amendment ledger | accepted |
 | [0013](0013-phase-0-go-no-go-after-falsification-laboratory.md) | Phase 0 go/no-go after the falsification laboratory | accepted |
 | [0014](0014-correct-spec-debt-meter-active-counts.md) | Correct spec-debt meter active counts | accepted |
-| [0015](0015-select-phase-1-source-grammar.md) | Select Phase 1 source grammar | proposed |
-| [0016](0016-use-stable-debug-json-as-interim-graph-interchange.md) | Use stable debug JSON as interim graph interchange | proposed |
-| [0017](0017-select-phase-1-incremental-engine.md) | Select Phase 1 incremental engine | proposed |
-| [0018](0018-preserve-interpretive-jurisdiction-oracles.md) | Preserve interpretive Jurisdiction oracles through Phase 1 | proposed |
-| [0019](0019-dispose-phase-0-prior-art-commitments.md) | Dispose Phase 0 prior-art commitments | proposed |
+| [0015](0015-select-phase-1-source-grammar.md) | Select Phase 1 source grammar | accepted |
+| [0016](0016-use-stable-debug-json-as-interim-graph-interchange.md) | Use stable debug JSON as interim graph interchange | accepted |
+| [0017](0017-select-phase-1-incremental-engine.md) | Select Phase 1 incremental engine | accepted |
+| [0018](0018-preserve-interpretive-jurisdiction-oracles.md) | Preserve interpretive Jurisdiction oracles through Phase 1 | accepted |
+| [0019](0019-dispose-phase-0-prior-art-commitments.md) | Dispose Phase 0 prior-art commitments | accepted |
 | [0020](0020-require-high-assurance-phase-1-suite-qualification.md) | Require high-assurance Phase 1 suite qualification | accepted |
 
 ## Writing a new ADR

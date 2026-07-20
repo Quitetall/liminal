@@ -1,6 +1,6 @@
 # 0016. Use stable debug JSON as interim graph interchange
 
-- **Status:** proposed — user acceptance required
+- **Status:** accepted
 - **Date:** 2026-07-20
 - **Deciders:** Brian
 - **Related:** v4 §§14, 121; M15; Phase 1
@@ -11,7 +11,7 @@ Phase 1 needs deterministic inspectable interchange for tests and diagnostics.
 The in-memory model and migration story remain provisional. v4 §121 explicitly
 warns against freezing a final binary representation before that evidence.
 
-## Proposed decision
+## Decision
 
 Use versioned stable debug JSON as the only Phase 1 graph interchange. Require
 canonical field ordering, deterministic bytes, explicit schema version,
@@ -32,4 +32,3 @@ requires a new ADR plus bidirectional migration evidence.
 - Tests and users can inspect interchange with ordinary tools.
 - Phase 1 pays serialization overhead and makes no storage-performance claim.
 - A later final serialization decision remains mandatory.
-

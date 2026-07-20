@@ -1,6 +1,6 @@
 # 0017. Select Phase 1 incremental engine
 
-- **Status:** proposed — user decision required
+- **Status:** accepted
 - **Date:** 2026-07-20
 - **Deciders:** Brian
 - **Related:** v4 §§24, 118A, 122; R4 §8; M06; M08; M15
@@ -17,9 +17,9 @@ explicit inputs, effects outside queries, durability-informed invalidation,
 Workspace Basis vectors, demand-driven computation, interned symbols,
 diagnostic accumulation, and as-of/history views.
 
-## Decision required
+## Decision
 
-Choose exactly one:
+Options considered:
 
 1. **Salsa behind Liminal-owned interfaces.** Use Salsa for tracked dependency
    execution and durability; represent Workspace Basis/freshness as explicit
@@ -27,12 +27,12 @@ Choose exactly one:
 2. **Liminal-specific engine.** Implement dependency graph, revisions,
    durability, cycle handling, diagnostics, and memo invalidation directly.
 
-**Recommendation:** option 1. Salsa retires less novel infrastructure risk while
+**Decision:** option 1. Salsa retires less novel infrastructure risk while
 Liminal-owned interfaces prevent its database shape from becoming semantic
 authority. Add differential tests against Phase -1 pure-query replay before
 expanding tracked scope.
 
-## Consequences pending acceptance
+## Consequences
 
 - Salsa remains an implementation detail, not source of truth or effect host.
 - As-of graph history stays in Liminal storage and enters queries as explicit
@@ -44,4 +44,3 @@ expanding tracked scope.
 model Basis vectors, deterministic replay, diagnostics, or bounded invalidation
 without hidden global state or unacceptable recomputation. Reversal requires a
 new ADR and the same differential suite against the replacement.
-

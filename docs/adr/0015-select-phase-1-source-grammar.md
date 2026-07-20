@@ -1,6 +1,6 @@
 # 0015. Select Phase 1 source grammar
 
-- **Status:** proposed — user decision required
+- **Status:** accepted
 - **Date:** 2026-07-20
 - **Deciders:** Brian
 - **Related:** v4 §§15–20, 119; M09; M13; M15; M17
@@ -17,9 +17,9 @@ All alternatives must preserve malformed bytes, lower to one explicit semantic
 core, keep identity claims bounded by ADR-0009, and satisfy M17's independent
 full-reparse oracle before capability can rise.
 
-## Decision required
+## Decision
 
-Choose exactly one:
+Options considered:
 
 1. **Strict CommonMark-compatible superset.** Lowest adoption friction; hardest
    compatibility constraint when explicit graph constructs outgrow Markdown.
@@ -30,18 +30,17 @@ Choose exactly one:
    semantics. More frontend work; strongest separation between ergonomic sugar
    and complete representation.
 
-**Recommendation:** option 3. Begin Phase 1 with the constrained
+**Decision:** option 3. Begin Phase 1 with the constrained
 Markdown-compatible frontend as the only product path; keep the explicit form a
 debug/conformance target until real requirements justify user-facing `.lim`.
 
-## Consequences pending acceptance
+## Consequences
 
 - Parser substrate and M17 real-CST spike follow the selected frontend.
 - Every frontend shares projection laws and explicit semantic core.
-- No parser implementation begins while this ADR is proposed.
+- Parser implementation begins only after this ADR's acceptance.
 
 **What would falsify or reverse this:** M17 cannot preserve malformed bytes or
 meet canonical round-trip laws; two frontends drift semantically; or measured
 maintenance cost exceeds the value of the explicit core. Reversal requires a new
 ADR and migration fixtures.
-

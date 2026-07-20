@@ -1,6 +1,6 @@
 # 0018. Preserve interpretive Jurisdiction oracles through Phase 1
 
-- **Status:** proposed — user acceptance required
+- **Status:** accepted
 - **Date:** 2026-07-20
 - **Deciders:** Brian
 - **Related:** v4 §§7.9, 125; R4 §10; M02–M08; M14; M15
@@ -12,7 +12,7 @@ RepairPlan evaluation, Workspace Basis selection, and ILRP execution. Indexed
 dispatch or compiled plans could improve speed but would introduce a second
 semantic path before differential equivalence exists.
 
-## Proposed decision
+## Decision
 
 Keep interpretive implementations as conformance oracles throughout Phase 1.
 Do not land compiled Contracts, generated repair code, indexed policy dispatch,
@@ -30,4 +30,3 @@ new ADR; this oracle remains available for conformance.
 - One semantic authority remains during Phase 1.
 - Policy execution may be slower; performance is measured before optimization.
 - Compiled paths cannot bypass crash or anti-chimera evidence.
-
