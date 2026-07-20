@@ -1869,18 +1869,102 @@ fn real_cst_spike_oracle_handles_synthetic_cases() {
 /// and provenance against the reviewed golden with only elapsed time redacted.
 /// Fails closed on missing cases, changed seeds, unsorted rows, or byte drift.
 #[test]
-#[ignore = "Phase 0 M17: reviewed real-CST golden"]
 fn real_cst_anchor_recovery_report_matches_golden() {
-    unimplemented!("match real-CST anchor recovery to its golden");
+    let root = camino::Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let golden_path = root.join("golden/anchor_recovery_real_cst.md");
+    let golden = std::fs::read_to_string(&golden_path)
+        .unwrap_or_else(|error| panic!("read reviewed real-CST golden {golden_path}: {error}"));
+    let git_commit = real_cst_report_field(&golden, "git_commit").unwrap();
+    let measurement_tree = real_cst_report_field(&golden, "measurement_tree").unwrap();
+    assert_real_cst_provenance(git_commit, measurement_tree).unwrap();
+
+    let measurement = spike_real_cst::run_frozen_measurement().unwrap();
+    let report = spike_real_cst::render_report(&measurement, git_commit, measurement_tree);
+    assert_eq!(
+        spike_real_cst::redact_elapsed(&report),
+        spike_real_cst::redact_elapsed(&golden),
+        "real-CST measurement drifted from the reviewed golden"
+    );
 }
 
 /// Independently derives the supported level from every D17.3 measurement
 /// conjunct and compares it with the report's declared capability.
 /// Fails closed to Level 2 unless the ≥95% bar and every other L3 condition pass.
 #[test]
-#[ignore = "Phase 0 M17: measured capability report"]
 fn real_cst_declared_level_never_exceeds_measurement() {
-    unimplemented!("bound the declared real-CST level by measurement");
+    let measurement = spike_real_cst::run_frozen_measurement().unwrap();
+    assert_eq!(measurement.merge_total, 8);
+    assert!(measurement.merge_rate >= 0.95);
+    assert!(measurement.malformed_nonpanic);
+    assert!(measurement.selection_and_mark_boundaries_survive);
+    assert!(measurement.undo_correct);
+    assert!(measurement.no_undeclared_loss);
+    assert!(
+        !measurement.canonical_roundtrip_supported,
+        "tree-sitter-md has no independently qualified lossless native serializer"
+    );
+    assert_eq!(spike_real_cst::derived_level(&measurement), 2);
+    assert_eq!(
+        spike_real_cst::DECLARED_LEVEL,
+        spike_real_cst::derived_level(&measurement),
+        "declared capability exceeds independently derived measurement"
+    );
+}
+
+fn real_cst_report_field<'a>(report: &'a str, key: &str) -> Result<&'a str, String> {
+    let prefix = format!("{key}: ");
+    let mut matches = report.lines().filter_map(|line| line.strip_prefix(&prefix));
+    let value = matches
+        .next()
+        .ok_or_else(|| format!("real-CST report is missing {key}"))?;
+    if matches.next().is_some() {
+        return Err(format!("real-CST report repeats {key}"));
+    }
+    Ok(value)
+}
+
+fn assert_real_cst_provenance(git_commit: &str, measurement_tree: &str) -> Result<(), String> {
+    for (name, value) in [
+        ("git_commit", git_commit),
+        ("measurement_tree", measurement_tree),
+    ] {
+        if value.len() != 40
+            || !value
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(format!("{name} is not 40 lowercase hexadecimal characters"));
+        }
+    }
+
+    let root = camino::Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .ok_or_else(|| "conformance directory has no repository parent".to_owned())?
+        .to_owned();
+    let output = std::process::Command::new("git")
+        .args([
+            "-C",
+            root.as_str(),
+            "rev-parse",
+            &format!("{git_commit}^{{tree}}"),
+        ])
+        .output()
+        .map_err(|error| format!("run git rev-parse for real-CST provenance: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "real-CST measurement commit is unavailable: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let actual_tree = String::from_utf8(output.stdout)
+        .map_err(|error| format!("git returned non-UTF-8 tree id: {error}"))?;
+    if actual_tree.trim() != measurement_tree {
+        return Err(format!(
+            "real-CST measurement tree mismatch: report={measurement_tree}, commit={}",
+            actual_tree.trim()
+        ));
+    }
+    Ok(())
 }
 
 /// Checks the template-derived Phase 1 inventory and coverage matrices against
