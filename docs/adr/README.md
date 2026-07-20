@@ -36,6 +36,7 @@ cannot name its own kill-condition is not a decision, it is a hope.
 | [0016](0016-use-stable-debug-json-as-interim-graph-interchange.md) | Use stable debug JSON as interim graph interchange | proposed |
 | [0017](0017-select-phase-1-incremental-engine.md) | Select Phase 1 incremental engine | proposed |
 | [0018](0018-preserve-interpretive-jurisdiction-oracles.md) | Preserve interpretive Jurisdiction oracles through Phase 1 | proposed |
+| [0019](0019-dispose-phase-0-prior-art-commitments.md) | Dispose Phase 0 prior-art commitments | proposed |
 
 ## Writing a new ADR
 

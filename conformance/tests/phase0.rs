@@ -1259,6 +1259,263 @@ fn assert_phase_minus_1_identity_and_projection_evidence() -> Result<(), String>
     Ok(())
 }
 
+fn assert_fixture_inventory_governed() -> Result<(), String> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .ok_or("conformance manifest lacks workspace parent")?;
+    let output = std::process::Command::new("git")
+        .args(["ls-files", "conformance/fixtures"])
+        .current_dir(root)
+        .output()
+        .map_err(|error| error.to_string())?;
+    if !output.status.success() {
+        return Err("git fixture inventory failed".into());
+    }
+    let tracked = String::from_utf8(output.stdout).map_err(|error| error.to_string())?;
+    let families = tracked
+        .lines()
+        .filter_map(|path| {
+            path.strip_prefix("conformance/fixtures/")?
+                .split('/')
+                .next()
+        })
+        .filter(|name| *name != "README.md")
+        .collect::<BTreeSet<_>>();
+    if families.is_empty() {
+        return Err("no tracked fixture families".into());
+    }
+
+    let inventory = include_str!("../fixtures/README.md");
+    let mut documented = BTreeSet::new();
+    for line in inventory.lines().filter(|line| line.starts_with("| ")) {
+        if line.starts_with("| Family ") || line.starts_with("|---") {
+            continue;
+        }
+        let fields = line
+            .trim_matches('|')
+            .split('|')
+            .map(str::trim)
+            .collect::<Vec<_>>();
+        if fields.len() != 7 {
+            return Err(format!("fixture inventory row has {} fields", fields.len()));
+        }
+        if fields[..6]
+            .iter()
+            .any(|field| field.is_empty() || *field == "—")
+        {
+            return Err(format!(
+                "fixture family {:?} has an unowned field",
+                fields[0]
+            ));
+        }
+        if !matches!(fields[6], "public" | "sanitized") {
+            return Err(format!(
+                "fixture family {:?} has invalid confidentiality {:?}",
+                fields[0], fields[6]
+            ));
+        }
+        if !documented.insert(fields[0]) {
+            return Err(format!("fixture family {:?} is duplicated", fields[0]));
+        }
+    }
+    if documented != families {
+        return Err(format!(
+            "documented fixture families {documented:?} differ from tracked {families:?}"
+        ));
+    }
+    Ok(())
+}
+
+fn assert_sound_session_conjunction() -> Result<(), String> {
+    use liminal_conformance::harness::{ToyRun, all_scenarios, assert_silent};
+    use liminal_revision::BasisPerspective;
+
+    let scenarios = all_scenarios().map_err(|error| error.to_string())?;
+    let scenario = scenarios
+        .iter()
+        .find(|scenario| scenario.scenario.id == "sound_session")
+        .ok_or("sound_session fixture missing")?;
+    let run = ToyRun::new("phase0-sound-conjunction").map_err(|error| error.to_string())?;
+    let execution = run
+        .exec_scenario(scenario)
+        .map_err(|error| error.to_string())?;
+    if !execution.status.success() {
+        return Err(format!(
+            "sound session execution failed: {}",
+            String::from_utf8_lossy(&execution.stderr)
+        ));
+    }
+    let output = run.check().map_err(|error| error.to_string())?;
+    assert_silent(&output);
+
+    let workspace =
+        liminal_daemon::ToyWorkspace::open(&run.root).map_err(|error| error.to_string())?;
+    let basis = workspace
+        .basis(BasisPerspective::DurableOnly)
+        .map_err(|error| error.to_string())?;
+    let report = workspace
+        .checker()
+        .check_workspace(&basis)
+        .map_err(|error| error.to_string())?;
+    if !report.is_sound()
+        || !workspace
+            .reconciliation()
+            .items()
+            .map_err(|error| error.to_string())?
+            .is_empty()
+        || !workspace
+            .store()
+            .scan_aux(liminal_graph::ns::JUR_OVERLAY)
+            .map_err(|error| error.to_string())?
+            .is_empty()
+    {
+        return Err("sound session emitted findings, items, or overlays".into());
+    }
+
+    let corpus =
+        camino::Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures/traces/labeled");
+    let (scorecard, drafts) = liminal_conformance::pipeline::run(&corpus, "external-file")
+        .map_err(|error| error.to_string())?;
+    if scorecard.sound_session_diagnostics != 0
+        || scorecard.sound_checker_output_bytes != 0
+        || scorecard.unexpected_reconciliation_items != 0
+        || scorecard.manual_contract_authoring != 0
+    {
+        return Err(format!(
+            "development scorecard is not silent: {scorecard:?}"
+        ));
+    }
+    if drafts.declared == 0 || drafts.reconciled_within_window == 0 {
+        return Err(format!(
+            "transient drafts were hidden instead of declared and reconciled: {drafts:?}"
+        ));
+    }
+    assert_aged_overlay_remains_visible(&scenarios)?;
+
+    let cli = include_str!("../../crates/liminal-cli/src/main.rs");
+    for prohibited in [
+        ["Set", "Contract"].concat(),
+        ["Author", "Contract"].concat(),
+        ["Edit", "Contract"].concat(),
+    ] {
+        if cli.contains(&prohibited) {
+            return Err(format!(
+                "standard CLI exposes manual Contract authoring surface {prohibited}"
+            ));
+        }
+    }
+    drop(workspace);
+    std::fs::remove_dir_all(&run.root).map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn assert_aged_overlay_remains_visible(
+    scenarios: &[liminal_conformance::ScenarioScript],
+) -> Result<(), String> {
+    let mut scenario = scenarios
+        .iter()
+        .find(|scenario| scenario.scenario.id == "offline_holder_overlay")
+        .cloned()
+        .ok_or("offline_holder_overlay fixture missing")?;
+    scenario.steps.truncate(3);
+    let mut extra = toml::Table::new();
+    extra.insert("by_secs".into(), toml::Value::Integer(90_000));
+    scenario.steps.push(liminal_daemon::scenario::Step {
+        kind: "advance_clock".into(),
+        extra,
+    });
+
+    let run =
+        liminal_conformance::ToyRun::new("phase0-aged-debt").map_err(|error| error.to_string())?;
+    let execution = run
+        .exec_scenario(&scenario)
+        .map_err(|error| error.to_string())?;
+    if !execution.status.success() {
+        return Err("aged Overlay witness failed to execute".into());
+    }
+    let workspace =
+        liminal_daemon::ToyWorkspace::open(&run.root).map_err(|error| error.to_string())?;
+    let items = workspace
+        .reconciliation()
+        .items()
+        .map_err(|error| error.to_string())?;
+    let overlays = workspace
+        .store()
+        .scan_aux(liminal_graph::ns::JUR_OVERLAY)
+        .map_err(|error| error.to_string())?;
+    if items.len() != 1 || overlays.len() != 1 {
+        return Err("aged transient debt was hidden or deleted".into());
+    }
+    drop(workspace);
+    std::fs::remove_dir_all(&run.root).map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn assert_phase0_threat_model_complete() -> Result<(), String> {
+    let model = include_str!("../../docs/security/threat-model.md");
+    let expected_boundaries = [
+        "graph store",
+        "filesystem Holders",
+        "clients/buffers",
+        "resolver observations",
+        "repair execution",
+        "plugins/processes",
+        "corpus handling",
+        "supply chain",
+    ]
+    .into_iter()
+    .collect::<BTreeSet<_>>();
+    let mut ids = BTreeSet::new();
+    let mut boundary_counts = std::collections::BTreeMap::new();
+    for line in model
+        .lines()
+        .filter(|line| line.starts_with("| TM-") && !line.starts_with("| TM-ID"))
+    {
+        let fields = line
+            .trim_matches('|')
+            .split('|')
+            .map(str::trim)
+            .collect::<Vec<_>>();
+        if fields.len() != 14 || fields.iter().any(|field| field.is_empty()) {
+            return Err(format!(
+                "threat row must contain 14 non-empty fields: {line}"
+            ));
+        }
+        let id = fields[0];
+        if id.len() != 5
+            || !id.starts_with("TM-")
+            || !id[3..].bytes().all(|byte| byte.is_ascii_digit())
+            || !ids.insert(id)
+        {
+            return Err(format!("invalid or duplicate threat id {id:?}"));
+        }
+        if !expected_boundaries.contains(fields[2]) {
+            return Err(format!("unknown trust boundary {:?}", fields[2]));
+        }
+        *boundary_counts.entry(fields[2]).or_insert(0usize) += 1;
+        if !matches!(fields[12], "low" | "medium" | "high" | "critical") {
+            return Err(format!("invalid impact {:?}", fields[12]));
+        }
+        if !matches!(fields[13], "unlikely" | "possible" | "likely") {
+            return Err(format!("invalid likelihood {:?}", fields[13]));
+        }
+    }
+    if ids.len() < 16 {
+        return Err(format!("threat inventory has only {} threats", ids.len()));
+    }
+    for boundary in expected_boundaries {
+        if boundary_counts.get(boundary).copied().unwrap_or(0) < 2 {
+            return Err(format!(
+                "trust boundary {boundary:?} lacks two threat probes"
+            ));
+        }
+    }
+    if !include_str!("../../SECURITY.md").contains("docs/security/threat-model.md") {
+        return Err("SECURITY.md does not link the Phase 0 threat model".into());
+    }
+    Ok(())
+}
+
 /// Derives crash cases from non-empty `ToyRun::baseline` hits and checks the
 /// independent `crash_matrix` covers every `(point, occurrence)` exactly.
 /// Fails closed on empty terminals, unknown boundaries, or non-idempotent recovery.
@@ -1348,27 +1605,24 @@ fn phase1_boundary_adrs_are_accepted_and_unambiguous() {
 /// authoring, and no hidden transient debt beyond the policy window.
 /// Fails closed when any conjunct emits, persists, or requires manual intervention.
 #[test]
-#[ignore = "Phase 0 M16: conjunctive sound-session gate"]
 fn sound_session_zero_diagnostics_items_and_authoring() {
-    unimplemented!("prove sound sessions emit no diagnostics items or authoring");
+    assert_sound_session_conjunction().unwrap();
 }
 
 /// Compares documented public and sanitized fixture families with tracked paths
 /// outside locked trees, requiring a version, parser, owner, and confidentiality.
 /// Fails closed on undocumented, unowned, versionless, or locked-tree inventory.
 #[test]
-#[ignore = "Phase 0 M16: governed fixture inventory"]
 fn phase0_fixture_inventory_is_versioned_and_owned() {
-    unimplemented!("require versioned owned Phase 0 fixtures");
+    assert_fixture_inventory_governed().unwrap();
 }
 
 /// Checks every named trust boundary has assets, attacker, entry point, failure,
 /// controls, detection, recovery, verification, residual risk, and owner.
 /// Fails closed on any missing boundary or unsupported mitigation claim.
 #[test]
-#[ignore = "Phase 0 M16: published threat model"]
 fn phase0_threat_model_covers_every_trust_boundary() {
-    unimplemented!("cover every Phase 0 trust boundary");
+    assert_phase0_threat_model_complete().unwrap();
 }
 
 /// Compares the complete v4 §118A reference inventory with the accepted ADR,
