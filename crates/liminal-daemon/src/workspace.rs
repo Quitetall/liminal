@@ -288,29 +288,47 @@ fn persist_epoch(store: &GraphStore, epoch: SessionEpoch) -> Result<(), Workspac
     Ok(())
 }
 
-/// Seed `AvailableInputs.durable` with a `FileContent` component per ingested
-/// file (D06.5). The durable state is what every perspective starts from.
+/// Reconstruct `AvailableInputs.durable` from committed file mirrors and
+/// current-observation metadata (D06.5; M08 Algorithm B). Durable state is what
+/// every perspective starts from, including after process restart.
 fn seed_durable_inputs(
     store: &GraphStore,
     root: &Utf8Path,
 ) -> Result<AvailableInputs, WorkspaceError> {
     let mut inputs = AvailableInputs::default();
-    for (key, _) in store.scan_aux(liminal_graph::ns::SYS_BLOB)? {
-        let Some(rel) = key.strip_prefix("file/") else {
-            continue;
-        };
-        let abs = root.join(rel);
-        let Ok(bytes) = std::fs::read(&abs) else {
-            continue;
-        };
-        let path = PathId(rel.into());
-        inputs.durable.insert(
-            JurisdictionKey::Path(path.clone()),
-            liminal_revision::BasisComponent::FileContent {
-                path,
-                hash: liminal_id::ContentHash::of(&bytes),
-            },
-        );
+    for (key, value) in store.scan_aux(liminal_graph::ns::SYS_BLOB)? {
+        if let Some(rel) = key.strip_prefix("file/") {
+            let abs = root.join(rel);
+            let Ok(bytes) = std::fs::read(&abs) else {
+                continue;
+            };
+            let path = PathId(rel.into());
+            inputs.durable.insert(
+                JurisdictionKey::Path(path.clone()),
+                liminal_revision::BasisComponent::FileContent {
+                    path,
+                    hash: liminal_id::ContentHash::of(&bytes),
+                },
+            );
+        } else if let Some(key_source) = key.strip_prefix("obs-current/") {
+            let component: liminal_revision::BasisComponent = serde_json::from_value(value)
+                .map_err(|error| liminal_graph::StoreError::Corrupt(error.to_string()))?;
+            let liminal_revision::BasisComponent::Observation { source, .. } = &component else {
+                return Err(liminal_graph::StoreError::Corrupt(format!(
+                    "{key}: current observation metadata has wrong component kind"
+                ))
+                .into());
+            };
+            if source.to_string() != key_source {
+                return Err(liminal_graph::StoreError::Corrupt(format!(
+                    "{key}: observation source does not match its key"
+                ))
+                .into());
+            }
+            inputs
+                .durable
+                .insert(JurisdictionKey::Source(*source), component);
+        }
     }
     Ok(inputs)
 }

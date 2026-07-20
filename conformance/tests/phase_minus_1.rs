@@ -417,7 +417,7 @@ fn accepted_auto_repair_is_one_command_revertible() {
 
     // A RepairRecord with all six R4 §6 fields was written; capture its id and
     // the post-save file bytes. Scope the store handle so the CLI can lock it.
-    let (repair_id, post_save) = {
+    let (repair_id, post_save, expected_preimage) = {
         let ws = ToyWorkspace::open(&run.root).expect("open");
         let records = ws.repairs().expect("repairs");
         assert_eq!(records.len(), 1, "exactly one accepted repair");
@@ -427,9 +427,25 @@ fn accepted_auto_repair_is_one_command_revertible() {
         assert_eq!(r.selected_rule, "save-promotion");
         assert!(r.inverse.is_some(), "must record an inverse (revertible)");
         assert_eq!(r.applied_steps.len(), 1);
+        let expected_preimage = r
+            .inverse
+            .as_ref()
+            .expect("accepted repair records its inverse")
+            .steps
+            .values()
+            .find_map(|step| match &step.operation {
+                liminal_jurisdiction::RepairOperation::WriteFile { path, contents }
+                    if path.0 == "notes.md" =>
+                {
+                    Some(contents.clone())
+                }
+                _ => None,
+            })
+            .expect("inverse records notes.md preimage bytes");
         (
             r.repair,
             std::fs::read_to_string(run.root.join("notes.md")).unwrap(),
+            expected_preimage,
         )
     };
 
@@ -442,6 +458,11 @@ fn accepted_auto_repair_is_one_command_revertible() {
     assert!(stdout.starts_with("undone: repair:"), "got {stdout:?}");
     let after_undo = std::fs::read_to_string(run.root.join("notes.md")).unwrap();
     assert_ne!(after_undo, post_save, "undo changed the file back");
+    assert_eq!(
+        after_undo.as_bytes(),
+        expected_preimage,
+        "undo restored the exact recorded preimage"
+    );
 
     // Undo again after an external edit → the recorded inverse is stale, so
     // undo must queue a REVIEWABLE proposal, never overwrite with stale bytes.

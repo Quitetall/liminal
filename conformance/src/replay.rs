@@ -139,11 +139,37 @@ pub fn freeze(basis: &WorkspaceBasis, workspace: &ToyWorkspace) -> anyhow::Resul
     for component in basis.components.values() {
         let key = blob_key(component)?;
         let value = match component {
-            BasisComponent::BufferGeneration { .. } | BasisComponent::Observation { .. } => {
-                workspace
+            BasisComponent::BufferGeneration { content_hash, .. } => {
+                let value = workspace
                     .store()
                     .get_aux(ns::SYS_BLOB, &key)?
-                    .unwrap_or(serde_json::Value::Null)
+                    .ok_or_else(|| anyhow::anyhow!("freeze: missing basis-pinned blob {key}"))?;
+                let bytes = value.as_str().ok_or_else(|| {
+                    anyhow::anyhow!("freeze: basis-pinned buffer blob {key} is not text")
+                })?;
+                if let Some(expected) = content_hash {
+                    let actual = liminal_id::ContentHash::of(bytes.as_bytes());
+                    anyhow::ensure!(
+                        actual == *expected,
+                        "freeze: buffer blob {key} no longer matches the basis-pinned hash \
+                         (pinned {expected}, found {actual})"
+                    );
+                }
+                value
+            }
+            BasisComponent::Observation { hash, .. } => {
+                let value = workspace
+                    .store()
+                    .get_aux(ns::SYS_BLOB, &key)?
+                    .ok_or_else(|| anyhow::anyhow!("freeze: missing basis-pinned blob {key}"))?;
+                let bytes = serde_json::to_vec(&value)?;
+                let actual = liminal_id::ContentHash::of(&bytes);
+                anyhow::ensure!(
+                    actual == *hash,
+                    "freeze: observation blob {key} no longer matches the basis-pinned hash \
+                     (pinned {hash}, found {actual})"
+                );
+                value
             }
             BasisComponent::FileContent { path, hash } => {
                 let bytes = std::fs::read(workspace.root().join(&path.0))?;

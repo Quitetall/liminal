@@ -310,6 +310,11 @@ impl ToyRun {
         // 1. Baseline in its own root.
         let baseline_run = Self::new(&format!("baseline-{}", scenario.scenario.id))?;
         let trace = baseline_run.baseline(scenario)?;
+        anyhow::ensure!(
+            !trace.hits.is_empty(),
+            "crash matrix [{}]: baseline produced no durable-boundary hits",
+            scenario.scenario.id
+        );
 
         let expected = scenario.expect.terminal.as_deref().unwrap_or("committed");
         let normalize = |s: &str| s.to_lowercase().replace('-', "");
@@ -330,6 +335,10 @@ impl ToyRun {
 
             // First recovery.
             let r1 = run.recover()?;
+            anyhow::ensure!(
+                !r1.terminals.is_empty(),
+                "crash matrix [{label}]: recovery returned no intent terminals"
+            );
             for state in &r1.terminals {
                 let actual_norm = normalize(&format!("{state:?}"));
                 anyhow::ensure!(
@@ -463,6 +472,10 @@ pub fn verify_heldout_manifest(version_dir: &Utf8Path) -> anyhow::Result<()> {
             .ok_or_else(|| anyhow::anyhow!("{manifest_path}: bad manifest line: {line:?}"))?;
         expected.insert(rel.trim().to_owned(), hash.trim().to_owned());
     }
+    anyhow::ensure!(
+        !expected.is_empty(),
+        "held-out corpus at {version_dir} must be non-empty"
+    );
 
     let mut actual = BTreeMap::new();
     collect_hashes(version_dir, version_dir, &mut actual)?;

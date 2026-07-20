@@ -173,7 +173,7 @@ fn every_toy_subject_names_its_holder() {
             String::from_utf8_lossy(&exec.stderr)
         );
 
-        let ws = ToyWorkspace::open(&run.root).expect("open audited workspace");
+        let mut ws = ToyWorkspace::open(&run.root).expect("open audited workspace");
         let basis = ws
             .basis(BasisPerspective::DurableOnly)
             .expect("capture durable basis");
@@ -184,6 +184,7 @@ fn every_toy_subject_names_its_holder() {
             "scenario {} must create at least one governed subject",
             scenario.scenario.id
         );
+        let mut graph_native_subjects = Vec::new();
         for subject in subjects {
             if let liminal_id::JurisdictionSubject::Node(node_id) = subject
                 && ws
@@ -198,7 +199,7 @@ fn every_toy_subject_names_its_holder() {
                     "EXTERNAL_VALUE must carry its approved Managed identity"
                 );
             }
-            checker
+            let holder = checker
                 .resolve_holder(subject, &basis)
                 .unwrap_or_else(|error| {
                     panic!(
@@ -206,6 +207,38 @@ fn every_toy_subject_names_its_holder() {
                         scenario.scenario.id
                     )
                 });
+            if holder == liminal_jurisdiction::Holder::Graph {
+                graph_native_subjects.push(subject);
+            }
+        }
+
+        if let Some(path) =
+            basis
+                .components
+                .iter()
+                .find_map(|(key, component)| match (key, component) {
+                    (
+                        liminal_id::JurisdictionKey::Path(path),
+                        BasisComponent::FileContent { .. },
+                    ) => Some(path.clone()),
+                    _ => None,
+                })
+        {
+            let client = ClientId::new();
+            ws.client(client).open_buffer(path);
+            let client_basis = ws
+                .basis(BasisPerspective::ClientScoped { client })
+                .expect("capture client-scoped audit basis");
+            let checker = ws.checker();
+            for subject in graph_native_subjects {
+                assert_eq!(
+                    checker
+                        .resolve_holder(subject, &client_basis)
+                        .expect("graph-native subject remains governed"),
+                    liminal_jurisdiction::Holder::Graph,
+                    "graph-native subject {subject} must not be captured by a client buffer"
+                );
+            }
         }
     }
 }
@@ -357,7 +390,7 @@ fn crash_gate_matrix_and_revert_hold() {
         .exec_scenario(repair_scenario)
         .expect("execute repair scenario");
     assert!(exec.status.success(), "accepted repair scenario must pass");
-    let (repair_id, repaired_bytes) = {
+    let (repair_id, repaired_bytes, expected_preimage) = {
         let workspace = ToyWorkspace::open(&run.root).expect("open repair workspace");
         let repairs = workspace.repairs().expect("read repair records");
         assert_eq!(repairs.len(), 1, "exactly one repair must be accepted");
@@ -365,9 +398,25 @@ fn crash_gate_matrix_and_revert_hold() {
             repairs[0].inverse.is_some(),
             "accepted repair records its inverse"
         );
+        let expected_preimage = repairs[0]
+            .inverse
+            .as_ref()
+            .expect("accepted repair records its inverse")
+            .steps
+            .values()
+            .find_map(|step| match &step.operation {
+                liminal_jurisdiction::RepairOperation::WriteFile { path, contents }
+                    if path.0 == "notes.md" =>
+                {
+                    Some(contents.clone())
+                }
+                _ => None,
+            })
+            .expect("inverse records notes.md preimage bytes");
         (
             repairs[0].repair,
             std::fs::read(run.root.join("notes.md")).expect("read repaired file"),
+            expected_preimage,
         )
     };
     let undo = run
@@ -382,6 +431,10 @@ fn crash_gate_matrix_and_revert_hold() {
     assert_ne!(
         reverted_bytes, repaired_bytes,
         "undo must change repaired bytes"
+    );
+    assert_eq!(
+        reverted_bytes, expected_preimage,
+        "undo must restore the inverse's exact recorded preimage"
     );
 }
 
@@ -609,6 +662,24 @@ fn denominators_frozen_and_split_locked() {
     assert_eq!(
         rendered, denominator_golden,
         "denominator arithmetic drifted"
+    );
+
+    let empty_probe = camino::Utf8PathBuf::from(
+        std::env::temp_dir()
+            .to_str()
+            .expect("temporary directory is UTF-8"),
+    )
+    .join(format!("liminal-m12-empty-corpus-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&empty_probe);
+    std::fs::create_dir_all(&empty_probe).expect("create empty-corpus probe");
+    std::fs::write(empty_probe.join("MANIFEST.b3"), b" \n")
+        .expect("write whitespace manifest probe");
+    let empty_error = liminal_conformance::harness::verify_heldout_manifest(&empty_probe)
+        .expect_err("an empty locked corpus must fail closed");
+    let _ = std::fs::remove_dir_all(&empty_probe);
+    assert!(
+        empty_error.to_string().contains("non-empty"),
+        "empty-corpus error must name the invariant: {empty_error}"
     );
 
     let heldout_v1 = conformance_root.join("corpora/heldout/v1");

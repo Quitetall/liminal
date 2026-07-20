@@ -16,7 +16,10 @@ use liminal_daemon::ToyWorkspace;
 use liminal_daemon::queries::{
     AiContextStub, Backlinks, LiveWorld, RenderBlock, WorkspaceExport, World, perspective_label,
 };
-use liminal_id::{BufferId, ClientId, JurisdictionKey, NodeId, PathId};
+use liminal_id::{
+    BufferId, ClientId, ContentHash, JurisdictionKey, NodeId, PathId, SessionEpoch, SourceId,
+    Timestamp,
+};
 use liminal_query::Query;
 use liminal_query::memo::MemoTable;
 use liminal_revision::{BasisPerspective, ComponentDeps, WorkspaceBasis};
@@ -38,10 +41,24 @@ fn node_for(ws: &ToyWorkspace, alias: &str) -> NodeId {
         .expect("node field must parse as a NodeId")
 }
 
+fn runner_query_output(ws: &ToyWorkspace, query: &str, perspective: &str) -> String {
+    ws.store()
+        .get_aux(
+            liminal_graph::ns::SYS_BLOB,
+            &format!("query/{query}:{perspective}"),
+        )
+        .expect("read runner query output")
+        .unwrap_or_else(|| panic!("runner persisted {query}:{perspective}"))
+        .as_str()
+        .expect("runner query output is text")
+        .to_owned()
+}
+
 /// Open + edit both dirty clients directly (exactly as `queries.rs`'s own
 /// unit tests do — the scenario's own `buffer_edit`/`query` steps only
-/// mutate the runner's scratch bytes and a step-local session; they publish
-/// nothing this test can reach after `exec_scenario` returns).
+/// mutate runner scratch bytes and step-local sessions. Their canonical query
+/// outputs persist in `SYS_BLOB`; their working buffer claims do not survive
+/// the post-scenario workspace reopen used by this test).
 fn open_dirty_clients(ws: &mut ToyWorkspace) -> (ClientId, ClientId, BufferId) {
     let neovim = ClientId::new();
     {
@@ -69,6 +86,28 @@ fn assert_dirty_consumers(
     neovim_label: &str,
     phone_label: &str,
 ) -> (String, String) {
+    let path_key = JurisdictionKey::Path(PathId("notes.md".into()));
+    let BasisPerspective::ClientScoped {
+        client: neovim_client,
+    } = neovim_basis.perspective
+    else {
+        panic!("preview basis must be client-scoped");
+    };
+    let liminal_revision::BasisComponent::BufferGeneration {
+        client: captured_client,
+        ..
+    } = neovim_basis
+        .components
+        .get(&path_key)
+        .expect("preview basis captures notes.md")
+    else {
+        panic!("preview basis must capture a buffer generation");
+    };
+    assert_eq!(
+        *captured_client, neovim_client,
+        "shared Path dependency must capture neovim's component, never phone's"
+    );
+
     let mut deps = ComponentDeps::default();
     let preview = RenderBlock {
         world,
@@ -83,8 +122,7 @@ fn assert_dirty_consumers(
     assert!(preview.contains("NEOVIM-EDIT"), "{preview}");
     assert!(!preview.contains("PHONE-EDIT"), "{preview}");
     assert!(
-        deps.read
-            .contains(&JurisdictionKey::Path(PathId("notes.md".into()))),
+        deps.read.contains(&path_key),
         "render_block must record its path dependency: {:?}",
         deps.read
     );
@@ -113,7 +151,7 @@ fn assert_backlinks_consumer(
     node: NodeId,
     durable_basis: &WorkspaceBasis,
     durable_label: &str,
-) {
+) -> String {
     let mut deps = ComponentDeps::default();
     let backlinks = Backlinks {
         world,
@@ -136,6 +174,7 @@ fn assert_backlinks_consumer(
         backlinks.contains(&comment_relation.id.to_string()),
         "backlinks must list the comment relation: {backlinks}"
     );
+    backlinks
 }
 
 /// Consumer 4 (durable export): byte-equal to an independent re-emission
@@ -334,6 +373,26 @@ fn four_consumers_two_dirty_buffers() {
 
     let mut ws = ToyWorkspace::open(&run.root).expect("open");
     let node = node_for(&ws, "p-fourier");
+    let runner_preview = runner_query_output(&ws, "render_block", "client-scoped:neovim");
+    assert!(runner_preview.contains("NEOVIM-EDIT"), "{runner_preview}");
+    assert!(!runner_preview.contains("PHONE-EDIT"), "{runner_preview}");
+    let runner_ai = runner_query_output(&ws, "ai_context_stub", "client-scoped:phone");
+    let runner_ai_json: serde_json::Value =
+        serde_json::from_str(&runner_ai).expect("runner AI context is JSON");
+    assert_eq!(
+        runner_ai_json["basis"]["perspective"],
+        "client-scoped:phone"
+    );
+    let runner_ai_text = runner_ai_json["text"]
+        .as_str()
+        .expect("runner AI context text");
+    assert!(runner_ai_text.contains("PHONE-EDIT"), "{runner_ai_text}");
+    assert!(!runner_ai_text.contains("NEOVIM-EDIT"), "{runner_ai_text}");
+    let runner_backlinks = runner_query_output(&ws, "backlinks", "durable-only");
+    let runner_export = runner_query_output(&ws, "workspace_export", "durable-only");
+    assert!(!runner_export.contains("NEOVIM-EDIT"), "{runner_export}");
+    assert!(!runner_export.contains("PHONE-EDIT"), "{runner_export}");
+
     let (neovim, phone, phone_buffer) = open_dirty_clients(&mut ws);
 
     let neovim_label = perspective_label(
@@ -368,8 +427,18 @@ fn four_consumers_two_dirty_buffers() {
         &neovim_label,
         &phone_label,
     );
-    assert_backlinks_consumer(&ws, &world, node, &durable_basis, &durable_label);
+    let backlinks = assert_backlinks_consumer(&ws, &world, node, &durable_basis, &durable_label);
     let export = assert_export_consumer(&ws, &world, &durable_label);
+
+    assert_eq!(
+        runner_preview, preview,
+        "runner preview must use query seam"
+    );
+    assert_eq!(
+        runner_backlinks, backlinks,
+        "runner backlinks must use query seam"
+    );
+    assert_eq!(runner_export, export, "runner export must use query seam");
 
     // The three text-bearing outputs are pairwise distinct.
     assert_ne!(preview, ai_context);
@@ -649,10 +718,14 @@ fn file_blob_fresh_after_accept_repair() {
     );
 }
 
-/// T1 review of M08.8: `freeze` must refuse to capture file bytes that no
-/// longer match the basis-pinned hash — a frozen payload must never silently
-/// contradict its own Basis.
+/// T1 review of M08.8: `freeze` must refuse absent or hash-wrong bytes for
+/// every Phase -1 byte-bearing component — a frozen payload must never
+/// silently contradict its own Basis.
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one frozen-byte invariant exercised across all Phase -1 component kinds"
+)]
 fn freeze_rejects_stale_file_bytes() {
     let scenarios = all_scenarios().expect("must load scenarios");
     let scenario = scenarios
@@ -663,7 +736,7 @@ fn freeze_rejects_stale_file_bytes() {
     let exec = run.exec_scenario(scenario).expect("exec must run");
     assert!(exec.status.success());
 
-    let ws = ToyWorkspace::open(&run.root).expect("open");
+    let mut ws = ToyWorkspace::open(&run.root).expect("open");
     let basis = ws
         .basis(BasisPerspective::DurableOnly)
         .expect("durable basis");
@@ -671,6 +744,94 @@ fn freeze_rejects_stale_file_bytes() {
         freeze(&basis, &ws).is_ok(),
         "untampered freeze must succeed"
     );
+
+    let mut missing_buffer_basis = basis.clone();
+    missing_buffer_basis.components.insert(
+        JurisdictionKey::Path(PathId("notes.md".into())),
+        liminal_revision::BasisComponent::BufferGeneration {
+            client: ClientId::new(),
+            buffer: BufferId::new(),
+            epoch: SessionEpoch(1),
+            generation: 99,
+            content_hash: Some(ContentHash::of(b"missing")),
+            base_file_hash: None,
+        },
+    );
+    assert!(
+        freeze(&missing_buffer_basis, &ws).is_err(),
+        "freeze must reject a missing pinned buffer blob"
+    );
+
+    let missing_source = SourceId::from_name("missing:observation");
+    let mut missing_observation_basis = basis.clone();
+    missing_observation_basis.components.insert(
+        JurisdictionKey::Source(missing_source),
+        liminal_revision::BasisComponent::Observation {
+            source: missing_source,
+            observed_at: Timestamp(1),
+            hash: ContentHash::of(b"missing"),
+        },
+    );
+    assert!(
+        freeze(&missing_observation_basis, &ws).is_err(),
+        "freeze must reject a missing pinned observation blob"
+    );
+
+    let client = ClientId::new();
+    let buffer = ws.client(client).open_buffer(PathId("notes.md".into()));
+    let buffer_basis = ws
+        .basis(BasisPerspective::ClientScoped { client })
+        .expect("client basis");
+    let buffer_component = buffer_basis
+        .components
+        .get(&JurisdictionKey::Path(PathId("notes.md".into())))
+        .expect("buffer component");
+    let liminal_revision::BasisComponent::BufferGeneration { generation, .. } = buffer_component
+    else {
+        panic!("client basis must select a buffer generation");
+    };
+    ws.store()
+        .put_working_aux(
+            liminal_graph::ns::SYS_BLOB,
+            &format!("buf/{client}/{buffer}/{generation}"),
+            serde_json::Value::String("tampered buffer".into()),
+        )
+        .expect("tamper buffer blob");
+    assert!(
+        freeze(&buffer_basis, &ws).is_err(),
+        "freeze must reject buffer bytes that do not match content_hash"
+    );
+
+    let observation = basis
+        .components
+        .values()
+        .find(|component| {
+            matches!(
+                component,
+                liminal_revision::BasisComponent::Observation { .. }
+            )
+        })
+        .expect("scenario basis contains observation");
+    let liminal_revision::BasisComponent::Observation { source, hash, .. } = observation else {
+        unreachable!();
+    };
+    ws.store()
+        .put_working_aux(
+            liminal_graph::ns::SYS_BLOB,
+            &format!("obs/{source}/{hash}"),
+            serde_json::json!({"price": "tampered"}),
+        )
+        .expect("tamper observation blob");
+    assert!(
+        freeze(&basis, &ws).is_err(),
+        "freeze must reject observation bytes that do not match the pinned hash"
+    );
+
+    drop(ws);
+    let ws = ToyWorkspace::open(&run.root).expect("reopen after working tamper");
+    let basis = ws
+        .basis(BasisPerspective::DurableOnly)
+        .expect("fresh durable basis");
 
     // Tamper with the durable file AFTER the basis pinned its hash.
     let path = run.root.join("notes.md");

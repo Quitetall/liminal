@@ -114,30 +114,32 @@ impl Checker<'_> {
         basis: &WorkspaceBasis,
     ) -> Result<Holder, CheckerError> {
         let contract = self.contract_for(subject)?;
-
-        // Buffer capture: if the perspective is client-scoped and the owning
-        // file's component is a matching BufferGeneration, resolve to buffer.
-        if let BasisPerspective::ClientScoped { client } = &basis.perspective {
-            for component in basis.components.values() {
-                if let BasisComponent::BufferGeneration {
-                    client: c, buffer, ..
-                } = component
-                    && c == client
-                {
-                    return Ok(Holder::Buffer {
-                        client: *client,
-                        buffer: *buffer,
-                    });
-                }
-            }
-        }
-
-        contract
+        let durable_holder = contract
             .resolution
             .read_precedence
             .first()
             .cloned()
-            .ok_or(CheckerError::Ungoverned(subject))
+            .ok_or(CheckerError::Ungoverned(subject))?;
+
+        // Buffer capture belongs only to an external-file contract and only to
+        // its owning Path component. Graph-native contracts remain Graph-held
+        // under every perspective (v4 §7.5–7.6).
+        if let (BasisPerspective::ClientScoped { client }, Holder::File { path }) =
+            (&basis.perspective, &durable_holder)
+            && let Some(BasisComponent::BufferGeneration {
+                client: component_client,
+                buffer,
+                ..
+            }) = basis.components.get(&JurisdictionKey::Path(path.clone()))
+            && component_client == client
+        {
+            return Ok(Holder::Buffer {
+                client: *client,
+                buffer: *buffer,
+            });
+        }
+
+        Ok(durable_holder)
     }
 
     /// Q2: Where would a write go? (Buffer capture is not routing.)

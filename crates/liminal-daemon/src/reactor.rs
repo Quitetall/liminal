@@ -36,17 +36,14 @@ impl ToyWorkspace {
     /// Inject one observation as a graph transaction (M08 Algorithm B):
     ///
     /// 1. Hash the canonical payload bytes.
-    /// 2. Persist the payload at `SYS_BLOB["obs/<source>/<hash>"]`.
-    /// 3. Commit a `MaterializeExternal` operation against the source's
-    ///    external-value node (created on first observation of a source —
-    ///    toy: at most one per scenario, mirroring `file_node_for`'s
-    ///    one-FILE-node simplification).
-    /// 4. Republish `AvailableInputs.durable[Source(source)]` so a fresh
+    /// 2. In one transaction, create the toy's external-value node when absent,
+    ///    persist payload at `SYS_BLOB["obs/<source>/<hash>"]`, persist restart
+    ///    metadata at `SYS_BLOB["obs-current/<source>"]`, and commit
+    ///    `MaterializeExternal`.
+    /// 3. Republish `AvailableInputs.durable[Source(source)]` so a fresh
     ///    Basis records the new observation as a dependency (D08.2) — the
     ///    same "durable input map is the single source of truth" discipline
-    ///    `seed_durable_inputs` applies to files (D06.5).
-    ///
-    /// Steps 2–3 land in ONE transaction (Algorithm B: "one transaction").
+    ///    `seed_durable_inputs` applies at reopen (D06.5).
     pub fn inject_observation(
         &mut self,
         obs: Observation,
@@ -58,13 +55,33 @@ impl ToyWorkspace {
         } = obs;
 
         let store = self.store();
-        let node = external_value_node(store)?;
+        let (node, create_node) = external_value_node(store)?;
 
         let payload_bytes = serde_json::to_vec(&payload).unwrap_or_default();
         let hash = ContentHash::of(&payload_bytes);
 
+        let component = BasisComponent::Observation {
+            source,
+            observed_at,
+            hash,
+        };
+        let component_value = serde_json::to_value(&component)
+            .map_err(|error| liminal_graph::StoreError::Corrupt(error.to_string()))?;
+
         let mut txn = store.begin()?;
+        if create_node {
+            txn.apply(Operation::CreateNode {
+                node: Node {
+                    id: node,
+                    kind: kind::EXTERNAL_VALUE,
+                    payload: PayloadRef::None,
+                    revision: RevisionId(0),
+                    flags: NodeFlags::default(),
+                },
+            })?;
+        }
         txn.put_aux(SYS_BLOB, &format!("obs/{source}/{hash}"), payload)?;
+        txn.put_aux(SYS_BLOB, &format!("obs-current/{source}"), component_value)?;
         txn.apply(Operation::MaterializeExternal {
             node,
             source,
@@ -73,14 +90,9 @@ impl ToyWorkspace {
         })?;
         let (revision, _txn_id) = txn.commit(reactor_meta())?;
 
-        self.inputs_mut().durable.insert(
-            JurisdictionKey::Source(source),
-            BasisComponent::Observation {
-                source,
-                observed_at,
-                hash,
-            },
-        );
+        self.inputs_mut()
+            .durable
+            .insert(JurisdictionKey::Source(source), component);
 
         Ok(revision)
     }
@@ -91,25 +103,13 @@ impl ToyWorkspace {
 /// never scripts more than one external source per scenario, so "the one
 /// `EXTERNAL_VALUE` node" is unambiguous — the same simplification
 /// `file_node_for` applies to the single FILE node.
-fn external_value_node(store: &GraphStore) -> Result<NodeId, WorkspaceError> {
+fn external_value_node(store: &GraphStore) -> Result<(NodeId, bool), WorkspaceError> {
     for node in store.nodes()? {
         if node.kind == kind::EXTERNAL_VALUE {
-            return Ok(node.id);
+            return Ok((node.id, false));
         }
     }
-    let id = NodeId::new();
-    let mut txn = store.begin()?;
-    txn.apply(Operation::CreateNode {
-        node: Node {
-            id,
-            kind: kind::EXTERNAL_VALUE,
-            payload: PayloadRef::None,
-            revision: RevisionId(0),
-            flags: NodeFlags::default(),
-        },
-    })?;
-    txn.commit(reactor_meta())?;
-    Ok(id)
+    Ok((NodeId::new(), true))
 }
 
 /// Metadata for reactor-driven graph transactions. Origin is `Remote` — an
@@ -291,6 +291,52 @@ mod tests {
             .unwrap();
         assert_eq!(blob, obs.payload);
         let _ = node;
+    }
+
+    #[test]
+    fn first_observation_materializes_in_one_transaction() {
+        let root = tmp_root("one-transaction");
+        let mut ws = ToyWorkspace::open(&root).unwrap();
+        let before = ws.store().head().unwrap();
+        let revision = ws
+            .inject_observation(Observation {
+                source: SourceId::from_name("stock:acme"),
+                observed_at: Timestamp(1),
+                payload: serde_json::json!({"price": 42.17}),
+            })
+            .unwrap();
+        assert_eq!(revision.0, before.0 + 1);
+    }
+
+    #[test]
+    fn durable_observation_survives_workspace_reopen() {
+        let root = tmp_root("reopen-observation");
+        let source = SourceId::from_name("stock:acme");
+        let observed_at = Timestamp(1234);
+        let payload = serde_json::json!({"price": 42.17});
+        let hash = ContentHash::of(&serde_json::to_vec(&payload).unwrap());
+        {
+            let mut ws = ToyWorkspace::open(&root).unwrap();
+            ws.inject_observation(Observation {
+                source,
+                observed_at,
+                payload,
+            })
+            .unwrap();
+        }
+
+        let reopened = ToyWorkspace::open(&root).unwrap();
+        let basis = reopened
+            .basis(liminal_revision::BasisPerspective::DurableOnly)
+            .unwrap();
+        assert_eq!(
+            basis.components.get(&JurisdictionKey::Source(source)),
+            Some(&BasisComponent::Observation {
+                source,
+                observed_at,
+                hash,
+            })
+        );
     }
 
     #[test]
