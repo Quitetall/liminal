@@ -57,6 +57,8 @@ AM-11.3 (M11): conformance `[[bin]] tracegen` — the five Algorithm-B importers
 AM-11.4 (M11): liminal_daemon::runner::StepRunner — exec's setup + step loop factored into a public per-step seam (open/open_buffer/step) so the M11.5 pipeline can collect observables per event through the ONE runner; exec delegates, behavior unchanged.
 AM-12.1 (M12): liminal_jurisdiction::Checker::subjects() — additive Node/Relation enumeration required by final gate test 1 because M03 exposed no whole-workspace subject surface.
 AM-12.2 (M12): final gate tests 1–9 are born at M12.1 and test 10 is born at M12.3 after its required accepted ADR exists; no ignored intermediate test.
+AM-12.3 (M12/M03 D03.4): EXTERNAL_VALUE Nodes dispatch to graph-native and compute Managed identity; M08.6 introduced this graph-transaction-only subject kind after M03, and final gate test 1 exposed the stale Ungoverned catch-all.
+AM-12.4 (M12/M05 Algorithm D): no_agenda_symbols allow-lists exactly one coordinate containing the exact frozen name overlay_debt_visible_without_agenda; no wildcard, substring allowance, or whole-file exclusion.
 
 **What would falsify or reverse this:** an M12 audit finding an amendment that
 was applied in code but not recorded here, or recorded here but not in the
