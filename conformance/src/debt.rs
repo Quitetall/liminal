@@ -129,8 +129,8 @@ mod tests {
                 .as_nanos()
         ));
         fs::create_dir_all(&root).expect("create debt-meter probe directory");
-        let test_attribute = "#[te".to_owned() + "st]";
-        let ignore_attribute = "#[ig".to_owned() + "nore = \"Phase 3: deferred case\"]";
+        let test_attribute = "#[test]";
+        let ignore_attribute = "#[ignore = \"Phase 3: deferred case\"]";
         let source = format!(
             "{test_attribute}\nfn active_case() {{}}\n\n\
              {test_attribute}\n{ignore_attribute}\nfn deferred_case() {{}}\n"
