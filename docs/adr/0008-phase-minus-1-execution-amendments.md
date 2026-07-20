@@ -34,6 +34,13 @@ AM-2.2 (M02): Setup gains `buffers: Vec<SetupBuffer>` — promote_single_step co
 AM-2.3 (M02): liminal_graph::store::ns module — aux-namespace constants get one home (protocol §7).
 AM-2.4 (M02): conformance `[[bin]] lim-toy` — D02.6 binary-location resolution.
 AM-2.5 (M02): test-name prefixing — recovery_never_guesses → crash_recovery_never_guesses (nextest crash-group filter). Assertions unchanged.
+AM-3.1 (M03): liminal_graph::relation::Relation gains `requires: Option<IdentityRequirement>` with `#[serde(default)]` so Q4 can enforce a Relation's identity requirement. Additive; old NDJSON records parse.
+AM-4.1 (M04): JurisdictionProfile::safety_check gains `&GraphStore` and FsExecutor gains a store handle so disjointness and alias continuity can be recomputed from stored graph state.
+AM-4.2 (M04): scenario vocabulary gains `accept_repair` and the daemon gains `accept_repair(plan_id)` so the DAG-accept fixture can drive explicit human acceptance.
+AM-4.3 (M04): liminal-source gains the additive `merge` module because block merging is source semantics.
+AM-5.1 (M05): scenario vocabulary gains `holder_available`, `advance_clock`, and `daemon_restart` so offline-Holder recovery and aging are exercised in-process.
+AM-6.1 (M06): PerspectiveError gains `PublishedUnavailable` so Published fails closed with its honest reason rather than a federation error.
+AM-6.2 (M06): ClientSession gains `select_working(subject_path, buffer)` because ambiguous working-Holder selection had no surface.
 AM-7.1 (M07): IdentityGrade::strength(self) -> u8 exposed pub (was private) for the M07 corpus's D07.5 worst-outcome ordering. Additive; pre-authorized by M07.md Frozen surfaces.
 AM-8.1 (M08): runner step vocabulary gains resolver_observe and query (additive).
 AM-8.2 (M08): liminal_revision::basis::graph_key() — stable map key for the GraphSnapshot component.
@@ -59,6 +66,7 @@ AM-12.1 (M12): liminal_jurisdiction::Checker::subjects() — additive Node/Relat
 AM-12.2 (M12): final gate tests 1–9 are born at M12.1 and test 10 is born at M12.3 after its required accepted ADR exists; no ignored intermediate test.
 AM-12.3 (M12/M03 D03.4): EXTERNAL_VALUE Nodes dispatch to graph-native and compute Managed identity; M08.6 introduced this graph-transaction-only subject kind after M03, and final gate test 1 exposed the stale Ungoverned catch-all.
 AM-12.4 (M12/M05 Algorithm D): no_agenda_symbols allow-lists exactly one coordinate containing the exact frozen name overlay_debt_visible_without_agenda; no wildcard, substring allowance, or whole-file exclusion.
+AM-12.5 (M12/M08 exit gate): preserve the shared `JurisdictionKey::Path(path)` grammar; the interactive-preview dependency assertion requires that Path key and a captured neovim `BufferGeneration`, never phone's component.
 
 **What would falsify or reverse this:** an M12 audit finding an amendment that
 was applied in code but not recorded here, or recorded here but not in the
