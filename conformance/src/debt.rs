@@ -52,9 +52,9 @@ impl DebtReport {
     }
 }
 
-/// Scan a workspace root for declared debt: every `#[ignore = "…"]` whose
+/// Scan a workspace root for declared debt: every ignored `#[test]` whose
 /// reason starts with `Phase` is bucketed by its phase tag (the text before
-/// the first `:`); every `#[test]` not preceded by an ignore is active.
+/// the first `:`); every other `#[test]` is active.
 pub fn scan_workspace_debt(root: &Utf8Path) -> anyhow::Result<DebtReport> {
     let mut report = DebtReport::default();
     let mut stack = vec![root.to_owned()];
@@ -84,28 +84,32 @@ fn scan_file(path: &Utf8Path, report: &mut DebtReport) {
         return;
     };
     let mut pending_ignore: Option<String> = None;
+    let mut pending_test = false;
     for line in text.lines() {
         let trimmed = line.trim();
         if let Some(rest) = trimmed.strip_prefix("#[ignore = \"") {
             let reason = rest.split('"').next().unwrap_or_default();
             pending_ignore = Some(reason.to_owned());
+        } else if trimmed == "#[ignore]" {
+            pending_ignore = Some(String::new());
         } else if trimmed.starts_with("fn ") && trimmed.contains('(') {
-            if let Some(reason) = pending_ignore.take() {
-                let phase = reason.split(':').next().unwrap_or("unphased").trim();
-                let key = if phase.starts_with("Phase") {
-                    phase.to_owned()
+            if pending_test {
+                if let Some(reason) = pending_ignore.take() {
+                    let phase = reason.split(':').next().unwrap_or("unphased").trim();
+                    let key = if phase.starts_with("Phase") {
+                        phase.to_owned()
+                    } else {
+                        "unphased".to_owned()
+                    };
+                    *report.ignored_by_phase.entry(key).or_default() += 1;
                 } else {
-                    "unphased".to_owned()
-                };
-                *report.ignored_by_phase.entry(key).or_default() += 1;
+                    report.active_tests += 1;
+                }
             }
+            pending_test = false;
+            pending_ignore = None;
         } else if trimmed == "#[test]" {
-            // A bare #[test] with no pending ignore counts as active once its
-            // fn line arrives; approximate by counting here when nothing is
-            // pending (the fn branch above consumes ignored ones).
-            if pending_ignore.is_none() {
-                report.active_tests += 1;
-            }
+            pending_test = true;
         }
     }
 }
@@ -113,6 +117,60 @@ fn scan_file(path: &Utf8Path, report: &mut DebtReport) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ignored_test_is_deferred_not_active() {
+        let root = std::env::temp_dir().join(format!(
+            "liminal-debt-meter-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock is after Unix epoch")
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).expect("create debt-meter probe directory");
+        let test_attribute = "#[te".to_owned() + "st]";
+        let ignore_attribute = "#[ig".to_owned() + "nore = \"Phase 3: deferred case\"]";
+        let source = format!(
+            "{test_attribute}\nfn active_case() {{}}\n\n\
+             {test_attribute}\n{ignore_attribute}\nfn deferred_case() {{}}\n"
+        );
+        fs::write(root.join("surface.rs"), source).expect("write debt-meter probe source");
+        let root = Utf8PathBuf::from_path_buf(root).expect("probe path is UTF-8");
+
+        let report = scan_workspace_debt(&root).expect("scan debt-meter probe");
+
+        fs::remove_dir_all(&root).expect("remove debt-meter probe directory");
+        assert_eq!(report.active_tests, 1);
+        assert_eq!(report.total_ignored(), 1);
+        assert_eq!(report.ignored_by_phase.get("Phase 3"), Some(&1));
+    }
+
+    #[test]
+    fn bare_ignore_is_unphased_debt_not_active() {
+        let root = std::env::temp_dir().join(format!(
+            "liminal-debt-meter-bare-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock is after Unix epoch")
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).expect("create bare-ignore probe directory");
+        fs::write(
+            root.join("surface.rs"),
+            "#[test]\n#[ignore]\nfn deferred_without_reason() {}\n",
+        )
+        .expect("write bare-ignore probe source");
+        let root = Utf8PathBuf::from_path_buf(root).expect("probe path is UTF-8");
+
+        let report = scan_workspace_debt(&root).expect("scan bare-ignore probe");
+
+        fs::remove_dir_all(&root).expect("remove bare-ignore probe directory");
+        assert_eq!(report.active_tests, 0);
+        assert_eq!(report.total_ignored(), 1);
+        assert_eq!(report.ignored_by_phase.get("unphased"), Some(&1));
+    }
 
     #[test]
     fn meter_finds_the_declared_backlog() {
