@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://liminal.dev/schema/transform-contract-v1.json",
+  "title": "Liminal TransformContract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "requires",
+    "preserves",
+    "introduces",
+    "may_discard",
+    "is_deterministic",
+    "is_reversible",
+    "has_effects",
+    "required_capabilities"
+  ],
+  "properties": {
+    "requires": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "preserves": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "introduces": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "may_discard": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "is_deterministic": { "type": "boolean" },
+    "is_reversible": { "type": "boolean" },
+    "has_effects": { "type": "boolean" },
+    "required_capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

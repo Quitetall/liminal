@@ -53,6 +53,7 @@ zstd.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
+liminal-transform.workspace = true
 proptest.workspace = true
 spike-annotation = { path = "spikes/spike-annotation" }
 spike-richedit = { path = "spikes/spike-richedit" }

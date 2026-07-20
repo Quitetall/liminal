@@ -208,6 +208,11 @@ Entity identity, immutable version identity, anchors, and aliases are distinct
 versions; they do not prove continuing entity identity. Heuristic recovery may
 produce evidence and confidence but MUST NOT claim logical continuity.
 
+**K-ID-01 — identity separation.** `EntityId` names accepted logical lineage;
+`VersionId` or a content hash names one immutable state; an anchor locates a
+subject within one revision-aware source; an alias is a resolvable name. None
+MUST be substituted for another without explicit provenance and declared loss.
+
 Identity grades form the Phase 0 evidence order:
 
 `Ephemeral < Anchored < Inferred < Explicit < Managed < External < ContentAddressed`.
@@ -218,6 +223,11 @@ ceilings: anonymous external-file subjects are Anchored; graph-native subjects
 and external observations are Managed. Explicit source identifiers MAY reach
 Explicit only where durable source evidence exists. A content-addressed payload
 does not upgrade its continuing entity identity.
+
+**K-ID-02 — evidence ceiling.** External-file profile floor and anonymous-text
+ceiling are `Anchored`; graph-native and observed `EXTERNAL_VALUE` floor/ceiling
+are `Managed`; annotated-source projection is Level 2; Pandoc conversion is
+Level 1. Tests regenerate evidence and MUST fail before any declaration rises.
 
 Delete/recreate, duplication, foreign rewrites, and history operations may make
 continuity unknowable. Such cases MUST surface ambiguity or loss; they MUST NOT

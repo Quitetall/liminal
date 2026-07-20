@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "examples": [
+    {
+      "id": "canonicalize-prose",
+      "accepted": false,
+      "contract": {
+        "requires": ["resolved-prose"],
+        "preserves": ["entities", "relations", "text"],
+        "introduces": ["canonical-order"],
+        "may_discard": [],
+        "is_deterministic": true,
+        "is_reversible": true,
+        "has_effects": false,
+        "required_capabilities": []
+      }
+    },
+    {
+      "id": "plain-text-export",
+      "accepted": true,
+      "contract": {
+        "requires": ["resolved-prose"],
+        "preserves": ["text"],
+        "introduces": ["plain-text"],
+        "may_discard": ["annotations", "relations", "stable-identity"],
+        "is_deterministic": true,
+        "is_reversible": false,
+        "has_effects": true,
+        "required_capabilities": ["filesystem-write"]
+      }
+    }
+  ]
+}

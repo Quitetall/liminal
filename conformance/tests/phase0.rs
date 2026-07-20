@@ -1018,6 +1018,247 @@ fn assert_intent_transition_table() {
     }
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TransformExamples {
+    version: u32,
+    examples: Vec<TransformExample>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TransformExample {
+    id: String,
+    accepted: bool,
+    contract: serde_json::Value,
+}
+
+const TRANSFORM_ARRAY_FIELDS: [&str; 5] = [
+    "requires",
+    "preserves",
+    "introduces",
+    "may_discard",
+    "required_capabilities",
+];
+const TRANSFORM_BOOL_FIELDS: [&str; 3] = ["is_deterministic", "is_reversible", "has_effects"];
+
+fn parse_transform_examples(
+    input: &str,
+) -> Result<Vec<liminal_transform::TransformContract>, String> {
+    let examples: TransformExamples =
+        serde_json::from_str(input).map_err(|error| error.to_string())?;
+    if examples.version != 1 || examples.examples.len() < 2 {
+        return Err("transform examples require version 1 and at least two cases".into());
+    }
+    let mut ids = BTreeSet::new();
+    let mut contracts = Vec::new();
+    for example in examples.examples {
+        if example.id.is_empty() || !ids.insert(example.id.clone()) {
+            return Err(format!(
+                "empty or duplicate transform example id {:?}",
+                example.id
+            ));
+        }
+        validate_transform_contract(&example.contract)?;
+        let contract: liminal_transform::TransformContract =
+            serde_json::from_value(example.contract).map_err(|error| error.to_string())?;
+        if !contract.may_discard.is_empty() && !example.accepted {
+            return Err(format!(
+                "destructive example {:?} lacks acceptance",
+                example.id
+            ));
+        }
+        contracts.push(contract);
+    }
+    Ok(contracts)
+}
+
+fn validate_transform_contract(value: &serde_json::Value) -> Result<(), String> {
+    let object = value
+        .as_object()
+        .ok_or("TransformContract must be an object")?;
+    let expected = TRANSFORM_ARRAY_FIELDS
+        .into_iter()
+        .chain(TRANSFORM_BOOL_FIELDS)
+        .collect::<BTreeSet<_>>();
+    let actual = object.keys().map(String::as_str).collect::<BTreeSet<_>>();
+    if actual != expected {
+        return Err(format!(
+            "TransformContract fields {actual:?} differ from {expected:?}"
+        ));
+    }
+    for field in TRANSFORM_ARRAY_FIELDS {
+        let values = object[field]
+            .as_array()
+            .ok_or_else(|| format!("{field} must be an array"))?;
+        let mut unique = BTreeSet::new();
+        for value in values {
+            let text = value
+                .as_str()
+                .filter(|text| !text.is_empty())
+                .ok_or_else(|| format!("{field} values must be non-empty strings"))?;
+            if !unique.insert(text) {
+                return Err(format!("{field} values must be unique"));
+            }
+        }
+    }
+    for field in TRANSFORM_BOOL_FIELDS {
+        if !object[field].is_boolean() {
+            return Err(format!("{field} must be boolean"));
+        }
+    }
+    Ok(())
+}
+
+fn assert_transform_schema_shape(input: &str) -> Result<(), String> {
+    let schema: serde_json::Value =
+        serde_json::from_str(input).map_err(|error| error.to_string())?;
+    if schema["$schema"] != "https://json-schema.org/draft/2020-12/schema"
+        || schema["type"] != "object"
+        || schema["additionalProperties"] != false
+    {
+        return Err("transform schema header is not strict draft 2020-12".into());
+    }
+    let required = schema["required"]
+        .as_array()
+        .ok_or("schema required must be an array")?
+        .iter()
+        .map(|value| value.as_str().ok_or("required value must be string"))
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    let expected = TRANSFORM_ARRAY_FIELDS
+        .into_iter()
+        .chain(TRANSFORM_BOOL_FIELDS)
+        .collect::<BTreeSet<_>>();
+    if required != expected {
+        return Err("schema required set differs from eight live fields".into());
+    }
+    for field in TRANSFORM_ARRAY_FIELDS {
+        let property = &schema["properties"][field];
+        if property["type"] != "array"
+            || property["uniqueItems"] != true
+            || property["items"]["type"] != "string"
+            || property["items"]["minLength"] != 1
+        {
+            return Err(format!("schema array property {field} is not strict"));
+        }
+    }
+    for field in TRANSFORM_BOOL_FIELDS {
+        if schema["properties"][field]["type"] != "boolean" {
+            return Err(format!("schema boolean property {field} drifted"));
+        }
+    }
+    Ok(())
+}
+
+fn malformed_transform_contracts() -> Vec<(&'static str, serde_json::Value)> {
+    let base = serde_json::json!({
+        "requires": ["resolved-prose"],
+        "preserves": ["text"],
+        "introduces": [],
+        "may_discard": [],
+        "is_deterministic": true,
+        "is_reversible": true,
+        "has_effects": false,
+        "required_capabilities": []
+    });
+    let mut unknown = base.clone();
+    unknown
+        .as_object_mut()
+        .unwrap()
+        .insert("surprise".into(), serde_json::Value::Bool(true));
+    let mut missing = base.clone();
+    missing.as_object_mut().unwrap().remove("preserves");
+    let mut duplicate = base.clone();
+    duplicate["requires"] = serde_json::json!(["resolved-prose", "resolved-prose"]);
+    let mut empty = base.clone();
+    empty["preserves"] = serde_json::json!([""]);
+    let mut wrong_array_type = base.clone();
+    wrong_array_type["introduces"] = serde_json::json!("canonical-order");
+    let mut wrong_item_type = base.clone();
+    wrong_item_type["may_discard"] = serde_json::json!([7]);
+    let mut wrong_boolean_type = base;
+    wrong_boolean_type["has_effects"] = serde_json::json!("false");
+
+    vec![
+        ("unknown field", unknown),
+        ("missing field", missing),
+        ("duplicate array member", duplicate),
+        ("empty array member", empty),
+        ("wrong array type", wrong_array_type),
+        ("wrong array item type", wrong_item_type),
+        ("wrong boolean type", wrong_boolean_type),
+        ("non-object", serde_json::json!([])),
+    ]
+}
+
+fn assert_phase_minus_1_identity_and_projection_evidence() -> Result<(), String> {
+    use liminal_conformance::identity::matrix::Matrix;
+    use liminal_conformance::identity::{Config, Strategy, claims};
+    use liminal_id::IdentityGrade;
+
+    let config = Config::load().map_err(|error| error.to_string())?;
+    let matrix = Matrix::build(&config).map_err(|error| error.to_string())?;
+    let external_floor = claims::external_file_floor();
+    let graph_floor = claims::graph_native_floor();
+    if external_floor != IdentityGrade::Anchored || graph_floor != IdentityGrade::Managed {
+        return Err("live profile identity floors differ from ADR-0009".into());
+    }
+    for strategy in [
+        Strategy::InlineId,
+        Strategy::Sidecar,
+        Strategy::Structural,
+        Strategy::RevisionAnchor,
+    ] {
+        let index = claims::strategy_index(&matrix, strategy)
+            .ok_or_else(|| format!("missing identity strategy {}", strategy.kebab()))?;
+        let cap = claims::column_cap(&matrix, index);
+        if !cap.satisfies(external_floor) {
+            return Err(format!(
+                "strategy {} cap {cap:?} is below external-file floor {external_floor:?}",
+                strategy.kebab()
+            ));
+        }
+    }
+    let managed_index = claims::strategy_index(&matrix, Strategy::ManagedGraph)
+        .ok_or("missing managed-graph identity strategy")?;
+    if !claims::column_cap(&matrix, managed_index).satisfies(graph_floor) {
+        return Err("managed-graph evidence is below graph-native floor".into());
+    }
+
+    let foreign =
+        spike_annotation::run_foreign_edit_loop(&config).map_err(|error| error.to_string())?;
+    let rich = spike_richedit::run_richedit_loop(&config);
+    let document = spike_annotation::AnnotatedDoc::build(&config.template, 33)
+        .map_err(|error| error.to_string())?;
+    let parsed = spike_annotation::parse(&spike_annotation::emit(&document))
+        .map_err(|error| error.to_string())?;
+    let measured_level =
+        spike_annotation::declared_level(&foreign, &rich, parsed.text == document.text);
+    if measured_level != 2 || spike_annotation::DECLARED_LEVEL != measured_level {
+        return Err(format!(
+            "annotated-source level drifted: measured={measured_level}, declared={}",
+            spike_annotation::DECLARED_LEVEL
+        ));
+    }
+
+    liminal_conformance::pandoc::assert_pandoc_pinned();
+    let root = camino::Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let fixture = root.join("fixtures/conversion-loss/pandoc");
+    let workdir = phase0_temp_dir(15_010)?;
+    let _ = std::fs::remove_dir_all(&workdir);
+    let measurement = liminal_conformance::pandoc::measure(&fixture, &workdir)
+        .map_err(|error| error.to_string())?;
+    let measured_level = measurement.declared_level();
+    let _ = std::fs::remove_dir_all(&workdir);
+    if measured_level != 1 || liminal_conformance::pandoc::DECLARED_LEVEL != measured_level {
+        return Err(format!(
+            "Pandoc level drifted: measured={measured_level}, declared={}",
+            liminal_conformance::pandoc::DECLARED_LEVEL
+        ));
+    }
+    Ok(())
+}
+
 /// Derives crash cases from non-empty `ToyRun::baseline` hits and checks the
 /// independent `crash_matrix` covers every `(point, occurrence)` exactly.
 /// Fails closed on empty terminals, unknown boundaries, or non-idempotent recovery.
@@ -1030,27 +1271,68 @@ fn ilrp_fixture_inventory_covers_every_durable_boundary() {
 /// against an independent byte-canonical JSON round trip.
 /// Fails closed on a missing field, renamed field, type drift, or unstable bytes.
 #[test]
-#[ignore = "Phase 0 M15: transform contract schema"]
 fn transform_contract_schema_roundtrips_all_fields() {
-    unimplemented!("round-trip every transform contract field");
+    let schema = include_str!("../../spec/fixtures/transform-contract.schema.json");
+    let examples = include_str!("../../spec/fixtures/transform-contract.examples.json");
+    assert_transform_schema_shape(schema).unwrap();
+    let contracts = parse_transform_examples(examples).unwrap();
+    assert!(
+        contracts
+            .iter()
+            .any(|contract| contract.may_discard.is_empty())
+    );
+    assert!(
+        contracts
+            .iter()
+            .any(|contract| !contract.may_discard.is_empty())
+    );
+    for contract in contracts {
+        validate_transform_contract(&serde_json::to_value(&contract).unwrap()).unwrap();
+        let bytes = serde_json::to_vec(&contract).unwrap();
+        let decoded: liminal_transform::TransformContract = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(decoded, contract);
+        assert_eq!(serde_json::to_vec(&decoded).unwrap(), bytes);
+    }
 }
 
 /// Exercises unknown, missing, duplicate, empty, and wrong-typed fields as
 /// independent malformed schema cases under `additionalProperties: false`.
 /// Fails closed if any malformed value deserializes or validates successfully.
 #[test]
-#[ignore = "Phase 0 M15: malformed transform fixtures"]
 fn transform_contract_schema_rejects_malformed_cases() {
-    unimplemented!("reject malformed transform contract cases");
+    for (case, value) in malformed_transform_contracts() {
+        assert!(
+            validate_transform_contract(&value).is_err(),
+            "malformed case {case:?} was accepted"
+        );
+    }
 }
 
 /// Audits normative identity and projection claims against accepted ADR values
 /// and independently regenerated Phase -1 measurements without blessing them.
 /// Fails closed if any grade or level differs from, or exceeds, its evidence.
 #[test]
-#[ignore = "Phase 0 M15: identity and projection publication"]
 fn projection_laws_and_identity_ceilings_are_frozen() {
-    unimplemented!("freeze projection laws and identity ceilings");
+    assert_phase_minus_1_identity_and_projection_evidence().unwrap();
+    let kernel = include_str!("../../spec/kernel.md");
+    let ir = include_str!("../../spec/ir.md");
+    let syntax = include_str!("../../spec/syntax.md");
+    for anchor in [
+        "K-ID-01",
+        "K-ID-02",
+        "IR-PROJ-01",
+        "IR-PROJ-02",
+        "IR-XFORM-01",
+        "SYN-ID-01",
+    ] {
+        let count = kernel.match_indices(anchor).count()
+            + ir.match_indices(anchor).count()
+            + syntax.match_indices(anchor).count();
+        assert_eq!(
+            count, 1,
+            "normative evidence anchor {anchor} must be unique"
+        );
+    }
 }
 
 /// Requires one accepted, explicit ADR decision for each §119, §121, §122, and

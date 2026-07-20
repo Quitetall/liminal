@@ -1,47 +1,62 @@
-# Syntax — human source language and built-in Ruff
+# Syntax — normative source-language constraints
 
-**Scope.** The native surface language: its goals, the compact
-Markdown-compatible form and the fully explicit form, the minimal syntax
-kernel every piece of domain sugar compiles into, the defaults policy, the
-way persistent identity is spelled in source, and the formatter/linter
-command surface with its two laws. Corresponds to v4 Part V (§15–§20).
+**Status:** normative Phase 0 constraints. Exact production grammar remains a
+reserved §119 decision. Phase -1 toy paragraphs are not the production language.
 
-This file is a curated index into the canonical text in `spec/v4/`. On any
-conflict the canonical text wins. Citation forms: `v4 §N`, `R4 §N`.
+## Source goals
 
-## Part V — Human source language
+Human source MUST be compact, error-tolerant, incrementally parseable, pleasant
+in existing editors, and fully expressible in an explicit form (v4 §§15–20).
+Ordinary Markdown MUST be accepted by at least one frontend path. Repositories
+declare edition and formatting policy. Invalid or unknown input MUST remain
+losslessly representable at L0 rather than being rejected or silently repaired.
 
-- **Surface syntax goals** — Markdown-compatible for ordinary prose,
-  compact, unambiguous under a declared edition, error-tolerant,
-  incrementally parseable, pleasant in modal editors, and always fully
-  expressible in an explicit form; ordinary Markdown is accepted as a
-  frontend dialect. v4 §15.
-- **Compact and explicit forms** — the same document written as compact
-  Markdown-style sugar and as explicit `node …` construction; both lower to
-  the same resolved graph normal form at the same Workspace Basis. v4 §16.
-- **Syntax kernel** — the grammar needs only a few general forms (literal,
-  node construction, relation construction, attribute assignment, ordered
-  block, reference, expression, macro invocation); all domain sugar compiles
-  into those forms. v4 §17.
-- **Defaults** — every implicit default has an explicit representation and
-  an explanation path (`lim expand`, `lim explain`, `lim fmt --profile
-  explicit`); the repository declares its formatter's default-writing
-  policy. v4 §18.
-- **Identity in source** — entity/version/anchor/alias separation, identity
-  grades, the no-magical-round-trip rule, and the compact (`{#id}`) and
-  fully explicit (`entity="…"`) identity spellings. v4 §19 (grades §19.1,
-  round-trip limits §19.2, immutable versions and lineage §19.3). The full
-  identity model is indexed in `spec/kernel.md`; this file owns only how
-  identity is *written*.
-- **Formatter and linter commands** — the Ruff-like `lim` toolchain
-  (`fmt`, `check`, `fix`, `lint`, `expand`, `explain`, `migrate`, `diff`,
-  `graph`, `trace`, `doctor`, `verify`) and the two formatter laws:
-  formatting is idempotent, and parsing canonical formatting recovers the
-  same semantic graph. v4 §20.
+Three §119 alternatives remain open until explicit user acceptance:
 
-Phase -1 note: no production grammar or parser exists yet — Law 14 (v4 §3)
-defers them until the Phase -1 gates pass (R4 §10). The grammar decision
-itself is an open ADR (v4 §119). The toy paragraph format used by the
-falsification laboratory is deliberately not this language.
+- strict CommonMark-compatible superset;
+- separate native `.lim` grammar;
+- dual frontend with a shared explicit core.
 
-Status: index only — becomes a self-contained chapter at Phase 0.
+All alternatives MUST lower to the same L1/L2 semantics and pass the same
+projection laws. No parser work begins before the accepted grammar ADR.
+
+## Explicit semantic core
+
+Every frontend MUST express literal data, Node construction, Relation
+construction, attribute assignment, ordered blocks, references, expressions,
+and macro invocation (v4 §§16–17). Domain sugar lowers into these forms; it
+cannot add a third semantic primitive. Compact and explicit forms at the same
+Workspace Basis MUST resolve to equivalent canonical graph semantics.
+
+Every implicit default MUST have an explicit spelling and explanation path.
+`lim expand`, `lim explain`, and explicit formatter output expose lowered
+meaning. Personal format choices may alter spelling, never interpretation.
+
+## Identity spelling
+
+**SYN-ID-01 — source identity law.** Compact `{#id}` and explicit
+`entity="…"` spellings provide durable Holder-controlled evidence for Explicit
+identity. Anonymous text remains Anchored. Duplicate, deleted, copied, or
+foreign-rewritten identifiers MUST surface ambiguity or loss; parsers MUST NOT
+invent continuity. Content hashes name immutable versions, not logical lineage.
+
+Sidecars, graph-managed IDs, external IDs, inline IDs, and inferred anchors are
+different strategies with different guarantees. A frontend MUST retain
+provenance and declare its strategy. Relations declare minimum identity grade;
+source syntax cannot upgrade a target past measured evidence.
+
+## Formatting laws
+
+Formatting MUST be idempotent. Parsing canonical formatting MUST recover the
+same semantic graph for the declared supported subset. Formatting MUST preserve
+unknown or malformed L0 content according to declared loss policy and MUST NOT
+bless inferred identity. `fmt`, `check`, `fix`, `lint`, `expand`, `explain`,
+`migrate`, `diff`, `graph`, `trace`, `doctor`, and `verify` share these laws.
+
+## Measurement boundary
+
+Real-CST evaluation in M17 uses only development/regression fixtures frozen
+before measurement. It compares incremental recovery with an independent full
+reparse oracle and preserves Level 2 unless every Level 3 conjunct passes. Test
+failure changes evidence; it does not authorize changing this chapter or a
+golden without review.

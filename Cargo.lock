@@ -513,6 +513,7 @@ dependencies = [
  "liminal-revision",
  "liminal-source",
  "liminal-sync",
+ "liminal-transform",
  "proptest",
  "rand",
  "serde",
