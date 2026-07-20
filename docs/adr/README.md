@@ -30,6 +30,7 @@ cannot name its own kill-condition is not a decision, it is a hope.
 | [0010](0010-freeze-measured-projection-capability-levels.md) | Freeze measured projection capability levels | accepted |
 | [0011](0011-freeze-jurisdiction-measurement-denominators.md) | Freeze Jurisdiction measurement denominators | accepted |
 | [0012](0012-ratify-phase-minus-1-amendment-ledger.md) | Ratify the Phase -1 amendment ledger | accepted |
+| [0013](0013-phase-0-go-no-go-after-falsification-laboratory.md) | Phase 0 go/no-go after the falsification laboratory | accepted |
 
 ## Writing a new ADR
 

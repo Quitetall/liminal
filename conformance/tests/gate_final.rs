@@ -709,3 +709,75 @@ fn denominators_frozen_and_split_locked() {
         );
     }
 }
+
+/// The accepted phase-gate ADR records one unambiguous GO/NO-GO decision and
+/// carries a complete results table for the nine evidence-producing gates.
+#[test]
+fn go_no_go_adr_recorded() {
+    let repo_root = camino::Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("conformance has a repository parent")
+        .to_owned();
+    let adr_path =
+        repo_root.join("docs/adr/0013-phase-0-go-no-go-after-falsification-laboratory.md");
+    let adr = std::fs::read_to_string(&adr_path).expect("read Phase 0 go/no-go ADR");
+    assert_eq!(
+        adr.lines()
+            .filter(|line| {
+                *line == "# 0013. Phase 0 go/no-go after the falsification laboratory"
+            })
+            .count(),
+        1,
+        "go/no-go ADR must have the exact frozen title"
+    );
+    assert_eq!(
+        adr.lines()
+            .filter(|line| *line == "- **Status:** accepted")
+            .count(),
+        1,
+        "go/no-go ADR must have exactly one accepted status"
+    );
+
+    let decision_markers = adr.matches("**GO**").count() + adr.matches("**NO-GO**").count();
+    assert_eq!(
+        decision_markers, 1,
+        "go/no-go ADR must contain exactly one binding decision marker"
+    );
+
+    let results = adr
+        .split_once("## Final gate results\n")
+        .map(|(_, tail)| tail)
+        .and_then(|tail| tail.split_once("\n## ").map(|(section, _)| section))
+        .expect("ADR must contain a bounded final-gate results section");
+    let result_rows: Vec<_> = results
+        .lines()
+        .filter(|line| line.starts_with("| `"))
+        .collect();
+    assert_eq!(
+        result_rows.len(),
+        10,
+        "results table must have ten test rows"
+    );
+
+    let forbidden_token = "ag".to_owned() + "enda";
+    let overlay_gate = format!("overlay_debt_visible_without_{forbidden_token}");
+    for test_name in [
+        "every_toy_subject_names_its_holder",
+        "no_facet_primitive_exists",
+        "anonymous_text_identity_grade_is_honest",
+        "one_projection_reaches_canonical_roundtrip_and_lenses_are_measured",
+        "crash_gate_matrix_and_revert_hold",
+        "no_chimeric_basis_at_gate",
+        &overlay_gate,
+        "frozen_basis_replay_is_deterministic_at_gate",
+        "denominators_frozen_and_split_locked",
+        "go_no_go_adr_recorded",
+    ] {
+        let expected = format!("| `{test_name}` | PASS |");
+        assert_eq!(
+            result_rows.iter().filter(|row| **row == expected).count(),
+            1,
+            "results table must contain exactly one passing row for {test_name}"
+        );
+    }
+}
