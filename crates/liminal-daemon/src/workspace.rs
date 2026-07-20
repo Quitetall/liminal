@@ -4,7 +4,9 @@
 
 use camino::Utf8Path;
 use liminal_graph::GraphStore;
-use liminal_id::{BufferId, ClientId, JurisdictionKey, PathId, SessionEpoch, TransactionId};
+use liminal_id::{
+    BufferId, ClientId, JurisdictionKey, PathId, SessionEpoch, SourceId, TransactionId,
+};
 use liminal_jurisdiction::{Checker, ProfileSet, ReconciliationQueue, RepairRecord};
 use liminal_revision::{AvailableInputs, BasisPerspective, PerspectiveError, WorkspaceBasis};
 
@@ -41,6 +43,14 @@ pub struct ToyWorkspace {
 }
 
 use std::collections::BTreeMap;
+
+const CURRENT_OBSERVATION_PREFIX: &str = "obs-current/";
+
+/// Canonical restart-metadata key for one external observation (v4 §7.5;
+/// M08 Algorithm B). Reactor writes and workspace reopen reads this one grammar.
+pub(crate) fn current_observation_key(source: SourceId) -> String {
+    format!("{CURRENT_OBSERVATION_PREFIX}{source}")
+}
 
 impl ToyWorkspace {
     /// Open the workspace rooted at `root`: state lives at `<root>/state/`;
@@ -310,7 +320,7 @@ fn seed_durable_inputs(
                     hash: liminal_id::ContentHash::of(&bytes),
                 },
             );
-        } else if let Some(key_source) = key.strip_prefix("obs-current/") {
+        } else if let Some(key_source) = key.strip_prefix(CURRENT_OBSERVATION_PREFIX) {
             let component: liminal_revision::BasisComponent = serde_json::from_value(value)
                 .map_err(|error| liminal_graph::StoreError::Corrupt(error.to_string()))?;
             let liminal_revision::BasisComponent::Observation { source, .. } = &component else {

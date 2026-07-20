@@ -15,11 +15,12 @@ the work orders are its mechanical projection.
 
 A milestone is done when, and only when:
 
-1. Every test named in the work order's **Exit gate** table either (a) flips from
-   `#[ignore = "Phase -1 M<n>: …"]` to passing, or (b) — for tests the plan names
-   that the tree does not yet contain — is **created un-ignored and born passing**
-   in the exact file the work order specifies. Creating a named exit-gate test with
-   an `#[ignore]` attribute is forbidden.
+1. Every test named in the work order's **Exit gate** table either (a) was authored
+   `#[ignore = "Phase N M<n>: …"]` at the preceding phase gate and flips to
+   passing, or (b) — when the preceding gate did not name it — is **created
+   un-ignored and born passing** in the exact file the work order specifies.
+   Creating a new ignored exit-gate test during milestone execution is forbidden;
+   Phase 0+ backlog stubs are authored only at the preceding gate per `phases.md`.
 2. Assertions are **UNWEAKENED**. The assertion text in each test's doc comment and
    in the work order is the contract. Weakening — loosening a comparison, deleting
    an assert, shrinking a matrix, converting byte-equality to substring, adding
@@ -169,10 +170,12 @@ project's most capable executor, and its artifacts get human sign-off.
   `JUR_DECISION`, `JUR_REPAIR`, `JUR_OVERLAY`, `JUR_OVERLAY_LOG`, `JUR_RECONCILE`,
   `SYS_BLOB`, `SYS_UNAVAILABLE`, `SYS_CLOCK`, `SYS_EPOCH`). Introduced at M02/M03;
   no namespace string literal appears at a call site.
-- **Milestone tests:** new milestone tests live in
+- **Milestone tests:** Phase -1 milestone tests live in
   `conformance/tests/milestones/m<nn>.rs` under a `milestones/main.rs` that
-  declares the modules. Crash tests are named `crash_*` anywhere (routed into the
-  serialized nextest crash group).
+  declares the modules. Phase 0+ gates shared across a phase sequence live in
+  `conformance/tests/phase<n>.rs`, are authored ignored at the preceding gate,
+  and are assigned to exact work orders there. Crash tests are named `crash_*`
+  anywhere (routed into the serialized nextest crash group).
 - **Name aliases:** where `docs/implementation-plan.md` uses a shorthand test name,
   the work order states the alias once (e.g. `capture_never_rejected` ≡ the gate
   test `no_edit_is_rejected`); tests are never duplicated to satisfy both names.

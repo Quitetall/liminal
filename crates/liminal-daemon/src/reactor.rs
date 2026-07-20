@@ -15,7 +15,7 @@ use liminal_id::{
 use liminal_resolver::ReplayableResolver;
 use liminal_revision::BasisComponent;
 
-use crate::workspace::{ToyWorkspace, WorkspaceError};
+use crate::workspace::{ToyWorkspace, WorkspaceError, current_observation_key};
 
 /// One point-in-time observation of external state (v4 §7.5 `Observation`
 /// Basis component; M08 Algorithm B). Doubles as [`ScriptedStockResolver`]'s
@@ -81,7 +81,7 @@ impl ToyWorkspace {
             })?;
         }
         txn.put_aux(SYS_BLOB, &format!("obs/{source}/{hash}"), payload)?;
-        txn.put_aux(SYS_BLOB, &format!("obs-current/{source}"), component_value)?;
+        txn.put_aux(SYS_BLOB, &current_observation_key(source), component_value)?;
         txn.apply(Operation::MaterializeExternal {
             node,
             source,
