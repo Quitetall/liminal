@@ -25,6 +25,11 @@ cannot name its own kill-condition is not a decision, it is a hope.
 | [0005](0005-test-stack-nextest-insta-proptest-divan.md) | Test stack: nextest + insta + proptest + divan | accepted |
 | [0006](0006-cargo-deny-supply-chain.md) | cargo-deny for supply-chain policy | accepted |
 | [0007](0007-hand-rolled-phase-minus-1-toy-store.md) | Hand-rolled Phase -1 toy store per v4 §92 | accepted |
+| [0008](0008-phase-minus-1-execution-amendments.md) | Phase -1 execution amendments ledger | accepted |
+| [0009](0009-cap-identity-promises-at-phase-minus-1-evidence.md) | Cap identity promises at Phase -1 evidence | accepted |
+| [0010](0010-freeze-measured-projection-capability-levels.md) | Freeze measured projection capability levels | accepted |
+| [0011](0011-freeze-jurisdiction-measurement-denominators.md) | Freeze Jurisdiction measurement denominators | accepted |
+| [0012](0012-ratify-phase-minus-1-amendment-ledger.md) | Ratify the Phase -1 amendment ledger | accepted |
 
 ## Writing a new ADR
 
