@@ -23,8 +23,8 @@ authorization, suite ratification, or access to locked acceptance inputs.
 | held-out contents inspected, listed, copied, hashed, or derived | NOT_RUN — prohibited |
 | intended campaign ceiling | 8 hours |
 | complete post-fix qualification rerun | NOT_RUN |
-| machine inventory | `conformance/haqp/packet.json` |
-| machine inventory BLAKE3 | `9388a2573e1d718b48034210003f378605b4c106352dd4510a08a263a9742952` |
+| machine inventory | `conformance/haqp/packet.json` (`cargo run -p liminal-xtask -- haq verify-inventory`) |
+| machine inventory BLAKE3 | `620c5ed72d82c6e23c7595fe6a7d7446535417aba8a99e0468edb71de2acf565` |
 
 ## Execution lanes
 

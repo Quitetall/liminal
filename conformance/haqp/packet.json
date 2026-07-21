@@ -2,6 +2,7 @@
   "suite_version": "phase1-haqp1-proposed-v1",
   "status": "proposed",
   "ratification": "unratified",
+  "qualification_state": "not-run",
   "locked_acceptance_corpora_touched": false,
   "requirements": [
     {"id": "P1-R001", "kind": "law", "source": "docs/execution/M18.md:D18.1", "critical": true},
@@ -27,16 +28,28 @@
     {"id": "P1-R021", "kind": "law", "source": "docs/execution/M22.md:D22.2", "critical": true},
     {"id": "P1-R022", "kind": "law", "source": "docs/execution/M23.md:D23.1", "critical": true},
     {"id": "P1-R023", "kind": "law", "source": "docs/execution/M23.md:D23.6", "critical": true},
-    {"id": "P1-R024", "kind": "gate", "source": "docs/execution/M24.md:D24.1", "critical": true}
+    {"id": "P1-R024", "kind": "gate", "source": "docs/execution/M24.md:D24.1", "critical": true},
+    {"id": "P1-R025", "kind": "law", "source": "docs/execution/M20.md:D20.5", "critical": true},
+    {"id": "P1-R026", "kind": "law", "source": "docs/execution/M20.md:D20.6", "critical": true},
+    {"id": "P1-R027", "kind": "law", "source": "docs/execution/M20.md:D20.7", "critical": true},
+    {"id": "P1-R028", "kind": "law", "source": "docs/execution/M21.md:D21.4", "critical": true},
+    {"id": "P1-R029", "kind": "law", "source": "docs/execution/M21.md:D21.5", "critical": true},
+    {"id": "P1-R030", "kind": "law", "source": "docs/execution/M21.md:D21.6", "critical": true},
+    {"id": "P1-R031", "kind": "law", "source": "docs/execution/M21.md:D21.7", "critical": true},
+    {"id": "P1-R032", "kind": "law", "source": "docs/execution/M22.md:D22.3", "critical": true},
+    {"id": "P1-R033", "kind": "law", "source": "docs/execution/M22.md:D22.4", "critical": true},
+    {"id": "P1-R034", "kind": "law", "source": "docs/execution/M22.md:D22.5", "critical": true},
+    {"id": "P1-R035", "kind": "law", "source": "docs/execution/M22.md:D22.6", "critical": true},
+    {"id": "P1-R036", "kind": "law", "source": "docs/execution/M22.md:D22.7", "critical": true}
   ],
   "tests": [
-    {"id": "P1-T01", "name": "laws::formatter_idempotence_law_holds", "requirements": ["P1-R001", "P1-R002", "P1-R003"]},
-    {"id": "P1-T02", "name": "laws::canonical_round_trip_law_holds", "requirements": ["P1-R004", "P1-R005", "P1-R006"]},
-    {"id": "P1-T03", "name": "laws::incremental_equals_full_compile_law_holds", "requirements": ["P1-R008", "P1-R009", "P1-R010"]},
-    {"id": "P1-T04", "name": "classes::malformed_source::malformed_source_never_panics_and_round_trips", "requirements": ["P1-R011", "P1-R016", "P1-R023"]},
+    {"id": "P1-T01", "name": "laws::formatter_idempotence_law_holds", "requirements": ["P1-R001", "P1-R002", "P1-R003", "P1-R026", "P1-R027"]},
+    {"id": "P1-T02", "name": "laws::canonical_round_trip_law_holds", "requirements": ["P1-R004", "P1-R005", "P1-R006", "P1-R012"]},
+    {"id": "P1-T03", "name": "laws::incremental_equals_full_compile_law_holds", "requirements": ["P1-R008", "P1-R009", "P1-R010", "P1-R028", "P1-R029", "P1-R030", "P1-R031"]},
+    {"id": "P1-T04", "name": "classes::malformed_source::malformed_source_never_panics_and_round_trips", "requirements": ["P1-R011", "P1-R016", "P1-R023", "P1-R032"]},
     {"id": "P1-T05", "name": "classes::malformed_source::fuzz_regressions_stay_fixed", "requirements": ["P1-R022", "P1-R023"]},
-    {"id": "P1-T06", "name": "classes::golden_render::full_document_html_matches_golden", "requirements": ["P1-R013", "P1-R014"]},
-    {"id": "P1-T07", "name": "classes::golden_render::incremental_patch_equals_full_render", "requirements": ["P1-R015", "P1-R017", "P1-R018", "P1-R019"]},
+    {"id": "P1-T06", "name": "classes::golden_render::full_document_html_matches_golden", "requirements": ["P1-R013", "P1-R014", "P1-R025", "P1-R033", "P1-R036"]},
+    {"id": "P1-T07", "name": "classes::golden_render::incremental_patch_equals_full_render", "requirements": ["P1-R007", "P1-R015", "P1-R017", "P1-R018", "P1-R019", "P1-R034", "P1-R035"]},
     {"id": "P1-T08", "name": "classes::migration::old_snapshots_open_after_format_evolution", "requirements": ["P1-R020", "P1-R021", "P1-R024"]}
   ],
   "mutants": [

@@ -7,11 +7,41 @@ use camino::Utf8Path;
 use serde::Deserialize;
 
 /// Verify committed HAQP inventories, packet status, and crash-boundary registry.
-pub fn verify_repo(root: &Utf8Path) -> Result<()> {
+pub fn verify_inventory_repo(root: &Utf8Path) -> Result<()> {
     let packet = read_packet(root)?;
     verify_packet(&packet)?;
     verify_markdown_surface(root, &packet)?;
     verify_crash_boundaries(&packet)?;
+    Ok(())
+}
+
+/// Verify completed HAQP qualification evidence. Planned or NOT_RUN packet rows
+/// fail here; this is the command used by the M17 packet gate.
+pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
+    let packet = read_packet(root)?;
+    verify_packet(&packet)?;
+    verify_markdown_surface(root, &packet)?;
+    verify_crash_boundaries(&packet)?;
+    require_eq(
+        "qualification_state",
+        &packet.qualification_state,
+        "complete",
+    )?;
+    for mutant in &packet.mutants {
+        require_eq("mutant.disposition", &mutant.disposition, "killed")?;
+    }
+    for canary in &packet.canaries {
+        require_eq("canary.result", &canary.result, "caught")?;
+    }
+    for family in &packet.generated {
+        require_eq("generated.result", &family.result, "pass")?;
+    }
+    for row in &packet.crash_boundaries {
+        require_eq("crash.result", &row.result, "pass")?;
+    }
+    for review in &packet.reviews {
+        require_eq("review.result", &review.result, "pass")?;
+    }
     Ok(())
 }
 
@@ -42,15 +72,38 @@ fn verify_packet(packet: &Packet) -> Result<()> {
         packet.requirements.iter().map(|row| row.id.as_str()),
         "requirement",
     )?;
+    let requirement_ids = packet
+        .requirements
+        .iter()
+        .map(|row| row.id.as_str())
+        .collect::<BTreeSet<_>>();
     require_unique(packet.tests.iter().map(|row| row.id.as_str()), "test")?;
     require_exact_ids(
         packet.tests.iter().map(|row| row.id.as_str()),
         (1..=8).map(|idx| format!("P1-T{idx:02}")),
         "test",
     )?;
+    let mut covered_requirements = BTreeSet::new();
     for test in &packet.tests {
         if test.requirements.is_empty() {
             anyhow::bail!("{} has no requirement mapping", test.id);
+        }
+        for requirement in &test.requirements {
+            if !requirement_ids.contains(requirement.as_str()) {
+                anyhow::bail!("{} references unknown requirement {}", test.id, requirement);
+            }
+            covered_requirements.insert(requirement.as_str());
+        }
+    }
+    for requirement in &packet.requirements {
+        if requirement.critical && !covered_requirements.contains(requirement.id.as_str()) {
+            anyhow::bail!(
+                "critical requirement {} is not mapped to a test",
+                requirement.id
+            );
+        }
+        if requirement.kind.trim().is_empty() || requirement.source.trim().is_empty() {
+            anyhow::bail!("requirement {} has empty kind/source", requirement.id);
         }
     }
     verify_mutants(packet)?;
@@ -241,6 +294,7 @@ struct Packet {
     suite_version: String,
     status: String,
     ratification: String,
+    qualification_state: String,
     locked_acceptance_corpora_touched: bool,
     requirements: Vec<Requirement>,
     tests: Vec<Test>,

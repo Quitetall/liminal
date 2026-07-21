@@ -1971,11 +1971,13 @@ fn assert_real_cst_provenance(git_commit: &str, measurement_tree: &str) -> Resul
 /// Fails closed unless the machine inventory is complete, bound into the review
 /// packet, and still unratified/proposed.
 #[test]
+#[ignore = "Phase 0 M17: HAQP qualification evidence not yet complete"]
 fn phase1_suite_packet_is_complete_and_unratified() {
     let root = camino::Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("workspace root");
-    liminal_xtask::haq::verify_repo(root).expect("Phase 1 HAQP packet inventory must verify");
+    liminal_xtask::haq::verify_qualified_repo(root)
+        .expect("Phase 1 HAQP qualification evidence must verify");
 }
 
 /// Requires an accepted ADR with exactly one explicit user GO or NO-GO decision

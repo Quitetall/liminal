@@ -7,7 +7,12 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Command::Haq { command } => match command {
-            HaqCommand::Verify => liminal_xtask::haq::verify_repo(&liminal_xtask::repo_root()?)?,
+            HaqCommand::Verify => {
+                liminal_xtask::haq::verify_qualified_repo(&liminal_xtask::repo_root()?)?;
+            }
+            HaqCommand::VerifyInventory => {
+                liminal_xtask::haq::verify_inventory_repo(&liminal_xtask::repo_root()?)?;
+            }
         },
     }
     Ok(())
@@ -31,6 +36,8 @@ enum Command {
 
 #[derive(Debug, Subcommand)]
 enum HaqCommand {
-    /// Verify committed HAQP inventories and packet status.
+    /// Verify completed HAQP qualification evidence.
     Verify,
+    /// Verify committed HAQP inventories and packet status before qualification.
+    VerifyInventory,
 }
