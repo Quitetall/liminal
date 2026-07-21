@@ -40,6 +40,20 @@ debug/conformance target until real requirements justify user-facing `.lim`.
 - Every frontend shares projection laws and explicit semantic core.
 - Parser implementation begins only after this ADR's acceptance.
 
+## Amendments
+
+AM-15.1 (user-ratified 2026-07-20): Phase 1 uses a Liminal-owned bounded
+Markdown-compatible grammar over `rowan 0.16.1` immutable lossless green trees
+and a `ropey 1.6.1` source view. The supported compact subset is ATX headings,
+paragraphs, ordered and unordered lists, block quotes, fenced code, emphasis,
+strong text, inline code, links, and explicit IDs. The explicit frontend covers
+the §17 literal, node, relation, attribute, ordered-block, reference, expression,
+and macro-invocation forms. Unknown extensions, raw HTML, malformed syntax, and
+unsupported constructs remain opaque and byte-preserved; HTML lowering escapes
+them. `tree-sitter-md` remains an M17 measurement dependency only because its
+documented correctness limits and lack of a lossless native serializer cannot
+support production authority.
+
 **What would falsify or reverse this:** M17 cannot preserve malformed bytes or
 meet canonical round-trip laws; two frontends drift semantically; or measured
 maintenance cost exceeds the value of the explicit core. Reversal requires a new

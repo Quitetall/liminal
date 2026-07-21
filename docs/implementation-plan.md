@@ -134,7 +134,7 @@ Crash testing is the backbone of M1–M6, so its rules are fixed here (v4 §92 r
 
 **Mechanism — in-process fault points, real subprocess death (primary).**
 
-- Fault points are registered at the ILRP durable boundaries: `ilrp/after_intent_commit`, `ilrp/after_external_apply`, `ilrp/after_acknowledge`, `ilrp/before_finalize`, `ilrp/after_finalize_before_notify` (matching `CrashPoint` in `liminal-jurisdiction::ilrp`). Points are **occurrence-counted, not name-exploded**: a two-step DAG hits `after_external_apply` twice, addressed as occurrence 1 and 2 — new steps never require new point names.
+- Fault points are registered at the ILRP durable boundaries: `ilrp/before_intent_commit`, `ilrp/after_intent_commit`, `ilrp/before_external_apply`, `ilrp/after_external_apply`, `ilrp/before_ack`, `ilrp/after_ack`, `ilrp/before_finalize`, `ilrp/after_finalize_before_notify` (matching `CrashPoint` in `liminal-jurisdiction::ilrp`). Points are **occurrence-counted, not name-exploded**: a two-step DAG hits `after_external_apply` twice, addressed as occurrence 1 and 2 — new steps never require new point names.
 - Arming: the conformance harness spawns `liminald exec <scenario>` with `LIMINAL_CRASHPOINT=<point>[:<occurrence>]` (occurrence defaults to 1). `EnvCrashInjector` (`liminal-daemon/src/crash.rs`) calls `std::process::abort()` on match — a real SIGABRT, no unwinding, no destructor flushes, so nothing "accidentally durable" survives.
 - **Hit-trace proves firing.** Every fault-point hit (matched or not) is appended (O_APPEND) to the file named by `LIMINAL_CRASH_TRACE`. `ToyRun::run_to_crash` asserts both the SIGABRT exit *and* that the armed point appears in the trace — a crash test whose point never fired is a broken test, not a passing one.
 - **The crash matrix is DERIVED, never hand-listed.** `ToyRun::baseline` runs the scenario with no injector and records the full hit trace; `crash_matrix()` turns every observed `(point, occurrence)` into a crash case automatically. Adding a durable boundary to a scenario therefore *cannot* be silently untested.
@@ -177,7 +177,7 @@ Infrastructure that is deliberately absent, with the exact event that activates 
 
 | Deferred item | Activation trigger |
 |---|---|
-| `fuzz/` targets (`cst_parse`, `format_idempotent`) | First parser crate lands (`liminal-cst`, Phase 1) |
+| Production `fuzz/` targets (`cst_parse`, `format_idempotent`) | First parser crate lands (`liminal-cst`, Phase 1). AM-17.2 separately permits Phase-0-only HAQP reference-harness targets before authorization; they cannot depend on or instantiate production parser code. |
 | Benchmark regression gating (CodSpeed via `codspeed-divan-compat`) | Phase 1 vertical slice lands |
 | `cargo-semver-checks` + reproducible-package verification | First `crates.io` publish |
 | SBOM / `cargo-auditable` | First distributed binary |

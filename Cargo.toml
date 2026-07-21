@@ -69,6 +69,7 @@ liminal-lua = { path = "crates/liminal-lua" }
 liminal-protocol = { path = "crates/liminal-protocol" }
 liminal-daemon = { path = "crates/liminal-daemon" }
 liminal-cli = { path = "crates/liminal-cli" }
+liminal-xtask = { path = "crates/liminal-xtask" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"                               # liminal-text / liminal-wasm-host may opt out later via a documented per-crate exception

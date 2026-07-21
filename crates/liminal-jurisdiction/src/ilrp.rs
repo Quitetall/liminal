@@ -130,16 +130,22 @@ pub trait ExternalExecutor {
     fn apply(&self, mutation: &ProposedMutation) -> Result<StepAck, IlrpError>;
 }
 
-/// The five durable boundaries after which Phase -1 kills the process
-/// (R4 §10). Per-step boundaries fire once per step in topological order;
-/// the harness disambiguates by occurrence count, not name explosion.
+/// Durable boundaries around ILRP transitions (R4 §10). Per-step boundaries
+/// fire once per step in topological order; the harness disambiguates by
+/// occurrence count, not name explosion.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CrashPoint {
+    /// Immediately before the Prepare transaction commits.
+    BeforeIntentCommit,
     /// After the Prepare transaction commits.
     AfterIntentCommit,
+    /// Immediately before one external step's effect is requested (per step).
+    BeforeExternalApply,
     /// After one external step's effect lands (per step).
     AfterExternalApply,
+    /// Immediately before one step's acknowledgement persists (per step).
+    BeforeAcknowledge,
     /// After one step's acknowledgement persists (per step).
     AfterAcknowledge,
     /// Immediately before the Finalize transaction.
@@ -153,8 +159,11 @@ impl CrashPoint {
     #[must_use]
     pub fn name(self) -> &'static str {
         match self {
+            Self::BeforeIntentCommit => "ilrp/before_intent_commit",
             Self::AfterIntentCommit => "ilrp/after_intent_commit",
+            Self::BeforeExternalApply => "ilrp/before_external_apply",
             Self::AfterExternalApply => "ilrp/after_external_apply",
+            Self::BeforeAcknowledge => "ilrp/before_ack",
             Self::AfterAcknowledge => "ilrp/after_ack",
             Self::BeforeFinalize => "ilrp/before_finalize",
             Self::AfterFinalizeBeforeNotify => "ilrp/after_finalize_before_notify",
@@ -164,10 +173,13 @@ impl CrashPoint {
     /// Every boundary, for harness enumeration (a registered point that never
     /// fires in a baseline run is a dead, untested boundary — a finding).
     #[must_use]
-    pub fn all() -> [CrashPoint; 5] {
+    pub fn all() -> [CrashPoint; 8] {
         [
+            Self::BeforeIntentCommit,
             Self::AfterIntentCommit,
+            Self::BeforeExternalApply,
             Self::AfterExternalApply,
+            Self::BeforeAcknowledge,
             Self::AfterAcknowledge,
             Self::BeforeFinalize,
             Self::AfterFinalizeBeforeNotify,
@@ -249,6 +261,21 @@ impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
         Ok(())
     }
 
+    fn acknowledge_step(
+        &self,
+        id: RepairId,
+        intent: &mut RepairIntent,
+        step_id: RepairStepId,
+        ack: StepAck,
+        origin: Origin,
+    ) -> Result<(), IlrpError> {
+        intent.acks.insert(step_id, ack);
+        self.crash.crash_if_armed(CrashPoint::BeforeAcknowledge);
+        self.commit_intent(id, intent, &format!("ack:{step_id}"), origin)?;
+        self.crash.crash_if_armed(CrashPoint::AfterAcknowledge);
+        Ok(())
+    }
+
     /// **Prepare** (v4 §7.8 step 1): in ONE graph transaction, record the
     /// plan, captured Basis, dependency DAG, expected pre/poststates,
     /// idempotency keys, and safety evidence. The intent enters `Prepared`.
@@ -299,6 +326,7 @@ impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
         // One transaction: persist the intent.
         let mut txn = self.store.begin()?;
         txn.put_aux(AUX_NS_INTENT, &key, serde_json::to_value(&intent)?)?;
+        self.crash.crash_if_armed(CrashPoint::BeforeIntentCommit);
         txn.commit(Self::meta("ilrp:prepare", Origin::Human))?;
 
         // Fault point: after the Prepare transaction commits.
@@ -399,9 +427,7 @@ impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
                         observed_poststate: step.expected_poststate.clone(),
                         at: Timestamp::now(),
                     };
-                    intent.acks.insert(*step_id, ack);
-                    self.commit_intent(id, intent, &format!("ack:{step_id}"), origin)?;
-                    self.crash.crash_if_armed(CrashPoint::AfterAcknowledge);
+                    self.acknowledge_step(id, intent, *step_id, ack, origin)?;
                     continue;
                 }
 
@@ -409,11 +435,10 @@ impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
                 match self.executor.verify(step)? {
                     PrestateMatch::Prestate => {
                         // Apply.
+                        self.crash.crash_if_armed(CrashPoint::BeforeExternalApply);
                         let ack = self.executor.apply(step)?;
                         self.crash.crash_if_armed(CrashPoint::AfterExternalApply);
-                        intent.acks.insert(*step_id, ack);
-                        self.commit_intent(id, intent, &format!("ack:{step_id}"), origin)?;
-                        self.crash.crash_if_armed(CrashPoint::AfterAcknowledge);
+                        self.acknowledge_step(id, intent, *step_id, ack, origin)?;
                     }
                     PrestateMatch::Poststate => {
                         // Already applied; synthesize ack.
@@ -422,9 +447,7 @@ impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
                             observed_poststate: step.expected_poststate.clone(),
                             at: Timestamp::now(),
                         };
-                        intent.acks.insert(*step_id, ack);
-                        self.commit_intent(id, intent, &format!("ack:{step_id}"), origin)?;
-                        self.crash.crash_if_armed(CrashPoint::AfterAcknowledge);
+                        self.acknowledge_step(id, intent, *step_id, ack, origin)?;
                     }
                     PrestateMatch::Neither => {
                         // Contested — stop and preserve.

@@ -54,6 +54,7 @@ zstd.workspace = true
 [dev-dependencies]
 insta.workspace = true
 liminal-transform.workspace = true
+liminal-xtask.workspace = true
 proptest.workspace = true
 spike-real-cst = { path = "spikes/real-cst" }
 spike-annotation = { path = "spikes/spike-annotation" }

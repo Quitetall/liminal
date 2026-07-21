@@ -105,14 +105,18 @@ mod tests {
             trace_path: Some(dir.to_str().unwrap().to_owned()),
             hits: Mutex::new(Vec::new()),
         };
+        injector.crash_if_armed(CrashPoint::BeforeIntentCommit);
         injector.crash_if_armed(CrashPoint::AfterIntentCommit);
+        injector.crash_if_armed(CrashPoint::BeforeExternalApply);
         injector.crash_if_armed(CrashPoint::AfterExternalApply);
         injector.crash_if_armed(CrashPoint::AfterExternalApply);
         let trace = std::fs::read_to_string(&dir).unwrap();
         assert_eq!(
             trace.lines().collect::<Vec<_>>(),
             vec![
+                "ilrp/before_intent_commit:1",
                 "ilrp/after_intent_commit:1",
+                "ilrp/before_external_apply:1",
                 "ilrp/after_external_apply:1",
                 "ilrp/after_external_apply:2",
             ],

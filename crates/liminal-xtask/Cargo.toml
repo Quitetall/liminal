@@ -1,0 +1,22 @@
+[package]
+name = "liminal-xtask"
+description = "Workspace maintenance and HAQP qualification verifier commands."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+blake3.workspace = true
+camino.workspace = true
+clap.workspace = true
+liminal-jurisdiction.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

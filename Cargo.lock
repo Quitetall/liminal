@@ -562,6 +562,7 @@ dependencies = [
  "liminal-source",
  "liminal-sync",
  "liminal-transform",
+ "liminal-xtask",
  "proptest",
  "rand",
  "serde",
@@ -726,6 +727,19 @@ dependencies = [
 [[package]]
 name = "liminal-wasm-host"
 version = "0.0.0"
+
+[[package]]
+name = "liminal-xtask"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "blake3",
+ "camino",
+ "clap",
+ "liminal-jurisdiction",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "linux-raw-sys"
