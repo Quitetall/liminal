@@ -134,9 +134,10 @@ Prestate permits idempotent apply; Poststate permits acknowledge/resume without
 reapplying; Neither MUST stop, retain bytes, and produce NeedsReview. Recovery
 MUST never guess.
 
-**K-ILRP-03 — durable boundary names.** `ilrp/after_intent_commit |
-ilrp/after_external_apply | ilrp/after_ack | ilrp/before_finalize |
-ilrp/after_finalize_before_notify`. Executable crash cases derive from every
+**K-ILRP-03 — durable boundary names.** `ilrp/before_intent_commit |
+ilrp/after_intent_commit | ilrp/before_external_apply |
+ilrp/after_external_apply | ilrp/before_ack | ilrp/after_ack |
+ilrp/before_finalize | ilrp/after_finalize_before_notify`. Executable crash cases derive from every
 observed `(boundary, occurrence)` pair; this explanatory list cannot define or
 limit coverage.
 

@@ -335,6 +335,24 @@ impl ToyRun {
 
             // First recovery.
             let r1 = run.recover()?;
+            if point == "ilrp/before_intent_commit" {
+                anyhow::ensure!(
+                    r1.terminals.is_empty(),
+                    "crash matrix [{label}]: before first intent commit must leave no recoverable intent"
+                );
+                let r2 = run.recover()?;
+                anyhow::ensure!(
+                    r2.world_digest == r1.world_digest && r2.terminals == r1.terminals,
+                    "crash matrix [{label}]: recovery idempotence failed before first intent commit"
+                );
+                let staged = liminal_source::scan_staged(&run.root)?;
+                anyhow::ensure!(
+                    staged.is_empty(),
+                    "crash matrix [{label}]: {} staged files remain after pre-intent crash",
+                    staged.len()
+                );
+                continue;
+            }
             anyhow::ensure!(
                 !r1.terminals.is_empty(),
                 "crash matrix [{label}]: recovery returned no intent terminals"
