@@ -470,8 +470,8 @@ pub fn source_basis(document: &HirDocument) -> SourceBasis {
 pub fn resolve(hir: &HirDocument, basis: &WorkspaceBasis) -> Result<ResolvedGraph, ResolveError> {
     let source = hir.source_map.basis.clone();
     let source_selected = basis.components.values().any(|component| match component {
-        BasisComponent::FileContent { hash, .. } => *hash == source.content_hash,
-        BasisComponent::BufferGeneration {
+        BasisComponent::FileContent { hash, .. }
+        | BasisComponent::BufferGeneration {
             content_hash: Some(hash),
             ..
         } => *hash == source.content_hash,
