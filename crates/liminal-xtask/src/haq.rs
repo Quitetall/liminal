@@ -9,9 +9,18 @@ use serde::Deserialize;
 /// Verify committed HAQP inventories, packet status, and crash-boundary registry.
 pub fn verify_inventory_repo(root: &Utf8Path) -> Result<()> {
     let packet = read_packet(root)?;
-    verify_packet(&packet)?;
+    verify_packet_shape(&packet)?;
+    verify_packet_statuses(
+        &packet,
+        PacketStatusExpectations {
+            mutant: "predeclared",
+            canary: "predeclared",
+            generated: "planned",
+            crash: "registered",
+            review: "planned",
+        },
+    )?;
     verify_markdown_surface(root, &packet)?;
-    verify_crash_boundaries(&packet)?;
     Ok(())
 }
 
@@ -19,29 +28,23 @@ pub fn verify_inventory_repo(root: &Utf8Path) -> Result<()> {
 /// fail here; this is the command used by the M17 packet gate.
 pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     let packet = read_packet(root)?;
-    verify_packet(&packet)?;
+    verify_packet_shape(&packet)?;
     verify_markdown_surface(root, &packet)?;
-    verify_crash_boundaries(&packet)?;
     require_eq(
         "qualification_state",
         &packet.qualification_state,
         "complete",
     )?;
-    for mutant in &packet.mutants {
-        require_eq("mutant.disposition", &mutant.disposition, "killed")?;
-    }
-    for canary in &packet.canaries {
-        require_eq("canary.result", &canary.result, "caught")?;
-    }
-    for family in &packet.generated {
-        require_eq("generated.result", &family.result, "pass")?;
-    }
-    for row in &packet.crash_boundaries {
-        require_eq("crash.result", &row.result, "pass")?;
-    }
-    for review in &packet.reviews {
-        require_eq("review.result", &review.result, "pass")?;
-    }
+    verify_packet_statuses(
+        &packet,
+        PacketStatusExpectations {
+            mutant: "killed",
+            canary: "caught",
+            generated: "pass",
+            crash: "pass",
+            review: "pass",
+        },
+    )?;
     Ok(())
 }
 
@@ -51,7 +54,7 @@ fn read_packet(root: &Utf8Path) -> Result<Packet> {
     serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))
 }
 
-fn verify_packet(packet: &Packet) -> Result<()> {
+fn verify_packet_shape(packet: &Packet) -> Result<()> {
     require_eq(
         "suite_version",
         &packet.suite_version,
@@ -106,14 +109,43 @@ fn verify_packet(packet: &Packet) -> Result<()> {
             anyhow::bail!("requirement {} has empty kind/source", requirement.id);
         }
     }
-    verify_mutants(packet)?;
-    verify_canaries(packet)?;
-    verify_generated(packet)?;
-    verify_reviews(packet)?;
+    verify_mutant_inventory(packet)?;
+    verify_canary_inventory(packet)?;
+    verify_generated_inventory(packet)?;
+    verify_reviews_inventory(packet)?;
+    verify_crash_boundary_inventory(packet)?;
     Ok(())
 }
 
-fn verify_mutants(packet: &Packet) -> Result<()> {
+#[derive(Clone, Copy)]
+struct PacketStatusExpectations {
+    mutant: &'static str,
+    canary: &'static str,
+    generated: &'static str,
+    crash: &'static str,
+    review: &'static str,
+}
+
+fn verify_packet_statuses(packet: &Packet, expected: PacketStatusExpectations) -> Result<()> {
+    for mutant in &packet.mutants {
+        require_eq("mutant.disposition", &mutant.disposition, expected.mutant)?;
+    }
+    for canary in &packet.canaries {
+        require_eq("canary.result", &canary.result, expected.canary)?;
+    }
+    for family in &packet.generated {
+        require_eq("generated.result", &family.result, expected.generated)?;
+    }
+    for row in &packet.crash_boundaries {
+        require_eq("crash.result", &row.result, expected.crash)?;
+    }
+    for review in &packet.reviews {
+        require_eq("review.result", &review.result, expected.review)?;
+    }
+    Ok(())
+}
+
+fn verify_mutant_inventory(packet: &Packet) -> Result<()> {
     if packet.mutants.len() != 65 {
         anyhow::bail!("mutant count must be 65, got {}", packet.mutants.len());
     }
@@ -123,7 +155,6 @@ fn verify_mutants(packet: &Packet) -> Result<()> {
     for mutant in &packet.mutants {
         *by_family.entry(mutant.family.as_str()).or_default() += 1;
         *by_operator.entry(mutant.operator.as_str()).or_default() += 1;
-        require_eq("mutant.disposition", &mutant.disposition, "predeclared")?;
         if mutant.killing_tests.is_empty() {
             anyhow::bail!("{} has no killing test", mutant.id);
         }
@@ -141,14 +172,13 @@ fn verify_mutants(packet: &Packet) -> Result<()> {
     Ok(())
 }
 
-fn verify_canaries(packet: &Packet) -> Result<()> {
+fn verify_canary_inventory(packet: &Packet) -> Result<()> {
     require_exact_ids(
         packet.canaries.iter().map(|row| row.id.as_str()),
         (1..=16).map(|idx| format!("C{idx:02}")),
         "canary",
     )?;
     for canary in &packet.canaries {
-        require_eq("canary.result", &canary.result, "predeclared")?;
         if canary.expected_failure.trim().is_empty() {
             anyhow::bail!("{} has empty expected failure", canary.id);
         }
@@ -156,7 +186,7 @@ fn verify_canaries(packet: &Packet) -> Result<()> {
     Ok(())
 }
 
-fn verify_generated(packet: &Packet) -> Result<()> {
+fn verify_generated_inventory(packet: &Packet) -> Result<()> {
     if packet.generated.len() != 5 {
         anyhow::bail!(
             "generated family count must be 5, got {}",
@@ -176,7 +206,6 @@ fn verify_generated(packet: &Packet) -> Result<()> {
         if family.seed_categories.len() < 16 {
             anyhow::bail!("{} has fewer than 16 seed categories", family.family);
         }
-        require_eq("generated.result", &family.result, "planned")?;
     }
     let total_minutes: u64 = packet.generated.iter().map(|row| row.fuzz_minutes).sum();
     if total_minutes < 155 {
@@ -185,7 +214,7 @@ fn verify_generated(packet: &Packet) -> Result<()> {
     Ok(())
 }
 
-fn verify_reviews(packet: &Packet) -> Result<()> {
+fn verify_reviews_inventory(packet: &Packet) -> Result<()> {
     if packet.reviews.len() != 2 {
         anyhow::bail!(
             "review record count must be 2, got {}",
@@ -203,7 +232,6 @@ fn verify_reviews(packet: &Packet) -> Result<()> {
         if review.unresolved_verified_findings != 0 {
             anyhow::bail!("{} has unresolved verified findings", review.reviewer);
         }
-        require_eq("review.result", &review.result, "planned")?;
     }
     Ok(())
 }
@@ -230,7 +258,7 @@ fn verify_markdown_surface(root: &Utf8Path, packet: &Packet) -> Result<()> {
     Ok(())
 }
 
-fn verify_crash_boundaries(packet: &Packet) -> Result<()> {
+fn verify_crash_boundary_inventory(packet: &Packet) -> Result<()> {
     let registered = liminal_jurisdiction::CrashPoint::all()
         .iter()
         .map(|point| point.name().to_owned())
@@ -252,7 +280,6 @@ fn verify_crash_boundaries(packet: &Packet) -> Result<()> {
                 row.boundary
             );
         }
-        require_eq("crash.result", &row.result, "registered")?;
     }
     Ok(())
 }
@@ -365,4 +392,82 @@ struct Review {
     attempts: u64,
     unresolved_verified_findings: u64,
     result: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn repo_root() -> camino::Utf8PathBuf {
+        camino::Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("crates dir")
+            .parent()
+            .expect("repo root")
+            .to_path_buf()
+    }
+
+    fn packet_from_repo() -> Packet {
+        read_packet(&repo_root()).expect("read HAQP packet")
+    }
+
+    fn mark_complete(packet: &mut Packet) {
+        packet.qualification_state = "complete".to_owned();
+        for mutant in &mut packet.mutants {
+            mutant.disposition = "killed".to_owned();
+        }
+        for canary in &mut packet.canaries {
+            canary.result = "caught".to_owned();
+        }
+        for family in &mut packet.generated {
+            family.result = "pass".to_owned();
+        }
+        for row in &mut packet.crash_boundaries {
+            row.result = "pass".to_owned();
+        }
+        for review in &mut packet.reviews {
+            review.result = "pass".to_owned();
+        }
+    }
+
+    #[test]
+    fn completed_packet_statuses_can_pass_qualified_layer() {
+        let mut packet = packet_from_repo();
+        mark_complete(&mut packet);
+
+        verify_packet_shape(&packet).expect("complete packet shape stays valid");
+        verify_packet_statuses(
+            &packet,
+            PacketStatusExpectations {
+                mutant: "killed",
+                canary: "caught",
+                generated: "pass",
+                crash: "pass",
+                review: "pass",
+            },
+        )
+        .expect("complete statuses accepted by qualified verifier");
+    }
+
+    #[test]
+    fn inventory_status_layer_still_rejects_completed_rows() {
+        let mut packet = packet_from_repo();
+        mark_complete(&mut packet);
+
+        let err = verify_packet_statuses(
+            &packet,
+            PacketStatusExpectations {
+                mutant: "predeclared",
+                canary: "predeclared",
+                generated: "planned",
+                crash: "registered",
+                review: "planned",
+            },
+        )
+        .expect_err("inventory verifier must reject completed statuses");
+        assert!(
+            err.to_string().contains("mutant.disposition"),
+            "unexpected error: {err}"
+        );
+    }
 }
