@@ -28,3 +28,23 @@ impl SourceRange {
         self.end <= self.start
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::SourceRange;
+
+    #[test]
+    fn length_and_empty_follow_half_open_range() {
+        let range = SourceRange { start: 3, end: 8 };
+        assert_eq!(range.len(), 5);
+        assert!(!range.is_empty());
+
+        let empty = SourceRange { start: 8, end: 8 };
+        assert_eq!(empty.len(), 0);
+        assert!(empty.is_empty());
+
+        let reversed = SourceRange { start: 8, end: 3 };
+        assert_eq!(reversed.len(), 0, "length saturates for reversed ranges");
+        assert!(reversed.is_empty());
+    }
+}

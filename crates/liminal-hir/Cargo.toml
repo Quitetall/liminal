@@ -11,3 +11,11 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+liminal-cst.workspace = true
+liminal-id.workspace = true
+liminal-source.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

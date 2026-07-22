@@ -12,7 +12,14 @@ authors.workspace = true
 publish.workspace = true
 
 [dependencies]
+liminal-cir.workspace = true
+liminal-cst.workspace = true
+liminal-hir.workspace = true
+liminal-id.workspace = true
+liminal-revision.workspace = true
 liminal-source.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
 
 [lints]
 workspace = true

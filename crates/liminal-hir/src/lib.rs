@@ -19,3 +19,10 @@
 //! and Concrete Syntax Tree, v4 §9) and lowers into `liminal-cir` (L2
 //! Resolved Graph IR, v4 §11) at an explicit `WorkspaceBasis` from
 //! `liminal-revision` (v4 §7.5).
+
+mod schema;
+
+pub use liminal_source::{
+    SourceBasis, SourceLoadError, SourceRange, SourceSliceError, Utf8HolderView,
+};
+pub use schema::*;

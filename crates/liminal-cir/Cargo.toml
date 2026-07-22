@@ -11,3 +11,15 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+blake3.workspace = true
+liminal-graph.workspace = true
+liminal-hir.workspace = true
+liminal-id.workspace = true
+liminal-revision.workspace = true
+liminal-source.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true

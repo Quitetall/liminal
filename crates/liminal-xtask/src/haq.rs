@@ -546,10 +546,9 @@ pub fn run_generated_repo(root: &Utf8Path, cases: u64) -> Result<()> {
                         .expect("generated source is UTF-8");
                     let cst = liminal_cst::parse(&view);
                     assert_eq!(cst.emit_lossless(), source);
-                    let formatted = liminal_format::MarkdownFormatter
-                        .format(&source)
-                        .expect("total formatter");
-                    let again = liminal_format::MarkdownFormatter
+                    let m19_formatter = liminal_format::MarkdownFormatter::default();
+                    let formatted = m19_formatter.format(&source).expect("total formatter");
+                    let again = m19_formatter
                         .format(&formatted)
                         .expect("idempotent formatter");
                     assert_eq!(formatted, again);

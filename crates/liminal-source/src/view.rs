@@ -198,9 +198,28 @@ mod tests {
     fn byte_slice_requires_utf8_boundaries() {
         let source = view("aéz");
         assert_eq!(source.byte_slice(1..3).expect("slice").to_string(), "é");
+        assert_eq!(
+            source
+                .byte_slice(0..source.len_bytes())
+                .expect("full slice")
+                .to_string(),
+            "aéz"
+        );
+        assert_eq!(source.byte_slice(1..1).expect("empty slice").len_bytes(), 0);
         assert!(matches!(
             source.byte_slice(2..3),
             Err(SourceSliceError::NotCharBoundary { offset: 2 })
         ));
+        assert!(matches!(
+            source.byte_slice(1..2),
+            Err(SourceSliceError::NotCharBoundary { offset: 2 })
+        ));
+        let reversed_start = 4;
+        let reversed_end = 3;
+        assert!(matches!(
+            source.byte_slice(reversed_start..reversed_end),
+            Err(SourceSliceError::OutOfBounds { .. })
+        ));
+        assert_eq!(source.to_string(), "aéz");
     }
 }

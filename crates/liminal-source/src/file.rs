@@ -232,6 +232,31 @@ mod tests {
     }
 
     #[test]
+    fn observe_missing_file_returns_none() {
+        let dir = tmp_dir("observe-missing");
+        let target = dir.join("missing.md");
+        assert_eq!(observe(&target).unwrap(), None);
+    }
+
+    #[test]
+    fn observe_propagates_non_not_found_errors() {
+        let dir = tmp_dir("observe-directory");
+        let err = observe(&dir).expect_err("reading a directory must fail");
+        assert_eq!(err.kind(), io::ErrorKind::IsADirectory);
+    }
+
+    #[test]
+    fn abandon_removes_staged_file_without_touching_target() {
+        let dir = tmp_dir("abandon");
+        let target = dir.join("note.md");
+        let staged = stage(&target, b"discarded").unwrap();
+        let staged_path = staged.staged_path().to_owned();
+        staged.abandon().unwrap();
+        assert!(!staged_path.exists());
+        assert!(!target.exists());
+    }
+
+    #[test]
     fn scan_finds_abandoned_staging() {
         let dir = tmp_dir("scan");
         let target = dir.join("nested").join("note.md");

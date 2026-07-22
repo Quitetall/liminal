@@ -10,6 +10,7 @@ flamegraph.svg
 fuzz/artifacts/
 fuzz/coverage/
 fuzz/target/
+mutants.out/
 
 # Local benchmark candidate; accepted baseline remains T1-owned.
 benches/baselines/phase1-candidate.json

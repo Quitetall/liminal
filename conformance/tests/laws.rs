@@ -19,7 +19,8 @@ fn formatter_idempotence_law_holds() {
         "leading blanks\n\nsecond block",
         "literal {#malformed id!}",
     ];
-    liminal_conformance::laws::check_formatter_idempotence(&MarkdownFormatter, &sources);
+    let formatter = MarkdownFormatter::default();
+    liminal_conformance::laws::check_formatter_idempotence(&formatter, &sources);
 }
 
 /// `parse(emit(graph))` preserves the supported subset; `emit(parse(source))`
@@ -32,7 +33,8 @@ fn canonical_round_trip_law_holds() {
         "alpha {#a}\n\nbeta {#b}",
         "unsuffixed paragraph\n\nthird block {#c}",
     ];
-    liminal_conformance::laws::check_canonical_round_trip(&MarkdownFormatter, &sources);
+    let formatter = MarkdownFormatter::default();
+    liminal_conformance::laws::check_canonical_round_trip(&formatter, &sources);
 }
 
 /// `incremental_compile(x, edits) ≡ full_compile(apply(x, edits))` (v4 §112)

@@ -538,6 +538,18 @@ dependencies = [
 [[package]]
 name = "liminal-cir"
 version = "0.0.0"
+dependencies = [
+ "blake3",
+ "liminal-graph",
+ "liminal-hir",
+ "liminal-id",
+ "liminal-revision",
+ "liminal-source",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "uuid",
+]
 
 [[package]]
 name = "liminal-cli"
@@ -626,7 +638,14 @@ dependencies = [
 name = "liminal-format"
 version = "0.0.0"
 dependencies = [
+ "liminal-cir",
+ "liminal-cst",
+ "liminal-hir",
+ "liminal-id",
+ "liminal-revision",
  "liminal-source",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -646,6 +665,14 @@ dependencies = [
 [[package]]
 name = "liminal-hir"
 version = "0.0.0"
+dependencies = [
+ "liminal-cst",
+ "liminal-id",
+ "liminal-source",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
 
 [[package]]
 name = "liminal-history"
