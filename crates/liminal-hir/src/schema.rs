@@ -641,6 +641,8 @@ fn parse_explicit_kind(
             BTreeMap::new(),
         ),
         "macro" => {
+            // M19 arguments are flat typed values; nested invocation syntax
+            // belongs to the later macro-expansion phase.
             let (name_part, args_part) = rest.split_once('(').unwrap_or((rest, ""));
             let name = name_part.trim().to_owned();
             let args = args_part.trim_end_matches(';').trim_end_matches(')').trim();

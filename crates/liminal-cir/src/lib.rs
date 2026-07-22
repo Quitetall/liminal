@@ -167,6 +167,9 @@ pub enum DebugJsonError {
         /// JSON path where structure diverged.
         path: String,
     },
+    /// JSON is semantically valid but not canonical v1 encoding.
+    #[error("non-canonical debug JSON")]
+    NonCanonical,
     /// Unsupported schema version.
     #[error("unsupported schema version {0}")]
     Version(u32),
@@ -279,9 +282,7 @@ pub fn deserialize_debug_v1(bytes: &[u8]) -> Result<DebugGraphV1, DebugJsonError
         .map_err(|err| DebugJsonError::Syntax(err.to_string()))?;
     compare_shape(&input, &expected, "$")?;
     if canonical != bytes {
-        return Err(DebugJsonError::Shape {
-            path: "$".to_owned(),
-        });
+        return Err(DebugJsonError::NonCanonical);
     }
     Ok(value)
 }
@@ -468,22 +469,19 @@ pub fn source_basis(document: &HirDocument) -> SourceBasis {
 #[allow(clippy::too_many_lines, clippy::items_after_statements)]
 pub fn resolve(hir: &HirDocument, basis: &WorkspaceBasis) -> Result<ResolvedGraph, ResolveError> {
     let source = hir.source_map.basis.clone();
-    let _holder = basis
-        .components
-        .iter()
-        .find_map(|(key, component)| match component {
-            BasisComponent::FileContent { hash, .. } if *hash == source.content_hash => {
-                Some(key.clone())
-            }
-            BasisComponent::BufferGeneration {
-                content_hash: Some(hash),
-                ..
-            } if *hash == source.content_hash => Some(key.clone()),
-            _ => None,
-        })
-        .ok_or(ResolveError::BasisMismatch(JurisdictionKey::Source(
+    let source_selected = basis.components.values().any(|component| match component {
+        BasisComponent::FileContent { hash, .. } => *hash == source.content_hash,
+        BasisComponent::BufferGeneration {
+            content_hash: Some(hash),
+            ..
+        } => *hash == source.content_hash,
+        _ => false,
+    });
+    if !source_selected {
+        return Err(ResolveError::BasisMismatch(JurisdictionKey::Source(
             source.source,
-        )))?;
+        )));
+    }
     let document_id = derived_node_id(source.source, "node-construction", &[]);
     let mut paths = HashMap::<HirId, Vec<u32>>::new();
     let mut parents = HashMap::<HirId, HirId>::new();

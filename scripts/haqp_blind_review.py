@@ -232,7 +232,7 @@ def run_pass(name: str, model: str, context: str, *, pass_two: bool) -> dict[str
         "fixed_base": {"commit": run("git", "rev-parse", "HEAD").strip()},
         "raw_response_sha256": digest(raw.encode()),
     }
-    # Keep only a digest; model output is untrusted and may contain secrets.
+    # Do not persist raw model output; it is untrusted and may contain secrets.
     (OUT / f"{name}.json").write_text(json.dumps(record, indent=2) + "\n")
     return record
 
