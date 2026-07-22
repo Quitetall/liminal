@@ -492,7 +492,13 @@ fn lower_explicit(source: &str) -> LowerParts {
             continue;
         }
         if line == "}" {
-            stack.pop();
+            if stack.pop().is_none() {
+                diagnostics.push(HirDiagnostic {
+                    code: HirDiagnosticCode::MalformedSyntax,
+                    range,
+                    message: "unexpected closing brace".to_owned(),
+                });
+            }
             continue;
         }
         let opens = line.ends_with('{');
@@ -527,6 +533,16 @@ fn lower_explicit(source: &str) -> LowerParts {
         {
             stack.push(id);
         }
+    }
+    if !stack.is_empty() {
+        diagnostics.push(HirDiagnostic {
+            code: HirDiagnosticCode::MalformedSyntax,
+            range: SourceRange {
+                start: 0,
+                end: u64::try_from(source.len()).expect("source length fits u64"),
+            },
+            message: format!("unclosed braces: {} block(s) never closed", stack.len()),
+        });
     }
     (items, roots, diagnostics, annotations)
 }
@@ -625,11 +641,19 @@ fn parse_explicit_kind(
             BTreeMap::new(),
         ),
         "macro" => {
-            let name = rest.split('(').next().unwrap_or(rest).trim().to_owned();
+            let (name_part, args_part) = rest.split_once('(').unwrap_or((rest, ""));
+            let name = name_part.trim().to_owned();
+            let args = args_part.trim_end_matches(';').trim_end_matches(')').trim();
             (
                 HirItemKind::MacroInvocation {
                     name,
-                    arguments: Vec::new(),
+                    arguments: if args.is_empty() {
+                        Vec::new()
+                    } else {
+                        args.split(',')
+                            .map(|value| parse_value(value.trim()))
+                            .collect()
+                    },
                 },
                 BTreeMap::new(),
             )

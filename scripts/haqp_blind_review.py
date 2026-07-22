@@ -29,10 +29,6 @@ def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def canonical(value: Any) -> bytes:
-    return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
-
-
 def run(*args: str) -> str:
     return subprocess.check_output(args, cwd=ROOT, text=True, stderr=subprocess.STDOUT)
 
@@ -114,12 +110,11 @@ def mcp_call(model: str, prompt: str, session_id: str) -> str:
         cwd=ROOT,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
         text=True,
     )
     assert proc.stdin is not None and proc.stdout is not None
     proc.stdin.write(json.dumps(init, separators=(",", ":")) + "\n")
-    proc.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
     proc.stdin.flush()
     result: dict[str, Any] | None = None
     deadline = time.monotonic() + 900
@@ -130,6 +125,10 @@ def mcp_call(model: str, prompt: str, session_id: str) -> str:
         try:
             item = json.loads(line)
         except json.JSONDecodeError:
+            continue
+        if item.get("id") == 0:
+            proc.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+            proc.stdin.flush()
             continue
         if item.get("id") == 1:
             result = item
@@ -233,7 +232,7 @@ def run_pass(name: str, model: str, context: str, *, pass_two: bool) -> dict[str
         "fixed_base": {"commit": run("git", "rev-parse", "HEAD").strip()},
         "raw_response_sha256": digest(raw.encode()),
     }
-    (OUT / f"{name}.raw.txt").write_text(raw)
+    # Keep only a digest; model output is untrusted and may contain secrets.
     (OUT / f"{name}.json").write_text(json.dumps(record, indent=2) + "\n")
     return record
 

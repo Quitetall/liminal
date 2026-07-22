@@ -278,6 +278,11 @@ pub fn deserialize_debug_v1(bytes: &[u8]) -> Result<DebugGraphV1, DebugJsonError
     let expected: serde_json::Value = serde_json::from_slice(&canonical)
         .map_err(|err| DebugJsonError::Syntax(err.to_string()))?;
     compare_shape(&input, &expected, "$")?;
+    if canonical != bytes {
+        return Err(DebugJsonError::Shape {
+            path: "$".to_owned(),
+        });
+    }
     Ok(value)
 }
 
@@ -463,7 +468,7 @@ pub fn source_basis(document: &HirDocument) -> SourceBasis {
 #[allow(clippy::too_many_lines, clippy::items_after_statements)]
 pub fn resolve(hir: &HirDocument, basis: &WorkspaceBasis) -> Result<ResolvedGraph, ResolveError> {
     let source = hir.source_map.basis.clone();
-    let holder = basis
+    let _holder = basis
         .components
         .iter()
         .find_map(|(key, component)| match component {
@@ -770,7 +775,6 @@ pub fn resolve(hir: &HirDocument, basis: &WorkspaceBasis) -> Result<ResolvedGrap
     }
     nodes.sort_by_key(|node| node.id);
     relations.sort_by_key(|relation| relation.id);
-    let _ = holder;
     Ok(ResolvedGraph {
         graph: DerivedGraph {
             basis: basis.clone(),
