@@ -410,11 +410,7 @@ fn compact_projection(
 ) -> (String, String, Vec<(String, String)>) {
     let first = text.lines().next().unwrap_or_default();
     let first_trimmed = first.trim_start();
-    let heading = first_trimmed
-        .trim_start()
-        .chars()
-        .take_while(|ch| *ch == '#')
-        .count();
+    let heading = first_trimmed.chars().take_while(|ch| *ch == '#').count();
     let heading_end = first_trimmed
         .char_indices()
         .nth(heading)
