@@ -13,6 +13,7 @@ black-box manifest gate.
 | malformed-source | v1 | conformance malformed-source class | byte-preserving negative oracle | malformed UTF-8 and syntax cases | Phase 1 | public |
 | migration | v1 | conformance migration class | versioned canonical JSON | unsupported-version and corrupt migration cases | Phase 1 | public |
 | phase0 | v1 | Phase 0 strict serde loaders | canonical TOML/JSON | unknown, duplicate, empty, dangling, and wrong-type cases | M13/M15 | public |
+| phase1 | v1 | Phase 1 source/renderer fixtures | byte-exact Markdown and HTML goldens | malformed source and render-boundary cases | M18/M22 | public |
 | repair-dags | v1 | `ScenarioScript::load` | topological step order | cycle, stale prestate, and unsafe candidate cases | M04 | public |
 | scenarios | v1 | `ScenarioScript::load_dir` | canonical TOML serde | schema and expectation mismatch cases | M02–M11 | public |
 | silence | v1 | `ScenarioScript::load` | byte-empty output oracle | unexpected diagnostic and item cases | M03/M16 | public |
