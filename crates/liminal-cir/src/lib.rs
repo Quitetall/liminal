@@ -1049,7 +1049,7 @@ mod tests {
     }
 
     #[test]
-    fn debug_validation_rejects_duplicate_dangling_and_missing_provenance() {
+    fn debug_validation_rejects_duplicate_and_missing_provenance() {
         let mut duplicate = fixture();
         duplicate.nodes.push(duplicate.nodes[0].clone());
         assert!(matches!(
