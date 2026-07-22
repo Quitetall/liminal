@@ -409,19 +409,28 @@ fn compact_projection(
     attributes: &mut BTreeMap<String, HirValue>,
 ) -> (String, String, Vec<(String, String)>) {
     let first = text.lines().next().unwrap_or_default();
-    let heading = first
+    let first_trimmed = first.trim_start();
+    let heading = first_trimmed
         .trim_start()
         .chars()
         .take_while(|ch| *ch == '#')
         .count();
-    if heading > 0 && first.chars().nth(heading) == Some(' ') {
+    let heading_end = first_trimmed
+        .char_indices()
+        .nth(heading)
+        .map_or(first_trimmed.len(), |(index, _)| index);
+    if heading > 0
+        && first_trimmed
+            .get(heading_end..)
+            .is_some_and(|rest| rest.starts_with(' '))
+    {
         attributes.insert(
             "level".into(),
             HirValue::Integer(i64::try_from(heading).unwrap_or(i64::MAX)),
         );
         return (
             "heading".into(),
-            first[heading + 1..].to_owned(),
+            first_trimmed[heading_end + 1..].to_owned(),
             Vec::new(),
         );
     }
@@ -843,5 +852,15 @@ mod tests {
         ];
         assert_eq!(forms.len(), 8);
         assert!(forms.windows(2).all(|pair| pair[0] != pair[1]));
+    }
+
+    #[test]
+    fn compact_heading_uses_unicode_safe_byte_offsets() {
+        let mut attributes = BTreeMap::new();
+        let (name, value, children) = compact_projection("\u{2029} # title", &mut attributes);
+        assert_eq!(name, "heading");
+        assert_eq!(value, "title");
+        assert!(children.is_empty());
+        assert_eq!(attributes.get("level"), Some(&HirValue::Integer(1)));
     }
 }
