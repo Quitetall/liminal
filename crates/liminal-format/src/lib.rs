@@ -9,14 +9,128 @@
 //! 2. **Parsing canonical formatting recovers the same semantic graph** —
 //!    the formatter may normalize spelling, never meaning.
 //!
-//! **RESERVED — implementation begins Phase 1** (v4 Part XXII "formatter,
-//! `lim fmt`, `lim check`"). Law 14 forbids a production formatter (and the
-//! parser it needs) until the Phase -1 falsification gates pass; formatter
-//! fuzzing (v4 §113) arrives with it.
-//!
-//! This crate exists now so the constitutional vocabulary has a compiled,
-//! greppable home: the [`Formatter`] seam lets the §112 idempotence law
-//! compile as a generic conformance test today, before any implementation.
+//! Phase 1 ships a deliberately bounded paragraph-compatible implementation.
+//! It is not a full Markdown grammar: unsupported constructs remain literal
+//! paragraph text until a grammar ADR expands this surface.
+
+use liminal_source::paragraph::{self, Block};
+
+/// Parsed document for the Phase 1 paragraph-compatible formatter.
+#[derive(Debug, Clone)]
+pub struct MarkdownDocument {
+    /// Blocks in source order. Byte ranges remain provenance metadata and do
+    /// not participate in semantic document equality.
+    pub blocks: Vec<Block>,
+}
+
+impl PartialEq for MarkdownDocument {
+    fn eq(&self, other: &Self) -> bool {
+        self.blocks
+            .iter()
+            .map(|block| (&block.text, &block.id))
+            .eq(other.blocks.iter().map(|block| (&block.text, &block.id)))
+    }
+}
+
+impl Eq for MarkdownDocument {}
+
+/// Formatter error. The Phase 1 parser is total, so this is reserved for API
+/// compatibility and future bounded diagnostics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MarkdownError;
+
+impl std::fmt::Display for MarkdownError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("markdown formatting error")
+    }
+}
+
+impl std::error::Error for MarkdownError {}
+
+/// Deterministic paragraph-compatible formatter.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MarkdownFormatter;
+
+impl Formatter for MarkdownFormatter {
+    type Doc = MarkdownDocument;
+    type Error = MarkdownError;
+
+    fn parse(&self, source: &str) -> Result<Self::Doc, Self::Error> {
+        Ok(MarkdownDocument {
+            blocks: paragraph::parse(source),
+        })
+    }
+
+    fn emit(&self, doc: &Self::Doc) -> Result<String, Self::Error> {
+        Ok(doc
+            .blocks
+            .iter()
+            .map(block_source)
+            .collect::<Vec<_>>()
+            .join("\n\n"))
+    }
+
+    fn format(&self, source: &str) -> Result<String, Self::Error> {
+        let doc = self.parse(source)?;
+        self.emit(&doc)
+    }
+}
+
+fn block_source(block: &Block) -> String {
+    match &block.id {
+        Some(id) => format!("{} {{#{id}}}", block.text),
+        None => block.text.clone(),
+    }
+}
+
+/// Deterministic HTML renderer for the same bounded document projection.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MarkdownRenderer;
+
+impl MarkdownRenderer {
+    /// Render paragraph blocks to stable HTML. Text is escaped before it is
+    /// placed in the document; IDs become stable `data-node-id` attributes.
+    pub fn render(&self, source: &str) -> Result<String, MarkdownError> {
+        let doc = MarkdownFormatter.parse(source)?;
+        self.render_blocks(&doc.blocks)
+    }
+
+    /// Render already compiled paragraph blocks. This is the output side of
+    /// the incremental compiler seam; it does not reparse source text.
+    pub fn render_blocks(&self, blocks: &[Block]) -> Result<String, MarkdownError> {
+        let mut out = String::from("<article>\n");
+        for block in blocks {
+            let id = block
+                .id
+                .as_deref()
+                .map(|value| format!(" data-node-id=\"{}\"", escape_html(value)))
+                .unwrap_or_default();
+            let text = escape_html(&block.text).replace('\n', "<br />\n");
+            out.push_str("<p");
+            out.push_str(&id);
+            out.push('>');
+            out.push_str(&text);
+            out.push_str("</p>\n");
+        }
+        out.push_str("</article>\n");
+        Ok(out)
+    }
+}
+
+fn escape_html(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for ch in input.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#39;"),
+            _ => out.push(ch),
+        }
+    }
+    out
+}
 
 /// The formatter seam over an opaque parsed document (v4 §20).
 ///

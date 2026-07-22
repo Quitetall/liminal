@@ -200,19 +200,41 @@ mod store_baselines {
     }
 }
 
+/// Phase 1 source-to-HTML benchmarks. These measure the bounded vertical
+/// slice that now exists; acceptance baselines remain a separate T1 decision.
+mod phase1 {
+    use std::mem::size_of;
+
+    /// Cold one-shot source-to-HTML startup proxy.
+    #[divan::bench]
+    fn cold_startup(bencher: divan::Bencher<'_, '_>) {
+        bencher.bench_local(|| {
+            std::hint::black_box(
+                liminal_format::MarkdownRenderer
+                    .render("one {#a}\n\ntwo {#b}")
+                    .expect("render fixture"),
+            );
+        });
+    }
+
+    /// Shallow logical Node/Relation footprint. Heap residency remains a
+    /// separate allocator-profile measurement and is not inferred here.
+    #[divan::bench]
+    fn mem_per_node_and_relation(bencher: divan::Bencher<'_, '_>) {
+        bencher.bench_local(|| {
+            std::hint::black_box(
+                size_of::<liminal_graph::Node>() + size_of::<liminal_graph::Relation>(),
+            );
+        });
+    }
+}
+
 /// The Phase-gated remainder of the v4 §116 charter. Each bench names its
 /// metric and the phase (v4 Part XXII) whose gate activates it; until then it
 /// panics by design (Law 14 — the subsystem it measures is forbidden to exist,
 /// so a "passing" bench here could only be measuring a lie).
 #[cfg(feature = "unimplemented")]
 mod future {
-    /// Metric: cold process start to first rendered output of the one-shot
-    /// source-to-HTML slice. Activates: Phase 1 (v4 Part XXII, §116).
-    #[divan::bench]
-    fn cold_startup() {
-        unimplemented!("Phase 1 (v4 Part XXII): needs the one-shot source-to-HTML vertical slice");
-    }
-
     /// Metric: warm `liminald` start to first served query. Activates:
     /// Phase 2 (v4 Part XXII, §116) — persistent daemons are forbidden in
     /// Phase -1.
@@ -278,14 +300,5 @@ mod future {
     #[divan::bench]
     fn macro_expansion() {
         unimplemented!("Phase 3 (v4 Part XXII): needs transform and macro infrastructure");
-    }
-
-    /// Metric: resident bytes per logical Node and Relation, measured via the
-    /// harness-wide `divan::AllocProfiler`. Activates: Phase 1 (v4 Part XXII,
-    /// §116) — measuring the toy store's memory shape would only invite the
-    /// optimization Law 14 forbids.
-    #[divan::bench]
-    fn mem_per_node_and_relation() {
-        unimplemented!("Phase 1 (v4 Part XXII): measure the real store, not the §92 toy");
     }
 }

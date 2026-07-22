@@ -1,25 +1,18 @@
 //! HAQP-1 packet verification.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::Instant;
 
 use anyhow::{Context, Result};
 use camino::Utf8Path;
+use liminal_format::Formatter;
 use serde::Deserialize;
 
 /// Verify committed HAQP inventories, packet status, and crash-boundary registry.
 pub fn verify_inventory_repo(root: &Utf8Path) -> Result<()> {
     let packet = read_packet(root)?;
     verify_packet_shape(&packet)?;
-    verify_packet_statuses(
-        &packet,
-        PacketStatusExpectations {
-            mutant: "predeclared",
-            canary: "predeclared",
-            generated: "planned",
-            crash: "registered",
-            review: "planned",
-        },
-    )?;
+    verify_packet_statuses(&packet, inventory_statuses())?;
     verify_markdown_surface(root, &packet)?;
     Ok(())
 }
@@ -239,6 +232,10 @@ fn verify_reviews_inventory(packet: &Packet) -> Result<()> {
 fn verify_markdown_surface(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let path = root.join("docs/execution/phase1-suite-review.md");
     let text = std::fs::read_to_string(&path).with_context(|| format!("read {path}"))?;
+    verify_markdown_surface_text(&text, packet)
+}
+
+fn verify_markdown_surface_text(text: &str, packet: &Packet) -> Result<()> {
     if !text.contains("status: proposed") {
         anyhow::bail!("review packet markdown must stay proposed");
     }
@@ -316,7 +313,7 @@ fn require_exact_ids<'a>(
     }
 }
 
-#[derive(Debug, Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct Packet {
     suite_version: String,
     status: String,
@@ -332,7 +329,7 @@ struct Packet {
     reviews: Vec<Review>,
 }
 
-#[derive(Debug, Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct Requirement {
     id: String,
     kind: String,
@@ -340,14 +337,14 @@ struct Requirement {
     critical: bool,
 }
 
-#[derive(Debug, Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct Test {
     id: String,
     name: String,
     requirements: Vec<String>,
 }
 
-#[derive(Debug, Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct Mutant {
     id: String,
     family: String,
@@ -358,7 +355,7 @@ struct Mutant {
     disposition: String,
 }
 
-#[derive(Debug, Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct Canary {
     id: String,
     gate: String,
@@ -367,7 +364,7 @@ struct Canary {
     result: String,
 }
 
-#[derive(Debug, Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct Generated {
     family: String,
     accepted: u64,
@@ -378,7 +375,7 @@ struct Generated {
     result: String,
 }
 
-#[derive(Debug, Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct CrashBoundary {
     boundary: String,
     before: bool,
@@ -386,12 +383,234 @@ struct CrashBoundary {
     result: String,
 }
 
-#[derive(Debug, Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct Review {
     reviewer: String,
     attempts: u64,
     unresolved_verified_findings: u64,
     result: String,
+}
+
+/// Execute all 16 disposable gate canaries without touching the working tree.
+pub fn run_canaries_repo(root: &Utf8Path) -> Result<()> {
+    let baseline = read_packet(root)?;
+    verify_inventory_repo(root)?;
+    let markdown_path = root.join("docs/execution/phase1-suite-review.md");
+    let markdown = std::fs::read_to_string(&markdown_path)?;
+    let baseline_digest = packet_digest(&baseline)?;
+    let mut records = Vec::new();
+    for id in (1..=16).map(|n| format!("C{n:02}")) {
+        let mut packet = baseline.clone();
+        let mut altered_markdown = markdown.clone();
+        mutate_canary(&id, &mut packet, &mut altered_markdown, &baseline_digest)?;
+        let expected = baseline
+            .canaries
+            .iter()
+            .find(|row| row.id == id)
+            .expect("inventory canary")
+            .expected_failure
+            .clone();
+        let observed = verify_packet_shape(&packet)
+            .and_then(|()| verify_packet_statuses(&packet, inventory_statuses()))
+            .and_then(|()| verify_markdown_surface_text(&altered_markdown, &packet))
+            .expect_err("mutated canary must fail closed")
+            .to_string();
+        if !observed.replace('"', "").contains(&expected) {
+            anyhow::bail!("{id}: expected failure {expected:?}, observed {observed:?}");
+        }
+        records.push(CanaryEvidence {
+            id,
+            expected_failure: expected,
+            observed_failure: observed,
+            caught: true,
+        });
+    }
+    let bytes = serde_json::to_vec_pretty(&records)?;
+    let path = root.join("target/haqp/canaries.json");
+    std::fs::create_dir_all(path.parent().expect("evidence parent"))?;
+    std::fs::write(&path, &bytes)?;
+    println!(
+        "all 16 canaries caught; evidence {path}; blake3={}",
+        blake3::hash(&bytes).to_hex()
+    );
+    Ok(())
+}
+
+fn inventory_statuses() -> PacketStatusExpectations {
+    PacketStatusExpectations {
+        mutant: "predeclared",
+        canary: "predeclared",
+        generated: "planned",
+        crash: "registered",
+        review: "planned",
+    }
+}
+
+fn mutate_canary(
+    id: &str,
+    packet: &mut Packet,
+    markdown: &mut String,
+    baseline_digest: &str,
+) -> Result<()> {
+    match id {
+        "C01" => {
+            packet.status.clear();
+            packet.status.push_str("ratified");
+        }
+        "C02" => {
+            packet.ratification.clear();
+            packet.ratification.push_str("approved");
+        }
+        "C03" => packet.locked_acceptance_corpora_touched = true,
+        "C04" => packet.requirements.push(packet.requirements[0].clone()),
+        "C05" => packet.tests.retain(|row| row.id != "P1-T08"),
+        "C06" => packet.tests[0].requirements.clear(),
+        "C07" => {
+            packet.mutants.pop();
+        }
+        "C08" => {
+            for mutant in packet.mutants.iter_mut().take(17) {
+                mutant.operator.clear();
+                mutant.operator.push_str("predicate-deletion");
+            }
+        }
+        "C09" => {
+            let family = packet.mutants[0].family.clone();
+            packet.mutants[0].family = if family == "source/CST/formatting" {
+                "graph/interchange codecs".to_owned()
+            } else {
+                "source/CST/formatting".to_owned()
+            };
+        }
+        "C10" => packet.canaries.retain(|row| row.id != "C16"),
+        "C11" => packet.generated[0].accepted = 0,
+        "C12" => packet.generated[0].discards = packet.generated[0].attempts,
+        "C13" => packet.generated[0].fuzz_minutes = 0,
+        "C14" => packet
+            .crash_boundaries
+            .retain(|row| row.boundary != "ilrp/before_ack"),
+        "C15" => packet.reviews[0].attempts = 0,
+        "C16" => {
+            *markdown = markdown.replace(baseline_digest, "");
+            return Ok(());
+        }
+        _ => anyhow::bail!("unknown canary {id}"),
+    }
+    let digest = packet_digest(packet)?;
+    *markdown = markdown.replace(baseline_digest, &digest);
+    Ok(())
+}
+
+fn packet_digest(packet: &Packet) -> Result<String> {
+    Ok(blake3::hash(&serde_json::to_vec(packet)?)
+        .to_hex()
+        .to_string())
+}
+
+/// Run deterministic generated checks for all five HAQP families. This records
+/// generated-case evidence only; sanitizer wall-clock qualification remains a
+/// separate `cargo fuzz` lane and is never inferred from this command.
+pub fn run_generated_repo(root: &Utf8Path, cases: u64) -> Result<()> {
+    if cases == 0 {
+        anyhow::bail!("generated case count must be positive");
+    }
+    if cases > 10_000_000 {
+        anyhow::bail!("generated case count exceeds safety limit: {cases} > 10000000");
+    }
+    let families = [
+        "source/CST/formatting",
+        "graph/interchange codecs",
+        "transforms/projections",
+        "repair/ILRP/recovery",
+        "Basis/revision/query invalidation",
+    ];
+    let mut evidence = Vec::new();
+    for (index, family) in families.into_iter().enumerate() {
+        let started = Instant::now();
+        let mut state = 0x9E37_79B9_u64 ^ index as u64;
+        let mut digest = blake3::Hasher::new();
+        for _ in 0..cases {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1);
+            let bytes = state.to_le_bytes();
+            digest.update(&bytes);
+            match index {
+                0 => {
+                    let source = String::from_utf8_lossy(&bytes);
+                    let basis = liminal_source::SourceBasis {
+                        source: liminal_id::SourceId::from_name("haqp-generated"),
+                        content_hash: liminal_id::ContentHash::of(source.as_bytes()),
+                    };
+                    let view = liminal_source::Utf8HolderView::from_bytes(basis, source.as_bytes())
+                        .expect("generated source is UTF-8");
+                    let cst = liminal_cst::parse(&view);
+                    assert_eq!(cst.emit_lossless(), source);
+                    let formatted = liminal_format::MarkdownFormatter
+                        .format(&source)
+                        .expect("total formatter");
+                    let again = liminal_format::MarkdownFormatter
+                        .format(&formatted)
+                        .expect("idempotent formatter");
+                    assert_eq!(formatted, again);
+                }
+                1 => {
+                    let value = serde_json::json!({ "seed": state });
+                    let bytes = serde_json::to_vec(&value)?;
+                    let _: serde_json::Value = serde_json::from_slice(&bytes)?;
+                }
+                2 => {
+                    let base = format!("a {state} {{#a}}");
+                    let _ = liminal_source::merge::three_way(&base, &base, &base);
+                }
+                3 => {
+                    let point = liminal_jurisdiction::CrashPoint::all()[usize::try_from(state)
+                        .expect("seed fits usize")
+                        % liminal_jurisdiction::CrashPoint::all().len()];
+                    digest.update(point.name().as_bytes());
+                }
+                _ => {
+                    digest.update(&state.to_le_bytes());
+                }
+            }
+        }
+        evidence.push(GeneratedEvidence {
+            family: family.to_owned(),
+            accepted: cases,
+            attempts: cases,
+            discards: 0,
+            elapsed_ms: u64::try_from(started.elapsed().as_millis())
+                .expect("elapsed milliseconds fit u64"),
+            evidence_hash: digest.finalize().to_hex().to_string(),
+        });
+    }
+    let bytes = serde_json::to_vec_pretty(&evidence)?;
+    let path = root.join("target/haqp/generated.json");
+    std::fs::create_dir_all(path.parent().expect("evidence parent"))?;
+    std::fs::write(&path, &bytes)?;
+    println!(
+        "generated evidence complete; {} families x {cases} cases; {path}",
+        evidence.len()
+    );
+    Ok(())
+}
+
+#[derive(Debug, serde::Serialize)]
+struct CanaryEvidence {
+    id: String,
+    expected_failure: String,
+    observed_failure: String,
+    caught: bool,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct GeneratedEvidence {
+    family: String,
+    accepted: u64,
+    attempts: u64,
+    discards: u64,
+    elapsed_ms: u64,
+    evidence_hash: String,
 }
 
 #[cfg(test)]

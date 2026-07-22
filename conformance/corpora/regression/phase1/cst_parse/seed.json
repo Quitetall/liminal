@@ -1,0 +1,1 @@
+{"schema_version":1,"target":"cst_parse","input_sha256":"df54486868581de3b75610c94cea93ab6189faa893252e98f6f6ccf8acc6716f","discovered_seed":1,"reproducer":"cargo fuzz run cst_parse"}

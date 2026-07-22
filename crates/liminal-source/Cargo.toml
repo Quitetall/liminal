@@ -12,6 +12,7 @@ publish.workspace = true
 [dependencies]
 camino.workspace = true
 liminal-id.workspace = true
+ropey = "=1.6.1"
 serde.workspace = true
 thiserror.workspace = true
 

@@ -9,6 +9,10 @@ flamegraph.svg
 # Fuzzing artifacts (fuzz/ itself is committed once it exists — Phase 1)
 fuzz/artifacts/
 fuzz/coverage/
+fuzz/target/
+
+# Local benchmark candidate; accepted baseline remains T1-owned.
+benches/baselines/phase1-candidate.json
 
 # Editor / OS litter
 .DS_Store

@@ -1,0 +1,54 @@
+[package]
+name = "liminal-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+liminal-cst = { path = "../crates/liminal-cst" }
+liminal-format = { path = "../crates/liminal-format" }
+liminal-id = { path = "../crates/liminal-id" }
+liminal-query = { path = "../crates/liminal-query" }
+liminal-revision = { path = "../crates/liminal-revision" }
+liminal-source = { path = "../crates/liminal-source" }
+
+[[bin]]
+name = "canonical_round_trip"
+path = "fuzz_targets/canonical_round_trip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cst_parse"
+path = "fuzz_targets/cst_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "format_idempotent"
+path = "fuzz_targets/format_idempotent.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "html_render"
+path = "fuzz_targets/html_render.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "incremental_full_equivalence"
+path = "fuzz_targets/incremental_full_equivalence.rs"
+test = false
+doc = false
+bench = false

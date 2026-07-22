@@ -7,19 +7,91 @@
 //! stubs so that large workspaces are never eagerly elaborated in full
 //! (v4 §22, §23 demand-driven parsing).
 //!
-//! **RESERVED — implementation begins Phase 1** (v4 Part XXII). Law 14 forbids
-//! any production parser, green-tree, rope, or incremental subtree machinery
-//! before the Phase -1 falsification gates pass; the Phase -1 toy paragraph
-//! format is a deliberate ~50-line hand parser living in the lab, not here.
-//!
-//! This crate exists now so the constitutional vocabulary — the §22
-//! `OpaqueBlock` sketch and its coarse kinds — has a compiled, greppable home
-//! that downstream seams (fuzz targets, §112 laws, conformance fixtures) can
-//! name today.
+//! Phase 1 error-tolerant coarse CST. This is intentionally not a full
+//! grammar: it records exact source bytes and conservative block ranges while
+//! deferring semantic elaboration.
 
 use liminal_id::ContentHash;
 use liminal_source::SourceRange;
 use serde::{Deserialize, Serialize};
+
+mod parser;
+pub use parser::{
+    LiminalLanguage, MAX_ERRORS, MAX_NESTING, Parse, ParseError, ParseErrorCode, SyntaxKind,
+    SyntaxNode, parse,
+};
+
+/// Lossless coarse CST document. `source` is authoritative for emit, so even
+/// malformed or unsupported syntax survives byte-for-byte.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CstDocument {
+    /// Original UTF-8 source bytes.
+    pub source: String,
+    /// Coarse blocks discovered without rejecting input.
+    pub blocks: Vec<OpaqueBlock>,
+}
+
+/// Parse source without rejection or panics.
+#[must_use]
+pub fn coarse_parse(source: &str) -> CstDocument {
+    let mut blocks = Vec::new();
+    let mut block_start = 0usize;
+    let mut cursor = 0usize;
+    let mut in_block = false;
+    for line in source.split_inclusive('\n') {
+        let content = line.strip_suffix('\n').unwrap_or(line);
+        let blank = content.trim().is_empty();
+        if blank {
+            if in_block {
+                blocks.push(block(source, block_start, cursor));
+                in_block = false;
+            }
+        } else if !in_block {
+            block_start = cursor;
+            in_block = true;
+        }
+        cursor += line.len();
+    }
+    if in_block {
+        blocks.push(block(source, block_start, source.len()));
+    }
+    CstDocument {
+        source: source.to_owned(),
+        blocks,
+    }
+}
+
+/// Emit exact original source bytes.
+#[must_use]
+pub fn emit(document: &CstDocument) -> &str {
+    &document.source
+}
+
+fn block(source: &str, start: usize, end: usize) -> OpaqueBlock {
+    let text = &source[start..end];
+    let first = text.lines().next().unwrap_or_default().trim_start();
+    let coarse_kind = if first.starts_with("```") {
+        CoarseKind::Fence
+    } else if first.starts_with('#') {
+        CoarseKind::Heading
+    } else if first.starts_with('-') || first.starts_with("* ") {
+        CoarseKind::List
+    } else if first.starts_with('@') {
+        CoarseKind::Directive
+    } else if first.starts_with("![") || first.contains("](") {
+        CoarseKind::ResourceReference
+    } else {
+        CoarseKind::ParagraphLike
+    };
+    OpaqueBlock {
+        range: SourceRange {
+            start: start as u64,
+            end: end as u64,
+        },
+        hash: ContentHash::of(text.as_bytes()),
+        coarse_kind,
+    }
+}
 
 /// An unelaborated region left as a stub by the coarse structural scan
 /// (verbatim from the v4 §22 sketch).

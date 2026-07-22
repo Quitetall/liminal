@@ -12,6 +12,7 @@ authors.workspace = true
 publish.workspace = true
 
 [dependencies]
+liminal-source.workspace = true
 liminal-id.workspace = true
 liminal-revision.workspace = true
 

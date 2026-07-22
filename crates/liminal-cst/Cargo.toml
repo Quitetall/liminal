@@ -14,6 +14,7 @@ publish.workspace = true
 [dependencies]
 liminal-id.workspace = true
 liminal-source.workspace = true
+rowan = "=0.16.1"
 serde.workspace = true
 
 [lints]

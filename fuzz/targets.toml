@@ -1,0 +1,34 @@
+[[target]]
+name = "canonical_round_trip"
+family = "projection"
+seed_dir = "fuzz/corpus/canonical_round_trip"
+regression_dir = "conformance/corpora/regression/phase1/canonical_round_trip"
+minimum_seed_count = 16
+
+[[target]]
+name = "cst_parse"
+family = "cst"
+seed_dir = "fuzz/corpus/cst_parse"
+regression_dir = "conformance/corpora/regression/phase1/cst_parse"
+minimum_seed_count = 16
+
+[[target]]
+name = "format_idempotent"
+family = "format"
+seed_dir = "fuzz/corpus/format_idempotent"
+regression_dir = "conformance/corpora/regression/phase1/format_idempotent"
+minimum_seed_count = 16
+
+[[target]]
+name = "html_render"
+family = "render"
+seed_dir = "fuzz/corpus/html_render"
+regression_dir = "conformance/corpora/regression/phase1/html_render"
+minimum_seed_count = 16
+
+[[target]]
+name = "incremental_full_equivalence"
+family = "incremental"
+seed_dir = "fuzz/corpus/incremental_full_equivalence"
+regression_dir = "conformance/corpora/regression/phase1/incremental_full_equivalence"
+minimum_seed_count = 16

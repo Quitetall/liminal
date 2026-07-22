@@ -32,6 +32,7 @@ uuid = { version = "1", features = [
   "serde",
 ] } # 128-bit persistent IDs (v4 §44); v5 = deterministic id from a well-known external source name (M08 reactor)
 blake3 = "1" # ContentHash / content addressing (v4 §19.3, §47)
+sha2 = "0.10" # SHA-256 metadata for minimized regression corpus provenance
 zstd = "0.13" # heldout-corpus trace compression (AM-11.6): imported histories stored .zst in-tree
 crc32fast = "1" # log record checksums (v4 §92)
 fs4 = "0.13" # advisory single-writer lock; survives SIGABRT where O_EXCL lockfiles would not

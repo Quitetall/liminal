@@ -38,6 +38,19 @@ crash:
 gates:
     cargo run -p liminal-conformance --bin gates
 
+# HAQP packet checks and evidence lanes.
+haq-inventory:
+    cargo run -p liminal-xtask -- haq verify-inventory
+
+haq-verify:
+    cargo run -p liminal-xtask -- haq verify
+
+haq-canaries:
+    cargo run -p liminal-xtask -- haq run-canaries
+
+haq-generated cases="100000":
+    cargo run -p liminal-xtask -- haq generate --cases {{ cases }}
+
 # Review insta snapshot changes interactively
 snap:
     cargo insta review
@@ -52,9 +65,26 @@ deny:
 bench *ARGS:
     cargo bench -p liminal-benches {{ ARGS }}
 
-# Stub until fuzz/ exists (activation: liminal-cst lands, Phase 1 — see docs/implementation-plan.md)
+# Run each frozen target against its committed development corpus. Full HAQP
+# qualification still requires five separate 31-minute sanitizer runs.
 fuzz-smoke:
-    @echo "deferred: fuzz/ is created when liminal-cst lands (Phase 1)" && exit 1
+    cargo +nightly fuzz run cst_parse --sanitizer address -- -runs=1000
+    cargo +nightly fuzz run format_idempotent --sanitizer address -- -runs=1000
+    cargo +nightly fuzz run canonical_round_trip --sanitizer address -- -runs=1000
+    cargo +nightly fuzz run incremental_full_equivalence --sanitizer address -- -runs=1000
+    cargo +nightly fuzz run html_render --sanitizer address -- -runs=1000
+
+phase1-tests:
+    cargo nextest run -p liminal-conformance --test laws --test classes -E 'test(/(formatter_idempotence_law_holds|canonical_round_trip_law_holds|incremental_equals_full_compile_law_holds|malformed_source_never_panics_and_round_trips|fuzz_regressions_stay_fixed|full_document_html_matches_golden|incremental_patch_equals_full_render)/)'
+
+bench-sample count="30":
+    cargo run -p liminal-xtask -- bench sample {{ count }}
+
+bench-baseline-check:
+    cargo run -p liminal-xtask -- bench baseline-check
+
+bench-gate:
+    cargo run -p liminal-xtask -- bench gate
 
 # Everything CI runs, locally, in CI order
 ci: fmt-check lint

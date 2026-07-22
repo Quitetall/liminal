@@ -18,5 +18,6 @@ pub fn repo_root() -> Result<Utf8PathBuf> {
     }
 }
 
+pub mod bench;
 /// HAQP-1 packet verification.
 pub mod haq;

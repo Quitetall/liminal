@@ -26,6 +26,81 @@ pub mod memo;
 pub use memo::{MemoEntry, MemoTable, entry_over_basis};
 
 use liminal_revision::{ComponentDeps, WorkspaceBasis};
+use liminal_source::paragraph::{self, Block};
+
+/// UTF-8 byte edit used by the Phase 1 incremental compiler.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceEdit {
+    /// Inclusive byte start in original source.
+    pub start: usize,
+    /// Exclusive byte end in original source.
+    pub end: usize,
+    /// Replacement text.
+    pub replacement: String,
+}
+
+/// Bounded paragraph compiler used by Phase 1 equivalence laws.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ParagraphCompiler;
+
+impl IncrementalCompiler for ParagraphCompiler {
+    type Source = String;
+    type Edit = SourceEdit;
+    type Output = Vec<Block>;
+
+    fn full(&self, source: &Self::Source, _basis: &WorkspaceBasis) -> Self::Output {
+        paragraph::parse(source)
+    }
+
+    fn apply(&self, source: &Self::Source, edits: &[Self::Edit]) -> Self::Source {
+        let mut output = source.clone();
+        let mut ordered = edits
+            .iter()
+            .filter_map(|edit| {
+                let start = edit.start.min(source.len());
+                let end = edit.end.min(source.len()).max(start);
+                (source.is_char_boundary(start) && source.is_char_boundary(end)).then_some((
+                    start,
+                    end,
+                    edit.replacement.as_str(),
+                ))
+            })
+            .collect::<Vec<_>>();
+        ordered.sort_by(|left, right| right.0.cmp(&left.0).then(right.1.cmp(&left.1)));
+
+        for index in 0..ordered.len() {
+            let (start, end, replacement) = ordered[index];
+            // Edits use original-source offsets. Overlapping edits have no
+            // deterministic sequential meaning, so discard every member of
+            // an overlap set fail-closed.
+            let overlaps =
+                ordered
+                    .iter()
+                    .enumerate()
+                    .any(|(other, &(other_start, other_end, _))| {
+                        other != index && start < other_end && other_start < end
+                    });
+            if overlaps {
+                continue;
+            }
+            output.replace_range(start..end, replacement);
+        }
+        output
+    }
+
+    fn incremental(
+        &self,
+        source: &Self::Source,
+        edits: &[Self::Edit],
+        basis: &WorkspaceBasis,
+    ) -> Self::Output {
+        // Correctness first: this implementation deliberately shares the
+        // canonical parser with full compilation until subtree reuse has its
+        // own benchmark and oracle evidence.
+        let edited = self.apply(source, edits);
+        self.full(&edited, basis)
+    }
+}
 
 /// A pure revisioned computation over a declared Workspace Basis (v4 §24).
 ///
@@ -81,4 +156,45 @@ pub trait IncrementalCompiler {
         edits: &[Self::Edit],
         basis: &WorkspaceBasis,
     ) -> Self::Output;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{IncrementalCompiler, ParagraphCompiler, SourceEdit};
+
+    #[test]
+    fn multiple_original_offset_edits_apply_back_to_front() {
+        let source = "abcdef".to_owned();
+        let edits = [
+            SourceEdit {
+                start: 0,
+                end: 1,
+                replacement: "A".to_owned(),
+            },
+            SourceEdit {
+                start: 4,
+                end: 6,
+                replacement: "EF!".to_owned(),
+            },
+        ];
+        assert_eq!(ParagraphCompiler.apply(&source, &edits), "AbcdEF!");
+    }
+
+    #[test]
+    fn overlapping_original_offset_edits_are_ignored() {
+        let source = "abcdef".to_owned();
+        let edits = [
+            SourceEdit {
+                start: 1,
+                end: 4,
+                replacement: "X".to_owned(),
+            },
+            SourceEdit {
+                start: 3,
+                end: 5,
+                replacement: "Y".to_owned(),
+            },
+        ];
+        assert_eq!(ParagraphCompiler.apply(&source, &edits), "abcdef");
+    }
 }

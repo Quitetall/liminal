@@ -15,6 +15,11 @@ blake3.workspace = true
 camino.workspace = true
 clap.workspace = true
 liminal-jurisdiction.workspace = true
+liminal-format.workspace = true
+liminal-graph.workspace = true
+liminal-cst.workspace = true
+liminal-source.workspace = true
+liminal-id.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

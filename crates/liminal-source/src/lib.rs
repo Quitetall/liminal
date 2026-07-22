@@ -13,3 +13,5 @@ mod range;
 
 pub use file::{FileObservation, StageError, StagedWrite, observe, scan_staged, stage};
 pub use range::SourceRange;
+pub mod view;
+pub use view::{SourceBasis, SourceLoadError, SourceSliceError, Utf8HolderView};
