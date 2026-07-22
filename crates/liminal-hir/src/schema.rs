@@ -765,6 +765,16 @@ mod tests {
     use super::*;
     use liminal_id::{ContentHash, SourceId};
 
+    fn parse(source: &str) -> Parse {
+        let basis = SourceBasis {
+            source: SourceId::from_name("hir-test-source"),
+            content_hash: ContentHash::of(source.as_bytes()),
+        };
+        let view = liminal_source::Utf8HolderView::from_bytes(basis, source.as_bytes())
+            .expect("valid test source");
+        liminal_cst::parse(&view)
+    }
+
     fn map(annotations: Vec<Annotation>) -> SourceMap {
         SourceMap {
             basis: SourceBasis {
@@ -858,5 +868,100 @@ mod tests {
         assert_eq!(value, "title");
         assert!(children.is_empty());
         assert_eq!(attributes.get("level"), Some(&HirValue::Integer(1)));
+    }
+
+    #[test]
+    fn compact_lowering_projects_markdown_block_kinds() {
+        let source = concat!(
+            "# Heading\n\n",
+            "```rust\nfn main() {}\n```\n\n",
+            "> quoted\n> text\n\n",
+            "- one\n- two\n\n",
+            "1. first\n2. second\n\n",
+            "plain paragraph {#p}\n",
+        );
+        let lowered = lower(&parse(source), SourceDialect::CompactOrExplicitV1)
+            .expect("compact source lowers");
+        let names = lowered
+            .document
+            .items
+            .iter()
+            .filter_map(|item| match &item.kind {
+                HirItemKind::NodeConstruction { name } => Some(name.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        for expected in [
+            "heading",
+            "code-block",
+            "block-quote",
+            "unordered-list",
+            "ordered-list",
+            "paragraph",
+        ] {
+            assert!(names.contains(&expected), "missing compact kind {expected}");
+        }
+        assert!(
+            lowered
+                .document
+                .items
+                .iter()
+                .any(|item| { item.attributes.get("level") == Some(&HirValue::Integer(1)) })
+        );
+    }
+
+    #[test]
+    fn explicit_lowering_parses_values_and_reports_malformed_forms() {
+        let source = concat!(
+            "#!liminal-explicit-v1\n",
+            "node root (title = \"a,b\", list = [1, 2]);\n",
+            "attribute top = true;\n",
+            "literal not-json;\n",
+            "relation @a -[links]-> @b;\n",
+            "relation malformed;\n",
+            "reference @root;\n",
+            "expression \"x\";\n",
+            "macro call(1, false, @root, \"a,b\");\n",
+            "mystery value;\n",
+            "}\n",
+        );
+        let lowered = lower(&parse(source), SourceDialect::ExplicitV1)
+            .expect("explicit source lowers with diagnostics");
+        assert!(
+            lowered
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == HirDiagnosticCode::AttributeWithoutOwner)
+        );
+        assert!(
+            lowered
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == HirDiagnosticCode::UnknownForm)
+        );
+        assert!(
+            lowered
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("relation requires"))
+        );
+        assert!(lowered.document.items.iter().any(|item| {
+            matches!(
+                &item.kind,
+                HirItemKind::MacroInvocation { arguments, .. }
+                    if arguments.len() == 4
+                        && arguments[0] == HirValue::Integer(1)
+                        && arguments[1] == HirValue::Bool(false)
+                        && arguments[2]
+                            == HirValue::Reference(HirReference::Unresolved("root".into()))
+            )
+        }));
+    }
+
+    #[test]
+    fn explicit_dialect_rejects_compact_source() {
+        let error = lower(&parse("plain"), SourceDialect::ExplicitV1)
+            .expect_err("explicit dialect requires marker");
+        assert!(matches!(error, HirError::InvalidSourceMap(_)));
     }
 }

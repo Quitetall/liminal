@@ -884,6 +884,7 @@ fn kind_id(name: &str) -> KindId {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use liminal_hir::{Annotation, AnnotationKind, HirDocument, HirItem};
     use liminal_id::{PathId, TransactionId};
     use liminal_revision::BasisPerspective;
 
@@ -929,6 +930,84 @@ mod tests {
         }
     }
 
+    fn hir_fixture() -> (HirDocument, WorkspaceBasis) {
+        let source = SourceId::from_name("test-source");
+        let hash = ContentHash::of(b"fixture");
+        let holder = JurisdictionKey::Path(PathId("fixture.md".into()));
+        let basis = WorkspaceBasis {
+            transaction: TransactionId::new(),
+            perspective: BasisPerspective::DurableOnly,
+            components: BTreeMap::from([(
+                holder,
+                BasisComponent::FileContent {
+                    path: PathId("fixture.md".into()),
+                    hash,
+                },
+            )]),
+        };
+        let range = SourceRange { start: 0, end: 7 };
+        let root = HirItem {
+            id: HirId(0),
+            range,
+            kind: HirItemKind::NodeConstruction {
+                name: "root".into(),
+            },
+            attributes: BTreeMap::from([("id".into(), HirValue::String("root".into()))]),
+            children: vec![HirId(1), HirId(2), HirId(3)],
+        };
+        let literal = HirItem {
+            id: HirId(1),
+            range,
+            kind: HirItemKind::Literal {
+                value: "value".into(),
+            },
+            attributes: BTreeMap::new(),
+            children: Vec::new(),
+        };
+        let relation = HirItem {
+            id: HirId(2),
+            range,
+            kind: HirItemKind::RelationConstruction {
+                source: HirReference::Unresolved("root".into()),
+                kind: "links".into(),
+                target: HirReference::Unresolved("root".into()),
+            },
+            attributes: BTreeMap::new(),
+            children: Vec::new(),
+        };
+        let reference = HirItem {
+            id: HirId(3),
+            range,
+            kind: HirItemKind::Reference {
+                target: HirReference::Unresolved("root".into()),
+            },
+            attributes: BTreeMap::new(),
+            children: Vec::new(),
+        };
+        (
+            HirDocument {
+                basis: SourceBasis {
+                    source,
+                    content_hash: hash,
+                },
+                roots: vec![HirId(0)],
+                items: vec![root, literal, relation, reference],
+                source_map: liminal_hir::SourceMap {
+                    basis: SourceBasis {
+                        source,
+                        content_hash: hash,
+                    },
+                    annotations: vec![Annotation {
+                        kind: AnnotationKind::Form,
+                        range,
+                        hir: Some(HirId(0)),
+                    }],
+                },
+            },
+            basis,
+        )
+    }
+
     #[test]
     fn derived_ids_are_stable_and_path_sensitive() {
         let source = SourceId::from_name("stable");
@@ -967,5 +1046,96 @@ mod tests {
         let mut altered = serde_json::to_vec_pretty(&json).expect("json");
         altered.push(b'\n');
         assert!(deserialize_debug_v1(&altered).is_err());
+    }
+
+    #[test]
+    fn debug_validation_rejects_duplicate_dangling_and_missing_provenance() {
+        let mut duplicate = fixture();
+        duplicate.nodes.push(duplicate.nodes[0].clone());
+        assert!(matches!(
+            serialize_debug_v1(&duplicate),
+            Err(DebugJsonError::Invalid(message)) if message.contains("duplicate node")
+        ));
+
+        let mut missing = fixture();
+        missing.provenance.clear();
+        assert!(matches!(
+            serialize_debug_v1(&missing),
+            Err(DebugJsonError::Invalid(message)) if message.contains("provenance")
+        ));
+
+        let mut wrong_hash = fixture();
+        wrong_hash.source.content_hash = ContentHash::of(b"other");
+        assert!(matches!(
+            serialize_debug_v1(&wrong_hash),
+            Err(DebugJsonError::Invalid(message)) if message.contains("hash mismatch")
+        ));
+    }
+
+    #[test]
+    fn resolve_materializes_relations_and_provenance_at_basis() {
+        let (hir, basis) = hir_fixture();
+        let resolved = resolve(&hir, &basis).expect("basis-selected HIR resolves");
+        assert!(resolved.diagnostics.is_empty());
+        assert!(resolved.graph.nodes.len() >= 3);
+        assert!(resolved.graph.relations.len() >= 3);
+        assert_eq!(
+            resolved.graph.provenance.len(),
+            resolved.graph.nodes.len() + resolved.graph.relations.len()
+        );
+        assert!(
+            resolved
+                .graph
+                .nodes
+                .iter()
+                .all(|node| node.flags.contains(NodeFlags::DERIVED))
+        );
+    }
+
+    #[test]
+    fn resolve_reports_unresolved_and_duplicate_symbols_and_rejects_wrong_basis() {
+        let (mut hir, basis) = hir_fixture();
+        hir.items[2].kind = HirItemKind::Reference {
+            target: HirReference::Unresolved("missing".into()),
+        };
+        let unresolved = resolve(&hir, &basis).expect("unresolved refs are diagnostic");
+        assert!(
+            unresolved
+                .diagnostics
+                .iter()
+                .any(|item| item.code == ResolveDiagnosticCode::UnresolvedReference)
+        );
+
+        hir.items.push(HirItem {
+            id: HirId(4),
+            range: SourceRange { start: 0, end: 7 },
+            kind: HirItemKind::NodeConstruction {
+                name: "other".into(),
+            },
+            attributes: BTreeMap::from([("id".into(), HirValue::String("root".into()))]),
+            children: Vec::new(),
+        });
+        hir.roots.push(HirId(4));
+        let duplicate = resolve(&hir, &basis).expect("duplicate IDs are diagnostic");
+        assert!(
+            duplicate
+                .diagnostics
+                .iter()
+                .any(|item| item.code == ResolveDiagnosticCode::DuplicateExplicitId)
+        );
+
+        let mut wrong = basis;
+        let holder = wrong.components.keys().next().cloned().unwrap();
+        wrong.components.insert(
+            holder,
+            BasisComponent::FileContent {
+                path: PathId("fixture.md".into()),
+                hash: ContentHash::of(b"wrong"),
+            },
+        );
+        assert!(matches!(
+            resolve(&hir, &wrong),
+            Err(ResolveError::BasisMismatch(_))
+        ));
     }
 }

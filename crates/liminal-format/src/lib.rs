@@ -461,4 +461,90 @@ mod tests {
             .expect("macro form is present");
         assert_eq!(macro_item, &[HirValue::Integer(1), HirValue::Bool(true)]);
     }
+
+    #[test]
+    fn formatter_emits_explicit_forms_and_renderer_escapes_html() {
+        let source = concat!(
+            "#!liminal-explicit-v1\n",
+            "node root (id = \"root\") {\n",
+            "  literal \"value\";\n",
+            "  attribute flags = [null, false, @root, \"a,b\"];\n",
+            "  reference @root;\n",
+            "  expression \"x + 1\";\n",
+            "  macro expand(1, true);\n",
+            "}\n",
+            "relation @root -[links]-> @root;\n",
+            "ordered {\n",
+            "  literal \"tail\";\n",
+            "}\n",
+        );
+        let formatter = MarkdownFormatter::default();
+        let emitted = formatter.format(source).expect("explicit source formats");
+        assert!(emitted.starts_with("#!liminal-explicit-v1\n"));
+        for expected in [
+            "node root",
+            "literal \"value\";",
+            "attribute flags = ",
+            "reference @root;",
+            "expression \"x + 1\";",
+            "macro expand(1, true);",
+            "relation ",
+            "ordered {",
+        ] {
+            assert!(
+                emitted.contains(expected),
+                "missing emitted form {expected}"
+            );
+        }
+        assert!(emitted.contains("[null, false"));
+        assert_eq!(
+            formatter.emit(&formatter.parse(source).unwrap()).unwrap(),
+            emitted
+        );
+
+        let rendered = MarkdownRenderer
+            .render("line\n<&>\"' {#node}")
+            .expect("HTML renders");
+        assert!(rendered.contains("&lt;&amp;&gt;&quot;&#39;"));
+        assert!(rendered.contains("data-node-id=\"node\""));
+        assert!(rendered.contains("<br />"));
+    }
+
+    #[test]
+    fn markdown_document_equality_ignores_ranges_and_error_display_is_stable() {
+        let left = MarkdownDocument {
+            blocks: vec![Block {
+                text: "same".into(),
+                id: Some("id".into()),
+                range: liminal_source::SourceRange { start: 0, end: 4 },
+            }],
+        };
+        let mut right = left.clone();
+        right.blocks[0].range = liminal_source::SourceRange { start: 10, end: 14 };
+        assert_eq!(left, right);
+        right.blocks[0].text = "different".into();
+        assert_ne!(left, right);
+        assert_eq!(MarkdownError.to_string(), "markdown formatting error");
+
+        let formatter = MarkdownFormatter::default();
+        let base = formatter.parse("plain").expect("phase1 parse");
+        let mut same_semantics = base.clone();
+        let holder = same_semantics.holder.clone();
+        if let Some(BasisComponent::FileContent { hash, .. }) =
+            same_semantics.graph.basis.components.get_mut(&holder)
+        {
+            *hash = ContentHash::of(b"different source hash");
+        }
+        assert_eq!(base, same_semantics);
+        let mut different_path = base.clone();
+        if let Some(BasisComponent::FileContent { path, .. }) =
+            different_path.graph.basis.components.get_mut(&holder)
+        {
+            *path = PathId("other.md".into());
+        }
+        assert_ne!(base, different_path);
+        let mut different_transaction = base.clone();
+        different_transaction.graph.basis.transaction = TransactionId::new();
+        assert_ne!(base, different_transaction);
+    }
 }
