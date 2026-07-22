@@ -450,5 +450,15 @@ mod tests {
         assert!(
             forms.contains(&5) && forms.contains(&6) && forms.contains(&7) && forms.contains(&8)
         );
+        let macro_item = document
+            .hir
+            .items
+            .iter()
+            .find_map(|item| match &item.kind {
+                HirItemKind::MacroInvocation { arguments, .. } => Some(arguments),
+                _ => None,
+            })
+            .expect("macro form is present");
+        assert_eq!(macro_item, &[HirValue::Integer(1), HirValue::Bool(true)]);
     }
 }

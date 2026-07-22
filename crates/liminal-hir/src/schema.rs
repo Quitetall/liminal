@@ -652,7 +652,8 @@ fn parse_explicit_kind(
                     arguments: if args.is_empty() {
                         Vec::new()
                     } else {
-                        args.split(',')
+                        split_top_level(args, ',')
+                            .into_iter()
                             .map(|value| parse_value(value.trim()))
                             .collect()
                     },
@@ -692,11 +693,45 @@ fn parse_trailing_attributes(rest: &str) -> BTreeMap<String, HirValue> {
 }
 
 fn parse_attributes(value: &str) -> BTreeMap<String, HirValue> {
-    value
-        .split(',')
+    split_top_level(value, ',')
+        .into_iter()
         .filter_map(|part| part.split_once('='))
         .map(|(name, value)| (name.trim().to_owned(), parse_value(value.trim())))
         .collect()
+}
+
+/// Split a comma-separated explicit-syntax field without splitting inside a
+/// JSON string or nested list/parenthesized value.
+fn split_top_level(value: &str, delimiter: char) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut start = 0;
+    let mut depth = 0_u32;
+    let mut quoted = false;
+    let mut escaped = false;
+    for (index, ch) in value.char_indices() {
+        if quoted {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                quoted = false;
+            }
+            continue;
+        }
+        match ch {
+            '"' => quoted = true,
+            '(' | '[' | '{' => depth = depth.saturating_add(1),
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            _ if ch == delimiter && depth == 0 => {
+                parts.push(&value[start..index]);
+                start = index + ch.len_utf8();
+            }
+            _ => {}
+        }
+    }
+    parts.push(&value[start..]);
+    parts
 }
 
 fn parse_json_string(value: &str) -> Option<String> {
