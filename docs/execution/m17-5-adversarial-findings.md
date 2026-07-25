@@ -237,6 +237,59 @@ pushed discards to 1.45% and 16.87%.
 
 ---
 
+## F-08 — CRITICAL. Real mutation testing shows a 53% kill rate, not the required 100%; `liminal-cir` is effectively untested.
+
+The packet predeclares 65 mutants and ADR-0020 §3 requires **100% of
+applicable, non-duplicate, non-equivalent mutants killed — one survivor blocks
+eligibility**. Actual mutation testing (`cargo-mutants` 27.1.0) reports:
+
+| outcome | count |
+|---|---|
+| caught | 38 |
+| **missed (survived)** | **34** |
+| unviable | 11 |
+| timeout | 0 |
+
+**53% kill rate over 72 viable mutants.** Every survivor is in
+`crates/liminal-cir/src/lib.rs`.
+
+**Hand-verified live, this session** (the run was dated 07-22; nothing since
+touched `liminal-cir`, but a stale number is not evidence). I applied the
+survivor `replace sorted_relations -> Vec<Relation> with vec![]` — making the
+derived CIR graph report **zero relations** — and ran the whole workspace:
+
+```
+269 tests run: 269 passed, 23 skipped
+```
+
+Not one test noticed that the graph lost every relation. Reverted via
+`git checkout` and re-verified clean.
+
+Other survivors of the same character:
+- `replace compare_shape -> Result<(), DebugJsonError> with Ok(())` — the
+  debug-JSON shape comparison becomes a no-op;
+- `replace payload_for -> ... with Ok("xyzzy".into())` — every payload becomes
+  a constant;
+- six independent `delete !` / `replace || with &&` mutations inside
+  `validate_debug_graph` — validation inverted or short-circuited;
+- three `replace == with !=` inside `resolve`.
+
+**Impact:** `liminal-cir` (1,141 lines) is the derived-graph layer the Phase 1
+projection rests on, and the suite cannot distinguish it from a broken
+implementation. This is the single strongest piece of evidence that the suite
+is not yet fit to qualify anything — and it is exactly the question HAQP-1
+exists to answer, answered honestly.
+
+**Fix (not landed):** `liminal-cir` needs real unit and property coverage —
+relation ordering/preservation, `validate_debug_graph`'s rejection paths,
+`compare_shape` structural mismatch, `payload_for`, and the `resolve` equality
+paths — until every viable mutant dies. The packet's mutant rows must stay
+`predeclared` and `qualification_state` `not-run` until then. Note the six
+`liminal-cir` unit tests currently pass against a version that returns no
+relations at all.
+
+---
+
 ## Verified clean (checked, not findings)
 
 - **Crash-boundary inventory reconciles**: 8 declared in `packet.json` exactly
