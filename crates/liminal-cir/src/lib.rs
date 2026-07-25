@@ -1154,8 +1154,10 @@ mod tests {
 mod mutation_kills {
     use super::*;
     use liminal_graph::{Relation, RelationFlags, Target};
+    use liminal_hir::{HirId, HirItemKind, HirReference, HirValue};
     use liminal_id::{PathId, TransactionId};
     use liminal_revision::BasisPerspective;
+    use std::collections::HashMap;
 
     /// A two-node, two-relation graph with complete provenance.
     fn graph_with_relations() -> DebugGraphV1 {
@@ -1326,6 +1328,190 @@ mod mutation_kills {
         assert!(
             validate_debug_graph(&graph).is_err(),
             "provenance carrying a foreign content hash must be rejected"
+        );
+    }
+
+    /// Kills all five `compare_shape` mutants directly: the whole-function
+    /// `Ok(())`, both deleted match arms, the `|| -> &&` on the object-key
+    /// check, and the discriminant guard replaced with `false`. Driving it
+    /// through `deserialize_debug_v1` cannot reach these — serde's
+    /// `deny_unknown_fields` rejects first — so the function is exercised
+    /// directly.
+    #[test]
+    fn compare_shape_rejects_every_structural_difference() {
+        use serde_json::json;
+        let ok = |a: serde_json::Value, b: serde_json::Value| compare_shape(&a, &b, "$").is_ok();
+        let bad = |a: serde_json::Value, b: serde_json::Value| compare_shape(&a, &b, "$").is_err();
+
+        assert!(
+            ok(json!({"a": 1}), json!({"a": 1})),
+            "identical shapes agree"
+        );
+
+        // Object: differing key COUNT, and same count with a differing NAME.
+        // The second case is what `|| -> &&` would let through.
+        assert!(bad(json!({"a": 1, "b": 2}), json!({"a": 1})), "extra key");
+        assert!(bad(json!({"a": 1}), json!({"b": 1})), "renamed key");
+
+        // Array length.
+        assert!(bad(json!([1, 2]), json!([1])), "array length");
+
+        // Type discriminant mismatch (kills the `false` guard replacement).
+        assert!(bad(json!(1), json!("1")), "number vs string");
+        assert!(bad(json!(null), json!(0)), "null vs number");
+        assert!(bad(json!({"a": 1}), json!([1])), "object vs array");
+
+        // Nested difference must still surface.
+        assert!(
+            bad(json!({"a": {"b": 1}}), json!({"a": {"b": "1"}})),
+            "nested"
+        );
+    }
+
+    /// Kills the seven `node_kind_name` / `form_name` mutants: constant
+    /// returns (`""`, `"xyzzy"`) and the deleted match arms. Every spelling is
+    /// pinned to a literal, so any substitution is visible.
+    #[test]
+    fn hir_kind_and_form_names_are_exact() {
+        let literal = HirItemKind::Literal { value: "v".into() };
+        let node = HirItemKind::NodeConstruction {
+            name: "custom-name".into(),
+        };
+        let ordered = HirItemKind::OrderedBlock;
+        let expression = HirItemKind::Expression {
+            source: "1 + 1".into(),
+        };
+        let macro_call = HirItemKind::MacroInvocation {
+            name: "m".into(),
+            arguments: Vec::new(),
+        };
+        let reference = HirItemKind::Reference {
+            target: HirReference::Unresolved("t".into()),
+        };
+        let relation = HirItemKind::RelationConstruction {
+            source: HirReference::Unresolved("a".into()),
+            kind: "links".into(),
+            target: HirReference::Unresolved("b".into()),
+        };
+        let attribute = HirItemKind::AttributeAssignment {
+            owner: None,
+            name: "k".into(),
+            value: HirValue::String("v".into()),
+        };
+
+        assert_eq!(node_kind_name(&literal), Some("literal"));
+        assert_eq!(node_kind_name(&node), Some("custom-name"));
+        assert_eq!(node_kind_name(&ordered), Some("ordered-block"));
+        assert_eq!(node_kind_name(&expression), Some("expression"));
+        assert_eq!(node_kind_name(&macro_call), Some("macro-invocation"));
+        assert_eq!(node_kind_name(&reference), None);
+        assert_eq!(node_kind_name(&relation), None);
+
+        assert_eq!(form_name(&literal), "literal");
+        assert_eq!(form_name(&node), "node-construction");
+        assert_eq!(form_name(&relation), "relation-construction");
+        assert_eq!(form_name(&attribute), "attribute-assignment");
+        assert_eq!(form_name(&ordered), "ordered-block");
+        assert_eq!(form_name(&reference), "reference");
+        assert_eq!(form_name(&expression), "expression");
+        assert_eq!(form_name(&macro_call), "macro-invocation");
+    }
+
+    /// Kills both `payload_for` constant-return mutants: the payload must
+    /// carry the item's actual kind and attributes, not a fixed string.
+    #[test]
+    fn derived_payload_carries_kind_and_attributes() {
+        let kind = HirItemKind::Literal {
+            value: "carried-value".into(),
+        };
+        let attributes =
+            BTreeMap::from([("colour".to_owned(), HirValue::String("blue".to_owned()))]);
+        let payload = payload_for(&kind, &attributes).expect("payload encodes");
+        assert!(
+            payload.contains("carried-value"),
+            "payload dropped the literal value: {payload}"
+        );
+        assert!(
+            payload.contains("colour") && payload.contains("blue"),
+            "payload dropped attributes: {payload}"
+        );
+        // Distinct inputs must not collapse to one payload.
+        let other = payload_for(
+            &HirItemKind::Literal {
+                value: "different".into(),
+            },
+            &BTreeMap::new(),
+        )
+        .expect("payload encodes");
+        assert_ne!(payload, other, "payload_for ignores its input");
+    }
+
+    /// Kills `replace | with ^` in `kind_id`: the high bit marks derived
+    /// kinds and must be set for every name, which `^` cannot guarantee.
+    #[test]
+    fn derived_kind_ids_always_set_the_derived_high_bit() {
+        for name in [
+            "literal",
+            "node-construction",
+            "ordered-block",
+            "expression",
+            "macro-invocation",
+            "",
+        ] {
+            let KindId(raw) = kind_id(name);
+            assert_eq!(
+                raw & 0x8000_0000,
+                0x8000_0000,
+                "kind_id({name:?}) lost the derived high bit: {raw:#x}"
+            );
+        }
+        assert_ne!(
+            kind_id("literal"),
+            kind_id("expression"),
+            "distinct kind names must not collide"
+        );
+    }
+
+    /// Kills `replace nearest_owner -> Option<NodeId> with None`: an item
+    /// nested below a node-bearing ancestor must resolve to that ancestor.
+    #[test]
+    fn nearest_owner_walks_up_to_the_owning_node() {
+        let source = SourceId::from_name("owner-walk");
+        let owner_node = derived_node_id(source, "node-construction", &[0]);
+        let parents = HashMap::from([(HirId(2), HirId(1)), (HirId(1), HirId(0))]);
+        let node_for = BTreeMap::from([(HirId(0), owner_node)]);
+        assert_eq!(
+            nearest_owner(HirId(2), &parents, &node_for),
+            Some(owner_node),
+            "nearest_owner must walk transitively to the owning node"
+        );
+        assert_eq!(
+            nearest_owner(HirId(0), &parents, &node_for),
+            None,
+            "a root with no node-bearing ancestor has no owner"
+        );
+    }
+
+    /// Kills `replace || with &&` in `deserialize_debug_v1`'s framing check:
+    /// a missing trailing LF and a doubled trailing LF must EACH be rejected.
+    #[test]
+    fn debug_json_framing_rejects_both_violations_independently() {
+        let graph = graph_with_relations();
+        let bytes = serialize_debug_v1(&graph).expect("serializes");
+        deserialize_debug_v1(&bytes).expect("canonical framing decodes");
+
+        let mut missing = bytes.clone();
+        assert_eq!(missing.pop(), Some(b'\n'), "canonical form ends with LF");
+        assert!(
+            deserialize_debug_v1(&missing).is_err(),
+            "a document with no trailing LF must be rejected"
+        );
+
+        let mut doubled = bytes.clone();
+        doubled.push(b'\n');
+        assert!(
+            deserialize_debug_v1(&doubled).is_err(),
+            "a document with two trailing LFs must be rejected"
         );
     }
 
