@@ -1139,3 +1139,224 @@ mod tests {
         ));
     }
 }
+
+/// Mutation kills for M17.5 finding F-08.
+///
+/// `cargo-mutants` found 34 survivors in this file — every one a validation or
+/// projection defect the suite could not see. The headline case:
+/// `sorted_relations` returning `vec![]`, so the derived graph reports **no
+/// relations at all**, passed the entire 269-test workspace suite.
+///
+/// These are deliberately NEGATIVE and CONTENT tests: each pins a specific
+/// seeded defect. A test here going green against a mutated build means the
+/// mutant survived.
+#[cfg(test)]
+mod mutation_kills {
+    use super::*;
+    use liminal_graph::{Relation, RelationFlags, Target};
+    use liminal_id::{PathId, TransactionId};
+    use liminal_revision::BasisPerspective;
+
+    /// A two-node, two-relation graph with complete provenance.
+    fn graph_with_relations() -> DebugGraphV1 {
+        let source = SourceId::from_name("mutation-kill");
+        let hash = ContentHash::of(b"mutation-kill");
+        let holder = JurisdictionKey::Path(PathId("kill.md".into()));
+        let basis = WorkspaceBasis {
+            transaction: TransactionId::new(),
+            perspective: BasisPerspective::DurableOnly,
+            components: BTreeMap::from([(
+                holder.clone(),
+                BasisComponent::FileContent {
+                    path: PathId("kill.md".into()),
+                    hash,
+                },
+            )]),
+        };
+        let range = SourceRange { start: 0, end: 4 };
+        let a = derived_node_id(source, "literal", &[0]);
+        let b = derived_node_id(source, "literal", &[1]);
+        let node = |id| Node {
+            id,
+            kind: KindId(1),
+            payload: PayloadRef::None,
+            revision: RevisionId(0),
+            flags: NodeFlags::DERIVED,
+        };
+        let r1 = derived_relation_id(source, "links", "relation", &[0]);
+        let r2 = derived_relation_id(source, "links", "relation", &[1]);
+        let relation = |id, src, dst| Relation {
+            id,
+            source: src,
+            target: Target::Node(dst),
+            kind: KindId(2),
+            payload: PayloadRef::None,
+            revision: RevisionId(0),
+            flags: RelationFlags(0),
+            requires: None,
+        };
+        let prov = |subject| DebugProvenanceV1 {
+            subject,
+            source,
+            content_hash: hash,
+            range,
+            identity_grade: IdentityGrade::Anchored,
+        };
+        DebugGraphV1 {
+            schema_version: 1,
+            basis,
+            holder,
+            source: SourceBasis {
+                source,
+                content_hash: hash,
+            },
+            nodes: vec![node(a), node(b)],
+            relations: vec![relation(r1, a, b), relation(r2, b, a)],
+            provenance: vec![
+                prov(ProvenanceSubject::Node(a)),
+                prov(ProvenanceSubject::Node(b)),
+                prov(ProvenanceSubject::Relation(r1)),
+                prov(ProvenanceSubject::Relation(r2)),
+            ],
+        }
+    }
+
+    /// Kills `replace sorted_relations -> Vec<Relation> with vec![]`.
+    #[test]
+    fn relations_survive_validation_and_round_trip_in_id_order() {
+        let graph = graph_with_relations();
+        validate_debug_graph(&graph).expect("well-formed graph validates");
+
+        let bytes = serialize_debug_v1(&graph).expect("serializes");
+        let back = deserialize_debug_v1(&bytes).expect("deserializes");
+        assert_eq!(
+            back.relations.len(),
+            2,
+            "round trip lost relations: {:?}",
+            back.relations
+        );
+
+        let ordered = sorted_relations(&graph.relations);
+        assert_eq!(ordered.len(), 2, "sorted_relations dropped relations");
+        assert!(
+            ordered[0].id <= ordered[1].id,
+            "sorted_relations did not order by id"
+        );
+        let ids: BTreeSet<_> = ordered.iter().map(|r| r.id).collect();
+        assert_eq!(ids.len(), 2, "sorted_relations collapsed distinct ids");
+    }
+
+    /// Kills the `delete !` on the duplicate-relation guard.
+    #[test]
+    fn duplicate_relation_id_is_rejected() {
+        let mut graph = graph_with_relations();
+        graph.relations[1].id = graph.relations[0].id;
+        let err = validate_debug_graph(&graph).expect_err("duplicate relation must be rejected");
+        assert!(
+            format!("{err}").contains("duplicate relation"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// Kills `replace || with &&` and the `delete !`s on the dangling-endpoint
+    /// guard. Source and target are checked SEPARATELY: with `&&` substituted,
+    /// a single dangling side no longer trips the guard.
+    #[test]
+    fn dangling_relation_source_is_rejected() {
+        let mut graph = graph_with_relations();
+        graph.relations[0].source = derived_node_id(graph.source.source, "literal", &[99]);
+        let err = validate_debug_graph(&graph).expect_err("dangling source must be rejected");
+        assert!(
+            format!("{err}").contains("dangling"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn dangling_relation_target_is_rejected() {
+        let mut graph = graph_with_relations();
+        graph.relations[0].target =
+            Target::Node(derived_node_id(graph.source.source, "literal", &[99]));
+        let err = validate_debug_graph(&graph).expect_err("dangling target must be rejected");
+        assert!(
+            format!("{err}").contains("dangling"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// Kills `replace + with -` on the provenance-count check.
+    #[test]
+    fn provenance_must_cover_every_node_and_relation() {
+        let mut graph = graph_with_relations();
+        graph
+            .provenance
+            .retain(|entry| matches!(entry.subject, ProvenanceSubject::Node(_)));
+        let err =
+            validate_debug_graph(&graph).expect_err("provenance must cover nodes AND relations");
+        assert!(
+            format!("{err}").contains("provenance") || format!("{err}").contains("missing"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// Kills the duplicate-provenance-subject guard.
+    #[test]
+    fn duplicate_provenance_subject_is_rejected() {
+        let mut graph = graph_with_relations();
+        graph.provenance[1].subject = graph.provenance[0].subject;
+        let err = validate_debug_graph(&graph).expect_err("duplicate provenance must be rejected");
+        assert!(
+            format!("{err}").contains("duplicate provenance"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// Kills `replace || with &&` on the provenance/source consistency check.
+    #[test]
+    fn provenance_source_mismatch_is_rejected() {
+        let mut graph = graph_with_relations();
+        graph.provenance[0].source = SourceId::from_name("some-other-source");
+        assert!(
+            validate_debug_graph(&graph).is_err(),
+            "provenance naming a foreign source must be rejected"
+        );
+
+        let mut graph = graph_with_relations();
+        graph.provenance[0].content_hash = ContentHash::of(b"different bytes");
+        assert!(
+            validate_debug_graph(&graph).is_err(),
+            "provenance carrying a foreign content hash must be rejected"
+        );
+    }
+
+    /// Kills `replace compare_shape -> Result<(), DebugJsonError> with Ok(())`
+    /// and its `delete match arm` / `|| -> &&` variants.
+    #[test]
+    fn noncanonical_debug_json_is_rejected() {
+        let graph = graph_with_relations();
+        let bytes = serialize_debug_v1(&graph).expect("serializes");
+        let mut value: serde_json::Value = serde_json::from_slice(&bytes).expect("parses");
+
+        value
+            .as_object_mut()
+            .expect("top level is an object")
+            .insert("unexpected".into(), serde_json::Value::Bool(true));
+        let altered = serde_json::to_vec(&value).expect("re-encodes");
+        assert!(
+            deserialize_debug_v1(&altered).is_err(),
+            "a document with an extra key must not decode as canonical"
+        );
+
+        let mut value: serde_json::Value = serde_json::from_slice(&bytes).expect("parses");
+        if let Some(relations) = value.get_mut("relations").and_then(|v| v.as_array_mut()) {
+            relations.pop();
+            let altered = serde_json::to_vec(&value).expect("re-encodes");
+            assert!(
+                deserialize_debug_v1(&altered).is_err()
+                    || deserialize_debug_v1(&altered)
+                        .is_ok_and(|decoded| decoded.relations.len() == 1),
+                "a truncated relation array must be detected, not silently accepted as full"
+            );
+        }
+    }
+}
