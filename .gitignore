@@ -8,6 +8,11 @@ flamegraph.svg
 
 # Fuzzing artifacts (fuzz/ itself is committed once it exists — Phase 1)
 fuzz/artifacts/
+# libFuzzer grows fuzz/corpus/ during a campaign; that growth is a regenerable
+# cache, not evidence. The predeclared seeds (16 per target) are already
+# TRACKED and stay tracked — gitignore does not untrack them. Crash artifacts
+# are promoted to conformance/corpora/regression/ by name (ADR-0020 §4).
+fuzz/corpus/
 fuzz/coverage/
 fuzz/target/
 mutants.out/
