@@ -930,7 +930,7 @@ mod tests {
         }
     }
 
-    fn hir_fixture() -> (HirDocument, WorkspaceBasis) {
+    pub(super) fn hir_fixture() -> (HirDocument, WorkspaceBasis) {
         let source = SourceId::from_name("test-source");
         let hash = ContentHash::of(b"fixture");
         let holder = JurisdictionKey::Path(PathId("fixture.md".into()));
@@ -1152,6 +1152,7 @@ mod tests {
 /// mutant survived.
 #[cfg(test)]
 mod mutation_kills {
+    use super::tests::hir_fixture;
     use super::*;
     use liminal_graph::{Relation, RelationFlags, Target};
     use liminal_hir::{HirId, HirItemKind, HirReference, HirValue};
@@ -1329,6 +1330,143 @@ mod mutation_kills {
             validate_debug_graph(&graph).is_err(),
             "provenance carrying a foreign content hash must be rejected"
         );
+    }
+
+    /// Kills all three mutants on the duplicate-id guard in `resolve`
+    /// (`!duplicates.contains(id)` → true / → false / `delete !`).
+    ///
+    /// This pins a real identity law, not just a diagnostic: a spelling that
+    /// appears twice is AMBIGUOUS, so neither claimant may be promoted to
+    /// `Explicit` identity or given the durable-id flag. Promoting a
+    /// duplicate would hand two different nodes the same durable identity —
+    /// exactly the false promise M07/M09 measured against.
+    #[test]
+    fn duplicated_explicit_ids_are_never_promoted_to_explicit_identity() {
+        let (mut hir, basis) = hir_fixture();
+        let source = source_basis(&hir).source;
+
+        // Unique id first: promotion MUST happen, so a guard stuck at `false`
+        // (or an inverted `!`) is visible.
+        let unique = resolve(&hir, &basis).expect("resolves");
+        let promoted = unique
+            .graph
+            .nodes
+            .iter()
+            .find(|node| node.id == explicit_node_id(source, "root"))
+            .expect("a unique explicit id must produce an explicit node id");
+        assert!(
+            promoted.flags.contains(NodeFlags::HAS_DURABLE_ID),
+            "a unique explicit id must carry the durable-id flag"
+        );
+
+        // Now duplicate that spelling on a second item.
+        hir.items.push(liminal_hir::HirItem {
+            id: HirId(9),
+            range: SourceRange { start: 0, end: 7 },
+            kind: HirItemKind::NodeConstruction {
+                name: "other".into(),
+            },
+            attributes: BTreeMap::from([("id".into(), HirValue::String("root".into()))]),
+            children: Vec::new(),
+        });
+        hir.roots.push(HirId(9));
+
+        let duplicated = resolve(&hir, &basis).expect("duplicate ids are diagnostic, not fatal");
+        assert!(
+            duplicated
+                .graph
+                .nodes
+                .iter()
+                .all(|node| node.id != explicit_node_id(source, "root")),
+            "a duplicated spelling must not yield an explicit node id"
+        );
+        assert!(
+            duplicated
+                .graph
+                .nodes
+                .iter()
+                .all(|node| !node.flags.contains(NodeFlags::HAS_DURABLE_ID)),
+            "a duplicated spelling must not carry the durable-id flag"
+        );
+        assert!(
+            duplicated
+                .graph
+                .provenance
+                .iter()
+                .all(|(_, entry)| entry.identity_grade != IdentityGrade::Explicit),
+            "a duplicated spelling must not be graded Explicit"
+        );
+    }
+
+    /// Kills the deleted `FileContent` / `BufferGeneration` match arms in
+    /// `basis_for_source`: each component kind must have its hash rebased to
+    /// the exact source bytes, and the other fields preserved.
+    #[test]
+    fn basis_for_source_rebases_every_component_kind() {
+        use liminal_id::{BufferId, ClientId, SessionEpoch};
+
+        let holder = JurisdictionKey::Path(PathId("rebase.md".into()));
+        let fresh = ContentHash::of(b"fresh bytes");
+        let stale = ContentHash::of(b"stale bytes");
+
+        let file_basis = WorkspaceBasis {
+            transaction: TransactionId::new(),
+            perspective: BasisPerspective::DurableOnly,
+            components: BTreeMap::from([(
+                holder.clone(),
+                BasisComponent::FileContent {
+                    path: PathId("rebase.md".into()),
+                    hash: stale,
+                },
+            )]),
+        };
+        let rebased = basis_for_source(&file_basis, &holder, fresh).expect("file basis rebases");
+        match rebased.components.get(&holder).expect("component present") {
+            BasisComponent::FileContent { path, hash } => {
+                assert_eq!(*hash, fresh, "FileContent hash was not rebased");
+                assert_eq!(path.0, "rebase.md", "FileContent path was not preserved");
+            }
+            other => panic!("FileContent arm produced {other:?}"),
+        }
+
+        let buffer_basis = WorkspaceBasis {
+            transaction: TransactionId::new(),
+            perspective: BasisPerspective::DurableOnly,
+            components: BTreeMap::from([(
+                holder.clone(),
+                BasisComponent::BufferGeneration {
+                    client: ClientId::new(),
+                    buffer: BufferId::new(),
+                    epoch: SessionEpoch::default(),
+                    generation: 7,
+                    base_file_hash: Some(stale),
+                    content_hash: Some(stale),
+                },
+            )]),
+        };
+        let rebased =
+            basis_for_source(&buffer_basis, &holder, fresh).expect("buffer basis rebases");
+        match rebased.components.get(&holder).expect("component present") {
+            BasisComponent::BufferGeneration {
+                content_hash,
+                generation,
+                base_file_hash,
+                ..
+            } => {
+                assert_eq!(
+                    *content_hash,
+                    Some(fresh),
+                    "BufferGeneration hash was not rebased"
+                );
+                assert_eq!(*generation, 7, "generation was not preserved");
+                assert_eq!(
+                    *base_file_hash,
+                    Some(stale),
+                    "base_file_hash was not preserved"
+                );
+            }
+            other => panic!("BufferGeneration arm produced {other:?}"),
+        }
     }
 
     /// Kills all five `compare_shape` mutants directly: the whole-function
