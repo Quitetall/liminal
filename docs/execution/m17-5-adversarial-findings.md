@@ -170,6 +170,52 @@ Basis staleness, dispatch completeness) and record the rationale per family.
 
 ---
 
+## F-07 — CRITICAL. The generated-evidence lane tests nothing for four of five families, and its accept/discard counts are hardcoded.
+
+Found by running the lane rather than reading the packet (`just haq-generated`,
+then `haq generate --cases 100000`). Two independent proofs:
+
+**1. The counts are literals, not measurements.** In
+`crates/liminal-xtask/src/haq.rs::run_generated_repo`, every family records
+`accepted: cases, attempts: cases, discards: 0` — the `cases` parameter echoed
+back. No case is ever evaluated for acceptance, so ADR-0020 §4's ">=100,000
+accepted" and "discard rate above one percent fails qualification" are satisfied
+**by construction**. This is F-04's suspicion confirmed and worse: the 0% discard
+rate is not implausible, it is structurally impossible.
+
+**2. Four families do no work on the system under test.** By loop index:
+
+| # | Family | What the loop actually does | 100k cases |
+|---|---|---|---|
+| 0 | source/CST/formatting | REAL: parse, assert lossless emit, assert format idempotence | 1078 ms |
+| 1 | graph/interchange codecs | round-trips `{"seed":N}` through `serde_json` — tests a third-party library, not Liminal's codecs | 11 ms |
+| 2 | transforms/projections | `three_way(base, base, base)` — identical inputs, the trivial no-op case; never a real transform | 104 ms |
+| 3 | repair/ILRP/recovery | picks a `CrashPoint` and hashes its **name**; no driver, no repair, no recovery, no injection | 3 ms |
+| 4 | Basis/revision/query invalidation | hashes the PRNG state; zero contact with Basis, revision, or invalidation | negligible |
+
+Timing corroborates independently: 100,000 cases in 3 ms is ~33 million
+cases/second — not achievable if a case exercises anything.
+
+ADR-0020 §4 also requires per-family metamorphic relations (canonical reparse,
+idempotent replay, inverse/undo, irrelevant-input invariance, commuting
+independent transactions, incremental/full equivalence, deterministic
+permutation). Only family 0 has any.
+
+**Impact:** this is the finding that most endangers the whole profile. A
+qualification run would have recorded "5 families x 100,000 accepted
+deterministic cases, 0 discards" — 500,000 cases of evidence — while actually
+exercising one surface. Every downstream conclusion resting on generated
+evidence would have been false.
+
+**Fix (not yet landed; needs real work, not a packet edit):** implement genuine
+generators per family, each producing structured inputs, recording true
+attempt/accept/discard counts, and checking at least one metamorphic relation
+that is not the implementation's own equality path. Until then the generated
+rows must stay `planned` and `qualification_state` must stay `not-run` — which
+they do; the gate is still failing closed.
+
+---
+
 ## Verified clean (checked, not findings)
 
 - **Crash-boundary inventory reconciles**: 8 declared in `packet.json` exactly
@@ -188,8 +234,10 @@ Basis staleness, dispatch completeness) and record the rationale per family.
    three law gates until M19-M21 execute.~~ **DONE** — AM-17.2 declares the
    crates qualification substrate; all SEVEN Phase 1 exit gates re-ignored
    verbatim. *(F-02)*
-3. Null the unmeasured generated/fuzz numerics; add the attempts≠accepted check.
-   *(F-04)*
+3. **Supersedes F-04** — implement real per-family generators with true
+   attempt/accept/discard accounting and non-self-referential metamorphic
+   relations; nulling the numerics is not enough when the loop tests nothing.
+   *(F-04, F-07)*
 4. ~~Expand tests to cover all five evidence kinds per requirement before
    qualification.~~ **DONE** — inventory 8→38, evidence-coverage and
    anti-clustering checks + 2 canaries. *(F-05)*
