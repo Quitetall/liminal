@@ -1638,18 +1638,32 @@ mod mutation_kills {
         let bytes = serialize_debug_v1(&graph).expect("serializes");
         deserialize_debug_v1(&bytes).expect("canonical framing decodes");
 
+        // Assert the ERROR VARIANT, not merely that it errored. The
+        // byte-exact canonical check further down subsumes framing on
+        // accept/reject, so `is_err()` alone cannot tell the framing guard
+        // from the canonical guard — and a `|| -> &&` mutation of the framing
+        // guard survives an `is_err()` assertion. A framing violation must be
+        // reported AS a framing violation.
         let mut missing = bytes.clone();
         assert_eq!(missing.pop(), Some(b'\n'), "canonical form ends with LF");
         assert!(
-            deserialize_debug_v1(&missing).is_err(),
-            "a document with no trailing LF must be rejected"
+            matches!(
+                deserialize_debug_v1(&missing),
+                Err(DebugJsonError::Syntax(ref message)) if message.contains("trailing LF")
+            ),
+            "a missing trailing LF must be reported as a framing error, got {:?}",
+            deserialize_debug_v1(&missing)
         );
 
         let mut doubled = bytes.clone();
         doubled.push(b'\n');
         assert!(
-            deserialize_debug_v1(&doubled).is_err(),
-            "a document with two trailing LFs must be rejected"
+            matches!(
+                deserialize_debug_v1(&doubled),
+                Err(DebugJsonError::Syntax(ref message)) if message.contains("trailing LF")
+            ),
+            "a doubled trailing LF must be reported as a framing error, got {:?}",
+            deserialize_debug_v1(&doubled)
         );
     }
 
