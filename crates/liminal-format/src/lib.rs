@@ -237,6 +237,69 @@ impl Formatter for MarkdownFormatter {
     fn format(&self, source: &str) -> Result<String, Self::Error> {
         self.emit(&self.parse(source)?)
     }
+
+    /// AM-17.3: emit the compact surface when the caller asks for it AND the
+    /// document is compact-representable; otherwise fall back to the explicit
+    /// surface, which can express every form losslessly.
+    fn emit_in_dialect(
+        &self,
+        doc: &Self::Doc,
+        dialect: SourceDialect,
+    ) -> Result<String, Self::Error> {
+        match dialect {
+            SourceDialect::ExplicitV1 => self.emit(doc),
+            SourceDialect::CompactOrExplicitV1 => {
+                emit_compact(&doc.hir).map_or_else(|| self.emit(doc), Ok)
+            }
+        }
+    }
+}
+
+/// Render `hir` in the compact surface, or `None` when any root is not
+/// compact-representable.
+///
+/// The compact surface expresses exactly one shape: a `paragraph` node whose
+/// only child is a literal, carrying at most an `id` attribute — i.e. what
+/// `alpha {#a}` parses to. Anything richer (relations, nested nodes, ordered
+/// blocks, other attributes) has no compact spelling, so the whole document
+/// falls back rather than emitting a partial or lossy rendering.
+fn emit_compact(hir: &HirDocument) -> Option<String> {
+    let items: BTreeMap<liminal_hir::HirId, &HirItem> =
+        hir.items.iter().map(|item| (item.id, item)).collect();
+
+    let mut blocks = Vec::with_capacity(hir.roots.len());
+    for root in &hir.roots {
+        let item = items.get(root)?;
+        let HirItemKind::NodeConstruction { name } = &item.kind else {
+            return None;
+        };
+        if name != "paragraph" || item.children.len() != 1 {
+            return None;
+        }
+        let child = items.get(&item.children[0])?;
+        let HirItemKind::Literal { value } = &child.kind else {
+            return None;
+        };
+        if !child.attributes.is_empty() || !child.children.is_empty() {
+            return None;
+        }
+
+        let id = match item.attributes.len() {
+            0 => None,
+            1 => match item.attributes.get("id") {
+                Some(HirValue::String(id)) => Some(id.clone()),
+                _ => return None,
+            },
+            _ => return None,
+        };
+
+        blocks.push(match id {
+            Some(id) => format!("{value} {{#{id}}}"),
+            None => value.clone(),
+        });
+    }
+
+    Some(format!("{}\n", blocks.join("\n\n")))
 }
 
 fn emit_item(
@@ -406,6 +469,31 @@ pub trait Formatter {
     fn parse(&self, source: &str) -> Result<Self::Doc, Self::Error>;
     fn emit(&self, doc: &Self::Doc) -> Result<String, Self::Error>;
     fn format(&self, source: &str) -> Result<String, Self::Error>;
+
+    /// Emit `doc` in a REQUESTED surface dialect (AM-17.3, additive).
+    ///
+    /// [`emit`](Formatter::emit) is the canonical projection and always
+    /// produces the explicit surface; this is the dialect-aware counterpart
+    /// M19's "canonical round-trip across compact and explicit" and M20's
+    /// `lim fmt` need — a formatter that rewrote a reader's compact document
+    /// into `#!liminal-explicit-v1` on every save would destroy the surface
+    /// they chose.
+    ///
+    /// The default implementation delegates to `emit`, so this addition
+    /// cannot change the behavior of any existing implementor. An
+    /// implementation that cannot express `doc` in `dialect` MUST fall back
+    /// to the canonical surface rather than emit a lossy approximation.
+    ///
+    /// # Errors
+    /// Whatever the underlying emission reports.
+    fn emit_in_dialect(
+        &self,
+        doc: &Self::Doc,
+        dialect: SourceDialect,
+    ) -> Result<String, Self::Error> {
+        let _ = dialect;
+        self.emit(doc)
+    }
 }
 
 #[cfg(test)]
@@ -546,5 +634,78 @@ mod tests {
         let mut different_transaction = base.clone();
         different_transaction.graph.basis.transaction = TransactionId::new();
         assert_ne!(base, different_transaction);
+    }
+}
+
+#[cfg(test)]
+mod dialect_tests {
+    use super::*;
+
+    const COMPACT: &str = "alpha {#a}\n\nbeta {#b}\n\nunmarked block\n";
+
+    /// AM-17.3: asking for the compact dialect returns the COMPACT surface,
+    /// and it round-trips back to the same document. `lim fmt` on a reader's
+    /// Markdown must not hand back `#!liminal-explicit-v1`.
+    #[test]
+    fn compact_dialect_round_trips_without_lowering_to_explicit() {
+        let formatter = MarkdownFormatter::default();
+        let doc = formatter.parse(COMPACT).expect("compact source parses");
+        let emitted = formatter
+            .emit_in_dialect(&doc, SourceDialect::CompactOrExplicitV1)
+            .expect("compact emission");
+
+        assert!(
+            !emitted.contains("#!liminal-explicit-v1") && !emitted.contains("node paragraph"),
+            "compact request must not lower to the explicit surface: {emitted:?}"
+        );
+        assert!(
+            emitted.contains("alpha {#a}") && emitted.contains("beta {#b}"),
+            "compact emission must keep the compact id spelling: {emitted:?}"
+        );
+        let reparsed = formatter
+            .parse(&emitted)
+            .expect("compact emission reparses");
+        assert_eq!(reparsed, doc, "compact emission must round-trip");
+    }
+
+    /// The explicit dialect keeps the canonical projection unchanged — `emit`
+    /// was not mutated by this amendment.
+    #[test]
+    fn explicit_dialect_matches_untouched_emit() {
+        let formatter = MarkdownFormatter::default();
+        let doc = formatter.parse(COMPACT).expect("parses");
+        assert_eq!(
+            formatter
+                .emit_in_dialect(&doc, SourceDialect::ExplicitV1)
+                .expect("explicit emission"),
+            formatter.emit(&doc).expect("canonical emission"),
+        );
+    }
+
+    /// A document with no compact spelling falls back to the explicit surface
+    /// rather than emitting a lossy approximation.
+    #[test]
+    fn non_compact_representable_document_falls_back_to_explicit() {
+        let formatter = MarkdownFormatter::default();
+        let source = concat!(
+            "#!liminal-explicit-v1\n",
+            "node root (id = \"root\") {\n",
+            "  literal \"value\";\n",
+            "  attribute color = \"blue\";\n",
+            "}\n",
+        );
+        let doc = formatter.parse(source).expect("explicit source parses");
+        let emitted = formatter
+            .emit_in_dialect(&doc, SourceDialect::CompactOrExplicitV1)
+            .expect("emission");
+        assert!(
+            emitted.contains("#!liminal-explicit-v1"),
+            "a document the compact surface cannot express must fall back: {emitted:?}"
+        );
+        assert_eq!(
+            formatter.parse(&emitted).expect("fallback reparses"),
+            doc,
+            "the fallback must still round-trip"
+        );
     }
 }

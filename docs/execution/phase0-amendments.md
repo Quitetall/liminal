@@ -27,3 +27,16 @@ are therefore returned to their original `#[ignore = "Phase 1: ..."]` tags
 verbatim, to be un-ignored by the milestone that earns each one. Substrate
 code is retained, not reverted. Resolves M17.5 finding F-02; restores M17.8's
 predicted meter (backlog 23 now, 21 after the two Phase 0 gates flip).
+
+AM-17.3 (M17): the `liminal_format::Formatter` seam gains
+`emit_in_dialect(&self, doc, dialect) -> Result<String, Self::Error>` with a
+default implementation delegating to `emit`, so no existing implementor changes
+behavior. `emit` remains the canonical projection (always explicit surface) and
+was NOT mutated. Rationale: `format()` is `emit(parse(x))`, so a compact
+Markdown document was lowered to `#!liminal-explicit-v1` on every format — M19
+requires the canonical round-trip law "across compact and explicit", and M20's
+`lim fmt` must not rewrite a reader's chosen surface on save. `MarkdownFormatter`
+implements the compact surface for the compact-representable subset (a
+`paragraph` node whose only child is a literal, carrying at most an `id`) and
+falls back to the explicit surface for anything richer, never emitting a lossy
+approximation. Addition over mutation, per Brian's direction 2026-07-20.
