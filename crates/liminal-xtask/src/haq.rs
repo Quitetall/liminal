@@ -74,9 +74,12 @@ fn verify_packet_shape(packet: &Packet) -> Result<()> {
         .map(|row| row.id.as_str())
         .collect::<BTreeSet<_>>();
     require_unique(packet.tests.iter().map(|row| row.id.as_str()), "test")?;
+    // The inventory grows as evidence kinds are declared (M17.5 F-05): the IDs
+    // must stay dense and sequential, but the COUNT is not frozen at 8 — that
+    // ceiling was the mechanism that kept 36 requirements on 8 coarse tests.
     require_exact_ids(
         packet.tests.iter().map(|row| row.id.as_str()),
-        (1..=8).map(|idx| format!("P1-T{idx:02}")),
+        (1..=packet.tests.len()).map(|idx| format!("P1-T{idx:02}")),
         "test",
     )?;
     let mut covered_requirements = BTreeSet::new();
@@ -102,11 +105,116 @@ fn verify_packet_shape(packet: &Packet) -> Result<()> {
             anyhow::bail!("requirement {} has empty kind/source", requirement.id);
         }
     }
+    verify_evidence_coverage(packet)?;
     verify_mutant_inventory(packet)?;
+    verify_kill_concentration(packet)?;
     verify_canary_inventory(packet)?;
     verify_generated_inventory(packet)?;
     verify_reviews_inventory(packet)?;
     verify_crash_boundary_inventory(packet)?;
+    Ok(())
+}
+
+/// Evidence kinds every applicable critical requirement must carry
+/// (ADR-0020 §2: "positive, negative, malformed/adversarial, basis/provenance,
+/// and deterministic-replay evidence").
+const CORE_EVIDENCE: [&str; 5] = ["positive", "negative", "malformed", "basis", "replay"];
+/// "Stateful laws also have injected-fault and idempotent-recovery evidence."
+const STATEFUL_EVIDENCE: [&str; 2] = ["fault", "recovery"];
+/// No single test may carry more than this share of the mutation denominator.
+const MAX_KILL_SHARE: f64 = 0.25;
+
+/// M17.5 F-05: a requirement mapped to one coarse end-to-end test is not
+/// covered. Every critical requirement must carry all five core evidence
+/// kinds, and fault-class requirements must additionally carry injected-fault
+/// and idempotent-recovery evidence.
+fn verify_evidence_coverage(packet: &Packet) -> Result<()> {
+    let known = CORE_EVIDENCE
+        .iter()
+        .chain(STATEFUL_EVIDENCE.iter())
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let mut covered = BTreeMap::<&str, BTreeSet<&str>>::new();
+    for test in &packet.tests {
+        if test.evidence.is_empty() {
+            anyhow::bail!("{} declares no evidence kind", test.id);
+        }
+        for kind in &test.evidence {
+            if !known.contains(kind.as_str()) {
+                anyhow::bail!("{} declares unknown evidence kind {kind}", test.id);
+            }
+        }
+        for requirement in &test.requirements {
+            covered
+                .entry(requirement.as_str())
+                .or_default()
+                .extend(test.evidence.iter().map(String::as_str));
+        }
+    }
+    for requirement in &packet.requirements {
+        if !requirement.critical {
+            continue;
+        }
+        let have = covered
+            .get(requirement.id.as_str())
+            .cloned()
+            .unwrap_or_default();
+        let mut needed = CORE_EVIDENCE.to_vec();
+        if requirement.kind == "fault" {
+            needed.extend_from_slice(&STATEFUL_EVIDENCE);
+        }
+        let missing = needed
+            .into_iter()
+            .filter(|kind| !have.contains(kind))
+            .collect::<Vec<_>>();
+        if !missing.is_empty() {
+            anyhow::bail!(
+                "critical requirement {} ({}) is missing {} evidence",
+                requirement.id,
+                requirement.kind,
+                missing.join(", ")
+            );
+        }
+    }
+    Ok(())
+}
+
+/// M17.5 F-05: ADR-0020 §3 forbids mutation coverage clustering on
+/// easy-to-kill paths. A 100% kill rate carried by a handful of coarse
+/// end-to-end tests measures almost nothing, so cap any one test's share of
+/// the denominator and require every named killer to exist.
+fn verify_kill_concentration(packet: &Packet) -> Result<()> {
+    let total = packet.mutants.len();
+    if total == 0 {
+        return Ok(());
+    }
+    let test_ids = packet
+        .tests
+        .iter()
+        .map(|row| row.id.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut kills = BTreeMap::<&str, usize>::new();
+    for mutant in &packet.mutants {
+        for test in &mutant.killing_tests {
+            if !test_ids.contains(test.as_str()) {
+                anyhow::bail!("{} names unknown killing test {test}", mutant.id);
+            }
+            *kills.entry(test.as_str()).or_default() += 1;
+        }
+    }
+    for (test, count) in &kills {
+        #[allow(clippy::cast_precision_loss, reason = "inventory-scale counts")]
+        let share = *count as f64 / total as f64;
+        if share > MAX_KILL_SHARE {
+            anyhow::bail!(
+                "{test} is the named killer for {count}/{total} mutants ({:.0}%), \
+                 above the {:.0}% ceiling — mutation coverage is clustering on one \
+                 coarse test",
+                share * 100.0,
+                MAX_KILL_SHARE * 100.0
+            );
+        }
+    }
     Ok(())
 }
 
@@ -342,6 +450,10 @@ struct Test {
     id: String,
     name: String,
     requirements: Vec<String>,
+    /// Evidence kinds this test supplies for the requirements it maps to
+    /// (ADR-0020 §2). One of `positive`, `negative`, `malformed`, `basis`,
+    /// `replay`, `fault`, `recovery`.
+    evidence: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -665,6 +777,47 @@ mod tests {
             },
         )
         .expect("complete statuses accepted by qualified verifier");
+    }
+
+    /// M17.5 F-05 canary: dropping one evidence kind must fail the shape
+    /// check. Without this, "36 requirements covered" can mean 36 requirements
+    /// on one coarse end-to-end test.
+    #[test]
+    fn shape_check_rejects_a_requirement_missing_an_evidence_kind() {
+        let mut packet = packet_from_repo();
+        // Strip every `negative` test; the requirements they served lose a kind.
+        packet
+            .tests
+            .retain(|test| test.evidence != vec!["negative".to_owned()]);
+        for (index, test) in packet.tests.iter_mut().enumerate() {
+            test.id = format!("P1-T{:02}", index + 1);
+        }
+        for mutant in &mut packet.mutants {
+            mutant.killing_tests = vec![packet.tests[0].id.clone()];
+        }
+        let err = verify_packet_shape(&packet)
+            .expect_err("a requirement missing negative evidence must be rejected");
+        assert!(
+            err.to_string().contains("missing"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// M17.5 F-05 canary: a 100% kill rate carried by one coarse test is the
+    /// clustering ADR-0020 §3 forbids.
+    #[test]
+    fn shape_check_rejects_mutation_coverage_clustered_on_one_test() {
+        let mut packet = packet_from_repo();
+        let sole = packet.tests[0].id.clone();
+        for mutant in &mut packet.mutants {
+            mutant.killing_tests = vec![sole.clone()];
+        }
+        let err = verify_packet_shape(&packet)
+            .expect_err("kill concentration on one test must be rejected");
+        assert!(
+            err.to_string().contains("clustering"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]

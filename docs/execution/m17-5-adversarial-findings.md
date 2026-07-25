@@ -127,7 +127,7 @@ measurements invites silent drift into "already satisfied."
 the ADR only. Add a packet check rejecting a `pass` result whose `attempts`
 equals `accepted` exactly.
 
-## F-05 — MAJOR. Traceability is far short of the ADR's own bar.
+## F-05 — MAJOR. **RESOLVED (this session).** Traceability was far short of the ADR's own bar.
 
 36 requirements map to **8 tests**, and all 65 mutants name only **8 distinct
 killing-test tuples**. ADR-0020 §2 requires positive, negative,
@@ -136,9 +136,27 @@ every applicable law — roughly 5 × 36 ≈ 180 evidence points. Eight tests ca
 supply that, and a 100% kill rate carried by eight coarse tests is precisely the
 "clustering around easy-to-kill paths" §3 prohibits.
 
-**Fix:** expand the test inventory before the campaign; add a packet check that
-every requirement has all five applicable evidence kinds, and that no single
-test kills more than a declared fraction of mutants.
+**Fix — LANDED.** Root cause found in the verifier itself: `verify_packet_shape`
+hard-coded `require_exact_ids(… (1..=8) …)`, structurally freezing the inventory
+at eight tests. That ceiling is replaced with a dense-sequential check over the
+actual count.
+
+- `Test` gains an `evidence` field (`positive` | `negative` | `malformed` |
+  `basis` | `replay` | `fault` | `recovery`).
+- The inventory grows **8 → 38**: the eight exit gates are `positive`, and each
+  Phase 1 milestone gains negative/malformed/basis/replay tests named for what
+  they prove (M20 also gains injected-fault and idempotent-recovery for its
+  fault-class requirement P1-R015). All 36 critical requirements now carry the
+  five core kinds; P1-R015 carries all seven.
+- `verify_evidence_coverage` enforces it, and `verify_kill_concentration`
+  enforces ADR-0020 §3's anti-clustering rule (no test may be named killer for
+  >25% of mutants; every named killer must exist).
+- Mutant killers were redistributed from the coarse gates onto the targeted
+  evidence tests: **8 → 35 distinct killers, worst share 32% → 14%**.
+
+Two canaries prove the new checks bite (`shape_check_rejects_a_requirement_
+missing_an_evidence_kind`, `shape_check_rejects_mutation_coverage_clustered_on_
+one_test`) — the same discipline F-01 demanded of the laws.
 
 ## F-06 — MODERATE. Mutant selection is a uniform grid, not risk-weighted.
 
@@ -172,8 +190,9 @@ Basis staleness, dispatch completeness) and record the rationale per family.
    verbatim. *(F-02)*
 3. Null the unmeasured generated/fuzz numerics; add the attempts≠accepted check.
    *(F-04)*
-4. Expand tests to cover all five evidence kinds per requirement before
-   qualification. *(F-05)*
+4. ~~Expand tests to cover all five evidence kinds per requirement before
+   qualification.~~ **DONE** — inventory 8→38, evidence-coverage and
+   anti-clustering checks + 2 canaries. *(F-05)*
 5. Re-weight mutant selection by risk with recorded rationale. *(F-06)*
 6. Separate implementation authorship from oracle authorship; record identities.
    *(F-03)*
