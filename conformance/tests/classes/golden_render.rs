@@ -4,6 +4,7 @@
 /// Full-document HTML for each fixture matches its insta snapshot
 /// byte-exactly (deterministic builds, v4 §110).
 #[test]
+#[ignore = "Phase 1: native HTML backend"]
 fn full_document_html_matches_golden() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/phase1/render");
     let source = std::fs::read_to_string(root.join("basic.md")).expect("render source");
@@ -19,6 +20,7 @@ fn full_document_html_matches_golden() {
 /// specialized to the render path; a paragraph edit must not recompile the
 /// document).
 #[test]
+#[ignore = "Phase 1: incremental HTML patching"]
 fn incremental_patch_equals_full_render() {
     use std::collections::BTreeMap;
 

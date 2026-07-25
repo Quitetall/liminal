@@ -64,7 +64,7 @@ input-ignoring compiler vs the incremental law. Each is `#[should_panic]`, so
 a law going vacuous again turns a canary red. The real implementation still
 passes all three laws.
 
-## F-02 — CRITICAL. Phase 1 was implemented while formally unauthorized, and its exit gates are pre-greened.
+## F-02 — CRITICAL. **RESOLVED (this session, AM-17.2).** Phase 1 was implemented while formally unauthorized, and its exit gates were pre-greened.
 
 `docs/execution/M18.md`–`M24.md` show **0 of 47 steps done**; the packet records
 `Phase 1 execution authorization: NOT_RUN`. Yet `crates/liminal-cir` (1,141
@@ -83,12 +83,20 @@ against code that does not exist. But three consequences are not acceptable as-i
 3. Phase 1's gates flipped without the Phase 1 authorization the whole M17 gate
    is built to withhold.
 
-**Fix (one of):** (a) declare these crates *qualification substrate* under an
-explicit T1 amendment, quarantine them from Phase 1 exit-gate satisfaction, and
-re-ignore the three law tests until M19–M21 actually execute; or (b) accept them
-as Phase 1 work, retro-tick the corresponding steps with evidence, and record
-that Phase 1 began before its authorization. **(a) is correct** — it preserves
-the gate's meaning. Either way it is an amendment, never silence.
+**Fix — LANDED as AM-17.2 (option (a)).** The crates are declared **HAQP
+qualification substrate**: retained, not reverted, because HAQP-1 cannot mutate
+or fuzz code that does not exist. But all **seven** Phase 1 exit-gate tests —
+not just the three law gates; `malformed_source_never_panics_and_round_trips`,
+`fuzz_regressions_stay_fixed`, `full_document_html_matches_golden`, and
+`incremental_patch_equals_full_render` were green too — are returned to their
+original `#[ignore = "Phase 1: ..."]` tags, recovered verbatim from `d76efd5`.
+Each is un-ignored by the milestone that earns it (M18-M23), with M24
+aggregating all seven.
+
+Independent confirmation the quarantine is correct: the meter now reads
+**Phase 1: 7 deferred / backlog 23**, and 23 minus the two Phase 0 gates that
+flip at M17.5/M17.6 is **exactly the 21 M17.8 predicts**. The work order's own
+arithmetic never expected these tests to be green at M17.
 
 ## F-03 — CRITICAL. Oracle independence is structurally compromised.
 
@@ -158,8 +166,10 @@ Basis staleness, dispatch completeness) and record the rationale per family.
 1. ~~Anchor all three §112 laws to independent oracles; add degenerate-implementation
    canaries that must fail.~~ **DONE** — `content_witness` oracle + 4 canaries in
    `tests/law_canaries.rs`. *(F-01; F-03's mechanical half)*
-2. Resolve the Phase 1 authorization contradiction by amendment; re-ignore the
-   three law gates until M19–M21 execute. *(F-02)*
+2. ~~Resolve the Phase 1 authorization contradiction by amendment; re-ignore the
+   three law gates until M19-M21 execute.~~ **DONE** — AM-17.2 declares the
+   crates qualification substrate; all SEVEN Phase 1 exit gates re-ignored
+   verbatim. *(F-02)*
 3. Null the unmeasured generated/fuzz numerics; add the attempts≠accepted check.
    *(F-04)*
 4. Expand tests to cover all five evidence kinds per requirement before

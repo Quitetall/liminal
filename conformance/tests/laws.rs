@@ -11,6 +11,7 @@
 /// `liminal_format::Formatter` (the Phase 1 Markdown-compatible formatter),
 /// fed by `fixtures/malformed-source/` and golden sources.
 #[test]
+#[ignore = "Phase 1: first Formatter implementation (lim fmt)"]
 fn formatter_idempotence_law_holds() {
     use liminal_format::MarkdownFormatter;
 
@@ -26,6 +27,7 @@ fn formatter_idempotence_law_holds() {
 /// `parse(emit(graph))` preserves the supported subset; `emit(parse(source))`
 /// canonicalizes (v4 §8.4 level 2, §124) via `laws::check_canonical_round_trip`.
 #[test]
+#[ignore = "Phase 1: canonical round-trip for the vertical-slice projection"]
 fn canonical_round_trip_law_holds() {
     use liminal_format::MarkdownFormatter;
 
@@ -42,6 +44,7 @@ fn canonical_round_trip_law_holds() {
 /// `liminal_query::IncrementalCompiler` (Phase 1 vertical slice; the M8
 /// revision prototype may instantiate a toy version earlier).
 #[test]
+#[ignore = "Phase 1: incremental compiler equivalence (toy version possible at M8)"]
 fn incremental_equals_full_compile_law_holds() {
     use std::collections::BTreeMap;
 
