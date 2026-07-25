@@ -4,12 +4,82 @@
 //! `tests/laws.rs`, phase-tagged `#[ignore]`d until each seam has an
 //! implementation.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use liminal_format::Formatter;
 use liminal_history::SemanticDiff;
 use liminal_query::IncrementalCompiler;
 use liminal_resolver::ReplayableResolver;
 use liminal_revision::WorkspaceBasis;
 use liminal_sync::Replica;
+
+/// INDEPENDENT content oracle (ADR-0020 §5; M17.5 finding F-01).
+///
+/// Implemented HERE, inside the law, over RAW text — it never calls the
+/// implementation's parser, canonicalizer, or equality. Returns the multiset
+/// of word tokens and the set of well-formed `{#id}` durable markers.
+///
+/// This exists because self-referential relations (`parse(format(x)) ==
+/// parse(x)`) are satisfied by a formatter that deletes all content and a
+/// parser that returns a constant. An anchor outside the implementation is the
+/// only thing that makes those relations mean anything.
+fn content_witness(text: &str) -> (BTreeMap<String, usize>, BTreeSet<String>) {
+    let mut words: BTreeMap<String, usize> = BTreeMap::new();
+    for token in text.split(|c: char| !c.is_alphanumeric() && c != '_') {
+        if !token.is_empty() {
+            *words.entry(token.to_owned()).or_default() += 1;
+        }
+    }
+
+    let mut ids = BTreeSet::new();
+    let mut rest = text;
+    while let Some(open) = rest.find("{#") {
+        let after = &rest[open + 2..];
+        let Some(close) = after.find('}') else { break };
+        let candidate = &after[..close];
+        if !candidate.is_empty()
+            && candidate
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        {
+            ids.insert(candidate.to_owned());
+        }
+        rest = &after[close + 1..];
+    }
+    (words, ids)
+}
+
+/// Assert that `output` still carries every word token and every durable id
+/// present in `input`, and that a non-empty input did not become empty.
+/// Content-destroying implementations die here.
+fn assert_content_survives(input: &str, output: &str, what: &str) {
+    assert!(
+        input.trim().is_empty() || !output.trim().is_empty(),
+        "{what} erased a non-empty document: input {input:?} produced {output:?}"
+    );
+    let (in_words, in_ids) = content_witness(input);
+    let (out_words, out_ids) = content_witness(output);
+    for (word, count) in &in_words {
+        let seen = out_words.get(word).copied().unwrap_or(0);
+        assert!(
+            seen >= *count,
+            "{what} dropped content: token {word:?} appears {count}x in input \
+             {input:?} but {seen}x in output {output:?}"
+        );
+    }
+    // Surface-agnostic id survival: a durable id may legitimately change
+    // SPELLING between surfaces (`{#a}` in the compact syntax becomes
+    // `(id = "a")` in the explicit one), but its VALUE must survive somewhere
+    // in the output. Checking the value as a token keeps this oracle
+    // independent of the implementation while permitting the declared
+    // surface transform.
+    for id in &in_ids {
+        assert!(
+            out_words.contains_key(id) || out_ids.contains(id),
+            "{what} dropped durable id {id:?}: input {input:?} produced {output:?}"
+        );
+    }
+}
 
 /// Law: `parse(format(parse(x))) ≡ parse(x)` and formatting is idempotent
 /// (v4 §112, §20).
@@ -38,7 +108,39 @@ where
             twice, formatted,
             "formatting must be idempotent for {source:?}"
         );
+
+        // Anchor outside the implementation (F-01): the relations above are
+        // self-referential and a content-deleting formatter satisfies them.
+        assert_content_survives(source, &formatted, "format");
     }
+
+    // Non-degeneracy of `parse` (F-01): a parser returning one constant makes
+    // every round-trip relation vacuously true. Callers supply semantically
+    // distinct sources, so at least two parses must differ.
+    assert_parse_discriminates(formatter, sources);
+}
+
+/// A parser that maps every input to the same `Doc` satisfies every
+/// round-trip law vacuously. Requires at least two of the declared sources to
+/// parse differently. Callers MUST pass semantically distinct sources.
+fn assert_parse_discriminates<F>(formatter: &F, sources: &[&str])
+where
+    F: Formatter,
+    F::Doc: PartialEq + std::fmt::Debug,
+    F::Error: std::fmt::Debug,
+{
+    if sources.len() < 2 {
+        return;
+    }
+    let docs: Vec<F::Doc> = sources
+        .iter()
+        .map(|s| formatter.parse(s).expect("source must parse"))
+        .collect();
+    assert!(
+        docs.windows(2).any(|pair| pair[0] != pair[1]),
+        "parse maps every declared source to the same document — a constant \
+         parser satisfies the round-trip relations vacuously; sources: {sources:?}"
+    );
 }
 
 /// Law: `parse(emit(graph))` preserves the supported subset and
@@ -59,7 +161,13 @@ where
         );
         let again = formatter.emit(&round).expect("round must emit");
         assert_eq!(again, emitted, "emission must be canonical for {source:?}");
+
+        // Anchor outside the implementation (F-01): emit must carry the
+        // source's content, not merely agree with its own parse.
+        assert_content_survives(source, &emitted, "emit");
     }
+
+    assert_parse_discriminates(formatter, sources);
 }
 
 /// Law: `incremental_compile(x, edits) ≡ full_compile(apply(x, edits))` at one
@@ -79,6 +187,17 @@ pub fn check_incremental_equals_full<C>(
     assert_eq!(
         incremental, full,
         "incremental(x, edits) must equal full(apply(x, edits)) at one Basis"
+    );
+
+    // Non-degeneracy (F-01): a compiler returning one constant from both paths
+    // satisfies the equality above vacuously. Callers MUST pass edits that
+    // observably change the compilation — a law fed no-op edits proves nothing.
+    let baseline = compiler.full(source, basis);
+    assert!(
+        edits.is_empty() || full != baseline,
+        "compiling the edited source produced the same output as the \
+         unedited source — either the declared edits are not observable or \
+         the compiler ignores its input; both make this law vacuous"
     );
 }
 

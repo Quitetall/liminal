@@ -14,7 +14,7 @@ that campaign is worth running.
 
 ---
 
-## F-01 — CRITICAL. All three flipped Phase 1 law gates are vacuous.
+## F-01 — CRITICAL. **RESOLVED (this session).** All three flipped Phase 1 law gates were vacuous.
 
 **Reproduction (verified, this session):** implement `liminal_format::Formatter`
 such that `parse` returns a unit `Doc` for every input and `format`/`emit`
@@ -41,10 +41,28 @@ calling the implementation's own equality or normalization path on both sides."*
 and `incremental_equals_full_compile_law_holds` are green and counted as active
 progress, but constrain nothing. They are also the exit gates of M19/M20/M21.
 
-**Fix:** each law needs at least one side anchored outside the implementation —
-fixed literal expected values, worked spec examples, or a separately implemented
-oracle — plus a non-vacuity canary asserting the law *rejects* a degenerate
-implementation. The degenerate formatter above is the ready-made canary.
+**Fix — LANDED.** `conformance/src/laws.rs` gained `content_witness`, an
+independent oracle implemented inside the law over RAW text (word multiset +
+durable-id values), never calling the implementation's parser, canonicalizer,
+or equality. All three laws now additionally assert:
+
+- **content survival** — a non-empty input may not become empty, and every
+  word token and durable-id value must survive into the output;
+- **parse discrimination** — a parser mapping every declared source to one
+  `Doc` is rejected;
+- **edit sensitivity** — a compiler whose output ignores observable edits is
+  rejected.
+
+Id survival is checked surface-agnostically: `{#a}` legitimately becomes
+`(id = "a")` in the explicit syntax, so the oracle requires the id VALUE to
+survive, not its spelling. (Discovered while hardening: the real
+`MarkdownFormatter::format` emits the explicit surface, not Markdown.)
+
+Four permanent gate canaries in `conformance/tests/law_canaries.rs` pin this:
+content-deletion vs both round-trip laws, constant-parser vs idempotence, and
+input-ignoring compiler vs the incremental law. Each is `#[should_panic]`, so
+a law going vacuous again turns a canary red. The real implementation still
+passes all three laws.
 
 ## F-02 — CRITICAL. Phase 1 was implemented while formally unauthorized, and its exit gates are pre-greened.
 
@@ -137,8 +155,9 @@ Basis staleness, dispatch completeness) and record the rationale per family.
 
 ## Improvement list (ordered; do before re-running the campaign)
 
-1. Anchor all three §112 laws to independent oracles; add degenerate-implementation
-   canaries that must fail. *(F-01, F-03)*
+1. ~~Anchor all three §112 laws to independent oracles; add degenerate-implementation
+   canaries that must fail.~~ **DONE** — `content_witness` oracle + 4 canaries in
+   `tests/law_canaries.rs`. *(F-01; F-03's mechanical half)*
 2. Resolve the Phase 1 authorization contradiction by amendment; re-ignore the
    three law gates until M19–M21 execute. *(F-02)*
 3. Null the unmeasured generated/fuzz numerics; add the attempts≠accepted check.
