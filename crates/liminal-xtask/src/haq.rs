@@ -307,6 +307,34 @@ fn verify_generated_inventory(packet: &Packet) -> Result<()> {
         if family.seed_categories.len() < 16 {
             anyhow::bail!("{} has fewer than 16 seed categories", family.family);
         }
+        // Internal consistency: the three counts must describe one run.
+        if family.accepted + family.discards != family.attempts {
+            anyhow::bail!(
+                "{}: accepted {} + discards {} != attempts {} — the counts do not \
+                 describe a single run",
+                family.family,
+                family.accepted,
+                family.discards,
+                family.attempts
+            );
+        }
+        // M17.5 F-04/F-07: a `pass` must be backed by a reproducible run, not
+        // by numbers typed into the packet.
+        if family.result == "pass" {
+            if family.seed.is_none() {
+                anyhow::bail!("{} claims pass without a recorded seed", family.family);
+            }
+            if family
+                .evidence_hash
+                .as_ref()
+                .is_none_or(|hash| hash.len() != 64)
+            {
+                anyhow::bail!(
+                    "{} claims pass without a 64-hex evidence hash",
+                    family.family
+                );
+            }
+        }
     }
     let total_minutes: u64 = packet.generated.iter().map(|row| row.fuzz_minutes).sum();
     if total_minutes < 155 {
@@ -485,6 +513,14 @@ struct Generated {
     fuzz_minutes: u64,
     seed_categories: Vec<String>,
     result: String,
+    /// Seed the recorded run used; required once `result` is `pass` so the
+    /// campaign is reproducible (ADR-0020 §1) and its numbers cannot be
+    /// asserted without a run behind them (M17.5 F-04/F-07).
+    #[serde(default)]
+    seed: Option<u64>,
+    /// BLAKE3 of the recorded run's evidence stream; required once `pass`.
+    #[serde(default)]
+    evidence_hash: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -622,6 +658,334 @@ fn packet_digest(packet: &Packet) -> Result<String> {
 /// Run deterministic generated checks for all five HAQP families. This records
 /// generated-case evidence only; sanitizer wall-clock qualification remains a
 /// separate `cargo fuzz` lane and is never inferred from this command.
+/// Deterministic 64-bit stream; one seed per case, recorded per family.
+struct Rng(u64);
+impl Rng {
+    fn next(&mut self) -> u64 {
+        self.0 = self
+            .0
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        self.0 ^ (self.0 >> 31)
+    }
+    fn below(&mut self, n: u64) -> u64 {
+        self.next() % n.max(1)
+    }
+    fn word(&mut self) -> String {
+        const ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789-_ ";
+        let len = 1 + self.below(12);
+        (0..len)
+            .map(|_| {
+                let idx = usize::try_from(self.below(ALPHABET.len() as u64)).expect("index fits");
+                char::from(ALPHABET[idx])
+            })
+            .collect()
+    }
+}
+
+/// Outcome of one generated case: the generator decides acceptance from the
+/// candidate itself, so `accepted`/`discards` are MEASURED, never assumed.
+enum Case {
+    /// In-domain and every metamorphic relation held.
+    Accepted,
+    /// Out of the declared domain; not evidence either way.
+    Discarded,
+}
+
+/// Family 0 — source/CST/formatting. Metamorphic relations: **lossless
+/// emit** (the CST must reproduce its input byte-for-byte) and **format
+/// idempotence**, both compared over bytes rather than parsed values.
+fn case_source_cst(rng: &mut Rng) -> Result<Case> {
+    let source = rng.word();
+    // Out of domain: the compact surface has no all-whitespace document.
+    if source.trim().is_empty() {
+        return Ok(Case::Discarded);
+    }
+    let basis = liminal_source::SourceBasis {
+        source: liminal_id::SourceId::from_name("haqp-generated"),
+        content_hash: liminal_id::ContentHash::of(source.as_bytes()),
+    };
+    let view = liminal_source::Utf8HolderView::from_bytes(basis, source.as_bytes())
+        .context("generated source must load")?;
+    let cst = liminal_cst::parse(&view);
+    anyhow::ensure!(
+        cst.emit_lossless() == source,
+        "CST emit is not lossless for {source:?}"
+    );
+    let fmt = liminal_format::MarkdownFormatter::default();
+    let once = fmt
+        .format(&source)
+        .map_err(|e| anyhow::anyhow!("formatter rejected {source:?}: {e}"))?;
+    let twice = fmt
+        .format(&once)
+        .map_err(|e| anyhow::anyhow!("reformat failed: {e}"))?;
+    anyhow::ensure!(once == twice, "formatting is not idempotent");
+    Ok(Case::Accepted)
+}
+
+/// Family 1 — graph/interchange codecs.
+///
+/// Metamorphic relation: **byte-canonical stability**. Re-serializing a value
+/// decoded from canonical bytes must reproduce those bytes exactly. The
+/// comparison is over BYTES, never the type's own `PartialEq`, so a broken
+/// `Eq` cannot make this pass (ADR-0020 §5).
+fn case_interchange(rng: &mut Rng) -> Result<Case> {
+    use liminal_graph::{Node, NodeFlags, PayloadRef};
+
+    let text = rng.word();
+    let durable = rng.below(2) == 1;
+    // Domain rule: a node claiming a durable id must carry payload text.
+    // Candidates violating it are out of domain and discarded, not "fixed".
+    if durable && text.trim().is_empty() {
+        return Ok(Case::Discarded);
+    }
+    let node = Node {
+        id: liminal_id::NodeId::new(),
+        kind: liminal_graph::KindId(u32::try_from(rng.below(8)).expect("kind fits")),
+        payload: if rng.below(4) == 0 {
+            PayloadRef::None
+        } else {
+            PayloadRef::Text(text)
+        },
+        revision: liminal_id::RevisionId(rng.below(1_000)),
+        flags: if durable {
+            NodeFlags::HAS_DURABLE_ID
+        } else {
+            NodeFlags::default()
+        },
+    };
+
+    let once = serde_json::to_vec(&node)?;
+    let decoded: Node = serde_json::from_slice(&once)?;
+    let twice = serde_json::to_vec(&decoded)?;
+    anyhow::ensure!(
+        once == twice,
+        "interchange codec is not byte-canonical for {node:?}"
+    );
+    Ok(Case::Accepted)
+}
+
+/// Family 2 — transforms/projections.
+///
+/// Metamorphic relations, both independent of the merge's own equality:
+/// **identity** (a side that changed nothing must not perturb the other
+/// side's content) and **outcome-class symmetry** (swapping `ours`/`theirs`
+/// cannot change whether the merge was structurally disjoint).
+fn case_transform(rng: &mut Rng) -> Result<Case> {
+    use liminal_source::merge::{MergeOutcome, three_way};
+
+    let blocks = 1 + rng.below(4);
+    let base = (0..blocks)
+        .map(|i| format!("{} {{#b{i}}}", rng.word()))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    // Out of domain: a degenerate base has no slots to align.
+    if base.trim().is_empty() {
+        return Ok(Case::Discarded);
+    }
+    let mutate = |rng: &mut Rng, text: &str| -> String {
+        text.lines()
+            .map(|line| {
+                if rng.below(3) == 0 {
+                    format!("{} {line}", rng.word())
+                } else {
+                    line.to_owned()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let ours = mutate(rng, &base);
+    let theirs = mutate(rng, &base);
+
+    // Identity: theirs unchanged => the merge must carry ours' content.
+    if let MergeOutcome::Disjoint { merged } = three_way(&base, &ours, &base) {
+        anyhow::ensure!(
+            merged.split_whitespace().eq(ours.split_whitespace()),
+            "identity merge dropped content: {ours:?} -> {merged:?}"
+        );
+    }
+
+    let forward = three_way(&base, &ours, &theirs);
+    let swapped = three_way(&base, &theirs, &ours);
+    let disjoint = |o: &MergeOutcome| matches!(o, MergeOutcome::Disjoint { .. });
+    anyhow::ensure!(
+        disjoint(&forward) == disjoint(&swapped),
+        "merge disjointness is not symmetric under swapping sides"
+    );
+    Ok(Case::Accepted)
+}
+
+/// Family 3 — repair/ILRP/recovery.
+///
+/// Builds a real `RepairPlan` DAG and orders it. Metamorphic relation:
+/// **deterministic permutation** — shuffling the dependency list must not
+/// change the resulting order. The ordering is then verified against the
+/// generator's OWN edge set, not by asking the implementation again. Cyclic
+/// candidates are out of domain and are discarded, which is where this
+/// family's discard rate genuinely comes from.
+fn case_repair(rng: &mut Rng) -> Result<Case> {
+    use liminal_jurisdiction::repair::{
+        ProposedMutation, RepairDependency, RepairOperation, RepairPlan, StatePredicate, topo_order,
+    };
+
+    let count = usize::try_from(2 + rng.below(5)).expect("step count fits");
+    let ids: Vec<liminal_id::RepairStepId> = (0..count)
+        .map(|_| liminal_id::RepairStepId::new())
+        .collect();
+    let steps = ids
+        .iter()
+        .map(|id| {
+            (
+                *id,
+                ProposedMutation {
+                    id: *id,
+                    subject: liminal_id::JurisdictionSubject::Node(liminal_id::NodeId::new()),
+                    operation: RepairOperation::WriteFile {
+                        path: liminal_id::PathId("generated.md".into()),
+                        contents: rng.word().into_bytes(),
+                    },
+                    expected_prestate: StatePredicate::Any,
+                    expected_poststate: StatePredicate::Any,
+                    idempotency_key: liminal_id::IdempotencyKey::new(),
+                },
+            )
+        })
+        .collect();
+
+    let mut edges = Vec::new();
+    for i in 0..count {
+        for j in (i + 1)..count {
+            if rng.below(3) == 0 {
+                edges.push((i, j));
+            }
+        }
+    }
+    // Rarely close a genuine cycle. A lone back edge is NOT a cycle unless a
+    // forward path exists, so add both directions to guarantee one.
+    let cyclic = count >= 2 && rng.below(384) == 0;
+    if cyclic {
+        edges.retain(|(before, after)| !(*before == 0 && *after == count - 1));
+        edges.push((0, count - 1));
+        edges.push((count - 1, 0));
+    }
+    let dependencies: Vec<RepairDependency> = edges
+        .iter()
+        .map(|(before, after)| RepairDependency {
+            before: ids[*before],
+            after: ids[*after],
+        })
+        .collect();
+
+    let plan = RepairPlan {
+        id: liminal_id::RepairId::new(),
+        basis: liminal_revision::WorkspaceBasis {
+            transaction: liminal_id::TransactionId::new(),
+            perspective: liminal_revision::BasisPerspective::DurableOnly,
+            components: BTreeMap::new(),
+        },
+        steps,
+        dependencies: dependencies.clone(),
+        inverse: None,
+    };
+    let Ok(order) = topo_order(&plan) else {
+        // Cyclic plans are correctly refused; not acceptance evidence.
+        return Ok(Case::Discarded);
+    };
+    anyhow::ensure!(
+        !cyclic,
+        "a cyclic plan was ordered instead of refused: {dependencies:?}"
+    );
+
+    // Independent verification against the generator's own edges.
+    let position: BTreeMap<liminal_id::RepairStepId, usize> = order
+        .iter()
+        .enumerate()
+        .map(|(index, id)| (*id, index))
+        .collect();
+    anyhow::ensure!(order.len() == count, "ordering dropped or duplicated steps");
+    for (before, after) in &edges {
+        anyhow::ensure!(
+            position[&ids[*before]] < position[&ids[*after]],
+            "ordering violated a declared dependency"
+        );
+    }
+
+    // Deterministic permutation: reversing the edge list must not change it.
+    let mut permuted = plan.clone();
+    permuted.dependencies.reverse();
+    anyhow::ensure!(
+        topo_order(&permuted).map_err(|e| anyhow::anyhow!("{e}"))? == order,
+        "topological order changed under permutation of the dependency list"
+    );
+    Ok(Case::Accepted)
+}
+
+/// Family 4 — Basis/revision/query invalidation.
+///
+/// Metamorphic relations: **irrelevant-input invariance** (a key never read
+/// must never invalidate) and **monotonicity** (recording more reads can only
+/// add invalidations). Both are checked against a key set the generator built
+/// itself, so `ComponentDeps` is never its own oracle.
+fn case_invalidation(rng: &mut Rng) -> Result<Case> {
+    use liminal_revision::ComponentDeps;
+
+    // Target the declared domain (computations that read >=1 component) and
+    // keep a rare out-of-domain probe so the discard path stays exercised.
+    let read_count = if rng.below(384) == 0 {
+        0
+    } else {
+        1 + rng.below(5)
+    };
+    let mut deps = ComponentDeps::default();
+    let mut expected = BTreeSet::new();
+    for _ in 0..read_count {
+        let key = liminal_id::JurisdictionKey::Path(liminal_id::PathId(rng.word().into()));
+        deps.record(key.clone());
+        expected.insert(key);
+    }
+    // Out of domain: nothing was read, so invalidation is vacuous.
+    if expected.is_empty() {
+        return Ok(Case::Discarded);
+    }
+
+    for key in &expected {
+        anyhow::ensure!(
+            deps.invalidated_by(key),
+            "a recorded read did not invalidate: {key:?}"
+        );
+    }
+    let unrelated = liminal_id::JurisdictionKey::Path(liminal_id::PathId(
+        format!("unread/{}", rng.word()).into(),
+    ));
+    if !expected.contains(&unrelated) {
+        anyhow::ensure!(
+            !deps.invalidated_by(&unrelated),
+            "an unread key invalidated the computation: {unrelated:?}"
+        );
+    }
+    // Monotonicity: adding a read never un-invalidates an existing one.
+    let extra = liminal_id::JurisdictionKey::Path(liminal_id::PathId(rng.word().into()));
+    deps.record(extra);
+    for key in &expected {
+        anyhow::ensure!(
+            deps.invalidated_by(key),
+            "recording another read un-invalidated {key:?}"
+        );
+    }
+    Ok(Case::Accepted)
+}
+
+/// One generated-evidence family: its name and its case runner.
+type Family = (&'static str, fn(&mut Rng) -> Result<Case>);
+
+/// Run the five HAQP generated-evidence families with MEASURED acceptance.
+///
+/// Each family generates structured candidates, decides acceptance from the
+/// candidate itself, and checks at least one metamorphic relation that does
+/// not route through the implementation's own equality path. Counts are
+/// tallied from outcomes — never echoed from the requested case count
+/// (M17.5 finding F-07).
 pub fn run_generated_repo(root: &Utf8Path, cases: u64) -> Result<()> {
     if cases == 0 {
         anyhow::bail!("generated case count must be positive");
@@ -629,69 +993,51 @@ pub fn run_generated_repo(root: &Utf8Path, cases: u64) -> Result<()> {
     if cases > 10_000_000 {
         anyhow::bail!("generated case count exceeds safety limit: {cases} > 10000000");
     }
-    let families = [
-        "source/CST/formatting",
-        "graph/interchange codecs",
-        "transforms/projections",
-        "repair/ILRP/recovery",
-        "Basis/revision/query invalidation",
+    let families: [Family; 5] = [
+        ("source/CST/formatting", case_source_cst),
+        ("graph/interchange codecs", case_interchange),
+        ("transforms/projections", case_transform),
+        ("repair/ILRP/recovery", case_repair),
+        ("Basis/revision/query invalidation", case_invalidation),
     ];
+
     let mut evidence = Vec::new();
-    for (index, family) in families.into_iter().enumerate() {
+    for (index, (family, run)) in families.into_iter().enumerate() {
+        let seed = 0x9E37_79B9_7F4A_7C15_u64 ^ (index as u64).wrapping_mul(0x0100_0000_01B3);
+        let mut rng = Rng(seed);
         let started = Instant::now();
-        let mut state = 0x9E37_79B9_u64 ^ index as u64;
         let mut digest = blake3::Hasher::new();
-        for _ in 0..cases {
-            state = state
-                .wrapping_mul(6_364_136_223_846_793_005)
-                .wrapping_add(1);
-            let bytes = state.to_le_bytes();
-            digest.update(&bytes);
-            match index {
-                0 => {
-                    let source = String::from_utf8_lossy(&bytes);
-                    let basis = liminal_source::SourceBasis {
-                        source: liminal_id::SourceId::from_name("haqp-generated"),
-                        content_hash: liminal_id::ContentHash::of(source.as_bytes()),
-                    };
-                    let view = liminal_source::Utf8HolderView::from_bytes(basis, source.as_bytes())
-                        .expect("generated source is UTF-8");
-                    let cst = liminal_cst::parse(&view);
-                    assert_eq!(cst.emit_lossless(), source);
-                    let m19_formatter = liminal_format::MarkdownFormatter::default();
-                    let formatted = m19_formatter.format(&source).expect("total formatter");
-                    let again = m19_formatter
-                        .format(&formatted)
-                        .expect("idempotent formatter");
-                    assert_eq!(formatted, again);
-                }
-                1 => {
-                    let value = serde_json::json!({ "seed": state });
-                    let bytes = serde_json::to_vec(&value)?;
-                    let _: serde_json::Value = serde_json::from_slice(&bytes)?;
-                }
-                2 => {
-                    let base = format!("a {state} {{#a}}");
-                    let _ = liminal_source::merge::three_way(&base, &base, &base);
-                }
-                3 => {
-                    let point = liminal_jurisdiction::CrashPoint::all()[usize::try_from(state)
-                        .expect("seed fits usize")
-                        % liminal_jurisdiction::CrashPoint::all().len()];
-                    digest.update(point.name().as_bytes());
-                }
-                _ => {
-                    digest.update(&state.to_le_bytes());
-                }
+        digest.update(&seed.to_le_bytes());
+        // ADR-0020 §4 requires >=100,000 ACCEPTED cases, so run until the
+        // acceptance target is met rather than stopping at N attempts. The
+        // attempt cap keeps a badly-targeted generator from running forever
+        // instead of silently reporting a short campaign.
+        let (mut accepted, mut discards, mut attempts) = (0u64, 0u64, 0u64);
+        let attempt_cap = cases.saturating_mul(2);
+        while accepted < cases {
+            anyhow::ensure!(
+                attempts < attempt_cap,
+                "{family}: {attempts} attempts yielded only {accepted}/{cases} accepted \
+                 — the generator is not targeting its declared domain"
+            );
+            attempts += 1;
+            match run(&mut rng).with_context(|| format!("{family} attempt {attempts}"))? {
+                Case::Accepted => accepted += 1,
+                Case::Discarded => discards += 1,
             }
+            digest.update(&rng.0.to_le_bytes());
         }
+        anyhow::ensure!(
+            accepted + discards == attempts,
+            "{family}: accounting lost cases"
+        );
         evidence.push(GeneratedEvidence {
             family: family.to_owned(),
-            accepted: cases,
-            attempts: cases,
-            discards: 0,
-            elapsed_ms: u64::try_from(started.elapsed().as_millis())
-                .expect("elapsed milliseconds fit u64"),
+            accepted,
+            attempts,
+            discards,
+            seed,
+            elapsed_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
             evidence_hash: digest.finalize().to_hex().to_string(),
         });
     }
@@ -699,10 +1045,15 @@ pub fn run_generated_repo(root: &Utf8Path, cases: u64) -> Result<()> {
     let path = root.join("target/haqp/generated.json");
     std::fs::create_dir_all(path.parent().expect("evidence parent"))?;
     std::fs::write(&path, &bytes)?;
-    println!(
-        "generated evidence complete; {} families x {cases} cases; {path}",
-        evidence.len()
-    );
+    for row in &evidence {
+        #[allow(clippy::cast_precision_loss, reason = "reporting only")]
+        let rate = row.discards as f64 * 100.0 / row.attempts.max(1) as f64;
+        println!(
+            "{}: {} accepted / {} attempts ({} discarded, {rate:.2}%)",
+            row.family, row.accepted, row.attempts, row.discards
+        );
+    }
+    println!("generated evidence written to {path}");
     Ok(())
 }
 
@@ -720,6 +1071,8 @@ struct GeneratedEvidence {
     accepted: u64,
     attempts: u64,
     discards: u64,
+    /// Recorded so the run is reproducible (ADR-0020 §1).
+    seed: u64,
     elapsed_ms: u64,
     evidence_hash: String,
 }

@@ -1661,8 +1661,8 @@
   {
    "family": "source/CST/formatting",
    "accepted": 100000,
-   "attempts": 100000,
-   "discards": 0,
+   "attempts": 100204,
+   "discards": 204,
    "fuzz_minutes": 31,
    "seed_categories": [
     "empty",
@@ -1682,13 +1682,15 @@
     "boundary-offset",
     "hostile"
    ],
-   "result": "planned"
+   "result": "planned",
+   "seed": 11400714819323198485,
+   "evidence_hash": "afd8a1b3b15c2287102d0a8a8fe676a02ed4a80546afc6bdff9695a1d6a786a6"
   },
   {
    "family": "graph/interchange codecs",
    "accepted": 100000,
-   "attempts": 100000,
-   "discards": 0,
+   "attempts": 100133,
+   "discards": 133,
    "fuzz_minutes": 31,
    "seed_categories": [
     "empty",
@@ -1708,7 +1710,9 @@
     "invalid-json",
     "hostile"
    ],
-   "result": "planned"
+   "result": "planned",
+   "seed": 11400713719811571110,
+   "evidence_hash": "2a1a22034e3070e064c9e6e4ebbfaf69bf37af571b56431d54396adde5ea230e"
   },
   {
    "family": "transforms/projections",
@@ -1734,13 +1738,15 @@
     "truncated",
     "hostile"
    ],
-   "result": "planned"
+   "result": "planned",
+   "seed": 11400717018346454899,
+   "evidence_hash": "750e899f4d460edbfb9f5127d4f3484b4912265f770b0d0edc29dbd10b66ed6d"
   },
   {
    "family": "repair/ILRP/recovery",
    "accepted": 100000,
-   "attempts": 100000,
-   "discards": 0,
+   "attempts": 100242,
+   "discards": 242,
    "fuzz_minutes": 31,
    "seed_categories": [
     "prepared",
@@ -1760,13 +1766,15 @@
     "truncated-intent",
     "hostile"
    ],
-   "result": "planned"
+   "result": "planned",
+   "seed": 11400715918834825484,
+   "evidence_hash": "0346dbba691941b53ec5d4db8c9c8f61b055fe20680c21bd7607623d5decfa25"
   },
   {
    "family": "Basis/revision/query invalidation",
    "accepted": 100000,
-   "attempts": 100000,
-   "discards": 0,
+   "attempts": 100260,
+   "discards": 260,
    "fuzz_minutes": 31,
    "seed_categories": [
     "empty-basis",
@@ -1786,7 +1794,9 @@
     "reordered",
     "hostile"
    ],
-   "result": "planned"
+   "result": "planned",
+   "seed": 11400719217369709273,
+   "evidence_hash": "a13f7367cfd8aec45ad8b6a215e7944acce84dc4ef9bc18a6220fa9ce5247bbc"
   }
  ],
  "crash_boundaries": [

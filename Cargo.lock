@@ -789,6 +789,7 @@ dependencies = [
  "liminal-graph",
  "liminal-id",
  "liminal-jurisdiction",
+ "liminal-revision",
  "liminal-source",
  "serde",
  "serde_json",

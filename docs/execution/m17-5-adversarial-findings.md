@@ -114,7 +114,7 @@ examples, or a separately implemented oracle. Two violations:
 **Fix:** require that the Phase 1 oracle be implemented by a different executor
 than the Phase 1 implementation, and record both identities in the packet.
 
-## F-04 — MAJOR. Generated evidence carries result-shaped numbers before any run.
+## F-04 — MAJOR. **RESOLVED with F-07.** Generated evidence carried result-shaped numbers before any run.
 
 All five families record `accepted: 100000, attempts: 100000, discards: 0` and
 `fuzz_minutes: 31`. Five independent generators producing a **0% discard rate**
@@ -170,7 +170,7 @@ Basis staleness, dispatch completeness) and record the rationale per family.
 
 ---
 
-## F-07 — CRITICAL. The generated-evidence lane tests nothing for four of five families, and its accept/discard counts are hardcoded.
+## F-07 — CRITICAL. **RESOLVED (this session).** The generated-evidence lane tested nothing for four of five families, and its accept/discard counts were hardcoded.
 
 Found by running the lane rather than reading the packet (`just haq-generated`,
 then `haq generate --cases 100000`). Two independent proofs:
@@ -207,12 +207,33 @@ deterministic cases, 0 discards" — 500,000 cases of evidence — while actuall
 exercising one surface. Every downstream conclusion resting on generated
 evidence would have been false.
 
-**Fix (not yet landed; needs real work, not a packet edit):** implement genuine
-generators per family, each producing structured inputs, recording true
-attempt/accept/discard counts, and checking at least one metamorphic relation
-that is not the implementation's own equality path. Until then the generated
-rows must stay `planned` and `qualification_state` must stay `not-run` — which
-they do; the gate is still failing closed.
+**Fix — LANDED.** All five families now generate structured inputs from a
+recorded seed, decide acceptance from the candidate, and check metamorphic
+relations that do not route through the implementation's own equality:
+
+| Family | Metamorphic relation(s) | before → after |
+|---|---|---|
+| source/CST/formatting | lossless emit + format idempotence, over bytes | 1078 → 913 ms |
+| graph/interchange codecs | **byte-canonical stability** (re-encode of a decode reproduces the bytes; a broken `Eq` cannot pass it) | 11 → 43 ms |
+| transforms/projections | **identity** (an unchanged side must not perturb content) + **outcome-class symmetry** under swapping sides | 104 → 1286 ms |
+| repair/ILRP/recovery | real `RepairPlan` DAGs through `topo_order`; **deterministic permutation** + dependency order verified against the generator's OWN edge set | 3 → 240 ms |
+| Basis/revision/query invalidation | **irrelevant-input invariance** + **monotonicity**, checked against a key set the generator built itself | ~0 → 148 ms |
+
+Counts are tallied from outcomes. The runner now targets **100,000 accepted**
+(ADR-0020 §4 says accepted, not attempted) with an attempt cap that fails loudly
+rather than silently reporting a short campaign. Measured result: 100,000
+accepted per family at 0.00–0.26% discards, all under the 1% ceiling.
+
+`Generated` gained `seed` and `evidence_hash`, **required once `result` is
+`pass`** — a family can no longer claim a pass without a reproducible run behind
+it — plus an internal-consistency check that `accepted + discards == attempts`.
+Re-running from the recorded seeds reproduces the packet's counts and evidence
+hashes byte-for-byte.
+
+Two defects the new generators caught immediately, both fixed rather than
+asserted away: a cycle probe that wasn't actually cyclic (a lone back edge is
+not a cycle without a forward path), and two families whose domain targeting
+pushed discards to 1.45% and 16.87%.
 
 ---
 
@@ -234,10 +255,9 @@ they do; the gate is still failing closed.
    three law gates until M19-M21 execute.~~ **DONE** — AM-17.2 declares the
    crates qualification substrate; all SEVEN Phase 1 exit gates re-ignored
    verbatim. *(F-02)*
-3. **Supersedes F-04** — implement real per-family generators with true
-   attempt/accept/discard accounting and non-self-referential metamorphic
-   relations; nulling the numerics is not enough when the loop tests nothing.
-   *(F-04, F-07)*
+3. ~~**Supersedes F-04** — implement real per-family generators…~~ **DONE** —
+   five real generators, measured accounting, 100,000 accepted each, seeds and
+   evidence hashes required for any `pass`. *(F-04, F-07)*
 4. ~~Expand tests to cover all five evidence kinds per requirement before
    qualification.~~ **DONE** — inventory 8→38, evidence-coverage and
    anti-clustering checks + 2 canaries. *(F-05)*
