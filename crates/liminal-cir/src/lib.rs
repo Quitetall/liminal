@@ -1568,6 +1568,60 @@ mod mutation_kills {
         );
     }
 
+    /// Kills `delete match arm BasisComponent::BufferGeneration{content_hash, ..}`
+    /// in `validate_debug_graph`.
+    ///
+    /// Without that arm the basis hash falls through to `None`, so EVERY
+    /// graph derived from an unsaved buffer fails validation with a spurious
+    /// "basis/source hash mismatch". Nothing previously validated a graph on
+    /// a buffer basis, so the whole dirty-buffer projection path — the one a
+    /// live editor uses on every keystroke — was unverified.
+    #[test]
+    fn a_graph_derived_from_a_dirty_buffer_validates() {
+        use liminal_id::{BufferId, ClientId, SessionEpoch};
+
+        let mut graph = graph_with_relations();
+        let holder = graph.holder.clone();
+        let hash = graph.source.content_hash;
+
+        // Re-seat the same document on a BufferGeneration basis: the buffer's
+        // content hash IS the source hash, exactly as an unsaved edit would
+        // present it.
+        graph.basis.components.insert(
+            holder.clone(),
+            BasisComponent::BufferGeneration {
+                client: ClientId::new(),
+                buffer: BufferId::new(),
+                epoch: SessionEpoch::default(),
+                generation: 3,
+                base_file_hash: Some(ContentHash::of(b"the saved bytes")),
+                content_hash: Some(hash),
+            },
+        );
+        validate_debug_graph(&graph)
+            .expect("a graph derived from a dirty buffer must validate on its buffer basis");
+
+        // And the check must still BITE on a buffer whose content hash
+        // disagrees with the source it claims to derive from.
+        graph.basis.components.insert(
+            holder,
+            BasisComponent::BufferGeneration {
+                client: ClientId::new(),
+                buffer: BufferId::new(),
+                epoch: SessionEpoch::default(),
+                generation: 3,
+                base_file_hash: Some(ContentHash::of(b"the saved bytes")),
+                content_hash: Some(ContentHash::of(b"a different buffer")),
+            },
+        );
+        let err = validate_debug_graph(&graph)
+            .expect_err("a buffer hash that disagrees with the source must be rejected");
+        assert!(
+            format!("{err}").contains("basis/source hash mismatch"),
+            "unexpected error: {err}"
+        );
+    }
+
     /// Kills the deleted `FileContent` / `BufferGeneration` match arms in
     /// `basis_for_source`: each component kind must have its hash rebased to
     /// the exact source bytes, and the other fields preserved.
