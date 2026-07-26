@@ -237,7 +237,7 @@ pushed discards to 1.45% and 16.87%.
 
 ---
 
-## F-08 — CRITICAL. Real mutation testing shows a 53% kill rate, not the required 100%; `liminal-cir` is effectively untested.
+## F-08 — CRITICAL. **RESOLVED (this session): 53% → 100%.** Real mutation testing showed a 53% kill rate; `liminal-cir` was effectively untested.
 
 The packet predeclares 65 mutants and ADR-0020 §3 requires **100% of
 applicable, non-duplicate, non-equivalent mutants killed — one survivor blocks
@@ -280,13 +280,44 @@ implementation. This is the single strongest piece of evidence that the suite
 is not yet fit to qualify anything — and it is exactly the question HAQP-1
 exists to answer, answered honestly.
 
-**Fix (not landed):** `liminal-cir` needs real unit and property coverage —
-relation ordering/preservation, `validate_debug_graph`'s rejection paths,
-`compare_shape` structural mismatch, `payload_for`, and the `resolve` equality
-paths — until every viable mutant dies. The packet's mutant rows must stay
-`predeclared` and `qualification_state` `not-run` until then. Note the six
-`liminal-cir` unit tests currently pass against a version that returns no
-relations at all.
+**Fix — LANDED. Every viable mutant now dies.**
+
+| measurement | caught | missed | rate |
+|---|---|---|---|
+| baseline | 38 | 34 | 53% |
+| batch 1 (8 tests) | 48 | 26 | 65% |
+| batch 2 (6 tests) | 64 | 10 | 86% |
+| batch 3–4 (3 tests) | 69 | 5 | 93% |
+| batch 5 (1 test) | 73 | 1 | 98.6% |
+| **batch 6 (1 test)** | **74** | **0** | **100%** |
+
+19 tests over six batches, each CI-gated and committed before the next
+measurement. **No equivalent-mutant disposition was needed** — every mutant
+died to a real assertion, so ADR-0020 §3's proof-and-concurring-verification
+path was never invoked.
+
+Three defects the exercise exposed that were larger than their mutants:
+
+1. **The duplicate-id identity law was unguarded.** `resolve`'s
+   `!duplicates.contains(id)` guard decides whether a repeated `{#id}` is
+   promoted to `Explicit` identity. Only the *diagnostic* was tested, never
+   the resulting identity — so the code could have handed two different nodes
+   the same durable identity. That is the exact false promise M07/M09 spent
+   milestones measuring.
+2. **Containment document order was unasserted.** The three `resolve` `==`
+   mutants all feed the containment ordinal — the number a projection replays
+   to reconstruct a document. Nothing checked it.
+3. **The dirty-buffer projection path was never validated.** No test built a
+   graph on a `BufferGeneration` basis, so the path a live editor exercises on
+   every keystroke was unverified.
+
+Method notes worth keeping: `compare_shape`'s five mutants could only be
+killed by calling it DIRECTLY — driving it through `deserialize_debug_v1`
+never reaches it, because `deny_unknown_fields` rejects first. And an
+`is_err()` assertion could not kill the framing mutant, because a byte-exact
+canonical check downstream subsumes the framing guard; asserting the error
+VARIANT was required. A test that asserts only "it errored" against layered
+guards proves almost nothing about which guard ran.
 
 ---
 
