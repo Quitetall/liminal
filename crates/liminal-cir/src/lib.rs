@@ -1332,6 +1332,176 @@ mod mutation_kills {
         );
     }
 
+    /// Kills the three `== -> !=` mutants in `resolve` (parent lookup at the
+    /// `hir.items.iter().find` site, child index, and root index).
+    ///
+    /// All three feed the containment relation's ORDINAL, carried as the
+    /// relation payload. Nothing previously asserted that ordinal, so a
+    /// resolver that attributed children to the wrong parent, or numbered
+    /// them wrongly — was invisible. Document order is load-bearing: it is
+    /// what a projection replays to reconstruct the document.
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one document exercising parent lookup, child index, and root \
+                  index together is the point; splitting it would let a mutant \
+                  survive in the seam between fixtures"
+    )]
+    fn containment_relations_carry_the_declared_document_order() {
+        let source = SourceId::from_name("containment-order");
+        let hash = ContentHash::of(b"containment-order");
+        let holder = JurisdictionKey::Path(PathId("order.md".into()));
+        let basis = WorkspaceBasis {
+            transaction: TransactionId::new(),
+            perspective: BasisPerspective::DurableOnly,
+            components: BTreeMap::from([(
+                holder,
+                BasisComponent::FileContent {
+                    path: PathId("order.md".into()),
+                    hash,
+                },
+            )]),
+        };
+        let range = SourceRange { start: 0, end: 1 };
+        let literal = |id: u32, value: &str| liminal_hir::HirItem {
+            id: HirId(id),
+            range,
+            kind: HirItemKind::Literal {
+                value: value.to_owned(),
+            },
+            attributes: BTreeMap::new(),
+            children: Vec::new(),
+        };
+        // Two ROOTS, the first of which owns three ordered children. This
+        // exercises the parent-item lookup, the child-index path, and the
+        // root-index fallback in one document.
+        let parent = liminal_hir::HirItem {
+            id: HirId(0),
+            range,
+            kind: HirItemKind::NodeConstruction {
+                name: "parent".into(),
+            },
+            attributes: BTreeMap::new(),
+            children: vec![HirId(1), HirId(2), HirId(3)],
+        };
+        let second_root = liminal_hir::HirItem {
+            id: HirId(4),
+            range,
+            kind: HirItemKind::NodeConstruction {
+                name: "tailroot".into(),
+            },
+            attributes: BTreeMap::new(),
+            children: Vec::new(),
+        };
+        let hir = HirDocument {
+            basis: SourceBasis {
+                source,
+                content_hash: hash,
+            },
+            roots: vec![HirId(0), HirId(4)],
+            items: vec![
+                parent,
+                literal(1, "alphachild"),
+                literal(2, "betachild"),
+                literal(3, "gammachild"),
+                second_root,
+            ],
+            source_map: liminal_hir::SourceMap {
+                basis: SourceBasis {
+                    source,
+                    content_hash: hash,
+                },
+                annotations: Vec::new(),
+            },
+        };
+
+        let resolved = resolve(&hir, &basis).expect("resolves");
+        let ordinal_of = |target: NodeId| -> String {
+            resolved
+                .graph
+                .relations
+                .iter()
+                .find(|relation| relation.target.node() == target)
+                .map(|relation| match &relation.payload {
+                    PayloadRef::Text(text) => text.clone(),
+                    other => panic!("containment payload must be text, got {other:?}"),
+                })
+                .expect("every node must have an incoming containment relation")
+        };
+
+        // The three children must carry their DECLARED positions, 0/1/2.
+        let child_nodes: Vec<NodeId> = [1u32, 2, 3]
+            .iter()
+            .map(|index| {
+                let item = hir
+                    .items
+                    .iter()
+                    .find(|candidate| candidate.id == HirId(*index))
+                    .expect("child present");
+                let path = &[*index];
+                let _ = path;
+                resolved
+                    .graph
+                    .nodes
+                    .iter()
+                    .find(|node| match &node.payload {
+                        PayloadRef::Text(text) => text.contains(match &item.kind {
+                            HirItemKind::Literal { value } => value.as_str(),
+                            _ => unreachable!("children are literals"),
+                        }),
+                        _ => false,
+                    })
+                    .expect("child node present")
+                    .id
+            })
+            .collect();
+
+        assert_eq!(ordinal_of(child_nodes[0]), "0", "first child ordinal");
+        assert_eq!(ordinal_of(child_nodes[1]), "1", "second child ordinal");
+        assert_eq!(ordinal_of(child_nodes[2]), "2", "third child ordinal");
+
+        // All three children must hang off ONE common parent — a parent
+        // lookup that resolves wrongly scatters them across sources. Asserted
+        // structurally rather than by matching payload text, so the test
+        // cannot pass or fail for reasons unrelated to the resolver.
+        let sources: BTreeSet<NodeId> = child_nodes
+            .iter()
+            .map(|child| {
+                resolved
+                    .graph
+                    .relations
+                    .iter()
+                    .find(|relation| relation.target.node() == *child)
+                    .expect("containment relation present")
+                    .source
+            })
+            .collect();
+        assert_eq!(
+            sources.len(),
+            1,
+            "siblings were attributed to {} different parents",
+            sources.len()
+        );
+
+        // The second ROOT takes its ordinal from `hir.roots`, exercising the
+        // root-index fallback rather than a parent's children list.
+        let second_node = resolved
+            .graph
+            .nodes
+            .iter()
+            .find(|node| match &node.payload {
+                PayloadRef::Text(text) => text.contains("\"name\":\"tailroot\""),
+                _ => false,
+            })
+            .expect("tail root present")
+            .id;
+        assert_eq!(
+            ordinal_of(second_node),
+            "1",
+            "the tail root must carry root ordinal 1"
+        );
+    }
+
     /// Kills all three mutants on the duplicate-id guard in `resolve`
     /// (`!duplicates.contains(id)` → true / → false / `delete !`).
     ///
