@@ -4,6 +4,7 @@
 
 mod ai_operations;
 mod conversion_loss;
+mod fuzz_regressions;
 mod golden_render;
 mod large_workspace;
 mod malformed_source;
