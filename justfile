@@ -52,6 +52,9 @@ haq-generated cases="100000":
     cargo run -p liminal-xtask -- haq generate --cases {{ cases }}
 
 # Two isolated model-family HAQP reviews. Fails closed on dirty/unqualified base.
+haq-crash:
+    cargo run -p liminal-conformance --bin crash-evidence
+
 haq-blind-review:
     python3 scripts/haqp_blind_review.py --run
 
