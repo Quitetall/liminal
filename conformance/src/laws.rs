@@ -206,8 +206,21 @@ pub fn check_semantic_diff_matches<S>(differ: &S, graph: &S::Graph, tx: &S::Tx)
 where
     S: SemanticDiff,
     S::Tx: std::fmt::Debug,
+    S::Graph: PartialEq + std::fmt::Debug,
 {
     let after = differ.apply(graph, tx);
+
+    // Non-degeneracy (M17.5 pass-2 #5): `diff(apply(g, tx), g) == tx` is
+    // satisfied by an `apply` that changes nothing and a `diff` that echoes
+    // its argument. An observable transaction MUST move the graph, or the
+    // law is comparing the implementation to itself.
+    assert!(
+        &after != graph,
+        "apply(graph, tx) returned an unchanged graph — either the declared \
+         transaction is not observable or apply ignores it; both make this \
+         law vacuous"
+    );
+
     let recovered = differ.diff(&after, graph);
     assert_eq!(
         &recovered, tx,
@@ -230,6 +243,17 @@ pub fn check_resolver_replay_deterministic<R>(
         first, second,
         "replay from frozen observations must be deterministic"
     );
+
+    // Non-degeneracy (M17.5 pass-2 #6): a resolver returning one constant is
+    // trivially "deterministic". Replay must REPRODUCE A RECORDED
+    // observation — v4 §112: replay reproduces what was recorded, or it is
+    // not a replay. Checked against the caller's frozen log, which the
+    // resolver did not construct.
+    assert!(
+        frozen.contains(&first),
+        "replay returned {first:?}, which is not present in the frozen log — \
+         a replay must reproduce a recorded observation, not invent one"
+    );
 }
 
 /// Law: replicas converge under supported operation schedules (v4 §112, §88).
@@ -239,7 +263,7 @@ pub fn check_resolver_replay_deterministic<R>(
 pub fn check_replicas_converge<R>(make: impl Fn() -> R, ops_a: Vec<R::Op>, ops_b: Vec<R::Op>)
 where
     R: Replica,
-    R::State: std::fmt::Debug,
+    R::State: PartialEq + std::fmt::Debug,
 {
     let mut a = make();
     for op in ops_a {
@@ -249,6 +273,16 @@ where
     for op in ops_b {
         b.apply(op);
     }
+
+    // Non-degeneracy (M17.5 pass-2 #7): replicas whose `apply` is a no-op and
+    // whose `state()` is constant satisfy every convergence assertion below.
+    // At least one side must have OBSERVABLY moved from the empty replica.
+    let empty = make();
+    assert!(
+        a.state() != empty.state() || b.state() != empty.state(),
+        "neither operation sequence changed replica state — convergence is \
+         vacuous when every replica is identical"
+    );
 
     let mut a_then_b = make();
     a_then_b.merge(&a);

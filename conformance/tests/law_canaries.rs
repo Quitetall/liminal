@@ -133,3 +133,79 @@ fn canary_incremental_law_rejects_input_ignoring_compiler() {
         &basis(),
     );
 }
+
+// ── M17.5 pass-2 findings #5, #6, #7 ───────────────────────────────────────
+// The Phase 6/7 laws were left unhardened when F-01 fixed the Phase 1 three.
+// An independent reviewer (different model family) found all three vacuous.
+// These canaries pin the fix the same way.
+
+/// Applies nothing; diffs by echoing the requested transaction.
+#[derive(Debug, Default)]
+struct NoOpDiffer;
+
+impl liminal_history::SemanticDiff for NoOpDiffer {
+    type Graph = u8;
+    type Tx = u8;
+
+    fn apply(&self, graph: &Self::Graph, _tx: &Self::Tx) -> Self::Graph {
+        *graph // changes nothing
+    }
+    fn diff(&self, _after: &Self::Graph, _before: &Self::Graph) -> Self::Tx {
+        7 // echoes whatever the caller asked about
+    }
+}
+
+/// "Deterministic" by returning one constant, never consulting the log.
+#[derive(Debug, Default)]
+struct ConstantResolver;
+
+impl liminal_resolver::ReplayableResolver for ConstantResolver {
+    type Request = u8;
+    type Observation = u8;
+
+    fn observe(&mut self, _request: &Self::Request) -> Self::Observation {
+        0
+    }
+    fn replay(&self, _request: &Self::Request, _frozen: &[Self::Observation]) -> Self::Observation {
+        99 // never appears in any frozen log the caller supplies
+    }
+}
+
+/// Every replica is identical because nothing ever changes state.
+#[derive(Debug, Default)]
+struct InertReplica;
+
+impl liminal_sync::Replica for InertReplica {
+    type Op = u8;
+    type State = ();
+
+    fn apply(&mut self, _op: Self::Op) {}
+    fn merge(&mut self, _other: &Self) {}
+    fn state(&self) -> Self::State {}
+}
+
+/// The semantic-diff law must reject an `apply` that changes nothing.
+#[test]
+#[should_panic(expected = "unchanged graph")]
+fn canary_semantic_diff_law_rejects_inert_apply() {
+    liminal_conformance::laws::check_semantic_diff_matches(&NoOpDiffer, &1u8, &7u8);
+}
+
+/// The replay law must reject a resolver that invents observations instead of
+/// reproducing recorded ones.
+#[test]
+#[should_panic(expected = "not present in the frozen log")]
+fn canary_replay_law_rejects_invented_observations() {
+    liminal_conformance::laws::check_resolver_replay_deterministic(
+        &ConstantResolver,
+        &1u8,
+        &[1, 2],
+    );
+}
+
+/// The convergence law must reject replicas whose state never moves.
+#[test]
+#[should_panic(expected = "vacuous")]
+fn canary_convergence_law_rejects_inert_replicas() {
+    liminal_conformance::laws::check_replicas_converge(InertReplica::default, vec![1u8], vec![2u8]);
+}
