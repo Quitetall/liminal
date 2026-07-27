@@ -1,0 +1,6 @@
+[
+{"target":"cst_parse","seconds":1800,"elapsed_s":1801,"exit_code":0,"execs":32874194,"artifacts":0,"seed":20260725,"log":"target/haqp/fuzz-cst_parse.log"},
+{"target":"format_idempotent","seconds":1800,"elapsed_s":1810,"exit_code":0,"execs":1311666,"artifacts":0,"seed":20260725,"log":"target/haqp/fuzz-format_idempotent.log"},
+{"target":"canonical_round_trip","seconds":1800,"elapsed_s":1675,"exit_code":1,"execs":1487407,"artifacts":1,"seed":20260725,"log":"target/haqp/fuzz-canonical_round_trip.log"},
+{"target":"incremental_full_equivalence","seconds":1800,"elapsed_s":1802,"exit_code":0,"execs":657064,"artifacts":0,"seed":20260725,"log":"target/haqp/fuzz-incremental_full_equivalence.log"},
+{"target":"html_render","seconds":1800,"elapsed_s":1801,"exit_code":0,"execs":7446338,"artifacts":0,"seed":20260725,"log":"target/haqp/fuzz-html_render.log"}]

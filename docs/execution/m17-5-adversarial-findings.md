@@ -353,3 +353,50 @@ guards proves almost nothing about which guard ran.
 sweep. A new confirmed escape in round 2 blocks GO unless Brian explicitly
 extends. Reaching the cap with any confirmed escape unfixed and unaccepted
 blocks GO by construction.
+
+---
+
+## F-11 — MAJOR. The suite's green status is runner-dependent, and this blocks workspace-wide mutation testing.
+
+**Reproduction:**
+
+```
+cargo nextest run -p liminal-conformance scorecard_runs_end_to_end   # PASS
+cargo test    -p liminal-conformance --test classes                  # FAIL
+```
+
+```
+panicked at conformance/tests/classes/trace_replay.rs:96:
+  replay failed: store is locked by another process:
+  /tmp/liminal-pipeline/<pid>-<thread>-0-adversarial-delete-66_external-file/state
+```
+
+nextest runs every test in its own PROCESS; `cargo test` runs them as THREADS
+in one process. `pipeline::scratch_root` originally keyed only on
+`std::process::id()`, so isolation was accidental — it came from the runner,
+not from the code.
+
+**Consequence, and why this is more than a nit:** `cargo-mutants` drives
+`cargo test`, so `cargo mutants --workspace` cannot even establish a baseline:
+
+```
+ERROR cargo test failed in an unmutated tree, so no mutants were tested
+```
+
+The full-workspace mutation run Brian asked for is **blocked** until this is
+fixed. Per-file runs (`--file crates/liminal-cir/src/lib.rs`) still work, which
+is why F-08 and pass-1 A7 were measurable at all.
+
+**Partial fix landed:** `scratch_root` now keys on thread identity as well as
+pid, so the path is unique under either runner. **This was necessary but NOT
+sufficient** — the failure persists on a freshly created, uniquely named
+directory, which means the advisory lock is not being released rather than the
+path colliding. The prime suspect is the workspace reopen introduced by AM-8.11
+(`drop(ws); ws = ToyWorkspace::open(root)?`): if the previous handle's `fs4`
+lock outlives the drop within a threaded runtime, the reopen fails exactly this
+way. Not chased further here — it needs the ILRP/store owner, not a guess.
+
+**Standing rule this implies:** `just ci` uses nextest, so CI has never
+exercised the threaded path. A qualification suite whose result depends on the
+harness is not qualified. `cargo test --workspace` should join the continuous
+lane once this is fixed.

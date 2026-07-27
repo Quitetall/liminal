@@ -185,8 +185,17 @@ fn scratch_root(trace_id: &str) -> anyhow::Result<Utf8PathBuf> {
             }
         })
         .collect();
+    // Isolation must not depend on the test runner. nextest gives every test
+    // its own PROCESS, so `pid` alone sufficed there; `cargo test` (which
+    // cargo-mutants uses) runs tests as THREADS in one process, where two
+    // replays could contend for the same store lock. Keying on the thread as
+    // well makes the scratch root unique under either runner (M17.5 F-11).
+    let thread = format!("{:?}", std::thread::current().id())
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .collect::<String>();
     let dir = base.join(format!(
-        "liminal-pipeline/{}-{}-{clean}",
+        "liminal-pipeline/{}-{thread}-{}-{clean}",
         std::process::id(),
         COUNTER.fetch_add(1, Ordering::Relaxed)
     ));

@@ -38,6 +38,88 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
             review: "pass",
         },
     )?;
+    // M17.5 A6 / pass-2 #14,#15,#17,#19,#21: statuses are CLAIMS. Bind them to
+    // artifacts a run actually produced, or the whole gate is satisfiable by
+    // editing two files.
+    verify_provenance(root, &packet)?;
+    verify_fuzz_evidence(root, &packet)?;
+    Ok(())
+}
+
+/// The recorded fuzz campaign is too long to re-run per verification (150
+/// target-minutes), so its artifact is COMMITTED and the packet must agree
+/// with it exactly. Cheap lanes are re-run instead — see `haq verify-full`.
+fn verify_fuzz_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    let path = root.join("conformance/haqp/evidence/fuzz.json");
+    let bytes = std::fs::read(&path)
+        .with_context(|| format!("{path}: committed fuzz evidence is required"))?;
+    let recorded: Vec<FuzzEvidence> =
+        serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))?;
+    if recorded.len() != packet.generated.len() {
+        anyhow::bail!(
+            "fuzz evidence covers {} targets but the packet declares {} families",
+            recorded.len(),
+            packet.generated.len()
+        );
+    }
+    let total_minutes: u64 = recorded.iter().map(|row| row.seconds / 60).sum();
+    if total_minutes < 150 {
+        anyhow::bail!("recorded fuzz budget {total_minutes} target-minutes is below 150");
+    }
+    for row in &recorded {
+        if row.exit_code != 0 {
+            anyhow::bail!(
+                "fuzz target {} exited {} with {} artifact(s) — every crash is a failing \
+                 result (ADR-0020 §4)",
+                row.target,
+                row.exit_code,
+                row.artifacts
+            );
+        }
+        if row.artifacts != 0 {
+            anyhow::bail!(
+                "fuzz target {} left {} artifacts",
+                row.target,
+                row.artifacts
+            );
+        }
+        if row.execs == 0 {
+            anyhow::bail!("fuzz target {} recorded zero executions", row.target);
+        }
+    }
+    Ok(())
+}
+
+/// ADR-0020 §1: the qualification lane runs from ONE fixed clean commit and
+/// tree. Without this binding the packet describes no particular state of the
+/// repository (pass-2 finding #21).
+fn verify_provenance(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    let Some(provenance) = &packet.provenance else {
+        anyhow::bail!("packet has no provenance block; qualification is unbound to any tree");
+    };
+    let git = |args: &[&str]| -> Result<String> {
+        let out = std::process::Command::new("git")
+            .current_dir(root)
+            .args(args)
+            .output()?;
+        anyhow::ensure!(out.status.success(), "git {args:?} failed");
+        Ok(String::from_utf8(out.stdout)?.trim().to_owned())
+    };
+    let head = git(&["rev-parse", "HEAD"])?;
+    require_eq("provenance.commit", &provenance.commit, &head)?;
+    let dirty = git(&["status", "--porcelain"])?;
+    anyhow::ensure!(
+        dirty.is_empty(),
+        "qualification requires a clean tree; {} path(s) are dirty",
+        dirty.lines().count()
+    );
+    let lockfile = std::fs::read(root.join("Cargo.lock"))?;
+    let digest = blake3::hash(&lockfile).to_hex().to_string();
+    require_eq(
+        "provenance.lockfile_blake3",
+        &provenance.lockfile_blake3,
+        &digest,
+    )?;
     Ok(())
 }
 
@@ -463,6 +545,27 @@ struct Packet {
     generated: Vec<Generated>,
     crash_boundaries: Vec<CrashBoundary>,
     reviews: Vec<Review>,
+    /// ADR-0020 §1 fixed-base binding. Absent until the qualification lane
+    /// runs from one clean tree.
+    #[serde(default)]
+    provenance: Option<Provenance>,
+}
+
+/// The fixed base a qualification run was taken from.
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+struct Provenance {
+    commit: String,
+    lockfile_blake3: String,
+}
+
+/// One target's recorded fuzz campaign (committed artifact).
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+struct FuzzEvidence {
+    target: String,
+    seconds: u64,
+    exit_code: i32,
+    execs: u64,
+    artifacts: u64,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
