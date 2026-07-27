@@ -387,14 +387,38 @@ The full-workspace mutation run Brian asked for is **blocked** until this is
 fixed. Per-file runs (`--file crates/liminal-cir/src/lib.rs`) still work, which
 is why F-08 and pass-1 A7 were measurable at all.
 
-**Partial fix landed:** `scratch_root` now keys on thread identity as well as
-pid, so the path is unique under either runner. **This was necessary but NOT
-sufficient** — the failure persists on a freshly created, uniquely named
-directory, which means the advisory lock is not being released rather than the
-path colliding. The prime suspect is the workspace reopen introduced by AM-8.11
-(`drop(ws); ws = ToyWorkspace::open(root)?`): if the previous handle's `fs4`
-lock outlives the drop within a threaded runtime, the reopen fails exactly this
-way. Not chased further here — it needs the ILRP/store owner, not a guess.
+**NOT FIXED. It is a genuine intermittent race.** Measured across five
+consecutive threaded runs of the same binary: **3 pass, 2 fail** (~40%).
+
+What was ruled OUT, decisively:
+
+- **Path collision.** `scratch_root` now composes pid + a global atomic
+  counter + a **UUID** + the trace id. A brand-new, globally unique directory
+  still fails to take its own lock. Path uniqueness is not the cause.
+- **Sequential double-open.** The AM-8.11 reopen correctly drops the old
+  handle first (`self.ws = None;` before re-opening), so it is not that.
+- **Single-threaded execution.** `cargo test -- --test-threads=1` passes
+  every time.
+- **The test in isolation.** Running only `scorecard_runs_end_to_end` under
+  `cargo test` passes every time.
+
+So the failure requires (a) threads in one process and (b) sibling tests
+running concurrently, and it strikes on the FIRST store open of the run. Since
+`flock(2)` associates a lock with the open file description, a second
+descriptor on the same inode conflicts even inside one process — but with
+globally unique paths there should be no second descriptor. That contradiction
+is unresolved, and resolving it means reasoning about the store's locking
+discipline, which is `liminal-graph` semantics under AM-17.2 quarantine.
+Improvising there is exactly what protocol §3 forbids.
+
+**Retained change:** the globally-unique scratch root stays. It does not fix
+the race, but process-only isolation was a real latent weakness (isolation came
+from the runner, not the code) and its removal is what proved collision is not
+the cause.
+
+**Severity note:** the project's own standing rule is that a flaky test is a
+finding, never retried away. This one is flaky AND blocks workspace mutation
+testing, so it gates step 3.
 
 **Standing rule this implies:** `just ci` uses nextest, so CI has never
 exercised the threaded path. A qualification suite whose result depends on the

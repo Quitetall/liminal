@@ -190,12 +190,13 @@ fn scratch_root(trace_id: &str) -> anyhow::Result<Utf8PathBuf> {
     // cargo-mutants uses) runs tests as THREADS in one process, where two
     // replays could contend for the same store lock. Keying on the thread as
     // well makes the scratch root unique under either runner (M17.5 F-11).
-    let thread = format!("{:?}", std::thread::current().id())
-        .chars()
-        .filter(char::is_ascii_alphanumeric)
-        .collect::<String>();
+    // A globally unique component removes path collision as a possible cause
+    // entirely: pid+counter only isolated because nextest gives each test its
+    // own process, and `cargo test` (which cargo-mutants drives) runs tests as
+    // threads in one process (M17.5 F-11).
+    let unique = liminal_id::TransactionId::new();
     let dir = base.join(format!(
-        "liminal-pipeline/{}-{thread}-{}-{clean}",
+        "liminal-pipeline/{}-{}-{unique}-{clean}",
         std::process::id(),
         COUNTER.fetch_add(1, Ordering::Relaxed)
     ));
