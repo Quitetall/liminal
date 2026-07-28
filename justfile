@@ -112,6 +112,10 @@ ci: fmt-check lint
     cargo test --workspace --doc
     just doc
     just deny
+    # M17.5 F-14: these two gates were outside CI, so the packet digest sat
+    # broken for three commits without anything going red. Both are seconds.
+    just haq-inventory
+    just haq-canaries
 
 bump-toolchain version:
     sed -i 's/^channel = ".*"/channel = "{{ version }}"/' rust-toolchain.toml

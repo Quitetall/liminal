@@ -600,3 +600,37 @@ reproduction above: after deleting both binaries, `gate_final` runs 10/10 green.
 **Skip was never an option.** Making these tests skip when the binary is absent
 would convert a loud failure into a false green, which is the exact defect class
 this whole campaign exists to eliminate.
+
+---
+
+## F-14 — MAJOR. **RESOLVED.** The packet-digest gate had been red for three commits and nothing noticed.
+
+**Found while landing the Track A verifier fixes**, by running `just haq-inventory`
+— which turned out to have been failing at `HEAD` before I changed anything:
+
+```
+Error: review packet markdown missing packet digest 1e2aa209a387c7ac...
+```
+
+`verify_markdown_surface_text` hashes `serde_json::to_vec(packet)` — the
+DESERIALIZED STRUCT re-serialized, not the file's bytes. So when `af7aa10` added
+the `provenance`, `seed` and `evidence_hash` fields to bind the gate to real
+evidence (A6's fix), the serialized form changed and the recorded digest went
+stale. `packet.json` and `phase1-suite-review.md` were both last edited together
+in `c4ba072`, so nothing looked out of sync in the history.
+
+**The gate behaved correctly — it failed closed.** The defect is that nobody
+heard it: `just ci` ran `fmt-check`, `lint`, nextest, doc tests, `doc` and
+`deny`, but neither `haq-inventory` nor `haq-canaries`. A gate outside CI is a
+gate that reports to no one, and this one stayed red across `af7aa10`,
+`5da58a7` and `3eb5c56`.
+
+**Fix — LANDED.** Digest updated to the current packet, and both lanes joined
+`just ci`. They cost seconds. Confirmed: `all 16 canaries caught`.
+
+**Note for the digest's design.** Hashing the re-serialized struct means any
+schema change silently invalidates the recorded digest, which is a maintenance
+trap even though it fails safe. Hashing the packet FILE BYTES would bind the
+markdown to the artifact rather than to the verifier's current view of it.
+Not changed here — it alters what the digest means, and the canary flow hashes
+mutated in-memory packets — but it should be decided before qualification.

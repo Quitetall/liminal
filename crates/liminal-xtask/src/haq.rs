@@ -43,6 +43,65 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     // editing two files.
     verify_provenance(root, &packet)?;
     verify_fuzz_evidence(root, &packet)?;
+    verify_test_names_exist(root, &packet)?;
+    Ok(())
+}
+
+/// Every declared test name must name a test that EXISTS (M17.5 pass-2 #11).
+///
+/// `Test.name` was carried as an opaque string and never checked, so renaming a
+/// row to `does_not_exist` changed nothing — the traceability matrix could name
+/// 38 tests none of which were real.
+///
+/// This runs only at the QUALIFIED layer, not the inventory layer, and that
+/// asymmetry is deliberate: the proposed packet legitimately predeclares tests
+/// that milestones M19–M24 have not yet written, which is the whole point of an
+/// inventory. But a packet claiming `qualification_state: complete` while
+/// naming a test nobody wrote is exactly the false green this gate exists to
+/// stop.
+fn verify_test_names_exist(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    let mut sources = String::new();
+    let mut stack = vec![root.join("conformance"), root.join("crates")];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let Ok(path) = camino::Utf8PathBuf::from_path_buf(entry.path()) else {
+                continue;
+            };
+            if path.is_dir() {
+                if path.file_name() != Some("target") {
+                    stack.push(path);
+                }
+            } else if path.extension() == Some("rs")
+                && let Ok(text) = std::fs::read_to_string(&path)
+            {
+                sources.push_str(&text);
+                sources.push('\n');
+            }
+        }
+    }
+
+    let mut missing = Vec::new();
+    for test in &packet.tests {
+        // Names are module-qualified (`milestones::m19::foo`); the test itself
+        // is the final segment.
+        let leaf = test.name.rsplit("::").next().unwrap_or(test.name.as_str());
+        if leaf.trim().is_empty() {
+            anyhow::bail!("{} declares an empty test name", test.id);
+        }
+        if !sources.contains(&format!("fn {leaf}(")) {
+            missing.push(format!("{} -> {}", test.id, test.name));
+        }
+    }
+    if !missing.is_empty() {
+        anyhow::bail!(
+            "qualification claims {} test(s) that do not exist in the tree: {}",
+            missing.len(),
+            missing.join(", ")
+        );
+    }
     Ok(())
 }
 
@@ -177,10 +236,21 @@ fn verify_packet_shape(packet: &Packet) -> Result<()> {
         }
     }
     for requirement in &packet.requirements {
-        if requirement.critical && !covered_requirements.contains(requirement.id.as_str()) {
+        // M17.5 pass-2 #12: the `critical` guard let a non-critical requirement
+        // sit in the inventory forever with no test behind it, inflating the
+        // requirement count without adding any evidence. Every declared
+        // requirement must be mapped; criticality decides how MUCH evidence is
+        // needed (see `verify_evidence_coverage`), not whether any is.
+        if !covered_requirements.contains(requirement.id.as_str()) {
             anyhow::bail!(
-                "critical requirement {} is not mapped to a test",
-                requirement.id
+                "requirement {} ({}) is not mapped to any test — an unmapped \
+                 requirement counts toward the inventory while proving nothing",
+                requirement.id,
+                if requirement.critical {
+                    "critical"
+                } else {
+                    "non-critical"
+                }
             );
         }
         if requirement.kind.trim().is_empty() || requirement.source.trim().is_empty() {
@@ -328,14 +398,92 @@ fn verify_packet_statuses(packet: &Packet, expected: PacketStatusExpectations) -
     Ok(())
 }
 
+/// The five ADR-0020 §4 evidence families. A mutant naming anything else is not
+/// describing this suite.
+const MUTANT_FAMILIES: [&str; 5] = [
+    "source/CST/formatting",
+    "graph/interchange codecs",
+    "transforms/projections",
+    "repair/ILRP/recovery",
+    "Basis/revision/query invalidation",
+];
+
+/// The declared mutation operators. Closed by design (M17.5 pass-2 #13): an
+/// open vocabulary lets a fabricated inventory invent an operator per mutant
+/// and sail through the per-operator concentration ceiling, since a label used
+/// once can never exceed it.
+const MUTANT_OPERATORS: [&str; 13] = [
+    "predicate-deletion",
+    "predicate-inversion",
+    "threshold-plus-one",
+    "threshold-minus-one",
+    "missing-enum-dispatch",
+    "success-error-substitution",
+    "oracle-short-circuit",
+    "ordering-nondeterminism",
+    "stale-basis-acceptance",
+    "skipped-durable-transition",
+    "disabled-crash-point",
+    "broadened-allow-list",
+    "wrong-holder-selection",
+];
+
+/// Dispositions a mutant row may carry. `equivalent` and `duplicate` are the
+/// only ADR-0020 §3 escapes from "one survivor blocks eligibility", and both
+/// demand a written proof, so neither may be spelled freehand.
+const MUTANT_DISPOSITIONS: [&str; 4] = ["predeclared", "killed", "equivalent", "duplicate"];
+
 fn verify_mutant_inventory(packet: &Packet) -> Result<()> {
     if packet.mutants.len() != 65 {
         anyhow::bail!("mutant count must be 65, got {}", packet.mutants.len());
     }
     require_unique(packet.mutants.iter().map(|row| row.id.as_str()), "mutant")?;
+    let requirement_ids = packet
+        .requirements
+        .iter()
+        .map(|row| row.id.as_str())
+        .collect::<BTreeSet<_>>();
     let mut by_family = BTreeMap::<&str, usize>::new();
     let mut by_operator = BTreeMap::<&str, usize>::new();
     for mutant in &packet.mutants {
+        // M17.5 pass-2 #13: family/operator/source/disposition were free text,
+        // so a fabricated inventory with invented labels was accepted whole.
+        // Each must now name something this suite actually declares.
+        if !MUTANT_FAMILIES.contains(&mutant.family.as_str()) {
+            anyhow::bail!(
+                "{} declares unknown mutation family {:?}; expected one of {:?}",
+                mutant.id,
+                mutant.family,
+                MUTANT_FAMILIES
+            );
+        }
+        if !MUTANT_OPERATORS.contains(&mutant.operator.as_str()) {
+            anyhow::bail!(
+                "{} declares unknown mutation operator {:?}; expected one of {:?}",
+                mutant.id,
+                mutant.operator,
+                MUTANT_OPERATORS
+            );
+        }
+        if !MUTANT_DISPOSITIONS.contains(&mutant.disposition.as_str()) {
+            anyhow::bail!(
+                "{} declares unknown disposition {:?}; expected one of {:?}",
+                mutant.id,
+                mutant.disposition,
+                MUTANT_DISPOSITIONS
+            );
+        }
+        if !requirement_ids.contains(mutant.source.as_str()) {
+            anyhow::bail!(
+                "{} names source {:?}, which is not a declared requirement — a \
+                 mutant must attack something the inventory claims to require",
+                mutant.id,
+                mutant.source
+            );
+        }
+        if mutant.defect.trim().is_empty() {
+            anyhow::bail!("{} describes no defect", mutant.id);
+        }
         *by_family.entry(mutant.family.as_str()).or_default() += 1;
         *by_operator.entry(mutant.operator.as_str()).or_default() += 1;
         if mutant.killing_tests.is_empty() {
@@ -1274,6 +1422,90 @@ mod tests {
             err.to_string().contains("clustering"),
             "unexpected error: {err}"
         );
+    }
+
+    // ── M17.5 pass-2 #11/#12/#13: the fabricated-inventory cluster ──────────
+    // An independent reviewer built packets whose rows named nothing real and
+    // watched the verifier accept them. One canary per hole.
+
+    /// #12: a requirement with no test behind it inflates the inventory while
+    /// proving nothing. The old check exempted non-critical requirements.
+    #[test]
+    fn shape_check_rejects_a_requirement_mapped_to_no_test() {
+        let mut packet = packet_from_repo();
+        packet.requirements.push(Requirement {
+            id: "P1-R900".to_owned(),
+            kind: "law".to_owned(),
+            source: "v4 §112".to_owned(),
+            critical: false,
+        });
+        let err = verify_packet_shape(&packet)
+            .expect_err("an unmapped requirement must be rejected even when non-critical");
+        assert!(
+            err.to_string().contains("not mapped to any test"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// #13: free-text operators defeat the concentration ceiling, because a
+    /// label invented once can never exceed a share of the denominator.
+    #[test]
+    fn shape_check_rejects_an_invented_mutation_operator() {
+        let mut packet = packet_from_repo();
+        packet.mutants[0].operator = "artisanal-bespoke-operator".to_owned();
+        let err = verify_packet_shape(&packet)
+            .expect_err("an operator outside the declared vocabulary must be rejected");
+        assert!(
+            err.to_string().contains("unknown mutation operator"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// #13: a mutant must attack something the inventory claims to require.
+    #[test]
+    fn shape_check_rejects_a_mutant_whose_source_is_not_a_requirement() {
+        let mut packet = packet_from_repo();
+        packet.mutants[0].source = "P1-R999".to_owned();
+        let err = verify_packet_shape(&packet)
+            .expect_err("a mutant naming an unknown requirement must be rejected");
+        assert!(
+            err.to_string().contains("not a declared requirement"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// #13: an invented family would let a fabricated packet satisfy the
+    /// per-family balance with labels that name no evidence family.
+    #[test]
+    fn shape_check_rejects_an_invented_mutation_family() {
+        let mut packet = packet_from_repo();
+        packet.mutants[0].family = "vibes/general-goodness".to_owned();
+        let err = verify_packet_shape(&packet)
+            .expect_err("a family outside ADR-0020 §4's five must be rejected");
+        assert!(
+            err.to_string().contains("unknown mutation family"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// #11: the qualified layer must reject a packet naming tests nobody wrote.
+    /// The inventory layer must NOT, because predeclaring M19–M24's tests is
+    /// the inventory's purpose — this pins both halves of that asymmetry.
+    #[test]
+    fn qualified_layer_rejects_test_names_that_do_not_exist() {
+        let root = repo_root();
+        let mut packet = packet_from_repo();
+        packet.tests[0].name = "laws::this_test_was_never_written".to_owned();
+
+        let err = verify_test_names_exist(&root, &packet)
+            .expect_err("a qualification naming a nonexistent test must be rejected");
+        assert!(
+            err.to_string().contains("do not exist in the tree"),
+            "unexpected error: {err}"
+        );
+
+        // The same packet stays valid at the inventory layer.
+        verify_packet_shape(&packet).expect("predeclared names are legal in a proposed inventory");
     }
 
     #[test]
