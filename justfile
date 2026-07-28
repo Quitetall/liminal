@@ -98,8 +98,12 @@ bench-gate:
 # was never exercised by CI. That is the runner cargo-mutants drives, and it is
 # where the store-lock defect lived: a suite whose result depends on the harness
 # is not qualified. Kept as its own recipe so the failure names the lane.
+#
+# `--all-targets` deliberately excludes doc tests: `ci` already runs them once
+# via `cargo test --workspace --doc`, and a bare `cargo test --workspace` would
+# run all 27 doc-test sections a second time.
 test-threaded:
-    cargo test --workspace
+    cargo test --workspace --all-targets
 
 # Everything CI runs, locally, in CI order
 ci: fmt-check lint

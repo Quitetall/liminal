@@ -28,4 +28,8 @@ benches/baselines/phase1-candidate.json
 
 # NOTE: Cargo.lock is COMMITTED — the workspace contains binaries; CI must be reproducible.
 # NOTE: proptest-regressions/ is COMMITTED — it is the §113 regression corpus in miniature.
+#   Commit seeds deliberately, though, never by sweeping them up with `git add -A`:
+#   an ENVIRONMENTAL failure (a full tmpfs, the M17.5 F-11 store-lock race) also
+#   writes a seed, and that seed encodes no defect. A seed that passes on re-run
+#   was never a logic failure — see M17.5 F-12.
 scripts/__pycache__/

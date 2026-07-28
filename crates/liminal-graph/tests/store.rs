@@ -248,6 +248,8 @@ proptest! {
 fn open_waits_out_a_transient_lock_holder() {
     use fs4::fs_std::FileExt as _;
 
+    const HELD_FOR: std::time::Duration = std::time::Duration::from_millis(20);
+
     let dir = fresh_dir("transient-holder");
     std::fs::create_dir_all(&dir).expect("create store dir");
 
@@ -261,13 +263,28 @@ fn open_waits_out_a_transient_lock_holder() {
 
     let handle = std::thread::spawn(move || {
         // Well inside LOCK_ACQUIRE_BUDGET, well outside a single try_lock.
-        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::thread::sleep(HELD_FOR);
         drop(squatter);
     });
 
+    let started = std::time::Instant::now();
     let store = GraphStore::open(&dir).expect(
         "open must wait out a holder that releases inside the budget — a bare \
          try_lock fails here, which is exactly the F-11 defect",
+    );
+    let waited = started.elapsed();
+
+    // Self-diagnosing, so this test can never pass vacuously. If the squatter
+    // thread were scheduled to release BEFORE `open` first reached
+    // `try_lock_exclusive`, the open would have been uncontended, the retry
+    // path would never have run, and the test would "pass" while proving
+    // nothing — it would even pass with the fix reverted. Requiring that the
+    // open actually blocked for most of the hold turns that scheduling accident
+    // into a loud failure instead of a false green.
+    assert!(
+        waited >= HELD_FOR / 2,
+        "open returned after only {waited:?}, so it never contended with the \
+         squatter and never exercised the retry path — this test proved nothing"
     );
     handle.join().expect("squatter thread");
     drop(store);

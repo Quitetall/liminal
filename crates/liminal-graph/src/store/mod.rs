@@ -252,6 +252,10 @@ const LOCK_ACQUIRE_BUDGET: std::time::Duration = std::time::Duration::from_milli
 /// children. This is not a flaky test retried away — it is a lock acquisition
 /// that was never correct in a process that forks, and the permanent-holder
 /// canary in `tests/store.rs` pins that real contention still fails.
+/// Only contention is retried. `try_lock_exclusive` reports contention as
+/// `Ok(false)`; any `Err` is a real I/O fault (a closed descriptor, a
+/// filesystem that cannot lock) and propagates immediately rather than being
+/// retried into a timeout that would misreport the cause as `Locked`.
 fn acquire_write_lock(lock: &fs::File, dir: &Utf8Path) -> Result<(), StoreError> {
     let deadline = std::time::Instant::now() + LOCK_ACQUIRE_BUDGET;
     loop {
@@ -261,6 +265,10 @@ fn acquire_write_lock(lock: &fs::File, dir: &Utf8Path) -> Result<(), StoreError>
         if std::time::Instant::now() >= deadline {
             return Err(StoreError::Locked(dir.to_owned()));
         }
+        // Sleeping rather than spinning is deliberate, not an unfinished
+        // optimization: opening a store is a cold path, and the holder we are
+        // waiting on is a subprocess reaching `execve`, which no amount of
+        // spinning makes arrive sooner.
         std::thread::sleep(std::time::Duration::from_millis(1));
     }
 }
