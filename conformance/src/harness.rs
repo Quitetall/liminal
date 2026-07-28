@@ -33,7 +33,29 @@ fn lim_path() -> Utf8PathBuf {
     resolve_target_bin("lim")
 }
 
-/// Search the workspace `target/{debug,release}/` for a built binary.
+/// The package owning each binary this harness shells out to. Needed because
+/// `CARGO_BIN_EXE_*` only covers binaries of the crate under test.
+fn owning_package(name: &str) -> &'static str {
+    match name {
+        "lim" => "liminal-cli",
+        "lim-toy" => "liminal-conformance",
+        other => panic!("no owning package registered for binary {other:?}"),
+    }
+}
+
+/// Resolve a workspace binary, BUILDING IT IF ABSENT (M17.5 F-13).
+///
+/// This used to search `target/{debug,release}/` and panic if nothing was
+/// there. That made the suite's result depend on what someone happened to
+/// build earlier: `cargo nextest run` builds every workspace binary up front,
+/// so the tests passed there, while `cargo test -p liminal-conformance` — the
+/// command cargo-mutants generates — never builds another package's binaries
+/// and failed in a clean tree.
+///
+/// The staler hazard was worse than the failure: when a leftover `target/debug/
+/// lim` DID exist, these tests silently exercised whatever binary was last
+/// built, which need not match the source under test. Building on demand fixes
+/// both — cargo is a no-op when the binary is already current.
 fn resolve_target_bin(name: &str) -> Utf8PathBuf {
     let manifest = Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap_or(&manifest);
@@ -41,13 +63,34 @@ fn resolve_target_bin(name: &str) -> Utf8PathBuf {
         workspace.join(format!("target/debug/{name}")),
         workspace.join(format!("target/release/{name}")),
     ];
+
+    let status = std::process::Command::new(std::env::var("CARGO").as_deref().unwrap_or("cargo"))
+        .args([
+            "build",
+            "--quiet",
+            "-p",
+            owning_package(name),
+            "--bin",
+            name,
+        ])
+        .current_dir(workspace)
+        .status();
+    match status {
+        Ok(status) if status.success() => {}
+        // Do not fail here on a build error: if a binary is already present the
+        // tests can still run, and if it is not, the panic below names the
+        // actual problem far more clearly than a cargo exit code would.
+        Ok(_) | Err(_) => {}
+    }
+
     for candidate in &candidates {
         if candidate.exists() {
             return candidate.clone();
         }
     }
     panic!(
-        "{name} binary not found; build the workspace binaries or run tests via `cargo nextest run`"
+        "{name} binary not found and `cargo build -p {} --bin {name}` did not produce it",
+        owning_package(name)
     )
 }
 

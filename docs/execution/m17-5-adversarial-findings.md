@@ -554,3 +554,49 @@ replay, which is presumably why nothing deletes them. The options:
 
 Option 1 is the recommendation: it is the only one that never discards evidence
 from a failure and never grows without bound.
+
+---
+
+## F-13 — MAJOR. **RESOLVED.** Two gate tests depended on a binary someone built earlier, and could silently test a stale one.
+
+**Found by running the workspace mutation campaign F-11 unblocked** — the very
+next thing that campaign did was fail.
+
+`conformance/src/harness.rs::resolve_target_bin` searched
+`target/{debug,release}/` for the `lim` and `lim-toy` binaries and panicked if
+nothing was there. `lim` belongs to `liminal-cli`, so it is never reachable via
+this crate's `CARGO_BIN_EXE_*`.
+
+**Reproduction:**
+
+```
+rm -f target/debug/lim target/debug/lim-toy
+cargo test -p liminal-conformance --test gate_final
+  crash_gate_matrix_and_revert_hold ... FAILED
+  overlay_debt_visible_without_agenda ... FAILED
+  "lim binary not found; build the workspace binaries or run tests via
+   `cargo nextest run`"
+```
+
+The panic message names the defect precisely: **the suite was documented as
+runner-dependent and shipped that way.** `cargo nextest run` builds every
+workspace binary up front, so the tests passed there. `cargo test -p
+liminal-conformance` — exactly what cargo-mutants generates — builds no other
+package's binaries, so the baseline died and no mutant ran. This is F-11's
+lesson repeating in a second place.
+
+**The staler hazard is worse than the failure.** When a leftover
+`target/debug/lim` *did* exist, these two tests ran against whatever binary was
+last built, which need not correspond to the source under test. A green
+`crash_gate_matrix_and_revert_hold` could therefore be reporting on code that
+no longer exists. It passed locally throughout this campaign for precisely that
+reason.
+
+**Fix — LANDED.** `resolve_target_bin` now builds the binary on demand
+(`cargo build -p <owner> --bin <name>`), which is a no-op when it is already
+current, and only panics if the build failed to produce it. Verified with the
+reproduction above: after deleting both binaries, `gate_final` runs 10/10 green.
+
+**Skip was never an option.** Making these tests skip when the binary is absent
+would convert a loud failure into a false green, which is the exact defect class
+this whole campaign exists to eliminate.
