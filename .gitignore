@@ -28,3 +28,4 @@ benches/baselines/phase1-candidate.json
 
 # NOTE: Cargo.lock is COMMITTED — the workspace contains binaries; CI must be reproducible.
 # NOTE: proptest-regressions/ is COMMITTED — it is the §113 regression corpus in miniature.
+scripts/__pycache__/

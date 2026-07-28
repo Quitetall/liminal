@@ -387,8 +387,85 @@ The full-workspace mutation run Brian asked for is **blocked** until this is
 fixed. Per-file runs (`--file crates/liminal-cir/src/lib.rs`) still work, which
 is why F-08 and pass-1 A7 were measurable at all.
 
-**NOT FIXED. It is a genuine intermittent race.** Measured across five
-consecutive threaded runs of the same binary: **3 pass, 2 fail** (~40%).
+**RESOLVED. Root cause proven with a control; fix landed.**
+
+### Root cause: `flock` ownership belongs to the open file description, and forks inherit it
+
+`flock(2)` binds a lock to the OFD, not to the descriptor. When this process
+spawns a subprocess, the child inherits a duplicate of **every** open
+descriptor at `fork`, and `O_CLOEXEC` does not discard them until `execve`.
+Inside that window the child co-owns our lock's OFD — so closing *our*
+descriptor does **not** release the lock.
+
+Three facts had to line up, which is why it was so hard to see:
+
+1. `StepRunner::open` (`crates/liminal-daemon/src/runner.rs:1685`) deliberately
+   **drops the workspace and reopens the same path** — M08.7's
+   `seed_durable_inputs` ordering, mirroring a fresh process over the persisted
+   store. That reopen is the second open of one inode, and it is the exact
+   frame in the failure backtrace.
+2. Sibling tests spawn subprocesses constantly — `conformance/src/harness.rs`
+   spawns `lim-toy`, `tracegen.rs` and `identity/gitenv.rs` spawn `git`.
+3. Only `cargo test` runs tests as threads in one process, so only there can a
+   sibling's fork inherit this thread's lock descriptor. nextest gives each
+   test its own process, which is why the suite was green there.
+
+**Isolated proof with a control** (`scratchpad/f11repro/src/bin/fork_race.rs`):
+a drop-then-reopen loop over 3000 iterations.
+
+| sibling behaviour | reopen failures |
+|---|---|
+| control — no subprocess spawning | **0 / 3000** |
+| sibling thread spawning children | **4 / 3000** |
+
+Same mechanism, same syscalls, no Liminal code involved.
+
+**Evidence that ruled out the alternatives**, in order:
+
+- **fs4/kernel exonerated.** 16 threads × 200 unique-path acquisitions through
+  the identical `File::create` + `try_lock_exclusive` sequence: **0 conflicts**.
+  fs4 0.13 maps only `EWOULDBLOCK` to `Ok(false)`, so the failure was genuine
+  contention, not an error-mapping artifact.
+- **No second descriptor and no lock record.** A `#[cold]` probe at the failure
+  site caught the live failure: exactly one fd in the process pointed at the
+  path (our own), and `/proc/locks` held **no entry for that inode** among 86
+  system-wide `FLOCK` lines. The holder was already gone microseconds later —
+  precisely what a child that has since reached `execve` looks like.
+- **The window is sub-microsecond.** Any inline instrumentation in the failure
+  branch suppressed the bug outright (0/12 and 0/15 instrumented, vs 3/10
+  pristine), as did running under `strace`. Only a `#[cold] #[inline(never)]`
+  probe, which leaves `open`'s own code size intact, could observe it.
+
+**Fix — LANDED.** `GraphStore::open` now calls `acquire_write_lock`, which
+retries `try_lock_exclusive` against a 250 ms deadline. The budget dwarfs a
+fork→exec window while staying far below human-visible open latency, and a
+genuine second writer holds its lock for its whole lifetime — so this delays an
+honest `Locked` by at most the budget and never suppresses it.
+
+**This is not a flaky test retried away.** It is a lock acquisition that was
+never sound in a process that forks. Two paired regression tests in
+`crates/liminal-graph/tests/store.rs` pin both halves, and the pair must stay a
+pair:
+
+- `open_waits_out_a_transient_lock_holder` — a holder released after 20 ms must
+  be waited out. Verified to **fail** when the fix is reverted.
+- `open_still_rejects_a_lock_holder_that_never_releases` — the canary. A holder
+  that never releases must still produce `StoreError::Locked`. If this stops
+  failing, the single-writer guarantee has gone vacuous.
+
+**Measured result:** 3/10 threaded failures before, **0/15 after**, and
+`cargo test --workspace` — the cargo-mutants baseline — now passes cleanly
+twice in a row. The full-workspace mutation run is **unblocked**.
+
+**Standing rule, now honored:** `test-threaded` (`cargo test --workspace`) has
+joined `just ci`. CI ran nextest only, so the threaded path — the one
+cargo-mutants drives, and the one this defect lived in — had never been
+exercised.
+
+### Historical record: the state before this session
+
+**Previously reported NOT FIXED.** Measured across five consecutive threaded
+runs of the same binary: **3 pass, 2 fail** (~40%).
 
 What was ruled OUT, decisively:
 
@@ -411,6 +488,16 @@ is unresolved, and resolving it means reasoning about the store's locking
 discipline, which is `liminal-graph` semantics under AM-17.2 quarantine.
 Improvising there is exactly what protocol §3 forbids.
 
+**Where that reasoning went wrong, kept per §6.** Two of those inferences were
+false and cost the investigation a full session. "It strikes on the FIRST store
+open" conflated the process's first *scratch root* (counter `0`) with the first
+open of that *path* — it was always the second, the `runner.rs:1685` reopen.
+And "with globally unique paths there should be no second descriptor" assumed
+descriptors are only created by us; a forked child creates copies of all of
+them without opening anything. The scratch-root uniqueness work that followed
+from the first error was still worth keeping, but it was never going to fix
+this.
+
 **Retained change:** the globally-unique scratch root stays. It does not fix
 the race, but process-only isolation was a real latent weakness (isolation came
 from the runner, not the code) and its removal is what proved collision is not
@@ -424,3 +511,46 @@ testing, so it gates step 3.
 exercised the threaded path. A qualification suite whose result depends on the
 harness is not qualified. `cargo test --workspace` should join the continuous
 lane once this is fixed.
+
+---
+
+## F-12 — MODERATE. The pipeline leaks every scratch workspace it creates, and this can take CI down.
+
+**Found while investigating F-11**, not by looking for it.
+
+`pipeline::scratch_root` creates `/tmp/liminal-pipeline/<pid>-<counter>-<uuid>-<trace>`
+per replayed trace and **never removes it**. It only cleans a directory it is
+about to reuse (`if dir.exists() { remove_dir_all }`), which a fresh UUID
+guarantees never happens. So every trace of every run of every test binary
+leaks one workspace, complete with its file world.
+
+**Reproduction:** after this session's F-11 loops,
+`ls /tmp/liminal-pipeline | wc -l` reported **2394** directories. `/tmp` is
+tmpfs on this machine, so those are resident in RAM. It then filled:
+
+```
+the temp filesystem ... is full (0MB free) ... writes failed with ENOSPC
+```
+
+That aborted a `just ci` run mid-flight. A leak that consumes RAM without
+bound and eventually fails the build is not a housekeeping nit — it makes the
+suite's result depend on how many times it has been run before, which is the
+same class of defect as F-11 (a result that depends on the harness rather than
+the code).
+
+**Not fixed — the disposition is a real trade-off and is Brian's call.**
+Scratch workspaces are genuinely valuable for post-mortem debugging of a failed
+replay, which is presumably why nothing deletes them. The options:
+
+1. **Delete on success, retain on failure.** Keeps every artifact that could
+   ever be wanted and bounds the leak to actual failures. Requires `replay_trace`
+   to know its own outcome at cleanup time.
+2. **Retain all, sweep on startup** — delete `liminal-pipeline` entries older
+   than N hours at the first `scratch_root` call. Simplest, but a long CI run
+   can still exhaust tmpfs within one session.
+3. **Retain all, but honour an env var** (`LIMINAL_KEEP_SCRATCH=1`), deleting
+   otherwise. Cleanest default; loses artifacts for anyone who did not think to
+   set it before the run that failed.
+
+Option 1 is the recommendation: it is the only one that never discards evidence
+from a failure and never grows without bound.

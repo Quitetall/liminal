@@ -230,3 +230,71 @@ proptest! {
         prop_assert_eq!(store2.head().unwrap(), head);
     }
 }
+
+// ── M17.5 F-11: the single-writer lock vs descriptors inherited by forks ────
+//
+// `flock(2)` ownership belongs to the open file description, so a subprocess
+// forked while we hold the lock co-owns it until it reaches `execve`. Closing
+// our own descriptor inside that window does NOT release the lock, and a
+// reopen of the same store saw `EWOULDBLOCK` against a lock no live writer
+// held. `GraphStore::open` now waits a transient holder out.
+//
+// These two tests are a pair and must stay one: the first proves the wait
+// happens, the second proves the wait did not turn the lock into a no-op.
+
+/// A holder that releases within the budget must be waited out, not reported
+/// as contention.
+#[test]
+fn open_waits_out_a_transient_lock_holder() {
+    use fs4::fs_std::FileExt as _;
+
+    let dir = fresh_dir("transient-holder");
+    std::fs::create_dir_all(&dir).expect("create store dir");
+
+    // Stand in for the descriptor a forked child inherited: a separate open
+    // file description holding the very lock `open` is about to want.
+    let squatter = std::fs::File::create(dir.join("lock")).expect("create lock");
+    assert!(
+        squatter.try_lock_exclusive().expect("take squatter lock"),
+        "the squatter must hold the lock before the store tries to open"
+    );
+
+    let handle = std::thread::spawn(move || {
+        // Well inside LOCK_ACQUIRE_BUDGET, well outside a single try_lock.
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        drop(squatter);
+    });
+
+    let store = GraphStore::open(&dir).expect(
+        "open must wait out a holder that releases inside the budget — a bare \
+         try_lock fails here, which is exactly the F-11 defect",
+    );
+    handle.join().expect("squatter thread");
+    drop(store);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Canary for the fix above: a holder that never releases must still fail.
+/// If this stops failing, the single-writer guarantee has become vacuous.
+#[test]
+fn open_still_rejects_a_lock_holder_that_never_releases() {
+    use fs4::fs_std::FileExt as _;
+
+    let dir = fresh_dir("permanent-holder");
+    std::fs::create_dir_all(&dir).expect("create store dir");
+
+    let squatter = std::fs::File::create(dir.join("lock")).expect("create lock");
+    assert!(
+        squatter.try_lock_exclusive().expect("take squatter lock"),
+        "the squatter must hold the lock before the store tries to open"
+    );
+
+    let err = GraphStore::open(&dir).expect_err("a store held by another writer must not open");
+    assert!(
+        matches!(err, liminal_graph::StoreError::Locked(_)),
+        "expected StoreError::Locked, got {err:?}"
+    );
+
+    drop(squatter);
+    let _ = std::fs::remove_dir_all(&dir);
+}

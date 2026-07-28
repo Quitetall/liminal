@@ -93,9 +93,18 @@ bench-baseline-check:
 bench-gate:
     cargo run -p liminal-xtask -- bench gate
 
+# Threaded lane (M17.5 F-11). nextest gives every test its own PROCESS, so the
+# suite's green status under `cargo test` — tests as THREADS in one process —
+# was never exercised by CI. That is the runner cargo-mutants drives, and it is
+# where the store-lock defect lived: a suite whose result depends on the harness
+# is not qualified. Kept as its own recipe so the failure names the lane.
+test-threaded:
+    cargo test --workspace
+
 # Everything CI runs, locally, in CI order
 ci: fmt-check lint
     cargo nextest run --workspace --all-features --profile ci
+    just test-threaded
     cargo test --workspace --doc
     just doc
     just deny

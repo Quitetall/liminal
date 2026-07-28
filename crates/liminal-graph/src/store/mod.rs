@@ -224,6 +224,47 @@ impl std::fmt::Debug for Inner {
     }
 }
 
+/// How long [`acquire_write_lock`] tolerates a transient lock holder. Sized to
+/// dwarf a fork→exec window (microseconds, worst case low milliseconds under
+/// load) while staying far below any human-visible open latency. A genuine
+/// second writer holds its lock for its whole lifetime, so this delays the
+/// honest `Locked` error by at most this budget — it never suppresses it.
+const LOCK_ACQUIRE_BUDGET: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// Take the single-writer advisory lock, tolerating a *transient* holder
+/// (M17.5 F-11).
+///
+/// `flock(2)` ownership belongs to the open file description, not to the
+/// descriptor. So when this process spawns a subprocess, the child inherits a
+/// duplicate of every open descriptor at `fork`, and `O_CLOEXEC` does not
+/// discard them until `execve`. Inside that window the child co-owns our lock's
+/// OFD — and therefore closing *our* descriptor does not release the lock.
+///
+/// That makes a plain `try_lock` unsound for any process that both spawns
+/// children and reopens a store, which is exactly what the conformance harness
+/// does: `StepRunner::open` deliberately drops the workspace and reopens the
+/// same path (M08.7's `seed_durable_inputs` ordering), while sibling tests
+/// spawn `lim-toy` and `git`. The reopen then failed with `EWOULDBLOCK` against
+/// a lock no live writer held.
+///
+/// Measured in isolation with a control: a drop-then-reopen loop fails 0/3000
+/// times with no subprocess spawning and 4/3000 with a sibling thread spawning
+/// children. This is not a flaky test retried away — it is a lock acquisition
+/// that was never correct in a process that forks, and the permanent-holder
+/// canary in `tests/store.rs` pins that real contention still fails.
+fn acquire_write_lock(lock: &fs::File, dir: &Utf8Path) -> Result<(), StoreError> {
+    let deadline = std::time::Instant::now() + LOCK_ACQUIRE_BUDGET;
+    loop {
+        if lock.try_lock_exclusive()? {
+            return Ok(());
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err(StoreError::Locked(dir.to_owned()));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+}
+
 impl GraphStore {
     /// Open (or create) a store at `dir`, recovering state per §92: load the
     /// snapshot if present, replay checksummed segments, truncate a torn tail.
@@ -231,9 +272,7 @@ impl GraphStore {
         fs::create_dir_all(dir)?;
         let lock_path = dir.join("lock");
         let lock = fs::File::create(&lock_path)?;
-        if !lock.try_lock_exclusive()? {
-            return Err(StoreError::Locked(dir.to_owned()));
-        }
+        acquire_write_lock(&lock, dir)?;
 
         let (mut state, base_segment) = snapshot::load(dir)?;
         let log = SegmentLog::recover(dir, base_segment, |record| {
