@@ -33,3 +33,5 @@ benches/baselines/phase1-candidate.json
 #   writes a seed, and that seed encodes no defect. A seed that passes on re-run
 #   was never a logic failure — see M17.5 F-12.
 scripts/__pycache__/
+mutants.out.old/
+mutants.out/

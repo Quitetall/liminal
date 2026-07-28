@@ -634,3 +634,50 @@ trap even though it fails safe. Hashing the packet FILE BYTES would bind the
 markdown to the artifact rather than to the verifier's current view of it.
 Not changed here — it alters what the digest means, and the canary flow hashes
 mutated in-memory packets — but it should be decided before qualification.
+
+---
+
+## F-15 — MAJOR. **RESOLVED (configuration).** Two Phase 0 gates cannot run outside a git checkout, which aborted the mutation campaign.
+
+The third runner-dependency defect this session, found the same way as F-13 —
+by running the campaign and reading why it died.
+
+cargo-mutants builds each mutant in a COPY of the source tree, and that copy
+omits `.git` by default. Two gates verify git-tracked state:
+
+| test | what it needs git for |
+|---|---|
+| `phase0_fixture_inventory_is_versioned_and_owned` | enumerates TRACKED fixture paths; an untracked tree has no inventory to govern |
+| `real_cst_anchor_recovery_report_matches_golden` | checks the frozen measurement's commit provenance against the reviewed golden |
+
+Both failed the unmutated baseline with `fatal: not a git repository`, aborting
+the campaign before a single mutant ran:
+
+```
+test result: FAILED. 14 passed; 2 failed
+ERROR cargo test failed in an unmutated tree, so no mutants were tested
+```
+
+**Fix — LANDED as configuration**, `.cargo/mutants.toml` with `copy_vcs = true`.
+Confirmed: the run reaches per-mutant checking, which cargo-mutants only does
+after a clean baseline.
+
+**Skipping those two tests in the mutation lane was the wrong answer**, and it
+is worth recording why, because it is the tempting one: it shrinks the baseline
+until the tool is happy. A suite that quietly tests less under measurement than
+it does in CI reports a kill rate for a suite nobody actually runs. These two
+tests are legitimate — provenance and governance gates genuinely need the
+repository — so the environment was wrong, not the tests.
+
+### The pattern across F-11, F-13 and F-15
+
+Three defects this session, all the same shape: **the suite's result depended on
+how it was invoked rather than on the code.** Threads vs processes (F-11), a
+binary someone built earlier (F-13), a tree with or without `.git` (F-15). Each
+was invisible under `just ci` because CI ran exactly one configuration.
+
+That is worth stating as a standing principle rather than three fixes:
+**a qualification suite must be invariant under its runner, and the only way to
+know is to run it more than one way.** `just ci` now runs nextest AND the
+threaded lane; the mutation lane is the third configuration, and it found two
+of these three.

@@ -1,0 +1,19 @@
+# cargo-mutants configuration (M17.5 F-15).
+#
+# cargo-mutants builds each mutant in a COPY of the source tree, and by default
+# that copy omits `.git`. Two Phase 0 gates verify git-tracked state and cannot
+# pass without it:
+#
+#   phase0_fixture_inventory_is_versioned_and_owned  — enumerates TRACKED
+#     fixture paths, so an untracked tree has no inventory to govern;
+#   real_cst_anchor_recovery_report_matches_golden   — checks the frozen
+#     measurement's commit provenance against the reviewed golden.
+#
+# Both failed the unmutated baseline with "fatal: not a git repository", which
+# aborts the entire campaign before a single mutant runs.
+#
+# Copying the VCS directory is the right disposition rather than skipping those
+# tests in the mutation lane. Skipping would shrink the baseline to make the
+# tool happy, and a suite that quietly tests less under measurement than it does
+# in CI reports a kill rate for a suite nobody runs.
+copy_vcs = true
