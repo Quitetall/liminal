@@ -681,3 +681,98 @@ That is worth stating as a standing principle rather than three fixes:
 know is to run it more than one way.** `just ci` now runs nextest AND the
 threaded lane; the mutation lane is the third configuration, and it found two
 of these three.
+
+---
+
+## F-16 — MAJOR. **RESOLVED.** The recorded generated-evidence seed did not reproduce a run.
+
+**Found while fixing pass-2 #16**, and not on either reviewer's list.
+
+`Generated.seed` exists so a campaign can be replayed (ADR-0020 §1), and its doc
+comment said so. It could not. Three of the five families minted identifiers
+through `NodeId::new()`, `RepairStepId::new()`, `IdempotencyKey::new()`,
+`RepairId::new()` and `TransactionId::new()` — every one of which is
+`Uuid::now_v7()`, wall-clock milliseconds plus OS randomness, drawn from outside
+the seeded `Rng`. Two runs of seed *S* therefore explored different cases, and a
+crash at case 45,231 could not be replayed from the seed that found it.
+
+### Why it stayed invisible: #16 was hiding it
+
+The evidence digest absorbed only `rng.0` after each attempt. Nothing the ids
+touched ever reached the artifact, so the nondeterminism had no observable
+consequence — the hash was stable *because* it was blind. #16 (a digest
+independent of the code under test) and F-16 (a seed that reproduces nothing)
+are one defect seen from opposite ends, and **#16 was not fixable without fixing
+F-16 first**: absorbing real behaviour into the digest immediately turns
+unseeded entropy into a nondeterministic artifact.
+
+### Demonstrated, not argued
+
+Absorbing witnesses *before* seeding the ids made
+`generated_evidence_is_byte_identical_across_runs` fail on exactly two families:
+
+| family | before seeding | after seeding |
+| --- | --- | --- |
+| `source/CST/formatting` | identical | identical |
+| `graph/interchange codecs` | **differs** | identical |
+| `transforms/projections` | identical | identical |
+| `repair/ILRP/recovery` | **differs** | identical |
+| `Basis/revision/query invalidation` | identical | identical |
+
+The two that differ are precisely the two that mint UUIDs. That test is now the
+standing guard on both findings.
+
+**Fix:** `Rng::uuid()`, a v5 UUID over seeded bytes. v5 rather than a
+deterministic v7 because the latter would have to invent a timestamp. Nothing in
+these families depends on UUID version or time ordering, and it is a mild
+strengthening: v7 ids arrive in ascending creation order, so `topo_order` was
+only ever exercised on plans whose id order agreed with insertion order.
+
+---
+
+## F-17 — MODERATE. The fuzz lane's committed evidence cannot be audited after the fact, and half of #17 needs a protocol decision.
+
+Two items here are **NOT fixed** because both change what ADR-0020 counts as
+evidence, and §3 forbids improvising qualification semantics.
+
+**1. The recorded logs are unauditable.** Every row of
+`conformance/haqp/evidence/fuzz.json` carries `"log": "target/haqp/fuzz-<t>.log"`.
+`target/` is gitignored. So the artifact names the file that would substantiate
+it, and that file is guaranteed absent by the time anyone verifies. The execution
+counts, timings and exit codes are unfalsifiable in the committed state. The
+natural fix is a `log_blake3` per row, which makes a later-produced log checkable
+— but adding a required field to the evidence schema is a protocol change.
+
+**2. `fuzz_minutes` and `seconds` are two unreconciled claims about one
+campaign.** The packet declares `generated[*].fuzz_minutes` per FAMILY
+(≥31 each, ≥155 total); the artifact records `seconds` per TARGET (≥150 total).
+No mapping between the five families and the five targets is declared anywhere
+in ADR-0020 or the packet. `verify_fuzz_evidence` now takes no `packet` argument
+at all, and its doc comment records why: inventing that mapping is exactly the
+improvisation §3 prohibits. **Decision needed from Brian.**
+
+### What #17 DID close
+
+- `FuzzEvidence` gained `#[serde(deny_unknown_fields)]`. The artifact already
+  carried `elapsed_s`, `seed` and `log`; the struct silently discarded all three.
+  The campaign recorded its own reproduction seed and the verifier threw it away.
+- The target set is bound to `fuzz/fuzz_targets/*.rs` in the tree. The old check
+  compared `recorded.len()` against `packet.generated.len()` — a category error
+  comparing targets to families, which passed only because both happen to be 5,
+  and which accepted a row naming a target nobody wrote.
+- A clean campaign that finished far short of its budget is now refused as
+  incoherent. This check earned its place immediately: it caught a mistake in its
+  own test fixture, because `canonical_round_trip` really did stop at 1675s of
+  1800s and forcing its exit code to 0 reproduced exactly the contradiction.
+- Duplicate target rows, empty log paths, and a zero campaign seed are refused.
+
+### Verified clean while investigating (not a finding)
+
+The committed fuzz evidence records `exit_code: 1, artifacts: 1` for
+`canonical_round_trip`, which looked at first like an untracked crash. It is
+**F-09**, correctly handled: minimized and promoted to
+`conformance/corpora/regression/phase1/canonical_round_trip/f09-minimized.bin`
+per ADR-0020 §4, and deferred to M19. `verify_fuzz_evidence` refuses to qualify
+while it stands, which is the correct fail-closed behaviour. Worth noting only
+that `haq verify` bails earlier, on `qualification_state: not-run`, so the crash
+is latent rather than reported — the same shape as F-14.

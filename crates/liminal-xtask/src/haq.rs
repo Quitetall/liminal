@@ -42,7 +42,7 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     // artifacts a run actually produced, or the whole gate is satisfiable by
     // editing two files.
     verify_provenance(root, &packet)?;
-    verify_fuzz_evidence(root, &packet)?;
+    verify_fuzz_evidence(root)?;
     verify_test_names_exist(root, &packet)?;
     Ok(())
 }
@@ -108,24 +108,63 @@ fn verify_test_names_exist(root: &Utf8Path, packet: &Packet) -> Result<()> {
 /// The recorded fuzz campaign is too long to re-run per verification (150
 /// target-minutes), so its artifact is COMMITTED and the packet must agree
 /// with it exactly. Cheap lanes are re-run instead — see `haq verify-full`.
-fn verify_fuzz_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
+/// The packet is deliberately NOT consulted here, and that is a recorded gap
+/// rather than an oversight (M17.5 pass-2 #17, remaining half). The packet
+/// declares `generated[*].fuzz_minutes` per FAMILY while this artifact records
+/// `seconds` per TARGET, and no mapping between the two is declared anywhere in
+/// ADR-0020 or the packet. Inventing one here would be improvising qualification
+/// semantics, so the two independent claims about one campaign stay
+/// unreconciled until that mapping is decided.
+fn verify_fuzz_evidence(root: &Utf8Path) -> Result<()> {
     let path = root.join("conformance/haqp/evidence/fuzz.json");
     let bytes = std::fs::read(&path)
         .with_context(|| format!("{path}: committed fuzz evidence is required"))?;
     let recorded: Vec<FuzzEvidence> =
         serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))?;
-    if recorded.len() != packet.generated.len() {
+
+    // M17.5 pass-2 #17: the count was compared against `packet.generated.len()`,
+    // which is a category error — fuzz TARGETS are not generated FAMILIES. The
+    // two happen to both be 5, so the check passed while comparing unrelated
+    // things, and a row naming a target that does not exist was accepted.
+    // Bind to the targets that actually exist in the tree instead.
+    let mut present = BTreeSet::new();
+    let targets_dir = root.join("fuzz/fuzz_targets");
+    let entries = std::fs::read_dir(&targets_dir)
+        .with_context(|| format!("{targets_dir}: fuzz targets are required to verify the lane"))?;
+    for entry in entries.flatten() {
+        let Ok(file) = camino::Utf8PathBuf::from_path_buf(entry.path()) else {
+            continue;
+        };
+        if file.extension() == Some("rs")
+            && let Some(stem) = file.file_stem()
+        {
+            present.insert(stem.to_owned());
+        }
+    }
+    verify_fuzz_rows(&recorded, &present)
+}
+
+fn verify_fuzz_rows(recorded: &[FuzzEvidence], present: &BTreeSet<String>) -> Result<()> {
+    let declared = recorded
+        .iter()
+        .map(|row| row.target.clone())
+        .collect::<BTreeSet<_>>();
+    if &declared != present {
         anyhow::bail!(
-            "fuzz evidence covers {} targets but the packet declares {} families",
-            recorded.len(),
-            packet.generated.len()
+            "fuzz evidence does not cover the targets in the tree: recorded={declared:?}, \
+             present={present:?}"
         );
     }
+    require_unique(
+        recorded.iter().map(|row| row.target.as_str()),
+        "fuzz target",
+    )?;
+
     let total_minutes: u64 = recorded.iter().map(|row| row.seconds / 60).sum();
     if total_minutes < 150 {
         anyhow::bail!("recorded fuzz budget {total_minutes} target-minutes is below 150");
     }
-    for row in &recorded {
+    for row in recorded {
         if row.exit_code != 0 {
             anyhow::bail!(
                 "fuzz target {} exited {} with {} artifact(s) — every crash is a failing \
@@ -145,6 +184,26 @@ fn verify_fuzz_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         if row.execs == 0 {
             anyhow::bail!("fuzz target {} recorded zero executions", row.target);
         }
+        if row.log.trim().is_empty() {
+            anyhow::bail!("fuzz target {} records no log path", row.target);
+        }
+        // A clean campaign runs to its budget. Finishing far short of it means
+        // the target stopped early, and a clean early exit is a contradiction
+        // the evidence should not be able to state.
+        if row.elapsed_s + 60 < row.seconds {
+            anyhow::bail!(
+                "fuzz target {} claims a clean {}s campaign but only ran {}s — an early \
+                 exit with exit_code 0 and no artifacts is not a coherent result",
+                row.target,
+                row.seconds,
+                row.elapsed_s
+            );
+        }
+    }
+    // Every target shares one campaign seed, and it must be recorded: without it
+    // ADR-0020 §1 reproducibility is unavailable for the whole lane.
+    if recorded.iter().any(|row| row.seed == 0) {
+        anyhow::bail!("fuzz evidence records no campaign seed, so the lane cannot be reproduced");
     }
     Ok(())
 }
@@ -707,13 +766,29 @@ struct Provenance {
 }
 
 /// One target's recorded fuzz campaign (committed artifact).
+///
+/// `deny_unknown_fields` is load-bearing (M17.5 pass-2 #17). The committed
+/// artifact already carried `elapsed_s`, `seed` and `log`, written by
+/// `scripts/haqp_fuzz_campaign.sh`, and this struct silently dropped all three:
+/// the campaign recorded its own reproduction seed and the verifier threw it
+/// away. Anything the campaign records must now either be checked here or fail
+/// to parse.
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 struct FuzzEvidence {
     target: String,
+    /// Budget the campaign was asked for (`-max_total_time`).
     seconds: u64,
+    /// Wall-clock the campaign actually took. A target that exits early spent
+    /// less than its budget, which is how a crash shows up in the timings.
+    elapsed_s: u64,
     exit_code: i32,
     execs: u64,
     artifacts: u64,
+    /// Fixed so the campaign is reproducible (ADR-0020 §1).
+    seed: u64,
+    /// Path the campaign wrote its libFuzzer log to.
+    log: String,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -1751,6 +1826,93 @@ mod tests {
             .expect_err("a canary with no arm must not be counted as caught");
         assert!(
             err.to_string().contains("unknown canary C17"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// The committed fuzz artifact must parse into the struct that checks it.
+    /// `deny_unknown_fields` is what makes that meaningful: the artifact already
+    /// carried `elapsed_s`, `seed` and `log`, and the struct silently discarded
+    /// all three (#17).
+    #[test]
+    fn committed_fuzz_evidence_parses_with_every_field_checked() {
+        let bytes = std::fs::read(repo_root().join("conformance/haqp/evidence/fuzz.json"))
+            .expect("committed fuzz evidence");
+        let rows: Vec<FuzzEvidence> =
+            serde_json::from_slice(&bytes).expect("every recorded field must be declared");
+        assert_eq!(rows.len(), 5, "five targets");
+        assert!(
+            rows.iter().all(|row| row.seed != 0),
+            "the campaign seed must survive parsing"
+        );
+
+        let doctored = String::from_utf8(bytes)
+            .expect("utf8")
+            .replace("\"seed\":", "\"unchecked_new_field\":");
+        serde_json::from_str::<Vec<FuzzEvidence>>(&doctored)
+            .expect_err("a field the verifier does not check must not parse silently");
+    }
+
+    /// #17: a fuzz row naming a target that does not exist must be rejected. The
+    /// old count-only check compared against `packet.generated.len()` — families,
+    /// not targets — so an invented target name passed.
+    #[test]
+    fn fuzz_lane_rejects_a_target_that_does_not_exist() {
+        let bytes = std::fs::read(repo_root().join("conformance/haqp/evidence/fuzz.json"))
+            .expect("committed fuzz evidence");
+        let mut rows: Vec<FuzzEvidence> = serde_json::from_slice(&bytes).expect("parse");
+        let present = rows
+            .iter()
+            .map(|row| row.target.clone())
+            .collect::<BTreeSet<_>>();
+
+        // The honest artifact must reach the per-row checks, or this proves
+        // nothing. It stops at the recorded F-09 crash, which is the correct
+        // fail-closed behaviour and is deferred to M19 — so assert on THAT
+        // rather than on success.
+        let err = verify_fuzz_rows(&rows, &present).expect_err("F-09's crash still stands");
+        assert!(
+            err.to_string().contains("every crash is a failing result"),
+            "unexpected error: {err}"
+        );
+
+        rows[0].target = "target_nobody_wrote".to_owned();
+        let err = verify_fuzz_rows(&rows, &present)
+            .expect_err("a target that does not exist must be rejected");
+        assert!(
+            err.to_string().contains("does not cover the targets"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// #17: a target claiming a clean full-length campaign that finished far
+    /// short of its budget is stating a contradiction.
+    #[test]
+    fn fuzz_lane_rejects_a_clean_campaign_that_exited_early() {
+        let bytes = std::fs::read(repo_root().join("conformance/haqp/evidence/fuzz.json"))
+            .expect("committed fuzz evidence");
+        let mut rows: Vec<FuzzEvidence> = serde_json::from_slice(&bytes).expect("parse");
+        let present = rows
+            .iter()
+            .map(|row| row.target.clone())
+            .collect::<BTreeSet<_>>();
+        // Make every row clean so the early-exit check is what fires. Note that
+        // `elapsed_s` has to be normalised too: `canonical_round_trip` really did
+        // stop early (1675s of an 1800s budget) because of F-09, so simply
+        // clearing its exit code leaves behind exactly the contradiction this
+        // check exists to catch.
+        for row in &mut rows {
+            row.exit_code = 0;
+            row.artifacts = 0;
+            row.elapsed_s = row.seconds + 1;
+        }
+        verify_fuzz_rows(&rows, &present).expect("an all-clean campaign is otherwise valid");
+
+        rows[0].elapsed_s = 10;
+        let err = verify_fuzz_rows(&rows, &present)
+            .expect_err("a clean campaign cannot finish in a fraction of its budget");
+        assert!(
+            err.to_string().contains("not a coherent result"),
             "unexpected error: {err}"
         );
     }
