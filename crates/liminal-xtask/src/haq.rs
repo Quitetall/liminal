@@ -790,49 +790,83 @@ struct Review {
     result: String,
 }
 
-/// Execute all 16 disposable gate canaries without touching the working tree.
+/// Execute every declared disposable gate canary without touching the working
+/// tree.
 pub fn run_canaries_repo(root: &Utf8Path) -> Result<()> {
     let baseline = read_packet(root)?;
     verify_inventory_repo(root)?;
     let markdown_path = root.join("docs/execution/phase1-suite-review.md");
     let markdown = std::fs::read_to_string(&markdown_path)?;
-    let baseline_digest = packet_digest(&baseline)?;
-    let mut records = Vec::new();
-    for id in (1..=16).map(|n| format!("C{n:02}")) {
-        let mut packet = baseline.clone();
-        let mut altered_markdown = markdown.clone();
-        mutate_canary(&id, &mut packet, &mut altered_markdown, &baseline_digest)?;
-        let expected = baseline
-            .canaries
-            .iter()
-            .find(|row| row.id == id)
-            .expect("inventory canary")
-            .expected_failure
-            .clone();
-        let observed = verify_packet_shape(&packet)
-            .and_then(|()| verify_packet_statuses(&packet, inventory_statuses()))
-            .and_then(|()| verify_markdown_surface_text(&altered_markdown, &packet))
-            .expect_err("mutated canary must fail closed")
-            .to_string();
-        if !observed.replace('"', "").contains(&expected) {
-            anyhow::bail!("{id}: expected failure {expected:?}, observed {observed:?}");
-        }
-        records.push(CanaryEvidence {
-            id,
-            expected_failure: expected,
-            observed_failure: observed,
-            caught: true,
-        });
-    }
+    let records = run_canary_suite(&baseline, &markdown)?;
     let bytes = serde_json::to_vec_pretty(&records)?;
     let path = root.join("target/haqp/canaries.json");
     std::fs::create_dir_all(path.parent().expect("evidence parent"))?;
     std::fs::write(&path, &bytes)?;
     println!(
-        "all 16 canaries caught; evidence {path}; blake3={}",
+        "all {} canaries caught; evidence {path}; blake3={}",
+        records.len(),
         blake3::hash(&bytes).to_hex()
     );
     Ok(())
+}
+
+/// Run one canary per DECLARED row, and require each row's prose to describe
+/// the mutation that was actually performed (M17.5 pass-2 #22).
+///
+/// The runner used to iterate a hardcoded `C01..=C16` and read only
+/// `expected_failure`. `Canary.gate` and `Canary.violation` were therefore
+/// decorative: the packet could say C09 relabels a mutation family while the
+/// executed arm did something entirely different, and nothing would notice.
+/// That matters because the canary table is the artifact a reader trusts to
+/// learn WHAT the sixteen canaries prove — unverified prose in that position is
+/// worse than no prose, because it reads as evidence.
+///
+/// Driving the loop from `packet.canaries` rather than a hardcoded `1..=16`
+/// closes a drift hazard rather than a live hole: `verify_canary_inventory`
+/// currently pins the id set to exactly C01–C16, so an extra row is rejected
+/// before it reaches this function. But that rule is the only thing keeping the
+/// hardcoded range honest, and the natural future edit — relaxing it to a
+/// minimum when canary 17 is written — would have left the new canaries
+/// declared, counted, and never executed. The loop now cannot disagree with the
+/// table it reports on.
+fn run_canary_suite(baseline: &Packet, markdown: &str) -> Result<Vec<CanaryEvidence>> {
+    let baseline_digest = packet_digest(baseline)?;
+    let mut records = Vec::new();
+    for row in &baseline.canaries {
+        let mut packet = baseline.clone();
+        let mut altered_markdown = markdown.to_owned();
+        let performed = mutate_canary(
+            &row.id,
+            &mut packet,
+            &mut altered_markdown,
+            &baseline_digest,
+        )?;
+        require_eq(
+            &format!("{}.violation (packet prose vs executed mutation)", row.id),
+            &row.violation,
+            performed,
+        )?;
+        let observed = verify_packet_shape(&packet)
+            .and_then(|()| verify_packet_statuses(&packet, inventory_statuses()))
+            .and_then(|()| verify_markdown_surface_text(&altered_markdown, &packet))
+            .expect_err("mutated canary must fail closed")
+            .to_string();
+        if !observed.replace('"', "").contains(&row.expected_failure) {
+            anyhow::bail!(
+                "{}: expected failure {:?}, observed {observed:?}",
+                row.id,
+                row.expected_failure
+            );
+        }
+        records.push(CanaryEvidence {
+            id: row.id.clone(),
+            violation: row.violation.clone(),
+            expected_failure: row.expected_failure.clone(),
+            observed_failure: observed,
+            caught: true,
+        });
+    }
+    Ok(records)
 }
 
 fn inventory_statuses() -> PacketStatusExpectations {
@@ -845,59 +879,104 @@ fn inventory_statuses() -> PacketStatusExpectations {
     }
 }
 
+/// Apply one canary's mutation and RETURN the violation it performed, so the
+/// caller can hold the packet's prose to it (M17.5 pass-2 #22). The returned
+/// string is the authority: if the packet disagrees, the packet is wrong.
 fn mutate_canary(
     id: &str,
     packet: &mut Packet,
     markdown: &mut String,
     baseline_digest: &str,
-) -> Result<()> {
-    match id {
+) -> Result<&'static str> {
+    let performed = match id {
         "C01" => {
             packet.status.clear();
             packet.status.push_str("ratified");
+            "set status to ratified"
         }
         "C02" => {
             packet.ratification.clear();
             packet.ratification.push_str("approved");
+            "set ratification to approved"
         }
-        "C03" => packet.locked_acceptance_corpora_touched = true,
-        "C04" => packet.requirements.push(packet.requirements[0].clone()),
-        "C05" => packet.tests.retain(|row| row.id != "P1-T08"),
-        "C06" => packet.tests[0].requirements.clear(),
+        "C03" => {
+            packet.locked_acceptance_corpora_touched = true;
+            "set locked_acceptance_corpora_touched true"
+        }
+        "C04" => {
+            packet.requirements.push(packet.requirements[0].clone());
+            "duplicate requirement id"
+        }
+        "C05" => {
+            packet.tests.retain(|row| row.id != "P1-T08");
+            "remove P1-T08"
+        }
+        "C06" => {
+            packet.tests[0].requirements.clear();
+            "empty requirement mapping"
+        }
         "C07" => {
             packet.mutants.pop();
+            "remove one mutant"
         }
         "C08" => {
             for mutant in packet.mutants.iter_mut().take(17) {
                 mutant.operator.clear();
                 mutant.operator.push_str("predicate-deletion");
             }
+            "operator supplies 17 mutants"
         }
         "C09" => {
+            // Moving one mutant out of its family leaves that family at 12,
+            // which is what `verify_mutant_inventory`'s exactly-13 rule catches.
             let family = packet.mutants[0].family.clone();
             packet.mutants[0].family = if family == "source/CST/formatting" {
                 "graph/interchange codecs".to_owned()
             } else {
                 "source/CST/formatting".to_owned()
             };
+            "family supplies 12 mutants"
         }
-        "C10" => packet.canaries.retain(|row| row.id != "C16"),
-        "C11" => packet.generated[0].accepted = 0,
-        "C12" => packet.generated[0].discards = packet.generated[0].attempts,
-        "C13" => packet.generated[0].fuzz_minutes = 0,
-        "C14" => packet
-            .crash_boundaries
-            .retain(|row| row.boundary != "ilrp/before_ack"),
-        "C15" => packet.reviews[0].attempts = 0,
+        "C10" => {
+            packet.canaries.retain(|row| row.id != "C16");
+            "remove C16"
+        }
+        "C11" => {
+            packet.generated[0].accepted = 0;
+            "accepted below 100000"
+        }
+        "C12" => {
+            packet.generated[0].discards = packet.generated[0].attempts;
+            "discard rate above 1 percent"
+        }
+        "C13" => {
+            packet.generated[0].fuzz_minutes = 0;
+            "fuzz minutes below 31"
+        }
+        "C14" => {
+            packet
+                .crash_boundaries
+                .retain(|row| row.boundary != "ilrp/before_ack");
+            "drop before_ack boundary"
+        }
+        "C15" => {
+            packet.reviews[0].attempts = 0;
+            "review attempts below 12"
+        }
         "C16" => {
+            // The only arm that attacks the markdown surface rather than the
+            // packet, so it must NOT re-stamp the digest it just removed.
             *markdown = markdown.replace(baseline_digest, "");
-            return Ok(());
+            return Ok("remove packet digest");
         }
-        _ => anyhow::bail!("unknown canary {id}"),
-    }
+        _ => anyhow::bail!(
+            "unknown canary {id}: the packet declares a canary with no implemented \
+             mutation, so it would otherwise be counted as caught without running"
+        ),
+    };
     let digest = packet_digest(packet)?;
     *markdown = markdown.replace(baseline_digest, &digest);
-    Ok(())
+    Ok(performed)
 }
 
 fn packet_digest(packet: &Packet) -> Result<String> {
@@ -1238,6 +1317,34 @@ type Family = (&'static str, fn(&mut Rng) -> Result<Case>);
 /// tallied from outcomes — never echoed from the requested case count
 /// (M17.5 finding F-07).
 pub fn run_generated_repo(root: &Utf8Path, cases: u64) -> Result<()> {
+    let (evidence, timings) = generate_evidence(cases)?;
+    let bytes = serde_json::to_vec_pretty(&evidence)?;
+    let path = root.join("target/haqp/generated.json");
+    std::fs::create_dir_all(path.parent().expect("evidence parent"))?;
+    std::fs::write(&path, &bytes)?;
+    for (row, elapsed_ms) in evidence.iter().zip(&timings) {
+        #[allow(clippy::cast_precision_loss, reason = "reporting only")]
+        let rate = row.discards as f64 * 100.0 / row.attempts.max(1) as f64;
+        println!(
+            "{}: {} accepted / {} attempts ({} discarded, {rate:.2}%) in {elapsed_ms}ms",
+            row.family, row.accepted, row.attempts, row.discards
+        );
+    }
+    println!(
+        "generated evidence written to {path}; blake3={}",
+        blake3::hash(&bytes).to_hex()
+    );
+    Ok(())
+}
+
+/// Run the five families and return their evidence rows plus per-family
+/// wall-clock timings.
+///
+/// The timings are returned SEPARATELY rather than embedded in the rows on
+/// purpose: the rows are the hashable artifact and must be a pure function of
+/// the seed and the code under test, while the timings are telemetry for the
+/// operator (M17.5 pass-2 #18).
+fn generate_evidence(cases: u64) -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> {
     if cases == 0 {
         anyhow::bail!("generated case count must be positive");
     }
@@ -1253,6 +1360,7 @@ pub fn run_generated_repo(root: &Utf8Path, cases: u64) -> Result<()> {
     ];
 
     let mut evidence = Vec::new();
+    let mut timings = Vec::new();
     for (index, (family, run)) in families.into_iter().enumerate() {
         let seed = 0x9E37_79B9_7F4A_7C15_u64 ^ (index as u64).wrapping_mul(0x0100_0000_01B3);
         let mut rng = Rng(seed);
@@ -1288,35 +1396,33 @@ pub fn run_generated_repo(root: &Utf8Path, cases: u64) -> Result<()> {
             attempts,
             discards,
             seed,
-            elapsed_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
             evidence_hash: digest.finalize().to_hex().to_string(),
         });
+        timings.push(u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX));
     }
-    let bytes = serde_json::to_vec_pretty(&evidence)?;
-    let path = root.join("target/haqp/generated.json");
-    std::fs::create_dir_all(path.parent().expect("evidence parent"))?;
-    std::fs::write(&path, &bytes)?;
-    for row in &evidence {
-        #[allow(clippy::cast_precision_loss, reason = "reporting only")]
-        let rate = row.discards as f64 * 100.0 / row.attempts.max(1) as f64;
-        println!(
-            "{}: {} accepted / {} attempts ({} discarded, {rate:.2}%)",
-            row.family, row.accepted, row.attempts, row.discards
-        );
-    }
-    println!("generated evidence written to {path}");
-    Ok(())
+    Ok((evidence, timings))
 }
 
 #[derive(Debug, serde::Serialize)]
 struct CanaryEvidence {
     id: String,
+    /// The mutation that was actually performed, checked against the packet's
+    /// own prose (M17.5 pass-2 #22).
+    violation: String,
     expected_failure: String,
     observed_failure: String,
     caught: bool,
 }
 
-#[derive(Debug, serde::Serialize)]
+/// One family's generated-evidence row.
+///
+/// Every field here must be a function of the seed and the code under test and
+/// of NOTHING ELSE. Wall-clock timing used to live here as `elapsed_ms`, which
+/// made the artifact unhashable — two runs of the same seed differed (50→57,
+/// 94→110, 12→15 ms), so the artifact could never be compared against a
+/// recorded digest (M17.5 pass-2 #18). Timing is operational telemetry, not
+/// evidence; it is printed to stdout instead.
+#[derive(Debug, PartialEq, Eq, serde::Serialize)]
 struct GeneratedEvidence {
     family: String,
     accepted: u64,
@@ -1324,7 +1430,6 @@ struct GeneratedEvidence {
     discards: u64,
     /// Recorded so the run is reproducible (ADR-0020 §1).
     seed: u64,
-    elapsed_ms: u64,
     evidence_hash: String,
 }
 
@@ -1527,6 +1632,68 @@ mod tests {
         assert!(
             err.to_string().contains("mutant.disposition"),
             "unexpected error: {err}"
+        );
+    }
+
+    /// #22: a canary row whose prose disagrees with the mutation the runner
+    /// actually performs must be rejected. Without this, `gate` and `violation`
+    /// are decorative and the canary table describes whatever it likes.
+    #[test]
+    fn canary_runner_rejects_prose_that_misdescribes_its_own_mutation() {
+        let root = repo_root();
+        let markdown = std::fs::read_to_string(root.join("docs/execution/phase1-suite-review.md"))
+            .expect("review markdown");
+        let baseline = packet_from_repo();
+
+        // The honest packet must pass, or the assertion below proves nothing.
+        run_canary_suite(&baseline, &markdown).expect("the committed canary table must agree");
+
+        let mut doctored = baseline.clone();
+        doctored.canaries[8].violation = "reticulates splines".to_owned();
+        let err = run_canary_suite(&doctored, &markdown)
+            .expect_err("prose that misdescribes the executed mutation must fail closed");
+        assert!(
+            err.to_string().contains("C09.violation"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// #22, second half: a declared canary with no implemented mutation must
+    /// never be recorded as caught.
+    ///
+    /// This exercises `mutate_canary` directly because the guard is
+    /// defence-in-depth: `verify_canary_inventory` pins the id set to exactly
+    /// C01–C16, so a C17 row is rejected before `run_canary_suite` ever sees it.
+    /// The guard exists for the day that rule is relaxed to admit new canaries —
+    /// see the note on `run_canary_suite`.
+    #[test]
+    fn canary_runner_refuses_a_declared_canary_it_cannot_execute() {
+        let mut packet = packet_from_repo();
+        let mut markdown = String::new();
+        let err = mutate_canary("C17", &mut packet, &mut markdown, "")
+            .expect_err("a canary with no arm must not be counted as caught");
+        assert!(
+            err.to_string().contains("unknown canary C17"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// #18: the generated artifact must be byte-identical across runs, or it
+    /// cannot be hash-compared against a recorded digest. `elapsed_ms` used to
+    /// make this impossible.
+    ///
+    /// This also guards the reproducibility of the generators themselves: any
+    /// entropy they draw from outside the seeded `Rng` shows up here as a
+    /// differing artifact.
+    #[test]
+    fn generated_evidence_is_byte_identical_across_runs() {
+        let (first, _) = generate_evidence(64).expect("first run");
+        let (second, _) = generate_evidence(64).expect("second run");
+        assert_eq!(
+            serde_json::to_string_pretty(&first).expect("serialize first"),
+            serde_json::to_string_pretty(&second).expect("serialize second"),
+            "the same seed produced two different artifacts, so the recorded \
+             evidence hash certifies nothing"
         );
     }
 }
