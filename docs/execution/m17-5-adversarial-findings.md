@@ -776,3 +776,57 @@ per ADR-0020 §4, and deferred to M19. `verify_fuzz_evidence` refuses to qualify
 while it stands, which is the correct fail-closed behaviour. Worth noting only
 that `haq verify` bails earlier, on `qualification_state: not-run`, so the crash
 is latent rather than reported — the same shape as F-14.
+
+---
+
+## F-18 — MAJOR. The packet's fuzz budget exceeds what ADR-0020 requires, and the packet was populated to fit the verifier rather than the campaign.
+
+**Found by a failing test I wrote for the wrong threshold**, which is the only
+reason the numbers were ever compared.
+
+ADR-0020 line 90 is explicit: *"Each family also receives one **30-minute**
+sanitizer-enabled fuzz campaign … Total fuzz budget is at least 150
+target-minutes."*
+
+Three places disagree about that:
+
+| source | per unit | total |
+| --- | --- | --- |
+| **ADR-0020 (canonical)** | 30 minutes per family | ≥150 target-minutes |
+| `verify_generated_inventory` | `fuzz_minutes < 31` → bail | `< 155` → bail |
+| `verify_fuzz_evidence` | (no floor before this commit) | ≥150 |
+| `haqp_fuzz_campaign.sh` | `SECS=1800` = 30 minutes | 150 target-minutes |
+| `packet.json` | `fuzz_minutes: 31` per family | 155 claimed |
+
+So the verifier demands a minute more per family than the ADR asks for, and
+**the packet's numbers were evidently chosen to satisfy the verifier rather than
+to describe the campaign**: it claims 155 target-minutes while the committed
+artifact records 150. The packet overstates the evidence, and the artifact and
+the packet contradict each other about the same campaign. This is the concrete
+form of F-17 item 2 — the two claims are not merely unlinked, they disagree.
+
+A verifier stricter than the ADR is a false RED rather than a false green, which
+is the safer direction, but it did real harm here: it pulled a fabricated
+figure into the packet.
+
+**NOT fixed — the disposition is Brian's**, because the two branches differ in
+cost by 150 minutes of machine time:
+
+1. **Align the verifier to the ADR** (`fuzz_minutes >= 30`, total `>= 150`) and
+   correct `packet.json` to 30. Cheap. Ripples: C13's `violation` and
+   `expected_failure` both name "31", so the canary row changes; the packet
+   digest changes; `docs/execution/phase1-suite-review.md` needs the new digest
+   (F-14's lesson). No rerun needed — the committed campaign already satisfies
+   the ADR.
+2. **Treat 31/155 as a deliberate margin above the ADR** and rerun the campaign
+   at `SECS=1860` so the artifact matches the packet. Costs a fresh 155-minute
+   sanitizer campaign, and under §1 a rerun is required anyway once any verified
+   fix lands, so this may be nearly free if sequenced with the eventual rerun.
+
+Option 1 is the recommendation: the ADR is canonical, and a threshold invented
+by a verifier should not silently redefine the protocol it is checking.
+
+**What this commit DID do:** added the per-target floor the ADR does state
+(30 minutes), so one long target can no longer carry the 150-minute total while
+another runs for seconds. It follows the ADR, not the other verifier, and says so
+at the call site.

@@ -187,6 +187,22 @@ fn verify_fuzz_rows(recorded: &[FuzzEvidence], present: &BTreeSet<String>) -> Re
         if row.log.trim().is_empty() {
             anyhow::bail!("fuzz target {} records no log path", row.target);
         }
+        // ADR-0020 line 90: "each family also receives one 30-minute
+        // sanitizer-enabled fuzz campaign". That is a per-target floor, not just
+        // a contribution to the 150 target-minute total — without it one long
+        // target could carry the sum while another ran for seconds.
+        //
+        // 30 minutes, NOT the 31 that `verify_generated_inventory` demands of the
+        // packet. That discrepancy is real and is recorded as F-18; this check
+        // deliberately follows the ADR rather than the other verifier.
+        if row.seconds < 30 * 60 {
+            anyhow::bail!(
+                "fuzz target {} was budgeted {}s, below the 30-minute per-target floor \
+                 (ADR-0020)",
+                row.target,
+                row.seconds
+            );
+        }
         // A clean campaign runs to its budget. Finishing far short of it means
         // the target stopped early, and a clean early exit is a contradiction
         // the evidence should not be able to state.
@@ -200,10 +216,24 @@ fn verify_fuzz_rows(recorded: &[FuzzEvidence], present: &BTreeSet<String>) -> Re
             );
         }
     }
-    // Every target shares one campaign seed, and it must be recorded: without it
-    // ADR-0020 §1 reproducibility is unavailable for the whole lane.
-    if recorded.iter().any(|row| row.seed == 0) {
-        anyhow::bail!("fuzz evidence records no campaign seed, so the lane cannot be reproduced");
+    // `haqp_fuzz_campaign.sh` drives every target from ONE `SEED`, so the rows
+    // must agree. Checking only for a nonzero seed would let the comment claim
+    // more than the code enforced — rows carrying three different seeds describe
+    // three campaigns, and none of them is the one the packet points at.
+    let seeds = recorded.iter().map(|row| row.seed).collect::<BTreeSet<_>>();
+    match seeds.iter().copied().next() {
+        None => anyhow::bail!("fuzz evidence records no targets at all"),
+        Some(0) => {
+            anyhow::bail!(
+                "fuzz evidence records no campaign seed, so the lane cannot be reproduced"
+            )
+        }
+        Some(_) if seeds.len() > 1 => anyhow::bail!(
+            "fuzz evidence carries {} distinct seeds {seeds:?}; one campaign has one seed, so \
+             these rows describe runs the packet cannot point at",
+            seeds.len()
+        ),
+        Some(_) => {}
     }
     Ok(())
 }
@@ -1913,6 +1943,34 @@ mod tests {
             .expect_err("a clean campaign cannot finish in a fraction of its budget");
         assert!(
             err.to_string().contains("not a coherent result"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// #17: rows carrying different seeds describe different campaigns, none of
+    /// which is the one the packet points at. Checking only for a nonzero seed
+    /// let the comment claim more than the code enforced.
+    #[test]
+    fn fuzz_lane_rejects_rows_from_different_campaigns() {
+        let bytes = std::fs::read(repo_root().join("conformance/haqp/evidence/fuzz.json"))
+            .expect("committed fuzz evidence");
+        let mut rows: Vec<FuzzEvidence> = serde_json::from_slice(&bytes).expect("parse");
+        let present = rows
+            .iter()
+            .map(|row| row.target.clone())
+            .collect::<BTreeSet<_>>();
+        for row in &mut rows {
+            row.exit_code = 0;
+            row.artifacts = 0;
+            row.elapsed_s = row.seconds + 1;
+        }
+        verify_fuzz_rows(&rows, &present).expect("one campaign, one seed");
+
+        rows[2].seed += 1;
+        let err = verify_fuzz_rows(&rows, &present)
+            .expect_err("rows from two campaigns must be rejected");
+        assert!(
+            err.to_string().contains("distinct seeds"),
             "unexpected error: {err}"
         );
     }
