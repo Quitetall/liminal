@@ -1125,3 +1125,51 @@ budget crashing on F-09 after 305 of 1800 seconds. **A fuzz lane that stops earl
 has not measured the budget it claims.** The `elapsed_s` coherence check added
 for F-17 flags exactly this shape, and here it is again in live data: 305s
 against an 1800s budget.
+
+
+---
+
+## F-22 — MAJOR. **RESOLVED.** Every identifier position the emitter writes bare was unvalidated. Three campaigns found three instances of one defect.
+
+The third `canonical_round_trip` crash, at 660s of an 1800s budget. At that point
+the pattern was unmistakable and worth naming rather than patching again:
+
+| finding | position | campaign |
+| --- | --- | --- |
+| F-09 | attribute name in `(name = value)` | 1st |
+| F-21 | empty ordered block emitted as `ordered;` | 2nd |
+| F-22 | node name, relation kind/source/target, `attribute` form name, reference target, macro name | 3rd |
+
+**All three are one defect:** `emit_item` writes identifiers BARE — `node {name}`,
+`-[{kind}]->`, `attribute {name} =`, `@{name}`, `macro {name}(..)` — while the
+parser accepted arbitrary bytes in every one of those positions. Emit therefore
+produced source the parser could not read back, and
+`parse(emit(parse(x))) != parse(x)`.
+
+Fixing them one at a time was the wrong shape: each fix cost a 2.5-hour campaign
+rerun that then surfaced the next instance. So all five remaining positions were
+validated at once against M19's `ident` rule, degrading to a `Literal` with a
+`MalformedSyntax` diagnostic — the fallback the malformed-relation branch already
+used, and one that always round-trips because literals are JSON-escaped.
+
+### A fourth defect the validation exposed for free
+
+`explicit_surface_covers_all_eight_forms` failed on entirely legal source. The
+relation kind was parsed with `"-[links]->".trim_matches(['-', '[', ']'])`, which
+leaves **`links]->`** — `>` is not in the trim set. So every relation kind had
+been parsed wrong since the form was written, and emit produced
+`-[links]->]->`. Nothing caught it because nothing validated the kind; adding
+`is_ident` surfaced it on the first run.
+
+That is the argument for validating identifiers at the boundary rather than
+trusting them: the check paid for itself before it ever ran in anger.
+
+### Method change
+
+A 10-minute in-process probe at a fresh seed (20260730) now runs 205,015 execs
+clean with zero artifacts. Iterating with short probes before committing to the
+full 150-target-minute campaign is the sequence that should have been used from
+the start — three 2.5-hour cycles bought what one afternoon of probes would
+have.
+
+Promoted as `f22-bare-identifier-forms.bin`; corpus guard raised to >=26.

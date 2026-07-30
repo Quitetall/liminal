@@ -42,7 +42,7 @@ fn fixtures() -> Vec<(String, Vec<u8>)> {
         .collect();
     found.sort();
     assert!(
-        found.len() >= 25,
+        found.len() >= 26,
         "the canonical-round-trip regression corpus has shrunk to {} fixtures; a \
          corpus that \
          quietly empties reports clean",

@@ -576,21 +576,43 @@ fn parse_explicit_kind(
         ),
         "node" => {
             let (name, attributes) = parse_named_attributes(rest);
-            (HirItemKind::NodeConstruction { name }, attributes)
+            if is_ident(&name) {
+                (HirItemKind::NodeConstruction { name }, attributes)
+            } else {
+                not_a_form(diagnostics, range, line, "node name is not an identifier")
+            }
         }
         "relation" => {
             let relation = rest.trim().trim_end_matches(';');
             let parts = relation.split_whitespace().collect::<Vec<_>>();
-            if parts.len() >= 3 {
+            let source = parts
+                .first()
+                .map(|p| p.trim_start_matches('@').to_owned())
+                .unwrap_or_default();
+            // `-[kind]->`. The old `trim_matches(['-', '[', ']'])` left the
+            // trailing `]->` in place, because `>` is not in that set — so the
+            // kind of `-[links]->` parsed as `links]->` and emit wrote
+            // `-[links]->]->`. Nothing caught it because nothing validated the
+            // kind; the `is_ident` check below surfaced it immediately (M17.5
+            // F-22).
+            let kind = parts
+                .get(1)
+                .map(|p| {
+                    p.trim_start_matches("-[")
+                        .trim_end_matches("]->")
+                        .to_owned()
+                })
+                .unwrap_or_default();
+            let target = parts
+                .last()
+                .map(|p| p.trim_start_matches('@').to_owned())
+                .unwrap_or_default();
+            if parts.len() >= 3 && is_ident(&source) && is_ident(&kind) && is_ident(&target) {
                 (
                     HirItemKind::RelationConstruction {
-                        source: HirReference::Unresolved(
-                            parts[0].trim_start_matches('@').to_owned(),
-                        ),
-                        kind: parts[1].trim_matches(['-', '[', ']']).to_owned(),
-                        target: HirReference::Unresolved(
-                            parts.last().unwrap().trim_start_matches('@').to_owned(),
-                        ),
+                        source: HirReference::Unresolved(source),
+                        kind,
+                        target: HirReference::Unresolved(target),
                     },
                     parse_trailing_attributes(relation),
                 )
@@ -617,27 +639,47 @@ fn parse_explicit_kind(
                     message: "top-level attribute has no owner".to_owned(),
                 });
             }
-            (
-                HirItemKind::AttributeAssignment {
-                    owner,
-                    name: name.trim().to_owned(),
-                    value: parse_value(value.trim().trim_end_matches(';')),
-                },
-                BTreeMap::new(),
-            )
+            if is_ident(name.trim()) {
+                (
+                    HirItemKind::AttributeAssignment {
+                        owner,
+                        name: name.trim().to_owned(),
+                        value: parse_value(value.trim().trim_end_matches(';')),
+                    },
+                    BTreeMap::new(),
+                )
+            } else {
+                not_a_form(
+                    diagnostics,
+                    range,
+                    line,
+                    "attribute name is not an identifier",
+                )
+            }
         }
         "ordered" => (HirItemKind::OrderedBlock, BTreeMap::new()),
-        "reference" => (
-            HirItemKind::Reference {
-                target: HirReference::Unresolved(
-                    rest.trim()
-                        .trim_start_matches('@')
-                        .trim_end_matches(';')
-                        .to_owned(),
-                ),
-            },
-            BTreeMap::new(),
-        ),
+        "reference" => {
+            let target = rest
+                .trim()
+                .trim_start_matches('@')
+                .trim_end_matches(';')
+                .to_owned();
+            if is_ident(&target) {
+                (
+                    HirItemKind::Reference {
+                        target: HirReference::Unresolved(target),
+                    },
+                    BTreeMap::new(),
+                )
+            } else {
+                not_a_form(
+                    diagnostics,
+                    range,
+                    line,
+                    "reference target is not an identifier",
+                )
+            }
+        }
         "expression" => (
             HirItemKind::Expression {
                 source: parse_json_string(rest.trim_end_matches(';'))
@@ -651,6 +693,9 @@ fn parse_explicit_kind(
             let (name_part, args_part) = rest.split_once('(').unwrap_or((rest, ""));
             let name = name_part.trim().to_owned();
             let args = args_part.trim_end_matches(';').trim_end_matches(')').trim();
+            if !is_ident(&name) {
+                return not_a_form(diagnostics, range, line, "macro name is not an identifier");
+            }
             (
                 HirItemKind::MacroInvocation {
                     name,
@@ -711,6 +756,33 @@ fn parse_trailing_attributes(rest: &str) -> BTreeMap<String, HirValue> {
 /// Names outside the grammar are dropped rather than stored. Reporting them as
 /// a typed diagnostic is M19's job (D19.x); what M17.5 needs is that the HIR
 /// only ever holds attributes the emitter can round-trip.
+/// A form whose identifier is outside M19's grammar is NOT that form.
+///
+/// M17.5 F-09/F-21/F-22: every one of these positions is written BARE by
+/// `emit_item` — `node {name}`, `-[{kind}]->`, `attribute {name} =`, `@{name}`,
+/// `macro {name}(..)`. When the parser accepted arbitrary bytes there, emit
+/// produced source the parser could not read back, and the round-trip law
+/// failed. Degrading to a literal is the fallback the malformed-relation branch
+/// already used: a literal is emitted JSON-escaped, so it always round-trips.
+fn not_a_form(
+    diagnostics: &mut Vec<HirDiagnostic>,
+    range: SourceRange,
+    line: &str,
+    message: &str,
+) -> (HirItemKind, BTreeMap<String, HirValue>) {
+    diagnostics.push(HirDiagnostic {
+        code: HirDiagnosticCode::MalformedSyntax,
+        range,
+        message: message.to_owned(),
+    });
+    (
+        HirItemKind::Literal {
+            value: line.to_owned(),
+        },
+        BTreeMap::new(),
+    )
+}
+
 fn is_ident(name: &str) -> bool {
     let mut chars = name.chars();
     let Some(first) = chars.next() else {
