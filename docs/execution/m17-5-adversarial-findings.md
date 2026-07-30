@@ -885,9 +885,9 @@ user's data:** the root filesystem is at 99% (17 GB free of 928 GB) and swap is
 
 Same shape as F-14, with me as the cause rather than the discoverer.
 
-`typos` rejects `ba` inside the git SHA `` `c4ba072` `` in this very document,
-introduced by `feda854`. Every `just ci` run since has failed at `fmt-check`,
-the first recipe.
+`typos` reads the fourth and fifth characters of the git SHA `c4ba072` — cited
+in this very document, introduced by `feda854` — as a misspelling of "by" or
+"be". Every `just ci` run since has failed at `fmt-check`, the first recipe.
 
 **Why it went unnoticed:** I invoked CI as `just ci 2>&1 | tail -20`. In a
 pipeline the shell reports the exit status of the LAST command, so what I read
@@ -897,10 +897,16 @@ harness that reports the status of the wrong process is precisely the failure
 this campaign keeps finding, and it is worth recording that the reviewer of the
 suite made it too.
 
-**Fix:** `extend-ignore-re = ["`[0-9a-f]{7,40}`"]` in `typos.toml`. Every
-findings document cites commits in backticks, so ignoring the construct is the
-durable fix rather than rewording one SHA and waiting for the next hex collision
-— `ba`, `fo`, `ot` and friends recur constantly in SHAs.
+**Fix:** an `extend-ignore-re` for backticked hex of 7–40 digits in
+`typos.toml`. Every findings document cites commits in backticks, so ignoring
+the construct is the durable fix rather than rewording one SHA and waiting for
+the next hex collision — two-letter sequences that are both valid hex and common
+misspellings recur constantly in abbreviated SHAs.
+
+The bound is deliberate: it matches commit-length hex only, so short hex-looking
+fragments in prose are still spell-checked. Writing this section proved the
+point, since an earlier draft listed those fragments in backticks and took
+`fmt-check` red again.
 
 **Standing correction to method:** never read a gate's result through a pipe.
 Redirect to a file and test `$?` directly.

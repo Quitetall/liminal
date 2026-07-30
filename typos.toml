@@ -6,7 +6,7 @@
 # took `just ci` red for four commits (M17.5, found while fixing F-17). Every
 # findings document cites commits this way, so ignoring the construct is the
 # durable fix rather than rewording one SHA and waiting for the next collision.
-extend-ignore-re = ["`[0-9a-f]{7,40}`"]
+extend-ignore-re = ["`[0-9a-fA-F]{7,40}`"]
 
 [default.extend-words]
 # Operational Transformation — collaboration algorithm family (v4 §7.6, §123).
