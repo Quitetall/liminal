@@ -1,6 +1,13 @@
 # Conformance corpora contain DELIBERATELY damaged text (spec R4 §2.2 adversarial
 # traces) and must never be "fixed". spec/v4/ is canonical and verbatim.
 
+[default]
+# Git SHAs in backticks are hex, not prose. `c4ba072` tripped `ba -> by/be` and
+# took `just ci` red for four commits (M17.5, found while fixing F-17). Every
+# findings document cites commits this way, so ignoring the construct is the
+# durable fix rather than rewording one SHA and waiting for the next collision.
+extend-ignore-re = ["`[0-9a-f]{7,40}`"]
+
 [default.extend-words]
 # Operational Transformation — collaboration algorithm family (v4 §7.6, §123).
 OT = "OT"

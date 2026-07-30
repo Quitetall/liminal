@@ -830,3 +830,77 @@ by a verifier should not silently redefine the protocol it is checking.
 (30 minutes), so one long target can no longer carry the 150-minute total while
 another runs for seconds. It follows the ADR, not the other verifier, and says so
 at the call site.
+
+---
+
+## F-12 UPDATE — the scratch leak is now a HARD BLOCKER on the mutation measurement, and it is broader than first recorded.
+
+Measured this session rather than estimated.
+
+**Per-run cost.** One `cargo test --workspace --all-targets` — the runner
+cargo-mutants drives — takes 35s and leaks **250 directories, ~400 MB**, none of
+which is ever removed.
+
+**Against the campaign.** `cargo mutants --workspace --list` reports **2915
+mutants**. Each runs the suite once:
+
+> 2915 × 400 MB ≈ **1.1 TB** of scratch, against 7.3 GB of tmpfs free at the time
+> of measurement.
+
+The campaign would exhaust the filesystem after roughly **18 mutants**. This is
+not a housekeeping nit deferred behind Track C — it is the reason the Track C
+measurement cannot be taken, on any filesystem, until the leak is fixed. A
+background sweeper was considered and rejected: deleting a directory under a
+still-running test would report a *false kill*, corrupting the exact number the
+campaign exists to produce.
+
+**Broader than `pipeline::scratch_root`.** The original write-up named one
+function. The leak actually spans **~29 independent call sites** — every one an
+ad-hoc `std::env::temp_dir().join(format!(...))` with no cleanup — producing
+~90 distinct directory prefixes (`liminal-toyrun-*`, `liminal-store-test-*`,
+`liminal-source-test-*`, `liminal-reactor-*`, `liminal-bench-*`, `liminal-asof-*`
+and more). The real fix is one shared scratch helper with drop-based cleanup,
+not 29 individual patches.
+
+**It has now taken CI down twice.** Once in the previous session, and again this
+session: three `just ci` runs' worth of leakage contributed to filling the
+machine, and `just ci` failed with
+
+```
+replay failed: No space left on device (os error 28)
+```
+
+on three tests, all of which pass in isolation once space is freed. A suite
+whose result depends on how many times it has been run before is the same defect
+class as F-11.
+
+**Aggravating environmental factor, and NOT something to fix by deleting the
+user's data:** the root filesystem is at 99% (17 GB free of 928 GB) and swap is
+41 GB deep, partly because 25 GB of leaked tmpfs scratch is RAM-backed. Only the
+`liminal-*` portion is this project's to reclaim.
+
+---
+
+## F-19 — MAJOR. `just ci` was red at HEAD for four commits, and I reported it green.
+
+Same shape as F-14, with me as the cause rather than the discoverer.
+
+`typos` rejects `ba` inside the git SHA `` `c4ba072` `` in this very document,
+introduced by `feda854`. Every `just ci` run since has failed at `fmt-check`,
+the first recipe.
+
+**Why it went unnoticed:** I invoked CI as `just ci 2>&1 | tail -20`. In a
+pipeline the shell reports the exit status of the LAST command, so what I read
+as "exit code 0" was `tail`'s success, never the recipe's. Three separate
+"CI green" claims this session rested on that measurement. A verification
+harness that reports the status of the wrong process is precisely the failure
+this campaign keeps finding, and it is worth recording that the reviewer of the
+suite made it too.
+
+**Fix:** `extend-ignore-re = ["`[0-9a-f]{7,40}`"]` in `typos.toml`. Every
+findings document cites commits in backticks, so ignoring the construct is the
+durable fix rather than rewording one SHA and waiting for the next hex collision
+— `ba`, `fo`, `ot` and friends recur constantly in SHAs.
+
+**Standing correction to method:** never read a gate's result through a pipe.
+Redirect to a file and test `$?` directly.
