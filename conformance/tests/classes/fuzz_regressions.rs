@@ -8,11 +8,46 @@
 
 use camino::Utf8PathBuf;
 
-fn fixture(name: &str) -> Vec<u8> {
-    let path = Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+fn corpus_dir() -> Utf8PathBuf {
+    Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("corpora/regression/phase1/canonical_round_trip")
-        .join(name);
+}
+
+fn fixture(name: &str) -> Vec<u8> {
+    let path = corpus_dir().join(name);
     std::fs::read(&path).unwrap_or_else(|e| panic!("{path}: {e}"))
+}
+
+/// Every `.bin` in the corpus, enumerated rather than listed.
+///
+/// M17.5: the campaign had left 23 minimized artifacts in `fuzz/artifacts/`
+/// while only 2 were promoted, which ADR-0020 §4 forbids ("minimized artifacts
+/// become named regression fixtures before the qualification lane is rerun").
+/// Promoting them is only half the fix — a hardcoded list means the next
+/// promotion is replayed by nobody, so the guard now reads the directory.
+fn fixtures() -> Vec<(String, Vec<u8>)> {
+    let dir = corpus_dir();
+    let mut found: Vec<(String, Vec<u8>)> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("{dir}: {e}"))
+        .flatten()
+        .filter_map(|entry| {
+            let path = Utf8PathBuf::from_path_buf(entry.path()).ok()?;
+            if path.extension() != Some("bin") {
+                return None;
+            }
+            let name = path.file_name()?.to_owned();
+            let bytes = std::fs::read(&path).ok()?;
+            Some((name, bytes))
+        })
+        .collect();
+    found.sort();
+    assert!(
+        found.len() >= 24,
+        "the F-09 regression corpus has shrunk to {} fixtures; a corpus that \
+         quietly empties reports clean",
+        found.len()
+    );
+    found
 }
 
 /// F-09 (M17.5 fuzz campaign, 2026-07-25): `parse(emit(parse(x))) != parse(x)`
@@ -44,8 +79,7 @@ fn fixture(name: &str) -> Vec<u8> {
 fn f09_attribute_escape_round_trip_holds() {
     use liminal_format::Formatter;
 
-    for name in ["f09-minimized.bin", "f09-attribute-escape-round-trip.bin"] {
-        let bytes = fixture(name);
+    for (name, bytes) in fixtures() {
         let source = String::from_utf8_lossy(&bytes);
         let formatter = liminal_format::MarkdownFormatter::default();
         let document = formatter
@@ -71,8 +105,12 @@ fn f09_attribute_escape_round_trip_holds() {
 /// report clean. This runs unconditionally.
 #[test]
 fn f09_regression_fixtures_are_present_and_non_empty() {
+    // The two originally-named fixtures must keep their names; the rest are
+    // enumerated.
     for name in ["f09-minimized.bin", "f09-attribute-escape-round-trip.bin"] {
-        let bytes = fixture(name);
+        assert!(!fixture(name).is_empty(), "{name} is empty");
+    }
+    for (name, bytes) in fixtures() {
         assert!(!bytes.is_empty(), "{name} is empty");
         assert!(
             bytes.starts_with(b"#!liminal-explicit-v1"),
