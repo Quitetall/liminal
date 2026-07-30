@@ -101,15 +101,11 @@ impl ScratchDir {
         self.keep = true;
     }
 
-    /// Give up ownership, returning the path and leaving the directory behind.
-    ///
-    /// For the rare caller that must outlive the guard. Reintroduces the leak
-    /// for that one directory, so prefer holding the [`ScratchDir`].
-    #[must_use]
-    pub fn into_path(mut self) -> Utf8PathBuf {
-        self.keep = true;
-        self.path.clone()
-    }
+    // NOTE: there is deliberately no `into_path`/`leak` escape hatch. An earlier
+    // draft had one "for the rare caller that must outlive the guard"; no such
+    // caller exists, and a public method whose entire purpose is to reintroduce
+    // F-12 is an attractive nuisance in a crate that exists to close it. Add one
+    // only alongside the call site that genuinely needs it.
 }
 
 impl Drop for ScratchDir {

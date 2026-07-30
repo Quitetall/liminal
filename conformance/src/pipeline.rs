@@ -254,6 +254,9 @@ pub fn replay_trace(trace: &Trace) -> anyhow::Result<TraceReplay> {
         graph: setup.graph.clone(),
         buffers: Vec::new(),
     };
+    // `root` is the scratch GUARD and must outlive the runner: the executor
+    // holds a copy of the path, and dropping `root` early would delete the
+    // directory out from under it (M17.5 F-12).
     let mut runner = StepRunner::open(
         &root,
         &runner_setup,
