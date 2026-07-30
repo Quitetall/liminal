@@ -2,21 +2,14 @@
 //! never silently served. Partially REAL today against the toy store; the
 //! content-addressed object-store variant arrives with `liminal-resource`.
 
-use camino::Utf8PathBuf;
 use liminal_graph::{GraphStore, Node, NodeFlags, Operation, Origin, PayloadRef, TxnMeta};
 use liminal_id::{KindId, NodeId, RevisionId, Timestamp};
 
-fn fresh_dir(name: &str) -> Utf8PathBuf {
-    let dir = Utf8PathBuf::from(std::env::temp_dir().to_str().unwrap()).join(format!(
-        "liminal-conf-corrupt-{name}-{}-{:x}",
-        std::process::id(),
-        Timestamp::now().0
-    ));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
+fn fresh_dir(name: &str) -> liminal_scratch::ScratchDir {
+    liminal_scratch::ScratchDir::new(&format!("conf-corrupt-{name}")).expect("scratch dir")
 }
 
-fn seed_store(dir: &Utf8PathBuf) {
+fn seed_store(dir: &camino::Utf8Path) {
     let store = GraphStore::open(dir).unwrap();
     let mut txn = store.begin().unwrap();
     txn.apply(Operation::CreateNode {

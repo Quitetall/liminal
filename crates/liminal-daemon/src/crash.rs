@@ -98,11 +98,13 @@ mod tests {
 
     #[test]
     fn unarmed_injector_traces_without_dying() {
-        let dir = std::env::temp_dir().join(format!("liminal-crash-trace-{}", std::process::id()));
-        let _ = std::fs::remove_file(&dir);
+        // The trace is a FILE, so it lives inside a scratch dir that removes
+        // itself (M17.5 F-12) rather than being written straight into /tmp.
+        let scratch = liminal_scratch::ScratchDir::new("crash-trace").expect("scratch dir");
+        let dir = scratch.join("crash-trace.log");
         let injector = EnvCrashInjector {
             armed: None,
-            trace_path: Some(dir.to_str().unwrap().to_owned()),
+            trace_path: Some(dir.to_string()),
             hits: Mutex::new(Vec::new()),
         };
         injector.crash_if_armed(CrashPoint::BeforeIntentCommit);

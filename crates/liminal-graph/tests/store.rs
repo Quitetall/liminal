@@ -4,7 +4,7 @@
 //! Every durability assertion re-opens the store fresh — nothing is trusted
 //! from the writing handle's memory.
 
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use liminal_graph::{GraphStore, Node, NodeFlags, Operation, Origin, PayloadRef, TxnMeta};
 use liminal_id::{KindId, NodeId, RevisionId, Timestamp};
 use proptest::prelude::*;
@@ -19,14 +19,10 @@ fn meta() -> TxnMeta {
     }
 }
 
-fn fresh_dir(name: &str) -> Utf8PathBuf {
-    let dir = Utf8PathBuf::from(std::env::temp_dir().to_str().unwrap()).join(format!(
-        "liminal-store-test-{name}-{}-{:x}",
-        std::process::id(),
-        Timestamp::now().0
-    ));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
+/// A scratch store directory that removes itself (M17.5 F-12). Hold the
+/// returned guard for as long as the store is needed.
+fn fresh_dir(name: &str) -> liminal_scratch::ScratchDir {
+    liminal_scratch::ScratchDir::new(&format!("store-test-{name}")).expect("scratch dir")
 }
 
 fn create_node(store: &GraphStore, text: &str) -> NodeId {
@@ -46,7 +42,7 @@ fn create_node(store: &GraphStore, text: &str) -> NodeId {
     id
 }
 
-fn log_segment_path(dir: &Utf8PathBuf) -> Utf8PathBuf {
+fn log_segment_path(dir: &Utf8Path) -> Utf8PathBuf {
     dir.join("log.000000.ndjson")
 }
 

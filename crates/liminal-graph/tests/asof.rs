@@ -2,7 +2,6 @@
 //! and `state_at(r)` is stable across a snapshot rotation (segments are never
 //! GC'd, so genesis replay always reconstructs the same historical state).
 
-use camino::Utf8PathBuf;
 use liminal_graph::{GraphStore, Node, NodeFlags, Operation, Origin, PayloadRef, TxnMeta};
 use liminal_id::{GraphRevisionId, KindId, NodeId, RevisionId, Timestamp};
 use proptest::prelude::*;
@@ -17,14 +16,9 @@ fn meta() -> TxnMeta {
     }
 }
 
-fn fresh_dir(name: &str) -> Utf8PathBuf {
-    let dir = Utf8PathBuf::from(std::env::temp_dir().to_str().unwrap()).join(format!(
-        "liminal-asof-{name}-{}-{:x}",
-        std::process::id(),
-        Timestamp::now().0
-    ));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
+/// A scratch store directory that removes itself (M17.5 F-12).
+fn fresh_dir(name: &str) -> liminal_scratch::ScratchDir {
+    liminal_scratch::ScratchDir::new(&format!("asof-{name}")).expect("scratch dir")
 }
 
 /// Append one text node, returning its id and the revision it was created at.

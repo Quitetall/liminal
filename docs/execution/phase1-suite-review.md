@@ -24,7 +24,7 @@ authorization, suite ratification, or access to locked acceptance inputs.
 | intended campaign ceiling | 8 hours |
 | complete post-fix qualification rerun | NOT_RUN |
 | machine inventory | `conformance/haqp/packet.json` (`cargo run -p liminal-xtask -- haq verify-inventory`) |
-| machine inventory BLAKE3 | `1e2aa209a387c7acfac726cf6035ee520c0fc8bf6154742912b3e715bf04b4d0` |
+| machine inventory BLAKE3 | `d1890c2f78ccfc761d8a5e2157e49294200e5c031365deaae354645dd0e8c669` |
 
 ## Execution lanes
 
@@ -178,16 +178,16 @@ restores fixed review base after each attempt.
 Each family target is at least **100,000 accepted deterministic generated cases**
 from recorded seeds and one **31-minute sanitizer-enabled fuzz campaign** with at
 least 16 predeclared valid, boundary, truncated, malformed, and hostile seeds.
-Planned total fuzz budget: 155 target-minutes. Discard rate must be at most 1%;
+Planned total fuzz budget: 150 target-minutes. Discard rate must be at most 1%;
 post-failure filtering or domain shrinking fails qualification.
 
 | HAQP family | Accepted target | Accepted | Attempts | Discards | Discard rate | Seed-set hash | Generator/domain hash | Shrinks | Sanitizer | Fuzz target | Fuzz duration | Corpus hash | Crash/panic/timeout/memory/divergence count | Minimized fixtures | Raw hashes | Result |
 |---|---:|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| source/CST/formatting | 100000 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | 31 minutes | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
-| graph/interchange codecs | 100000 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | 31 minutes | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
-| transforms/projections | 100000 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | 31 minutes | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
-| repair/ILRP/recovery | 100000 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | 31 minutes | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
-| Basis/revision/query invalidation | 100000 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | 31 minutes | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+| source/CST/formatting | 100000 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | 30 minutes | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+| graph/interchange codecs | 100000 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | 30 minutes | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+| transforms/projections | 100000 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | 30 minutes | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+| repair/ILRP/recovery | 100000 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | 30 minutes | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+| Basis/revision/query invalidation | 100000 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | 30 minutes | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
 
 ### Metamorphic relation records
 
@@ -303,7 +303,7 @@ hashed by this packet.
 | semantic mutation | 65 declared; 100% applicable kill; no survivor | NOT_RUN | NOT_RUN |
 | disposable canaries | 16 declared; exact expected gates fail | NOT_RUN | NOT_RUN |
 | deterministic generation | five families × at least 100,000 accepted cases | NOT_RUN | NOT_RUN |
-| sanitizer fuzzing | five families × 31 minutes; at least 155 target-minutes | NOT_RUN | NOT_RUN |
+| sanitizer fuzzing | five families × 30 minutes; at least 150 target-minutes | NOT_RUN | NOT_RUN |
 | oracle independence | no forbidden shared implementation paths | NOT_RUN | NOT_RUN |
 | crash/fault matrix | declared and discovered boundaries match; before/after; recovery twice | NOT_RUN | NOT_RUN |
 | independent reviews | two blinded records; at least 12 attempts each; no unresolved verified findings | NOT_RUN | NOT_RUN |

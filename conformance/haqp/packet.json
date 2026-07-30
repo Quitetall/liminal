@@ -1631,8 +1631,8 @@
   {
    "id": "C13",
    "gate": "fuzz",
-   "violation": "fuzz minutes below 31",
-   "expected_failure": "fuzz minutes below 31",
+   "violation": "fuzz minutes below 30",
+   "expected_failure": "fuzz minutes below 30",
    "result": "predeclared"
   },
   {
@@ -1663,7 +1663,7 @@
    "accepted": 100000,
    "attempts": 100204,
    "discards": 204,
-   "fuzz_minutes": 31,
+   "fuzz_minutes": 30,
    "seed_categories": [
     "empty",
     "single-token",
@@ -1691,7 +1691,7 @@
    "accepted": 100000,
    "attempts": 100133,
    "discards": 133,
-   "fuzz_minutes": 31,
+   "fuzz_minutes": 30,
    "seed_categories": [
     "empty",
     "single-node",
@@ -1719,7 +1719,7 @@
    "accepted": 100000,
    "attempts": 100000,
    "discards": 0,
-   "fuzz_minutes": 31,
+   "fuzz_minutes": 30,
    "seed_categories": [
     "identity",
     "insert",
@@ -1747,7 +1747,7 @@
    "accepted": 100000,
    "attempts": 100242,
    "discards": 242,
-   "fuzz_minutes": 31,
+   "fuzz_minutes": 30,
    "seed_categories": [
     "prepared",
     "applying",
@@ -1775,7 +1775,7 @@
    "accepted": 100000,
    "attempts": 100260,
    "discards": 260,
-   "fuzz_minutes": 31,
+   "fuzz_minutes": 30,
    "seed_categories": [
     "empty-basis",
     "single-revision",

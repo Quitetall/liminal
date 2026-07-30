@@ -190,12 +190,9 @@ pub enum StageError {
 mod tests {
     use super::*;
 
-    fn tmp_dir(name: &str) -> Utf8PathBuf {
-        let dir = Utf8PathBuf::from(std::env::temp_dir().to_str().unwrap())
-            .join(format!("liminal-source-test-{name}-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        dir
+    /// A scratch directory that removes itself (M17.5 F-12).
+    fn tmp_dir(name: &str) -> liminal_scratch::ScratchDir {
+        liminal_scratch::ScratchDir::new(&format!("source-test-{name}")).expect("scratch dir")
     }
 
     #[test]

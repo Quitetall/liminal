@@ -6,7 +6,7 @@
 
 use std::process::Command;
 
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
 use rand::Rng;
 use rand::rngs::SmallRng;
 
@@ -137,20 +137,13 @@ pub fn hermetic_env(home: &Utf8Path) -> Vec<(String, String)> {
 ///
 /// # Errors
 /// If the directory cannot be created.
-pub fn case_tmpdir(label: &str) -> anyhow::Result<Utf8PathBuf> {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-    let base = Utf8PathBuf::from_path_buf(std::env::temp_dir())
-        .map_err(|p| anyhow::anyhow!("non-UTF-8 temp dir: {}", p.display()))?;
-    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let pid = std::process::id();
-    let dir = base.join(format!("liminal-identity/{pid}-{n}-{label}"));
-    if dir.exists() {
-        std::fs::remove_dir_all(&dir)?;
-    }
-    std::fs::create_dir_all(&dir)?;
-    Ok(dir)
+pub fn case_tmpdir(label: &str) -> anyhow::Result<liminal_scratch::ScratchDir> {
+    // M17.5 F-12: this built the path by hand and never removed it. The returned
+    // guard now removes the case repo when the caller drops it, or retains it if
+    // the caller is panicking.
+    Ok(liminal_scratch::ScratchDir::new(&format!(
+        "identity-{label}"
+    ))?)
 }
 
 /// Run one `git` command in `repo` with the hermetic environment, returning it
@@ -200,8 +193,8 @@ pub fn run_git_op(
 /// [`run_git_op`], additionally returning the hermetic case repo's path so a
 /// caller can walk its history afterwards (M11 Algorithm B: `tracegen git`
 /// replays an M07 op script and walks `git log --reverse` diffs). The repo
-/// is a scratch temp dir; the caller may read it freely and need not clean
-/// it up (same lifetime rules as every other [`case_tmpdir`] case).
+/// is a scratch temp dir; the caller may read it freely, and the returned
+/// guard removes it on drop (M17.5 F-12) unless the caller is panicking.
 ///
 /// # Errors
 /// Propagates any git command failure or a below-floor `git`.
@@ -211,7 +204,7 @@ pub fn run_git_op_with_repo(
     seed: u64,
     rng: &mut SmallRng,
     cfg: &Config,
-) -> anyhow::Result<(OpOutput, Utf8PathBuf)> {
+) -> anyhow::Result<(OpOutput, liminal_scratch::ScratchDir)> {
     let repo = case_tmpdir(&format!("{}-seed{seed}", op.name()))?;
 
     // 1-2: init + base commit.

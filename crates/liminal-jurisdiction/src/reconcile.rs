@@ -130,16 +130,14 @@ mod tests {
     use super::*;
     use liminal_id::NodeId;
 
-    /// A fresh scratch store dir under the system temp, cleaned on entry.
-    fn scratch_store(label: &str) -> GraphStore {
-        let dir = camino::Utf8PathBuf::from(std::env::temp_dir().to_str().unwrap()).join(format!(
-            "liminal-reconcile-{label}-{}-{:x}",
-            std::process::id(),
-            Timestamp::now().0
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        GraphStore::open(&dir).expect("open store")
+    /// A fresh scratch store that removes its directory on drop (M17.5 F-12).
+    /// The guard is returned alongside the store because dropping it deletes the
+    /// directory the store is reading.
+    fn scratch_store(label: &str) -> (GraphStore, liminal_scratch::ScratchDir) {
+        let dir =
+            liminal_scratch::ScratchDir::new(&format!("reconcile-{label}")).expect("scratch dir");
+        let store = GraphStore::open(&dir).expect("open store");
+        (store, dir)
     }
 
     fn item(root_cause: &str, subject: JurisdictionSubject) -> ReconciliationItem {
@@ -159,7 +157,7 @@ mod tests {
     /// inflating the queue with a second visible incident (R4 §2.3).
     #[test]
     fn same_root_cause_coalesces_under_the_first_id() {
-        let store = scratch_store("coalesce");
+        let (store, _scratch) = scratch_store("coalesce");
         let queue = ReconciliationQueue { store: &store };
 
         let s1 = JurisdictionSubject::Node(NodeId::new());
@@ -201,7 +199,7 @@ mod tests {
     /// remain two distinct visible items.
     #[test]
     fn different_root_cause_stays_separate() {
-        let store = scratch_store("separate");
+        let (store, _scratch) = scratch_store("separate");
         let queue = ReconciliationQueue { store: &store };
 
         let meta = liminal_graph::TxnMeta {

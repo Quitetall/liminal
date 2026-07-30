@@ -19,8 +19,7 @@ fn pandoc_version_pinned() {
 fn declared_level_matches_loss_report() {
     let root = camino::Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let fixture = root.join("fixtures/conversion-loss/pandoc");
-    let workdir = camino::Utf8PathBuf::from(std::env::temp_dir().to_str().expect("utf8 tmp"))
-        .join(format!("liminal-m10-level-{}", std::process::id()));
+    let workdir = liminal_scratch::ScratchDir::new("m10-level").expect("scratch dir");
     let measurement = pandoc::measure(&fixture, &workdir).expect("measurement runs");
     assert_eq!(
         measurement.declared_level(),

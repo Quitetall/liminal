@@ -779,7 +779,7 @@ is latent rather than reported — the same shape as F-14.
 
 ---
 
-## F-18 — MAJOR. The packet's fuzz budget exceeds what ADR-0020 requires, and the packet was populated to fit the verifier rather than the campaign.
+## F-18 — MAJOR. **RESOLVED (option 1, Brian's ruling).** The packet's fuzz budget exceeded what ADR-0020 requires, and the packet was populated to fit the verifier rather than the campaign.
 
 **Found by a failing test I wrote for the wrong threshold**, which is the only
 reason the numbers were ever compared.
@@ -809,8 +809,8 @@ A verifier stricter than the ADR is a false RED rather than a false green, which
 is the safer direction, but it did real harm here: it pulled a fabricated
 figure into the packet.
 
-**NOT fixed — the disposition is Brian's**, because the two branches differ in
-cost by 150 minutes of machine time:
+**Brian's ruling: option 1 — follow the ADR.** The two branches differed in cost
+by 150 minutes of machine time:
 
 1. **Align the verifier to the ADR** (`fuzz_minutes >= 30`, total `>= 150`) and
    correct `packet.json` to 30. Cheap. Ripples: C13's `violation` and
@@ -823,8 +823,28 @@ cost by 150 minutes of machine time:
    sanitizer campaign, and under §1 a rerun is required anyway once any verified
    fix lands, so this may be nearly free if sequenced with the eventual rerun.
 
-Option 1 is the recommendation: the ADR is canonical, and a threshold invented
-by a verifier should not silently redefine the protocol it is checking.
+Option 1 taken: the ADR is canonical, and a threshold invented by a verifier
+does not get to redefine the protocol it is checking. No rerun needed — the
+committed campaign already satisfies the ADR at 150 target-minutes.
+
+### What the fix touched, and what nearly got missed
+
+`verify_generated_inventory` now reads `< 30` and `< 150`, and `packet.json`
+carries `fuzz_minutes: 30`. The ripple was wider than the digest alone:
+
+- C13's `violation` AND `expected_failure` both quoted "below 31", so the canary
+  row changed with the message it asserts on. The canary evidence hash moved
+  from `53ea6c8a` to `6eec3a94` as a result, which is the expected consequence
+  rather than a surprise.
+- `mutate_canary`'s C13 arm returns that same string, now bound to the packet by
+  pass-2 #22 — so the three had to move together or the runner would have caught
+  the disagreement. That binding did its job on its first real edit.
+- `docs/execution/phase1-suite-review.md` carried the stale numbers in **six**
+  more places beyond the digest: five per-family "31 minutes" table cells and
+  the "155 target-minutes" planned budget, plus the summary row "five families ×
+  31 minutes; at least 155 target-minutes". The digest gate would NOT have
+  caught these — it hashes the packet, not the prose around it. Found by
+  grepping for the numbers rather than by trusting the gate.
 
 **What this commit DID do:** added the per-target floor the ADR does state
 (30 minutes), so one long target can no longer carry the 150-minute total while
@@ -833,7 +853,7 @@ at the call site.
 
 ---
 
-## F-12 UPDATE — the scratch leak is now a HARD BLOCKER on the mutation measurement, and it is broader than first recorded.
+## F-12 — **RESOLVED (Brian's ruling: fix it, to unblock Track C).** The scratch leak was a hard blocker on the mutation measurement, and broader than first recorded.
 
 Measured this session rather than estimated.
 
@@ -910,3 +930,47 @@ point, since an earlier draft listed those fragments in backticks and took
 
 **Standing correction to method:** never read a gate's result through a pipe.
 Redirect to a file and test `$?` directly.
+
+
+### Resolution
+
+`crates/liminal-scratch` — a `ScratchDir` guard that removes its directory on
+drop. 27 sites across 21 files now use it.
+
+**Measured, not asserted.** One `cargo test --workspace --all-targets`:
+
+| | leaked directories | per-run scratch |
+| --- | --- | --- |
+| before | **250** | ~400 MB |
+| after | **0** | 0 |
+
+Projected against the campaign that was blocked: 2915 mutants × 400 MB ≈ 1.1 TB
+becomes zero.
+
+**Retention policy — the reason nothing deleted scratch before.** Deleting
+unconditionally would throw away exactly the file world a failed replay needs.
+So `Drop` checks `std::thread::panicking()`: a **failing** test keeps its
+directory, with no flag, no foresight and no rerun needed. `LIMINAL_KEEP_SCRATCH`
+retains a *passing* run's scratch for anyone watching one. Retained paths are
+printed, so a failing run says where its evidence went. Nothing that could be
+wanted from a failure is discarded, and success does not accumulate.
+
+Two self-tests pin both halves, and the retention half matters as much as the
+deletion half: if it ever stopped holding, a failing test would delete its own
+diagnosis, and the pressure to revert to leaking-by-default would return.
+
+**Migration shape.** `ToyRun` was the single largest source — one directory per
+scenario per test. It keeps its public `root: Utf8PathBuf` field and gained a
+private guard, so all 35 `ToyRun::new` call sites are untouched. Elsewhere
+`ScratchDir` derefs to `Utf8Path`, so most helpers changed only their return
+type.
+
+**Known limit, documented in the crate:** `Drop` does not run when a process is
+killed or aborts, so the crash-injection suite's deliberate `SIGABRT` still
+leaks a handful of directories per run. Those are the parent's to own, which is
+a larger change than F-12 needs.
+
+**One rationalization found in the wild**, in `benches/benches/liminal.rs`:
+*"Deliberately never cleaned up — the OS owns its temp dir."* Nothing reclaims
+`/tmp` until reboot; it is tmpfs here, so the leak was resident in RAM. The
+comment now records what replaced it.

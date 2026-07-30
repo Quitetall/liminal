@@ -11,8 +11,7 @@
 fn pandoc_roundtrip_loss_matches_golden() {
     let root = camino::Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let fixture = root.join("fixtures/conversion-loss/pandoc");
-    let workdir = camino::Utf8PathBuf::from(std::env::temp_dir().to_str().expect("utf8 tmp"))
-        .join(format!("liminal-m10-loss-{}", std::process::id()));
+    let workdir = liminal_scratch::ScratchDir::new("m10-loss").expect("scratch dir");
     let measurement =
         liminal_conformance::pandoc::measure(&fixture, &workdir).expect("measurement runs");
     let rendered = liminal_conformance::pandoc::loss_report(&measurement);

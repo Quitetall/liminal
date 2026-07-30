@@ -11,13 +11,12 @@ use std::process::Command;
 /// Windows crash semantics are a Phase 2 concern).
 const SIGABRT: i32 = 6;
 
-/// Scratch dir keyed by test name + pid to avoid collisions in parallel runs.
-fn scratch_dir(label: &str) -> std::path::PathBuf {
-    let dir =
-        std::env::temp_dir().join(format!("liminal-crash-test-{label}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+/// Scratch dir that removes itself (M17.5 F-12).
+///
+/// These tests deliberately raise `SIGABRT` in a CHILD process; this directory
+/// belongs to the parent, which unwinds normally, so the guard still runs.
+fn scratch_dir(label: &str) -> liminal_scratch::ScratchDir {
+    liminal_scratch::ScratchDir::new(&format!("crash-test-{label}")).expect("scratch dir")
 }
 
 #[test]

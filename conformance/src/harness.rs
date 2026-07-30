@@ -194,18 +194,24 @@ pub struct RecoveryReport {
 pub struct ToyRun {
     /// Workspace root.
     pub root: Utf8PathBuf,
+    /// Owns the scratch directory's lifetime (M17.5 F-12). `ToyRun` was the
+    /// single largest source of the leak — one directory per scenario per test,
+    /// thousands per campaign — because nothing ever removed `root`. Held as a
+    /// private guard so all 35 `ToyRun::new` call sites keep using `.root`
+    /// unchanged; dropping the `ToyRun` now takes the workspace with it, unless
+    /// the test failed.
+    _scratch: liminal_scratch::ScratchDir,
 }
 
 impl ToyRun {
     /// Create a fresh scratch workspace.
     pub fn new(label: &str) -> anyhow::Result<Self> {
-        let root = Utf8PathBuf::from(std::env::temp_dir().to_str().unwrap()).join(format!(
-            "liminal-toyrun-{label}-{}-{:x}",
-            std::process::id(),
-            liminal_id::Timestamp::now().0
-        ));
-        std::fs::create_dir_all(&root)?;
-        Ok(Self { root })
+        let scratch = liminal_scratch::ScratchDir::new(&format!("toyrun-{label}"))?;
+        let root = scratch.path().to_owned();
+        Ok(Self {
+            root,
+            _scratch: scratch,
+        })
     }
 
     /// Run `lim-toy exec <root> <scenario>` with NO fault armed and NO trace

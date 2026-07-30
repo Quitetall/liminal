@@ -170,11 +170,12 @@ fn s(v: &str) -> toml::Value {
 }
 
 /// A fresh scratch workspace root for one trace replay.
-fn scratch_root(trace_id: &str) -> anyhow::Result<Utf8PathBuf> {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let base = Utf8PathBuf::from_path_buf(std::env::temp_dir())
-        .map_err(|p| anyhow::anyhow!("non-UTF-8 temp dir: {}", p.display()))?;
+///
+/// M17.5 F-12: this used to build the path by hand and never remove it — it
+/// only cleaned a directory it was about to REUSE, which a globally unique
+/// component guarantees never happens. `ScratchDir` keeps the uniqueness and
+/// adds the removal, retaining the workspace when a replay fails.
+fn scratch_root(trace_id: &str) -> anyhow::Result<liminal_scratch::ScratchDir> {
     let clean: String = trace_id
         .chars()
         .map(|c| {
@@ -185,26 +186,16 @@ fn scratch_root(trace_id: &str) -> anyhow::Result<Utf8PathBuf> {
             }
         })
         .collect();
-    // Isolation must not depend on the test runner. nextest gives every test
-    // its own PROCESS, so `pid` alone sufficed there; `cargo test` (which
-    // cargo-mutants uses) runs tests as THREADS in one process, where two
-    // replays could contend for the same store lock. Keying on the thread as
-    // well makes the scratch root unique under either runner (M17.5 F-11).
-    // A globally unique component removes path collision as a possible cause
-    // entirely: pid+counter only isolated because nextest gives each test its
-    // own process, and `cargo test` (which cargo-mutants drives) runs tests as
-    // threads in one process (M17.5 F-11).
+    // Isolation must not depend on the test runner. nextest gives every test its
+    // own PROCESS, so `pid` alone sufficed there; `cargo test` (which
+    // cargo-mutants drives) runs tests as THREADS in one process, where two
+    // replays could contend for the same store lock. `ScratchDir` carries pid,
+    // a process-wide counter and a nanosecond stamp, so the root is unique under
+    // either runner (M17.5 F-11).
     let unique = liminal_id::TransactionId::new();
-    let dir = base.join(format!(
-        "liminal-pipeline/{}-{}-{unique}-{clean}",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    ));
-    if dir.exists() {
-        std::fs::remove_dir_all(&dir)?;
-    }
-    std::fs::create_dir_all(&dir)?;
-    Ok(dir)
+    Ok(liminal_scratch::ScratchDir::new(&format!(
+        "pipeline-{unique}-{clean}"
+    ))?)
 }
 
 /// Holder-unavailable intervals `[from, to]` per the trace's own timeline
@@ -263,8 +254,12 @@ pub fn replay_trace(trace: &Trace) -> anyhow::Result<TraceReplay> {
         graph: setup.graph.clone(),
         buffers: Vec::new(),
     };
-    let mut runner =
-        StepRunner::open(&root, &runner_setup, FsExecutor::new(root.clone()), NoCrash)?;
+    let mut runner = StepRunner::open(
+        &root,
+        &runner_setup,
+        FsExecutor::new(root.path().to_owned()),
+        NoCrash,
+    )?;
 
     // ── Trace-level accounting state. ──
     let per_event_ops = denominator::per_event_ops(events);
@@ -390,7 +385,7 @@ pub fn replay_trace(trace: &Trace) -> anyhow::Result<TraceReplay> {
                 }
                 let mut ancestor = abs.parent();
                 while let Some(a) = ancestor {
-                    if a == root {
+                    if a == root.path() {
                         break;
                     }
                     if a.is_file() {

@@ -124,10 +124,8 @@ fn git_delivery_events_not_double_counted() {
 /// byte-delivery contract Algorithm A's double-count guard keys on).
 #[test]
 fn tracegen_git_produces_replayable_trace() {
-    let out = Utf8PathBuf::from(std::env::temp_dir().to_str().expect("utf8 tmp")).join(format!(
-        "liminal-m11-tracegen-{}/git-merge-11.trace.ndjson",
-        std::process::id()
-    ));
+    let scratch = liminal_scratch::ScratchDir::new("m11-tracegen").expect("scratch dir");
+    let out = scratch.join("git-merge-11.trace.ndjson");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_tracegen"))
         .args(["git", "git_merge@11", out.as_str()])
         .status()
@@ -177,11 +175,8 @@ fn tracegen_git_produces_replayable_trace() {
 /// (the manifest never hashes itself into the next manifest).
 #[test]
 fn gen_manifest_output_passes_verifier() {
-    let dir = Utf8PathBuf::from(std::env::temp_dir().to_str().expect("utf8 tmp"))
-        .join(format!("liminal-m11-genmanifest-{}/v9", std::process::id()));
-    if dir.exists() {
-        std::fs::remove_dir_all(&dir).expect("clean scratch");
-    }
+    let scratch = liminal_scratch::ScratchDir::new("m11-genmanifest").expect("scratch dir");
+    let dir = scratch.join("v9");
     std::fs::create_dir_all(dir.join("git")).expect("mkdirs");
     std::fs::write(dir.join("a.trace.ndjson"), "{}\n").expect("write");
     std::fs::write(dir.join("git/b.trace.ndjson"), "{\"x\":1}\n").expect("write");
@@ -214,9 +209,7 @@ fn gen_manifest_output_passes_verifier() {
 /// than failing on the missing file.
 #[test]
 fn imported_trace_with_added_nested_file_replays() {
-    let root = Utf8PathBuf::from(std::env::temp_dir().to_str().expect("utf8"))
-        .join(format!("liminal-m11-import-add-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+    let root = liminal_scratch::ScratchDir::new("m11-import-add").expect("scratch dir");
     std::fs::create_dir_all(&root).expect("mkdir");
 
     let trace = concat!(
@@ -243,9 +236,7 @@ fn imported_trace_with_added_nested_file_replays() {
 /// through the one decode site and replays identically to its raw form.
 #[test]
 fn zstd_compressed_trace_replays_identically() {
-    let root = Utf8PathBuf::from(std::env::temp_dir().to_str().expect("utf8"))
-        .join(format!("liminal-m11-zst-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+    let root = liminal_scratch::ScratchDir::new("m11-zst").expect("scratch dir");
     let raw_corpus = root.join("raw");
     let zst_corpus = root.join("zst");
     std::fs::create_dir_all(&raw_corpus).expect("mkdir");
@@ -285,9 +276,7 @@ fn zstd_compressed_trace_replays_identically() {
 /// history says the path is NOW.
 #[test]
 fn imported_trace_with_dir_file_transitions_replays() {
-    let root = Utf8PathBuf::from(std::env::temp_dir().to_str().expect("utf8"))
-        .join(format!("liminal-m11-dirfile-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+    let root = liminal_scratch::ScratchDir::new("m11-dirfile").expect("scratch dir");
     let corpus = root.join("corpus");
     std::fs::create_dir_all(&corpus).expect("mkdir");
 

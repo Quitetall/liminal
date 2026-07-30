@@ -9,7 +9,6 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use camino::Utf8PathBuf;
 use liminal_graph::{
     GraphStore, Node, NodeFlags, Operation, Origin, PayloadRef, Relation, RelationFlags, Target,
     TxnMeta,
@@ -30,18 +29,16 @@ fn main() {
 /// sequentially, but several benches open stores under the same temp root).
 static SCRATCH: AtomicU64 = AtomicU64::new(0);
 
-/// Fresh scratch directory under the OS temp dir for a throwaway store.
-/// Deliberately never cleaned up — the OS owns its temp dir.
-fn scratch_dir(label: &str) -> Utf8PathBuf {
-    let base = Utf8PathBuf::from_path_buf(std::env::temp_dir())
-        .expect("OS temp dir must be UTF-8 (paths are Utf8PathBuf, v4 §44)");
+/// Fresh scratch directory for a throwaway store, removed when the returned
+/// guard drops (M17.5 F-12).
+///
+/// This used to say "deliberately never cleaned up — the OS owns its temp dir",
+/// which is the assumption F-12 disproved: nothing reclaims `/tmp` until reboot,
+/// it is tmpfs here so the leak is resident in RAM, and a benchmark sweep leaks
+/// one store per case.
+fn scratch_dir(label: &str) -> liminal_scratch::ScratchDir {
     let n = SCRATCH.fetch_add(1, Ordering::Relaxed);
-    let dir = base.join(format!(
-        "liminal-bench-{label}-{pid}-{n}",
-        pid = std::process::id()
-    ));
-    std::fs::create_dir_all(&dir).expect("create scratch store dir");
-    dir
+    liminal_scratch::ScratchDir::new(&format!("bench-{label}-{n}")).expect("create scratch store")
 }
 
 /// A minimal text Node (v4 §4) with a fresh id at physical revision 0.

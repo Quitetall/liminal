@@ -1969,7 +1969,7 @@ pub fn graph_before_file_is_refused() -> bool {
     let Ok(store) = GraphStore::open(&dir) else {
         return false;
     };
-    let executor = crate::executor::FsExecutor::new(dir.clone());
+    let executor = crate::executor::FsExecutor::new(dir.path().to_owned());
     let driver = IlrpDriver {
         store: &store,
         executor: &executor,
@@ -1986,16 +1986,9 @@ pub fn graph_before_file_is_refused() -> bool {
     )
 }
 
-/// A fresh scratch store dir under the system temp.
-fn tempdir_for(label: &str) -> anyhow::Result<Utf8PathBuf> {
-    let dir = Utf8PathBuf::from(std::env::temp_dir().to_str().unwrap()).join(format!(
-        "liminal-d044-{label}-{}-{:x}",
-        std::process::id(),
-        Timestamp::now().0
-    ));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir)?;
-    Ok(dir)
+/// A fresh scratch store dir that removes itself on drop (M17.5 F-12).
+fn tempdir_for(label: &str) -> anyhow::Result<liminal_scratch::ScratchDir> {
+    Ok(liminal_scratch::ScratchDir::new(&format!("d044-{label}"))?)
 }
 
 /// Build the `lim repairs` report lines (M04 Algorithm E), sorted by repair id

@@ -620,8 +620,13 @@ fn verify_generated_inventory(packet: &Packet) -> Result<()> {
         if family.discards * 100 > family.attempts {
             anyhow::bail!("{} discard rate exceeds 1%", family.family);
         }
-        if family.fuzz_minutes < 31 {
-            anyhow::bail!("{} fuzz minutes below 31", family.family);
+        // ADR-0020 line 90: one 30-minute sanitizer campaign per family. This
+        // demanded 31, and packet.json was populated with 31 to match — so the
+        // packet claimed 155 target-minutes while the campaign performed 150
+        // (M17.5 F-18). The ADR is canonical; a verifier does not get to
+        // redefine the protocol it checks.
+        if family.fuzz_minutes < 30 {
+            anyhow::bail!("{} fuzz minutes below 30", family.family);
         }
         if family.seed_categories.len() < 16 {
             anyhow::bail!("{} has fewer than 16 seed categories", family.family);
@@ -656,8 +661,9 @@ fn verify_generated_inventory(packet: &Packet) -> Result<()> {
         }
     }
     let total_minutes: u64 = packet.generated.iter().map(|row| row.fuzz_minutes).sum();
-    if total_minutes < 155 {
-        anyhow::bail!("total fuzz minutes below 155: {total_minutes}");
+    // ADR-0020 line 92: "Total fuzz budget is at least 150 target-minutes."
+    if total_minutes < 150 {
+        anyhow::bail!("total fuzz minutes below 150: {total_minutes}");
     }
     Ok(())
 }
@@ -1056,7 +1062,7 @@ fn mutate_canary(
         }
         "C13" => {
             packet.generated[0].fuzz_minutes = 0;
-            "fuzz minutes below 31"
+            "fuzz minutes below 30"
         }
         "C14" => {
             packet

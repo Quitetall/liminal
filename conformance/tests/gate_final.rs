@@ -356,12 +356,7 @@ fn one_projection_reaches_canonical_roundtrip_and_lenses_are_measured() {
     pandoc::assert_pandoc_pinned();
     let fixture = camino::Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("fixtures/conversion-loss/pandoc");
-    let workdir = camino::Utf8PathBuf::from(
-        std::env::temp_dir()
-            .to_str()
-            .expect("temporary directory is UTF-8"),
-    )
-    .join(format!("liminal-m12-pandoc-{}", std::process::id()));
+    let workdir = liminal_scratch::ScratchDir::new("m12-pandoc").expect("scratch dir");
     let measurement = pandoc::measure(&fixture, &workdir).expect("measure pandoc lens");
     assert_eq!(
         measurement.declared_level(),
@@ -664,14 +659,7 @@ fn denominators_frozen_and_split_locked() {
         "denominator arithmetic drifted"
     );
 
-    let empty_probe = camino::Utf8PathBuf::from(
-        std::env::temp_dir()
-            .to_str()
-            .expect("temporary directory is UTF-8"),
-    )
-    .join(format!("liminal-m12-empty-corpus-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&empty_probe);
-    std::fs::create_dir_all(&empty_probe).expect("create empty-corpus probe");
+    let empty_probe = liminal_scratch::ScratchDir::new("m12-empty-corpus").expect("scratch dir");
     std::fs::write(empty_probe.join("MANIFEST.b3"), b" \n")
         .expect("write whitespace manifest probe");
     let empty_error = liminal_conformance::harness::verify_heldout_manifest(&empty_probe)

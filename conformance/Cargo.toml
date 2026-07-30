@@ -43,6 +43,7 @@ liminal-format.workspace = true
 liminal-graph.workspace = true
 liminal-history.workspace = true
 liminal-id.workspace = true
+liminal-scratch.workspace = true
 liminal-jurisdiction.workspace = true
 liminal-source.workspace = true
 liminal-query.workspace = true

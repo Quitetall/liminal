@@ -7,7 +7,6 @@
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
-use camino::Utf8PathBuf;
 use liminal_graph::ns::ILRP_INTENT;
 use liminal_graph::{GraphStore, Origin, TxnMeta};
 use liminal_id::{
@@ -23,14 +22,9 @@ use liminal_jurisdiction::{
 };
 use liminal_revision::{BasisPerspective, WorkspaceBasis};
 
-fn fresh_dir(name: &str) -> Utf8PathBuf {
-    let dir = Utf8PathBuf::from(std::env::temp_dir().to_str().unwrap()).join(format!(
-        "liminal-ilrp-test-{name}-{}-{:x}",
-        std::process::id(),
-        Timestamp::now().0
-    ));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
+/// A scratch store directory that removes itself (M17.5 F-12).
+fn fresh_dir(name: &str) -> liminal_scratch::ScratchDir {
+    liminal_scratch::ScratchDir::new(&format!("ilrp-test-{name}")).expect("scratch dir")
 }
 
 fn empty_basis() -> WorkspaceBasis {

@@ -405,22 +405,16 @@ The Laplace transform generalizes it
 to the complex plane. {#p-laplace}
 ";
 
-    fn tmp_root(name: &str) -> camino::Utf8PathBuf {
-        let dir = camino::Utf8PathBuf::from(std::env::temp_dir().to_str().unwrap()).join(format!(
-            "liminal-queries-{name}-{}-{:x}",
-            std::process::id(),
-            liminal_id::Timestamp::now().0
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+    /// A scratch root that removes itself (M17.5 F-12).
+    fn tmp_root(name: &str) -> liminal_scratch::ScratchDir {
+        liminal_scratch::ScratchDir::new(&format!("queries-{name}")).expect("scratch dir")
     }
 
     /// Build a workspace with NOTES ingested and a comment Relation on
     /// p-fourier. Ingest happens on a first handle, then we drop it and reopen —
     /// `seed_durable_inputs` runs at open, so the reopened workspace's input map
     /// (which every Basis resolves from) reflects the ingested file.
-    fn workspace(name: &str) -> (camino::Utf8PathBuf, ToyWorkspace) {
+    fn workspace(name: &str) -> (liminal_scratch::ScratchDir, ToyWorkspace) {
         let root = tmp_root(name);
         std::fs::write(root.join("notes.md"), NOTES).unwrap();
         {

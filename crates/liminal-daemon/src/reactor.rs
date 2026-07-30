@@ -231,15 +231,9 @@ fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
 mod tests {
     use super::*;
 
-    fn tmp_root(name: &str) -> camino::Utf8PathBuf {
-        let dir = camino::Utf8PathBuf::from(std::env::temp_dir().to_str().unwrap()).join(format!(
-            "liminal-reactor-{name}-{}-{:x}",
-            std::process::id(),
-            Timestamp::now().0
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+    /// A scratch root that removes itself (M17.5 F-12).
+    fn tmp_root(name: &str) -> liminal_scratch::ScratchDir {
+        liminal_scratch::ScratchDir::new(&format!("reactor-{name}")).expect("scratch dir")
     }
 
     #[test]

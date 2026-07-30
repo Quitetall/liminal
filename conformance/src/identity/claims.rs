@@ -188,7 +188,7 @@ fn ingest_text(store: &GraphStore, path: &str, text: &str) {
 
 /// A fresh scratch directory for an in-process store (deterministic-ish label,
 /// removed if present so reruns start clean).
-fn tempdir_for(label: &str) -> camino::Utf8PathBuf {
+fn tempdir_for(label: &str) -> liminal_scratch::ScratchDir {
     crate::identity::gitenv::case_tmpdir(&format!("claims-{label}"))
         .expect("scratch dir for claims store")
 }
