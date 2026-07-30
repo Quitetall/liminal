@@ -160,7 +160,23 @@ fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
                 review.reviewer
             );
         };
-        let path = root.join(evidence);
+        // The packet is the very thing this verifier exists to distrust, so its
+        // paths are not taken on faith. `join` DISCARDS the base when handed an
+        // absolute path, so `evidence: "/etc/passwd"` would read straight out of
+        // the repository; `..` walks out just as effectively.
+        let candidate = Utf8Path::new(evidence);
+        if candidate.is_absolute()
+            || candidate
+                .components()
+                .any(|part| part == camino::Utf8Component::ParentDir)
+        {
+            anyhow::bail!(
+                "{} points its record at {evidence:?}, which escapes the repository; \
+                 evidence paths must be relative and contain no `..`",
+                review.reviewer
+            );
+        }
+        let path = root.join(candidate);
         let bytes = std::fs::read(&path).with_context(|| {
             format!(
                 "{path}: {} claims pass but its record is missing",
@@ -169,10 +185,14 @@ fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         })?;
         let record: serde_json::Value =
             serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))?;
+        // A missing or malformed `attempts` array must say so. Defaulting to 0
+        // would report "declares 12 attempts but its record contains 0", which
+        // blames the packet for what is actually an unreadable record.
         let recorded_attempts = record
             .get("attempts")
             .and_then(|value| value.as_array())
-            .map_or(0, Vec::len) as u64;
+            .with_context(|| format!("{path}: record has no `attempts` array"))?
+            .len() as u64;
         if recorded_attempts != review.attempts {
             anyhow::bail!(
                 "{} declares {} attempts but its record contains {recorded_attempts}",
@@ -1066,6 +1086,7 @@ struct CrashEvidence {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 struct CrashEvidenceBoundary {
     boundary: String,
     occurrences_exercised: u64,
@@ -2286,6 +2307,25 @@ mod tests {
             err.to_string().contains("no committed record"),
             "unexpected error: {err}"
         );
+    }
+
+    /// #20 hardening: the packet is the artifact this verifier distrusts, so an
+    /// evidence path that escapes the repository must be refused rather than
+    /// read. `join` discards its base when given an absolute path.
+    #[test]
+    fn review_lane_refuses_an_evidence_path_that_escapes_the_repo() {
+        let root = repo_root();
+        for escape in ["/etc/passwd", "../../../etc/passwd"] {
+            let mut packet = packet_from_repo();
+            packet.reviews[0].result = "pass".to_owned();
+            packet.reviews[0].evidence = Some(escape.to_owned());
+            let err = verify_review_evidence(&root, &packet)
+                .expect_err("an evidence path outside the repo must be refused");
+            assert!(
+                err.to_string().contains("escapes the repository"),
+                "{escape} produced the wrong error: {err}"
+            );
+        }
     }
 
     /// #18: the generated artifact must be byte-identical across runs, or it
