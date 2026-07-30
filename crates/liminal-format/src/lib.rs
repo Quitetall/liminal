@@ -351,10 +351,19 @@ fn emit_item(
             value_text(value)
         )),
         HirItemKind::OrderedBlock => {
+            // M17.5 F-21: an EMPTY ordered block used to emit `ordered;`, and
+            // M19's grammar has no such form — `ordered = "ordered", spacing,
+            // block`, with the block mandatory. The parser therefore read
+            // `ordered;` back as the literal string "ordered;", so
+            // `parse(emit(parse(x))) != parse(x)` for any document containing an
+            // empty ordered block. The block is always emitted now, empty or not.
+            //
+            // `node` is deliberately NOT changed alongside it. `node foo;` is the
+            // same grammar deviation, but the parser accepts a block-less node
+            // and reproduces it exactly, so it round-trips. Tightening the parser
+            // to match the grammar there is M19's call, not a fix this lane needs.
             out.push_str(&format!("{indent}ordered"));
-            if item.children.is_empty() {
-                out.push_str(";\n");
-            } else {
+            {
                 out.push_str(" {\n");
                 for child in &item.children {
                     emit_item(

@@ -1071,3 +1071,57 @@ capability gate, and the defect it guards is fixed. Meter: Phase 1 backlog
 
 Non-vacuity evidence: before the fix, both fixtures reported
 `round-trip equal = false` under lossy conversion; after it, both are true.
+
+
+---
+
+## F-21 — MAJOR. **RESOLVED.** An empty ordered block emitted a form the grammar does not have.
+
+**Found by the qualification-lane rerun that F-09's fix required** — that is, by
+doing the thing ADR-0020 §1 exists to force. F-09 was fixed, the lane was rerun
+from a clean tree, and `canonical_round_trip` failed again at 305s of its
+1800s budget with a fresh crash. Same defect CLASS as F-09, different cause:
+**the emitter produced text the parser could not read back.**
+
+### Root cause
+
+`emit_item` wrote `ordered;` for an ordered block with no children. M19's
+grammar has no such form:
+
+```ebnf
+ordered = "ordered", spacing, block ;
+block   = "{", spacing, { form, spacing }, "}" ;
+```
+
+The block is mandatory, and an empty one is `{ }`. So the parser read `ordered;`
+back as the literal string `"ordered;"`, and
+`parse(emit(parse(x))) != parse(x)` for any document containing an empty ordered
+block. The block is now always emitted.
+
+Isolated to four cases before fixing, which is what kept the fix from
+over-reaching:
+
+| source | emits | round-trips |
+| --- | --- | --- |
+| `ordered;` | `literal "ordered;";` | yes — the parser never accepted it as a form |
+| `node foo;` | `node foo;` | yes |
+| `ordered { }` | `ordered;` | **NO** |
+| `node foo { }` | `node foo;` | yes |
+
+`node` was deliberately left alone. `node foo;` is the same grammar deviation —
+the grammar makes `node`'s block mandatory too — but the parser accepts a
+block-less node and reproduces it exactly, so the law holds. Tightening the
+parser there is M19's call, not something this lane needs, and changing it would
+have been scope the finding did not justify.
+
+Promoted as `f21-empty-ordered-block.bin`; the corpus guard now requires ≥25
+fixtures and both tests were renamed, since the corpus is no longer F-09's alone.
+
+### What this says about the campaign
+
+The first campaign found F-09. Fixing F-09 and rerunning found F-21 — a defect
+the first campaign never reached, because it spent its `canonical_round_trip`
+budget crashing on F-09 after 305 of 1800 seconds. **A fuzz lane that stops early
+has not measured the budget it claims.** The `elapsed_s` coherence check added
+for F-17 flags exactly this shape, and here it is again in live data: 305s
+against an 1800s budget.

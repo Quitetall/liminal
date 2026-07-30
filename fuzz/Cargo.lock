@@ -274,6 +274,7 @@ dependencies = [
  "crc32fast",
  "fs4",
  "liminal-id",
+ "liminal-scratch",
  "serde",
  "serde_json",
  "thiserror",
@@ -321,11 +322,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "liminal-scratch"
+version = "0.0.0"
+dependencies = [
+ "camino",
+]
+
+[[package]]
 name = "liminal-source"
 version = "0.0.0"
 dependencies = [
  "camino",
  "liminal-id",
+ "liminal-scratch",
  "ropey",
  "serde",
  "thiserror",

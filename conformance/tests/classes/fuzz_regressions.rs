@@ -42,19 +42,26 @@ fn fixtures() -> Vec<(String, Vec<u8>)> {
         .collect();
     found.sort();
     assert!(
-        found.len() >= 24,
-        "the F-09 regression corpus has shrunk to {} fixtures; a corpus that \
+        found.len() >= 25,
+        "the canonical-round-trip regression corpus has shrunk to {} fixtures; a \
+         corpus that \
          quietly empties reports clean",
         found.len()
     );
     found
 }
 
-/// F-09 (M17.5 fuzz campaign, 2026-07-25): `parse(emit(parse(x))) != parse(x)`
-/// for an explicit-syntax document whose attribute region contains an
-/// unbalanced quote alongside `=`, `\r`, and `,`.
+/// Replays every fixture in the canonical-round-trip corpus. Two defects are
+/// represented, both of the same class — **the emitter produced text the parser
+/// could not read back**:
 ///
-/// **FIXED in M17.5** (ADR-0020 §1 required it before the qualification lane
+/// - **F-09** (campaign of 2026-07-25): an attribute region with an unbalanced
+///   quote alongside `=`, `\r`, and `,`.
+/// - **F-21** (rerun of 2026-07-30, found AFTER F-09 was fixed): an empty
+///   ordered block emitted as `ordered;`, which is not a form in M19's grammar
+///   and reparsed as the literal string `"ordered;"`.
+///
+/// **Both FIXED in M17.5** (ADR-0020 §1 required it before the qualification lane
 /// could be rerun; the diagnostic half remains M19's).
 ///
 /// Root cause, as diagnosed by the pass-1 review:
@@ -76,7 +83,7 @@ fn fixtures() -> Vec<(String, Vec<u8>)> {
 /// `from_utf8_lossy`; a regression harness that does not replay what the fuzzer
 /// ran is not a regression harness.
 #[test]
-fn f09_attribute_escape_round_trip_holds() {
+fn canonical_round_trip_regression_corpus_holds() {
     use liminal_format::Formatter;
 
     for (name, bytes) in fixtures() {
@@ -104,7 +111,7 @@ fn f09_attribute_escape_round_trip_holds() {
 /// corpus that quietly empties is worse than none, because the campaign would
 /// report clean. This runs unconditionally.
 #[test]
-fn f09_regression_fixtures_are_present_and_non_empty() {
+fn regression_fixtures_are_present_and_non_empty() {
     // The two originally-named fixtures must keep their names; the rest are
     // enumerated.
     for name in ["f09-minimized.bin", "f09-attribute-escape-round-trip.bin"] {
