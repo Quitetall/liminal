@@ -697,10 +697,36 @@ fn parse_trailing_attributes(rest: &str) -> BTreeMap<String, HirValue> {
         })
 }
 
+/// M19's grammar defines `assignment = ident, spacing, "=", spacing, value`
+/// with `ident = (ALPHA | "_"), { ALPHA | DIGIT | "_" | "." | ":" | "-" }`.
+///
+/// M17.5 F-09: this accepted ANY text before the `=` as an attribute name and
+/// stored it. `emit_attrs` writes names bare — `{name} = {value}` — so a name
+/// containing `"`, `,` or `=` produced source the parser could not read back:
+/// on the next pass the stray quote opened a string in `split_top_level`, the
+/// `=` was swallowed, and the attribute count changed. That broke
+/// `parse(emit(parse(x))) == parse(x)`, which is M19's exit gate and the
+/// evidence behind the declared capability level.
+///
+/// Names outside the grammar are dropped rather than stored. Reporting them as
+/// a typed diagnostic is M19's job (D19.x); what M17.5 needs is that the HIR
+/// only ever holds attributes the emitter can round-trip.
+fn is_ident(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !(first.is_ascii_alphabetic() || first == '_') {
+        return false;
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | ':' | '-'))
+}
+
 fn parse_attributes(value: &str) -> BTreeMap<String, HirValue> {
     split_top_level(value, ',')
         .into_iter()
         .filter_map(|part| part.split_once('='))
+        .filter(|(name, _)| is_ident(name.trim()))
         .map(|(name, value)| (name.trim().to_owned(), parse_value(value.trim())))
         .collect()
 }
@@ -726,6 +752,33 @@ fn split_top_level(value: &str, delimiter: char) -> Vec<&str> {
         }
         match ch {
             '"' => quoted = true,
+            '(' | '[' | '{' => depth = depth.saturating_add(1),
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            _ if ch == delimiter && depth == 0 => {
+                parts.push(&value[start..index]);
+                start = index + ch.len_utf8();
+            }
+            _ => {}
+        }
+    }
+    parts.push(&value[start..]);
+    // M17.5 F-09: an unterminated quote left `quoted` set for the rest of the
+    // input, so every remaining delimiter was swallowed and the field count
+    // depended on whether a quote happened to be balanced. A quote that never
+    // closes is not a string — rescan treating quotes as ordinary characters so
+    // splitting stays total and gives the same answer on every pass.
+    if quoted {
+        return split_ignoring_quotes(value, delimiter);
+    }
+    parts
+}
+
+fn split_ignoring_quotes(value: &str, delimiter: char) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut start = 0;
+    let mut depth = 0_u32;
+    for (index, ch) in value.char_indices() {
+        match ch {
             '(' | '[' | '{' => depth = depth.saturating_add(1),
             ')' | ']' | '}' => depth = depth.saturating_sub(1),
             _ if ch == delimiter && depth == 0 => {

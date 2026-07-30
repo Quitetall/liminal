@@ -19,40 +19,49 @@ fn fixture(name: &str) -> Vec<u8> {
 /// for an explicit-syntax document whose attribute region contains an
 /// unbalanced quote alongside `=`, `\r`, and `,`.
 ///
-/// Root cause, diagnosed but NOT yet fixed (the fix belongs to M19/M20
-/// execution, not M17):
+/// **FIXED in M17.5** (ADR-0020 §1 required it before the qualification lane
+/// could be rerun; the diagnostic half remains M19's).
 ///
-/// 1. `liminal_hir::schema::parse_value` silently falls back to storing the
-///    RAW source text — quotes and escape sequences included — when
-///    `parse_json_string` fails, instead of diagnosing malformed input. Emit
-///    then JSON-escapes that raw text, so the bytes differ on the next pass.
-/// 2. `split_top_level` leaves `quoted` open forever after an unbalanced
-///    quote, so a `,` separating two attributes is swallowed and the
-///    attribute COUNT changes across the round trip.
+/// Root cause, as diagnosed by the pass-1 review:
 ///
-/// The law this breaks is M19's exit gate and the evidence behind the
-/// declared Level 2 capability, so this test is `#[ignore]`d against the same
-/// Phase 1 tag as that gate rather than deleted or weakened: it is backlog,
-/// and it must go green by the milestone that earns the gate.
+/// 1. `parse_attributes` accepted ANY text before the `=` as an attribute name.
+///    M19's grammar says `assignment = ident, ...`, and `emit_attrs` writes
+///    names bare, so a name containing `"` emitted source the parser could not
+///    read back. Names outside the grammar are now dropped at parse time.
+/// 2. `split_top_level` left `quoted` open forever after an unbalanced quote,
+///    swallowing every later delimiter and changing the attribute COUNT across
+///    the round trip. An unterminated quote is not a string, so the split now
+///    rescans treating quotes as ordinary characters.
+///
+/// This test replays with `from_utf8_lossy`, NOT `from_utf8`. Both fixtures
+/// contain invalid UTF-8 — that is what the fuzzer found — and the previous
+/// `let Ok(source) = from_utf8(..) else { continue }` skipped both of them, so
+/// the regression guard would have reported success against either fixture no
+/// matter what the code did. `fuzz_targets/canonical_round_trip.rs` uses
+/// `from_utf8_lossy`; a regression harness that does not replay what the fuzzer
+/// ran is not a regression harness.
 #[test]
-#[ignore = "Phase 1: F-09 attribute-escape round trip (fix belongs to M19/M20)"]
 fn f09_attribute_escape_round_trip_holds() {
     use liminal_format::Formatter;
 
     for name in ["f09-minimized.bin", "f09-attribute-escape-round-trip.bin"] {
         let bytes = fixture(name);
-        let Ok(source) = std::str::from_utf8(&bytes) else {
-            continue; // the harness only replays UTF-8 inputs
-        };
+        let source = String::from_utf8_lossy(&bytes);
         let formatter = liminal_format::MarkdownFormatter::default();
-        let Ok(document) = formatter.parse(source) else {
-            continue;
-        };
+        let document = formatter
+            .parse(&source)
+            .unwrap_or_else(|e| panic!("{name}: parser must be total: {e:?}"));
         let emitted = formatter.emit(&document).expect("emit must be total");
         let round = formatter.parse(&emitted).expect("emitted must reparse");
         assert_eq!(
             round, document,
             "{name}: parse(emit(parse(x))) must equal parse(x)"
+        );
+        // The fuzz target asserts emit stability too; so must the regression.
+        assert_eq!(
+            formatter.emit(&round).expect("emit must be total"),
+            emitted,
+            "{name}: emit(parse(emit(x))) must equal emit(x)"
         );
     }
 }

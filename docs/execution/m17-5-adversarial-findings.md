@@ -1007,3 +1007,67 @@ reads as, and that is not what it measures.
 means and would need the markdown line regenerated once more; worth doing
 deliberately rather than as a side effect of another change. Recorded for the
 decision before qualification.
+
+
+---
+
+## F-09 — MAJOR. **RESOLVED (Brian's ruling: fix now, rerun the lane).** The canonical round-trip law failed on an emitted document the parser could not read back.
+
+Found by the HAQP-1 fuzz campaign (`canonical_round_trip`, 2026-07-25), minimized
+to `regression/phase1/canonical_round_trip/f09-minimized.bin`. It was the reason
+the committed fuzz evidence carried `exit_code: 1, artifacts: 1`, and therefore
+the reason `verify_fuzz_evidence` refused to qualify.
+
+### Root cause, reproduced before fixing
+
+M19's grammar is explicit:
+
+```ebnf
+assignment = ident, spacing, "=", spacing, value ;
+ident      = (ALPHA | "_"), { ALPHA | DIGIT | "_" | "." | ":" | "-" } ;
+```
+
+Two places ignored it:
+
+1. **`parse_attributes` accepted any text before `=` as a name.** `emit_attrs`
+   writes names BARE (`{name} = {value}`), so a name containing `"` emitted
+   source the parser could not read back — the stray quote opened a string on
+   the next pass and the `=` was swallowed.
+2. **`split_top_level` left `quoted` open forever** after an unbalanced quote,
+   so every later delimiter was consumed and the attribute COUNT changed across
+   the round trip.
+
+The emitted forms show it directly:
+
+```
+emit1: node {… (…"… = ",c");
+emit2: node {… (…"… = "\"");
+```
+
+No improvisation was needed to fix it: the grammar already said what is legal,
+and the parser was simply more permissive than the emitter could support.
+Non-`ident` names are now dropped at parse time, and an unterminated quote makes
+`split_top_level` rescan treating quotes as ordinary characters, so splitting is
+total and gives the same answer on every pass.
+
+Reporting malformed attributes as a TYPED DIAGNOSTIC remains M19's work. What
+M17.5 needed is narrower and is now true: the HIR only ever holds attributes the
+emitter can round-trip.
+
+### The regression guard was vacuous, which is the more alarming half
+
+`f09_attribute_escape_round_trip_holds` replayed its fixtures through
+`std::str::from_utf8` and `continue`d when that failed. **Both fixtures contain
+invalid UTF-8** — that is precisely what the fuzzer found — so both were skipped
+and the test would have reported success no matter what the code did. It was
+also `#[ignore]`d, so it never ran at all.
+
+`fuzz_targets/canonical_round_trip.rs` uses `from_utf8_lossy`. A regression
+harness that does not replay what the fuzzer ran is not a regression harness.
+The test now uses lossy conversion, asserts emit stability as the fuzz target
+does, and is no longer ignored — it is a regression guard, not a Phase 1
+capability gate, and the defect it guards is fixed. Meter: Phase 1 backlog
+8 → 7, active 316 → 317.
+
+Non-vacuity evidence: before the fix, both fixtures reported
+`round-trip equal = false` under lossy conversion; after it, both are true.
