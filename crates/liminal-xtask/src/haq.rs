@@ -1001,6 +1001,28 @@ impl Rng {
     fn below(&mut self, n: u64) -> u64 {
         self.next() % n.max(1)
     }
+    /// A deterministic identifier drawn from the seeded stream.
+    ///
+    /// M17.5 F-16: the generators minted ids with `NodeId::new()`,
+    /// `RepairStepId::new()` and friends, all of which are `Uuid::now_v7()` —
+    /// wall-clock milliseconds plus OS randomness. So the `seed` recorded in the
+    /// packet, whose stated purpose is to make the campaign reproducible under
+    /// ADR-0020 §1, did not reproduce a run: a crash at case 45,231 could not be
+    /// replayed from it. The defect stayed invisible because the digest absorbed
+    /// only RNG state, so nothing the ids touched ever reached the artifact.
+    ///
+    /// v5 (namespaced SHA-1 of the seeded bytes) rather than v7, because a
+    /// deterministic v7 would have to invent a timestamp. The ids are opaque to
+    /// every assertion here; nothing in these families depends on UUID version
+    /// or on time ordering. That is a mild strengthening: v7 ids arrive in
+    /// ascending creation order, so `topo_order` was only ever exercised on
+    /// plans whose id order agreed with insertion order.
+    fn uuid(&mut self) -> uuid::Uuid {
+        let mut bytes = [0_u8; 16];
+        bytes[..8].copy_from_slice(&self.next().to_le_bytes());
+        bytes[8..].copy_from_slice(&self.next().to_le_bytes());
+        uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, &bytes)
+    }
     fn word(&mut self) -> String {
         const ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789-_ ";
         let len = 1 + self.below(12);
@@ -1016,8 +1038,21 @@ impl Rng {
 /// Outcome of one generated case: the generator decides acceptance from the
 /// candidate itself, so `accepted`/`discards` are MEASURED, never assumed.
 enum Case {
-    /// In-domain and every metamorphic relation held.
-    Accepted,
+    /// In-domain and every metamorphic relation held. Carries a WITNESS of what
+    /// the code under test actually produced for this input.
+    ///
+    /// The witness exists because of M17.5 pass-2 #16. The evidence digest used
+    /// to absorb only the generator's RNG state, which made it a fingerprint of
+    /// the GENERATOR and provably independent of the code being tested: delete
+    /// every `ensure!` in every case function below and, so long as the number
+    /// of RNG draws is unchanged, the recorded `evidence_hash` is bit-identical.
+    /// Two different formatters would hash the same. A hash that cannot
+    /// distinguish the implementation from a no-op is not evidence about the
+    /// implementation.
+    ///
+    /// So each family now returns bytes derived from the output it observed, and
+    /// the runner folds those into the digest. An empty witness is refused.
+    Accepted(Vec<u8>),
     /// Out of the declared domain; not evidence either way.
     Discarded,
 }
@@ -1050,7 +1085,11 @@ fn case_source_cst(rng: &mut Rng) -> Result<Case> {
         .format(&once)
         .map_err(|e| anyhow::anyhow!("reformat failed: {e}"))?;
     anyhow::ensure!(once == twice, "formatting is not idempotent");
-    Ok(Case::Accepted)
+    // Witness: what the CST emitted and what the formatter produced. A changed
+    // formatter changes the digest.
+    let mut witness = cst.emit_lossless().into_bytes();
+    witness.extend_from_slice(once.as_bytes());
+    Ok(Case::Accepted(witness))
 }
 
 /// Family 1 — graph/interchange codecs.
@@ -1070,7 +1109,7 @@ fn case_interchange(rng: &mut Rng) -> Result<Case> {
         return Ok(Case::Discarded);
     }
     let node = Node {
-        id: liminal_id::NodeId::new(),
+        id: liminal_id::NodeId::from_uuid(rng.uuid()),
         kind: liminal_graph::KindId(u32::try_from(rng.below(8)).expect("kind fits")),
         payload: if rng.below(4) == 0 {
             PayloadRef::None
@@ -1092,7 +1131,8 @@ fn case_interchange(rng: &mut Rng) -> Result<Case> {
         once == twice,
         "interchange codec is not byte-canonical for {node:?}"
     );
-    Ok(Case::Accepted)
+    // Witness: the canonical encoding itself.
+    Ok(Case::Accepted(once))
 }
 
 /// Family 2 — transforms/projections.
@@ -1129,7 +1169,8 @@ fn case_transform(rng: &mut Rng) -> Result<Case> {
     let theirs = mutate(rng, &base);
 
     // Identity: theirs unchanged => the merge must carry ours' content.
-    if let MergeOutcome::Disjoint { merged } = three_way(&base, &ours, &base) {
+    let identity = three_way(&base, &ours, &base);
+    if let MergeOutcome::Disjoint { merged } = &identity {
         anyhow::ensure!(
             merged.split_whitespace().eq(ours.split_whitespace()),
             "identity merge dropped content: {ours:?} -> {merged:?}"
@@ -1143,7 +1184,12 @@ fn case_transform(rng: &mut Rng) -> Result<Case> {
         disjoint(&forward) == disjoint(&swapped),
         "merge disjointness is not symmetric under swapping sides"
     );
-    Ok(Case::Accepted)
+    // Witness: all three merge results, so a changed merge changes the digest.
+    // `Debug` is used deliberately — it distinguishes the outcome VARIANT as
+    // well as the merged text, and the identity of the variant is exactly what
+    // the symmetry relation above is about.
+    let witness = format!("{identity:?}|{forward:?}|{swapped:?}").into_bytes();
+    Ok(Case::Accepted(witness))
 }
 
 /// Family 3 — repair/ILRP/recovery.
@@ -1161,7 +1207,7 @@ fn case_repair(rng: &mut Rng) -> Result<Case> {
 
     let count = usize::try_from(2 + rng.below(5)).expect("step count fits");
     let ids: Vec<liminal_id::RepairStepId> = (0..count)
-        .map(|_| liminal_id::RepairStepId::new())
+        .map(|_| liminal_id::RepairStepId::from_uuid(rng.uuid()))
         .collect();
     let steps = ids
         .iter()
@@ -1170,14 +1216,16 @@ fn case_repair(rng: &mut Rng) -> Result<Case> {
                 *id,
                 ProposedMutation {
                     id: *id,
-                    subject: liminal_id::JurisdictionSubject::Node(liminal_id::NodeId::new()),
+                    subject: liminal_id::JurisdictionSubject::Node(liminal_id::NodeId::from_uuid(
+                        rng.uuid(),
+                    )),
                     operation: RepairOperation::WriteFile {
                         path: liminal_id::PathId("generated.md".into()),
                         contents: rng.word().into_bytes(),
                     },
                     expected_prestate: StatePredicate::Any,
                     expected_poststate: StatePredicate::Any,
-                    idempotency_key: liminal_id::IdempotencyKey::new(),
+                    idempotency_key: liminal_id::IdempotencyKey::from_uuid(rng.uuid()),
                 },
             )
         })
@@ -1208,9 +1256,9 @@ fn case_repair(rng: &mut Rng) -> Result<Case> {
         .collect();
 
     let plan = RepairPlan {
-        id: liminal_id::RepairId::new(),
+        id: liminal_id::RepairId::from_uuid(rng.uuid()),
         basis: liminal_revision::WorkspaceBasis {
-            transaction: liminal_id::TransactionId::new(),
+            transaction: liminal_id::TransactionId::from_uuid(rng.uuid()),
             perspective: liminal_revision::BasisPerspective::DurableOnly,
             components: BTreeMap::new(),
         },
@@ -1248,7 +1296,13 @@ fn case_repair(rng: &mut Rng) -> Result<Case> {
         topo_order(&permuted).map_err(|e| anyhow::anyhow!("{e}"))? == order,
         "topological order changed under permutation of the dependency list"
     );
-    Ok(Case::Accepted)
+    // Witness: the order the implementation chose. A different ordering
+    // algorithm changes the digest even when both orders are valid.
+    let witness = order
+        .iter()
+        .flat_map(|id| id.as_uuid().into_bytes())
+        .collect::<Vec<u8>>();
+    Ok(Case::Accepted(witness))
 }
 
 /// Family 4 — Basis/revision/query invalidation.
@@ -1296,14 +1350,22 @@ fn case_invalidation(rng: &mut Rng) -> Result<Case> {
     }
     // Monotonicity: adding a read never un-invalidates an existing one.
     let extra = liminal_id::JurisdictionKey::Path(liminal_id::PathId(rng.word().into()));
-    deps.record(extra);
+    deps.record(extra.clone());
     for key in &expected {
         anyhow::ensure!(
             deps.invalidated_by(key),
             "recording another read un-invalidated {key:?}"
         );
     }
-    Ok(Case::Accepted)
+    // Witness: the implementation's answer for every key probed, including the
+    // two negative probes. A `invalidated_by` that always returned `true` would
+    // still satisfy the assertions above for recorded keys, but it changes these
+    // bytes.
+    let mut witness = Vec::new();
+    for key in expected.iter().chain([&unrelated, &extra]) {
+        witness.push(u8::from(deps.invalidated_by(key)));
+    }
+    Ok(Case::Accepted(witness))
 }
 
 /// One generated-evidence family: its name and its case runner.
@@ -1381,9 +1443,24 @@ fn generate_evidence(cases: u64) -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> {
             );
             attempts += 1;
             match run(&mut rng).with_context(|| format!("{family} attempt {attempts}"))? {
-                Case::Accepted => accepted += 1,
-                Case::Discarded => discards += 1,
+                Case::Accepted(witness) => {
+                    // A family that witnesses nothing would restore exactly the
+                    // #16 defect: a digest independent of the code under test.
+                    anyhow::ensure!(
+                        !witness.is_empty(),
+                        "{family}: accepted attempt {attempts} with an empty witness, so \
+                         the evidence hash would not depend on what the code produced"
+                    );
+                    accepted += 1;
+                    digest.update(b"A");
+                    digest.update(&witness);
+                }
+                Case::Discarded => {
+                    discards += 1;
+                    digest.update(b"D");
+                }
             }
+            // The RNG state binds the INPUT; the witness above binds the OUTPUT.
             digest.update(&rng.0.to_le_bytes());
         }
         anyhow::ensure!(

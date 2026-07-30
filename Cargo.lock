@@ -793,6 +793,7 @@ dependencies = [
  "liminal-source",
  "serde",
  "serde_json",
+ "uuid",
 ]
 
 [[package]]

@@ -23,6 +23,7 @@ liminal-id.workspace = true
 liminal-revision.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+uuid.workspace = true # deterministic (v5) ids for the generated-evidence lane
 
 [lints]
 workspace = true
