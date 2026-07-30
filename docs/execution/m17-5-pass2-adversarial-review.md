@@ -72,5 +72,41 @@ Required changes, verbatim:
 ## Disposition
 
 §6: "Zero verified findings may remain unresolved." Twenty findings across both
-passes are now open. `qualification_state` stays `not-run`; the packet stays
-`proposed`; Phase 1 remains unauthorized.
+passes were open at the time of this review. `qualification_state` stays
+`not-run`; the packet stays `proposed`; Phase 1 remains unauthorized.
+
+### Status after the M17.5 remediation campaign
+
+Every numbered item from this pass is now closed. Each fix is paired with a
+canary that was verified to bite, and each strengthening was verified NOT to
+produce a false red against the real implementation — twice that check caught a
+wrong assumption in the fix itself rather than a defect in the code.
+
+| item | disposition |
+| --- | --- |
+| #5, #6, #7 | vacuous §112 laws hardened (`3eb5c56`) |
+| #8 | content oracle compared word MULTISETS; order now checked as a subsequence |
+| #9 | identity merge relation could short-circuit; `Disjoint` is now required |
+| #10 | byte-canonical check passed a constant codec; decoded fields now compared |
+| #11, #12, #13 | fabricated inventories rejected (`feda854`) |
+| #16 | evidence digest was blind to the code under test; witnesses now absorbed |
+| #17 | fuzz lane bound to real targets; two halves escalated as F-17 |
+| #18 | `elapsed_ms` made the artifact unhashable; timing separated from evidence |
+| #19 | crash lane wrote to gitignored `target/`; evidence now committed and bound |
+| #20 | review rows were four self-asserted numbers; now bound to a record |
+| #22 | canary prose was decorative; bound to the executed mutation |
+
+Findings raised BY the remediation, recorded in
+`m17-5-adversarial-findings.md`: F-11 through F-20. Of those, F-03, F-06, F-09,
+F-17 and F-20 remain open by decision rather than by oversight.
+
+Three of this pass's items were closed only after the fix's own verification
+step rejected the first attempt:
+
+- **#8** — the first ordering rule failed the real formatter, because the
+  explicit surface hoists a durable id into its node header (`alpha {#a}` emits
+  the id ahead of the text). Ids are position-mobile by declared transform;
+  content is not. The rule now excludes ids and still catches a scrambler.
+- **#9/#10** — verified against 20,000 accepted cases per family, confirming the
+  now-unconditional relations are satisfied by the real implementations rather
+  than merely un-short-circuited.

@@ -67,6 +67,40 @@ impl Formatter for ConstantParseFormatter {
     }
 }
 
+/// Preserves every token and every durable id, but emits them in sorted order.
+///
+/// M17.5 pass-2 #8: this passed every content check the oracle made, because
+/// the witness compared word MULTISETS. Scrambling the author's content while
+/// keeping the bag of words intact is exactly the defect these laws exist to
+/// catch, so it must now die on the ordering assertion.
+#[derive(Debug, Default)]
+struct SortingFormatter;
+
+fn sorted_tokens(source: &str) -> String {
+    let mut tokens: Vec<&str> = source
+        .split(|c: char| !c.is_alphanumeric() && c != '_')
+        .filter(|t| !t.is_empty())
+        .collect();
+    tokens.sort_unstable();
+    tokens.join(" ")
+}
+
+impl Formatter for SortingFormatter {
+    type Doc = String;
+    type Error = std::convert::Infallible;
+
+    fn parse(&self, source: &str) -> Result<Self::Doc, Self::Error> {
+        Ok(sorted_tokens(source))
+    }
+    fn emit(&self, doc: &Self::Doc) -> Result<String, Self::Error> {
+        Ok(doc.clone())
+    }
+    fn format(&self, source: &str) -> Result<String, Self::Error> {
+        // Idempotent: sorting an already-sorted token list is a no-op.
+        Ok(sorted_tokens(source))
+    }
+}
+
 /// Ignores its input entirely: both compile paths return the same constant.
 #[derive(Debug, Default)]
 struct ConstantCompiler;
@@ -112,6 +146,22 @@ fn canary_idempotence_law_rejects_content_deletion() {
 #[should_panic(expected = "erased a non-empty document")]
 fn canary_round_trip_law_rejects_content_deletion() {
     liminal_conformance::laws::check_canonical_round_trip(&ContentDeletingFormatter, &SOURCES);
+}
+
+/// M17.5 pass-2 #8: content that survives as a BAG OF WORDS has not survived.
+/// The formatter below preserves every token and every id and is perfectly
+/// idempotent — only its ORDER is wrong.
+#[test]
+#[should_panic(expected = "reordered content")]
+fn canary_idempotence_law_rejects_a_content_scrambling_formatter() {
+    liminal_conformance::laws::check_formatter_idempotence(&SortingFormatter, &SOURCES);
+}
+
+/// The same defect must die in the round-trip law, not just the idempotence one.
+#[test]
+#[should_panic(expected = "reordered content")]
+fn canary_round_trip_law_rejects_a_content_scrambling_formatter() {
+    liminal_conformance::laws::check_canonical_round_trip(&SortingFormatter, &SOURCES);
 }
 
 /// The formatter-idempotence law must reject a constant parser, even when the

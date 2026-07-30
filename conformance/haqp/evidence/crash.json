@@ -1,0 +1,94 @@
+{
+  "boundaries": [
+    {
+      "boundary": "ilrp/after_ack",
+      "double_recovery": "pass",
+      "occurrences_exercised": 3,
+      "result": "pass",
+      "staged_residue": "none"
+    },
+    {
+      "boundary": "ilrp/after_external_apply",
+      "double_recovery": "pass",
+      "occurrences_exercised": 2,
+      "result": "pass",
+      "staged_residue": "none"
+    },
+    {
+      "boundary": "ilrp/after_finalize_before_notify",
+      "double_recovery": "pass",
+      "occurrences_exercised": 2,
+      "result": "pass",
+      "staged_residue": "none"
+    },
+    {
+      "boundary": "ilrp/after_intent_commit",
+      "double_recovery": "pass",
+      "occurrences_exercised": 2,
+      "result": "pass",
+      "staged_residue": "none"
+    },
+    {
+      "boundary": "ilrp/before_ack",
+      "double_recovery": "pass",
+      "occurrences_exercised": 3,
+      "result": "pass",
+      "staged_residue": "none"
+    },
+    {
+      "boundary": "ilrp/before_external_apply",
+      "double_recovery": "pass",
+      "occurrences_exercised": 2,
+      "result": "pass",
+      "staged_residue": "none"
+    },
+    {
+      "boundary": "ilrp/before_finalize",
+      "double_recovery": "pass",
+      "occurrences_exercised": 2,
+      "result": "pass",
+      "staged_residue": "none"
+    },
+    {
+      "boundary": "ilrp/before_intent_commit",
+      "double_recovery": "pass",
+      "occurrences_exercised": 2,
+      "result": "pass",
+      "staged_residue": "none"
+    }
+  ],
+  "exercised": 8,
+  "registered": 8,
+  "scenarios": [
+    {
+      "boundaries": [
+        "ilrp/after_ack",
+        "ilrp/after_external_apply",
+        "ilrp/after_finalize_before_notify",
+        "ilrp/after_intent_commit",
+        "ilrp/before_ack",
+        "ilrp/before_external_apply",
+        "ilrp/before_finalize",
+        "ilrp/before_intent_commit"
+      ],
+      "faults_injected": 8,
+      "result": "pass",
+      "scenario": "promote_single_step"
+    },
+    {
+      "boundaries": [
+        "ilrp/after_ack",
+        "ilrp/after_external_apply",
+        "ilrp/after_finalize_before_notify",
+        "ilrp/after_intent_commit",
+        "ilrp/before_ack",
+        "ilrp/before_external_apply",
+        "ilrp/before_finalize",
+        "ilrp/before_intent_commit"
+      ],
+      "faults_injected": 10,
+      "result": "pass",
+      "scenario": "dag_accept"
+    }
+  ]
+}

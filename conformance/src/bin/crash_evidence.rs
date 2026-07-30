@@ -98,7 +98,12 @@ fn main() -> anyhow::Result<()> {
         "scenarios": per_scenario,
         "boundaries": boundaries,
     });
-    let path = camino::Utf8PathBuf::from("target/haqp/crash.json");
+    // COMMITTED evidence, not `target/` (M17.5 pass-2 #19). Written under
+    // `target/` this artifact was gitignored, so `haq verify` could never read
+    // it: the packet asserted a crash result that nothing on disk corroborated,
+    // and the inventory exited 0 with the artifact saying `pass` and the packet
+    // saying `registered`. `fuzz.json` already lives here for the same reason.
+    let path = camino::Utf8PathBuf::from("conformance/haqp/evidence/crash.json");
     std::fs::create_dir_all(path.parent().expect("evidence parent"))?;
     std::fs::write(&path, serde_json::to_vec_pretty(&evidence)?)?;
     println!(

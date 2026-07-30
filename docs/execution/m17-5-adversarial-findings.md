@@ -974,3 +974,36 @@ a larger change than F-12 needs.
 *"Deliberately never cleaned up — the OS owns its temp dir."* Nothing reclaims
 `/tmp` until reboot; it is tmpfs here, so the leak was resident in RAM. The
 comment now records what replaced it.
+
+
+---
+
+## F-20 — MODERATE. The packet digest hashes the re-serialized struct, not the committed file.
+
+Noted earlier as "should be decided before qualification"; this session gave it
+a concrete demonstration.
+
+`packet_digest` hashes `serde_json::to_vec(packet)` — the deserialized struct
+re-serialized — rather than the bytes of `conformance/haqp/packet.json`. Two
+consequences, both observed while closing pass-2 #20:
+
+1. **Adding an optional field to a verifier struct changes the digest even when
+   the packet file is untouched.** Giving `Review` its `findings`,
+   `independently_reproduced` and `evidence` fields moved the digest from
+   `d1890c2f…` to `6a56eedd…` with no edit to `packet.json` at all, because the
+   empty defaults now appear in the re-serialization. The digest therefore
+   tracks the SCHEMA as much as the content.
+2. **Conversely, changes to the file that the struct does not model are
+   invisible.** Whitespace and key order are already normalized away, which is
+   arguably fine — but so is any field the struct does not declare, which is
+   not. `deny_unknown_fields` on `Packet` would close that half.
+
+Neither direction is a live false-green today: the digest still detects every
+edit to a field the verifier reads, and `just haq-inventory` fails closed when
+it drifts. But "the committed packet is this exact file" is what the digest
+reads as, and that is not what it measures.
+
+**Not fixed** — switching to file-bytes hashing changes what the recorded digest
+means and would need the markdown line regenerated once more; worth doing
+deliberately rather than as a side effect of another change. Recorded for the
+decision before qualification.

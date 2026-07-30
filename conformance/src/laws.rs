@@ -79,6 +79,58 @@ fn assert_content_survives(input: &str, output: &str, what: &str) {
             "{what} dropped durable id {id:?}: input {input:?} produced {output:?}"
         );
     }
+
+    assert_order_survives(input, output, &in_ids, what);
+}
+
+/// Every input token must appear in the output IN THE SAME RELATIVE ORDER.
+///
+/// M17.5 pass-2 #8: `assert_content_survives` compared word MULTISETS, so
+/// source `"a,b"` against output `"b a"` satisfied it — the tokens survived
+/// while their order did not. An implementation that emitted every word of the
+/// document in sorted order passed every content check this oracle made, and a
+/// formatter that scrambles content is exactly the defect these laws exist to
+/// catch.
+///
+/// Order is checked as a SUBSEQUENCE rather than an equality, and that
+/// asymmetry is deliberate: a declared surface transform may INSERT tokens
+/// (`hello {#a}` becomes `hello (id = "a")`, adding `id`), but no legitimate
+/// formatting or emission reorders the author's content. Insertions pass,
+/// permutations do not.
+///
+/// **Durable ids are excluded from the sequence**, and that exclusion is
+/// load-bearing rather than a convenience. The explicit surface hoists an id
+/// into its node's HEADER, so `alpha {#a}` emits as
+/// `node paragraph (id = "a") { literal "alpha"; }` — the id legitimately moves
+/// ahead of the text it labels. Ids are position-mobile by declared transform;
+/// the author's content is not. Id survival is asserted separately by value in
+/// `assert_content_survives`, so nothing goes unchecked. (A content word that
+/// happens to equal an id value is also skipped, which only weakens the check
+/// and never produces a false failure.)
+///
+/// Punctuation is still not compared, and that is not an oversight: rewriting
+/// punctuation is precisely what the compact-to-explicit surface transform
+/// does, so an oracle that pinned it would forbid the implementation's declared
+/// behaviour rather than test it.
+fn assert_order_survives(input: &str, output: &str, ids: &BTreeSet<String>, what: &str) {
+    let tokens = |text: &str| -> Vec<String> {
+        text.split(|c: char| !c.is_alphanumeric() && c != '_')
+            .filter(|token| !token.is_empty() && !ids.contains(*token))
+            .map(ToOwned::to_owned)
+            .collect()
+    };
+    let input_tokens = tokens(input);
+    let output_tokens = tokens(output);
+
+    let mut cursor = output_tokens.iter();
+    for (index, token) in input_tokens.iter().enumerate() {
+        assert!(
+            cursor.any(|candidate| candidate == token),
+            "{what} reordered content: input token {token:?} (#{index}) does not appear \
+             after its predecessors in the output. Input {input:?} produced {output:?}; \
+             input order {input_tokens:?}, output order {output_tokens:?}"
+        );
+    }
 }
 
 /// Law: `parse(format(parse(x))) ≡ parse(x)` and formatting is idempotent

@@ -43,7 +43,144 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     // editing two files.
     verify_provenance(root, &packet)?;
     verify_fuzz_evidence(root)?;
+    verify_crash_evidence(root, &packet)?;
+    verify_review_evidence(root, &packet)?;
     verify_test_names_exist(root, &packet)?;
+    Ok(())
+}
+
+/// Bind the packet's crash-boundary claims to the fault lane's committed
+/// artifact (M17.5 pass-2 #19).
+///
+/// The lane wrote `target/haqp/crash.json`, which is gitignored, so nothing
+/// could ever read it back: the artifact said `pass`, the packet said
+/// `registered`, and `haq verify-inventory` exited 0 with no one comparing the
+/// two. The packet's crash rows were pure assertion.
+fn verify_crash_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    let path = root.join("conformance/haqp/evidence/crash.json");
+    let bytes = std::fs::read(&path).with_context(|| {
+        format!("{path}: committed crash evidence is required; run `just haq-crash`")
+    })?;
+    let recorded: CrashEvidence =
+        serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))?;
+
+    let declared = packet
+        .crash_boundaries
+        .iter()
+        .map(|row| row.boundary.clone())
+        .collect::<BTreeSet<_>>();
+    verify_crash_rows(&recorded, &declared)
+}
+
+fn verify_crash_rows(recorded: &CrashEvidence, declared: &BTreeSet<String>) -> Result<()> {
+    let evidenced = recorded
+        .boundaries
+        .iter()
+        .map(|row| row.boundary.clone())
+        .collect::<BTreeSet<_>>();
+    if declared != &evidenced {
+        anyhow::bail!(
+            "crash evidence covers different boundaries than the packet declares: \
+             packet={declared:?}, evidence={evidenced:?}"
+        );
+    }
+    // ADR-0020 §5: runtime discovery and declared inventory must match exactly,
+    // and drift on EITHER side fails.
+    if recorded.registered != recorded.exercised {
+        anyhow::bail!(
+            "crash evidence records {} registered boundaries but {} exercised — an \
+             unexercised boundary is indistinguishable from a dead one",
+            recorded.registered,
+            recorded.exercised
+        );
+    }
+    for row in &recorded.boundaries {
+        if row.occurrences_exercised == 0 {
+            anyhow::bail!("crash boundary {} was never exercised", row.boundary);
+        }
+        for (field, value) in [
+            ("result", &row.result),
+            ("double_recovery", &row.double_recovery),
+        ] {
+            if value != "pass" {
+                anyhow::bail!("crash boundary {} reports {field} {value:?}", row.boundary);
+            }
+        }
+        if row.staged_residue != "none" {
+            anyhow::bail!(
+                "crash boundary {} left staged residue {:?}",
+                row.boundary,
+                row.staged_residue
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Bind each review row to a committed record (M17.5 pass-2 #20).
+///
+/// A review row was four self-asserted numbers with nothing behind them. The
+/// internal-consistency rules hold at every layer; the committed record is
+/// demanded only once a review claims `pass`, matching how
+/// `verify_generated_inventory` treats seeds and evidence hashes.
+fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    for review in &packet.reviews {
+        let raised = review.findings.iter().collect::<BTreeSet<_>>();
+        let unverified = review
+            .independently_reproduced
+            .iter()
+            .filter(|id| !raised.contains(id))
+            .collect::<Vec<_>>();
+        if !unverified.is_empty() {
+            anyhow::bail!(
+                "{} claims to have independently reproduced {unverified:?}, which it \
+                 never raised as findings",
+                review.reviewer
+            );
+        }
+        // A finding counted as VERIFIED and unresolved must be one that survived
+        // independent reproduction; otherwise "verified" means one model said so.
+        if review.unresolved_verified_findings > review.independently_reproduced.len() as u64 {
+            anyhow::bail!(
+                "{} counts {} unresolved VERIFIED findings but independently reproduced \
+                 only {} — a finding one reviewer asserted is not a verified finding \
+                 (ADR-0020 §6)",
+                review.reviewer,
+                review.unresolved_verified_findings,
+                review.independently_reproduced.len()
+            );
+        }
+        if review.result != "pass" {
+            continue;
+        }
+        let Some(evidence) = &review.evidence else {
+            anyhow::bail!(
+                "{} claims pass with no committed record; the lane's own output lives \
+                 under target/ and cannot be read back",
+                review.reviewer
+            );
+        };
+        let path = root.join(evidence);
+        let bytes = std::fs::read(&path).with_context(|| {
+            format!(
+                "{path}: {} claims pass but its record is missing",
+                review.reviewer
+            )
+        })?;
+        let record: serde_json::Value =
+            serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))?;
+        let recorded_attempts = record
+            .get("attempts")
+            .and_then(|value| value.as_array())
+            .map_or(0, Vec::len) as u64;
+        if recorded_attempts != review.attempts {
+            anyhow::bail!(
+                "{} declares {} attempts but its record contains {recorded_attempts}",
+                review.reviewer,
+                review.attempts
+            );
+        }
+    }
     Ok(())
 }
 
@@ -897,7 +1034,43 @@ struct CrashBoundary {
 struct Review {
     reviewer: String,
     attempts: u64,
+    /// Finding ids this reviewer raised.
+    #[serde(default)]
+    findings: Vec<String>,
+    /// The subset of `findings` a SECOND party reproduced independently.
+    ///
+    /// ADR-0020 §6 exists because one model asserting a defect is not evidence
+    /// of a defect. Without this field a review row was four self-asserted
+    /// numbers (M17.5 pass-2 #20): a reviewer could claim twelve attempts and
+    /// zero unresolved findings having reproduced nothing at all.
+    #[serde(default)]
+    independently_reproduced: Vec<String>,
     unresolved_verified_findings: u64,
+    /// Committed record of the run; required once `result` is `pass`.
+    #[serde(default)]
+    evidence: Option<String>,
+    result: String,
+}
+
+/// One boundary's recorded fault-matrix outcome (committed artifact).
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct CrashEvidence {
+    registered: usize,
+    exercised: usize,
+    /// Per-scenario rows; carried so `deny_unknown_fields` cannot be defeated
+    /// by the lane emitting a field the verifier silently drops (the F-17
+    /// lesson applied before it bites).
+    scenarios: Vec<serde_json::Value>,
+    boundaries: Vec<CrashEvidenceBoundary>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+struct CrashEvidenceBoundary {
+    boundary: String,
+    occurrences_exercised: u64,
+    double_recovery: String,
+    staged_residue: String,
     result: String,
 }
 
@@ -1242,6 +1415,24 @@ fn case_interchange(rng: &mut Rng) -> Result<Case> {
         once == twice,
         "interchange codec is not byte-canonical for {node:?}"
     );
+
+    // M17.5 pass-2 #10: `once == twice` alone is satisfied by a codec that
+    // ignores its input entirely — encode anything to one fixed valid document
+    // and the round trip is stable forever. Stability is not fidelity. So check
+    // that the DECODED value carries the fields we actually put in, field by
+    // field rather than through `Node`'s own `PartialEq` (ADR-0020 §5 forbids
+    // proving a relation with the implementation's equality on both sides).
+    anyhow::ensure!(decoded.id == node.id, "codec lost the node id");
+    anyhow::ensure!(decoded.kind == node.kind, "codec lost the node kind");
+    anyhow::ensure!(decoded.revision == node.revision, "codec lost the revision");
+    anyhow::ensure!(decoded.flags == node.flags, "codec lost the node flags");
+    anyhow::ensure!(
+        decoded.payload == node.payload,
+        "codec lost the payload: {:?} -> {:?}",
+        node.payload,
+        decoded.payload
+    );
+
     // Witness: the canonical encoding itself.
     Ok(Case::Accepted(once))
 }
@@ -1280,13 +1471,23 @@ fn case_transform(rng: &mut Rng) -> Result<Case> {
     let theirs = mutate(rng, &base);
 
     // Identity: theirs unchanged => the merge must carry ours' content.
+    //
+    // M17.5 pass-2 #9: this used to be `if let Disjoint { merged } = ...`, so an
+    // implementation that returned `Conflict` for EVERY input never entered the
+    // branch and the relation held vacuously — the metamorphic check tested
+    // nothing at all. A side that changed nothing cannot conflict with anything,
+    // so `Disjoint` is a REQUIREMENT here, not a case to handle.
     let identity = three_way(&base, &ours, &base);
-    if let MergeOutcome::Disjoint { merged } = &identity {
-        anyhow::ensure!(
-            merged.split_whitespace().eq(ours.split_whitespace()),
-            "identity merge dropped content: {ours:?} -> {merged:?}"
+    let MergeOutcome::Disjoint { merged } = &identity else {
+        anyhow::bail!(
+            "merging ours against an UNCHANGED theirs reported {identity:?}; a side that \
+             changed nothing cannot conflict"
         );
-    }
+    };
+    anyhow::ensure!(
+        merged.split_whitespace().eq(ours.split_whitespace()),
+        "identity merge dropped content: {ours:?} -> {merged:?}"
+    );
 
     let forward = three_way(&base, &ours, &theirs);
     let swapped = three_way(&base, &theirs, &ours);
@@ -1977,6 +2178,112 @@ mod tests {
             .expect_err("rows from two campaigns must be rejected");
         assert!(
             err.to_string().contains("distinct seeds"),
+            "unexpected error: {err}"
+        );
+    }
+
+    fn crash_evidence_from_repo() -> (CrashEvidence, BTreeSet<String>) {
+        let bytes = std::fs::read(repo_root().join("conformance/haqp/evidence/crash.json"))
+            .expect("committed crash evidence");
+        let recorded: CrashEvidence = serde_json::from_slice(&bytes).expect("parse");
+        let declared = packet_from_repo()
+            .crash_boundaries
+            .iter()
+            .map(|row| row.boundary.clone())
+            .collect::<BTreeSet<_>>();
+        (recorded, declared)
+    }
+
+    /// #19: the committed artifact and the packet must agree on which
+    /// boundaries exist. The lane used to write into gitignored `target/`, so
+    /// the artifact could say `pass` while the packet said `registered` and the
+    /// inventory exited 0 without ever comparing them.
+    #[test]
+    fn crash_lane_rejects_evidence_that_does_not_match_the_packet() {
+        let (recorded, declared) = crash_evidence_from_repo();
+        verify_crash_rows(&recorded, &declared)
+            .expect("the committed crash evidence must match the packet");
+
+        let mut doctored = recorded.clone();
+        doctored.boundaries.pop();
+        let err = verify_crash_rows(&doctored, &declared)
+            .expect_err("evidence missing a declared boundary must be rejected");
+        assert!(
+            err.to_string().contains("different boundaries"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// #19: a boundary that never fired is indistinguishable from a dead one
+    /// (ADR-0020 §5), and a failing recovery must not read as evidence.
+    #[test]
+    fn crash_lane_rejects_an_unexercised_or_failing_boundary() {
+        let (recorded, declared) = crash_evidence_from_repo();
+
+        let mut unexercised = recorded.clone();
+        unexercised.boundaries[0].occurrences_exercised = 0;
+        let err = verify_crash_rows(&unexercised, &declared)
+            .expect_err("an unexercised boundary must be rejected");
+        assert!(
+            err.to_string().contains("never exercised"),
+            "unexpected error: {err}"
+        );
+
+        let mut residue = recorded;
+        residue.boundaries[0].staged_residue = "one staged file".to_owned();
+        let err =
+            verify_crash_rows(&residue, &declared).expect_err("staged residue must be rejected");
+        assert!(
+            err.to_string().contains("staged residue"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// #20: a review may not count findings as VERIFIED that no second party
+    /// reproduced. One model asserting a defect is not evidence of a defect.
+    #[test]
+    fn review_lane_rejects_verified_findings_nobody_reproduced() {
+        let root = repo_root();
+        let mut packet = packet_from_repo();
+        verify_review_evidence(&root, &packet).expect("the committed review rows are consistent");
+
+        packet.reviews[0].unresolved_verified_findings = 2;
+        packet.reviews[0].findings = vec!["P1-F01".to_owned(), "P1-F02".to_owned()];
+        // ...but nothing was independently reproduced.
+        let err = verify_review_evidence(&root, &packet)
+            .expect_err("verified findings with no independent reproduction must be rejected");
+        assert!(
+            err.to_string().contains("independently reproduced only 0"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// #20: a review cannot claim to have reproduced a finding it never raised.
+    #[test]
+    fn review_lane_rejects_reproducing_a_finding_never_raised() {
+        let root = repo_root();
+        let mut packet = packet_from_repo();
+        packet.reviews[1].independently_reproduced = vec!["P1-F99".to_owned()];
+        let err = verify_review_evidence(&root, &packet)
+            .expect_err("reproducing an unraised finding must be rejected");
+        assert!(
+            err.to_string().contains("never raised"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// #20: `pass` requires a committed record. The blind-review lane writes
+    /// under `target/`, so without this a passing review is four numbers typed
+    /// into the packet.
+    #[test]
+    fn review_lane_rejects_a_pass_with_no_committed_record() {
+        let root = repo_root();
+        let mut packet = packet_from_repo();
+        packet.reviews[0].result = "pass".to_owned();
+        let err = verify_review_evidence(&root, &packet)
+            .expect_err("a passing review with no record must be rejected");
+        assert!(
+            err.to_string().contains("no committed record"),
             "unexpected error: {err}"
         );
     }
