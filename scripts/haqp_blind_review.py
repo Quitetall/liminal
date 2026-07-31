@@ -87,7 +87,7 @@ def mcp_call(model: str, prompt: str, session_id: str) -> str:
                 "model": model,
                 "prompt": prompt,
                 "system": "You are an isolated HAQP adversarial reviewer. Return JSON only.",
-                "max_tokens": 8000,
+                "max_tokens": 32000,
                 "temperature": 0.1,
                 "thinking_enabled": True,
                 "ephemeral": True,
