@@ -649,6 +649,7 @@ dependencies = [
  "liminal-source",
  "serde_json",
  "thiserror",
+ "uuid",
 ]
 
 [[package]]

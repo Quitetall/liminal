@@ -509,6 +509,235 @@ pub trait Formatter {
 mod tests {
     use super::*;
 
+    // ── M17.5 A7: `basis_semantic_eq` / `component_address_eq` survivors ──
+    //
+    // These two functions are the equality the §112 laws compare THROUGH, so a
+    // mutant that survives here silently weakens every law at once. The scoped
+    // campaign left 7 of them alive; each test below names the mutant it kills.
+
+    fn key(name: &str) -> liminal_id::JurisdictionKey {
+        liminal_id::JurisdictionKey::Path(liminal_id::PathId(name.into()))
+    }
+
+    fn buffer_component(generation: u64, content: &str) -> BasisComponent {
+        BasisComponent::BufferGeneration {
+            client: liminal_id::ClientId::from_uuid(uuid::Uuid::nil()),
+            buffer: liminal_id::BufferId::from_uuid(uuid::Uuid::nil()),
+            epoch: liminal_id::SessionEpoch(7),
+            generation,
+            // The field ADDRESS equality deliberately ignores.
+            content_hash: Some(liminal_id::ContentHash::of(content.as_bytes())),
+            base_file_hash: None,
+        }
+    }
+
+    fn basis(components: Vec<(liminal_id::JurisdictionKey, BasisComponent)>) -> WorkspaceBasis {
+        WorkspaceBasis {
+            transaction: liminal_id::TransactionId::from_uuid(uuid::Uuid::nil()),
+            perspective: BasisPerspective::DurableOnly,
+            components: components.into_iter().collect(),
+        }
+    }
+
+    /// Kills `replace || with && in basis_semantic_eq` (lib.rs:92). A differing
+    /// COMPONENT COUNT alone must decide inequality; under `&&` all three
+    /// disagreements would have to hold at once.
+    #[test]
+    fn basis_equality_rejects_a_differing_component_count() {
+        let holder = key("holder");
+        let a = basis(vec![(holder.clone(), buffer_component(1, "x"))]);
+        let b = basis(vec![
+            (holder.clone(), buffer_component(1, "x")),
+            (key("other"), buffer_component(2, "y")),
+        ]);
+        assert!(!basis_semantic_eq(&a, &b, &holder));
+        assert!(!basis_semantic_eq(&b, &a, &holder));
+    }
+
+    /// Kills `replace match guard key == holder with true` (lib.rs:99).
+    ///
+    /// Only the HOLDER's component is compared by address; every other
+    /// component must compare in full. If the guard were always true, a
+    /// non-holder component differing solely in `content_hash` would compare
+    /// equal — which is exactly the confusion between "same address" and "same
+    /// content" the Basis model exists to prevent.
+    #[test]
+    fn basis_equality_compares_non_holder_components_in_full() {
+        let holder = key("holder");
+        let other = key("other");
+        let a = basis(vec![
+            (holder.clone(), buffer_component(1, "x")),
+            (other.clone(), buffer_component(2, "content-a")),
+        ]);
+        let b = basis(vec![
+            (holder.clone(), buffer_component(1, "x")),
+            (other, buffer_component(2, "content-b")),
+        ]);
+        assert!(
+            !basis_semantic_eq(&a, &b, &holder),
+            "a non-holder component differing in content must not compare equal"
+        );
+    }
+
+    /// Kills the holder-address branch: the HOLDER's component compares by
+    /// address only, so differing content under the same address IS equal.
+    /// Paired with the test above so neither direction can be weakened alone.
+    #[test]
+    fn basis_equality_compares_the_holder_component_by_address_only() {
+        let holder = key("holder");
+        let a = basis(vec![(holder.clone(), buffer_component(3, "content-a"))]);
+        let b = basis(vec![(holder.clone(), buffer_component(3, "content-b"))]);
+        assert!(
+            basis_semantic_eq(&a, &b, &holder),
+            "the holder's component is addressed, not content-compared"
+        );
+    }
+
+    /// Kills `delete match arm (_, Some(bv))` and `replace == with !=`
+    /// (lib.rs:100): two identical bases must compare EQUAL. Deleting the arm
+    /// drops every non-holder key to `false`; flipping the operator inverts it.
+    #[test]
+    fn basis_equality_accepts_two_identical_bases() {
+        let holder = key("holder");
+        let build = || {
+            basis(vec![
+                (holder.clone(), buffer_component(1, "x")),
+                (key("other"), buffer_component(2, "y")),
+            ])
+        };
+        assert!(basis_semantic_eq(&build(), &build(), &holder));
+    }
+
+    /// Kills `delete match arm (BufferGeneration, BufferGeneration)`
+    /// (lib.rs:110) and both `replace == with !=` in `component_address_eq`
+    /// (lib.rs:127-128).
+    ///
+    /// Same address, different content: equal. Different generation: not equal.
+    /// Deleting the arm falls through to full `==`, which fails the first;
+    /// flipping either operator fails both.
+    #[test]
+    fn component_address_equality_ignores_content_but_not_address() {
+        assert!(
+            component_address_eq(&buffer_component(5, "one"), &buffer_component(5, "two")),
+            "same address with different content is the same ADDRESS"
+        );
+        assert!(
+            !component_address_eq(&buffer_component(5, "one"), &buffer_component(6, "one")),
+            "a differing generation is a differing address"
+        );
+    }
+
+    /// Kills the `_ => a == b` fallback (lib.rs:128). Mismatched VARIANTS take
+    /// that arm, and two different kinds of component are never the same
+    /// address.
+    #[test]
+    fn component_address_equality_rejects_mismatched_variants() {
+        let file = BasisComponent::FileContent {
+            path: PathId("a.md".into()),
+            hash: ContentHash::of(b""),
+        };
+        assert!(!component_address_eq(&file, &buffer_component(1, "x")));
+        assert!(!component_address_eq(&buffer_component(1, "x"), &file));
+    }
+
+    /// Kills both `replace + with *` in `emit_item` (lib.rs:330, 375).
+    ///
+    /// The mutants change `depth + 1` to `depth * 1`, which is the identity at
+    /// the root and only diverges once nesting exists — so the assertion has to
+    /// be about a CHILD's indentation, not merely that emission succeeds.
+    #[test]
+    fn nested_items_are_indented_by_depth() {
+        let source = concat!(
+            "#!liminal-explicit-v1\n",
+            "node outer {\n",
+            "  literal \"inner\";\n",
+            "}\n",
+        );
+        let formatter = MarkdownFormatter::default();
+        let emitted = formatter
+            .emit(&formatter.parse(source).expect("parses"))
+            .expect("emits");
+        assert!(
+            emitted.contains("\n  literal \"inner\";"),
+            "a nested literal must carry one indent level, got {emitted:?}"
+        );
+    }
+
+    /// Kills `replace + with *` at the ORDERED-block child site (lib.rs:375).
+    /// The node-nesting test above covers the other `depth + 1`; ordered blocks
+    /// recurse through a separate arm and need their own case.
+    #[test]
+    fn nested_ordered_block_children_are_indented() {
+        let source = "#!liminal-explicit-v1\nordered {\n  literal \"inner\";\n}\n";
+        let formatter = MarkdownFormatter::default();
+        let emitted = formatter
+            .emit(&formatter.parse(source).expect("parses"))
+            .expect("emits");
+        assert!(
+            emitted.contains("\n  literal \"inner\";"),
+            "an ordered block's child must carry one indent level, got {emitted:?}"
+        );
+    }
+
+    /// Kills both `emit_in_dialect -> Ok(constant)` mutants (lib.rs:503). The
+    /// dialect entry point must emit the document, not a fixed string.
+    #[test]
+    fn emit_in_dialect_emits_the_document() {
+        let source = "#!liminal-explicit-v1\nliteral \"carried\";\n";
+        let formatter = MarkdownFormatter::default();
+        let document = formatter.parse(source).expect("parses");
+        let emitted = formatter
+            .emit_in_dialect(&document, SourceDialect::CompactOrExplicitV1)
+            .expect("emits");
+        assert!(
+            emitted.contains("carried"),
+            "emit_in_dialect dropped the document's content: {emitted:?}"
+        );
+        assert_eq!(
+            emitted,
+            formatter.emit(&document).expect("emits"),
+            "the explicit dialect must agree with `emit`"
+        );
+    }
+
+    /// Kills both `replace || with &&` in `emit_compact` (lib.rs:276, 283).
+    ///
+    /// The compact surface is only legal for a `paragraph` node holding exactly
+    /// one bare literal. Each disjunct must independently disqualify a
+    /// candidate, so each is given a document that violates ONLY that clause.
+    #[test]
+    fn compact_surface_is_refused_when_any_single_condition_fails() {
+        let formatter = MarkdownFormatter::default();
+        let compact = |source: &str| {
+            let doc = formatter.parse(source).expect("parses");
+            formatter
+                .emit_in_dialect(&doc, SourceDialect::CompactOrExplicitV1)
+                .expect("emits")
+        };
+        // Wrong node name only.
+        assert!(
+            compact("#!liminal-explicit-v1\nnode section {\n  literal \"t\";\n}\n")
+                .starts_with("#!liminal-explicit-v1"),
+            "a non-paragraph node has no compact spelling"
+        );
+        // Right name, but two children.
+        assert!(
+            compact(
+                "#!liminal-explicit-v1\nnode paragraph {\n  literal \"a\";\n  literal \"b\";\n}\n"
+            )
+            .starts_with("#!liminal-explicit-v1"),
+            "a paragraph with two children has no compact spelling"
+        );
+        // Right name and one child, but the child carries attributes.
+        assert!(
+            compact(
+                "#!liminal-explicit-v1\nnode paragraph {\n  node inner (id = \"i\") {\n    literal \"a\";\n  }\n}\n"
+            )
+            .starts_with("#!liminal-explicit-v1"),
+            "a paragraph whose child is not a bare literal has no compact spelling"
+        );
+    }
+
     #[test]
     fn explicit_surface_covers_all_eight_forms() {
         let source = concat!(
