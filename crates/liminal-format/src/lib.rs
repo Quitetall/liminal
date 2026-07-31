@@ -515,8 +515,8 @@ mod tests {
     // mutant that survives here silently weakens every law at once. The scoped
     // campaign left 7 of them alive; each test below names the mutant it kills.
 
-    fn key(name: &str) -> liminal_id::JurisdictionKey {
-        liminal_id::JurisdictionKey::Path(liminal_id::PathId(name.into()))
+    fn key(name: &str) -> JurisdictionKey {
+        JurisdictionKey::Path(PathId(name.into()))
     }
 
     fn buffer_component(generation: u64, content: &str) -> BasisComponent {
@@ -526,14 +526,14 @@ mod tests {
             epoch: liminal_id::SessionEpoch(7),
             generation,
             // The field ADDRESS equality deliberately ignores.
-            content_hash: Some(liminal_id::ContentHash::of(content.as_bytes())),
+            content_hash: Some(ContentHash::of(content.as_bytes())),
             base_file_hash: None,
         }
     }
 
-    fn basis(components: Vec<(liminal_id::JurisdictionKey, BasisComponent)>) -> WorkspaceBasis {
+    fn basis(components: Vec<(JurisdictionKey, BasisComponent)>) -> WorkspaceBasis {
         WorkspaceBasis {
-            transaction: liminal_id::TransactionId::from_uuid(uuid::Uuid::nil()),
+            transaction: TransactionId::from_uuid(uuid::Uuid::nil()),
             perspective: BasisPerspective::DurableOnly,
             components: components.into_iter().collect(),
         }
