@@ -2124,15 +2124,12 @@ mod tests {
             .map(|row| row.target.clone())
             .collect::<BTreeSet<_>>();
 
-        // The honest artifact must reach the per-row checks, or this proves
-        // nothing. It stops at the recorded F-09 crash, which is the correct
-        // fail-closed behaviour and is deferred to M19 — so assert on THAT
-        // rather than on success.
-        let err = verify_fuzz_rows(&rows, &present).expect_err("F-09's crash still stands");
-        assert!(
-            err.to_string().contains("every crash is a failing result"),
-            "unexpected error: {err}"
-        );
+        // The honest artifact must PASS, or the rejection below proves nothing.
+        // This assertion used to expect failure, because the committed evidence
+        // still carried F-09's crash; the campaign of 2026-07-30 is clean
+        // (5 targets, 150 target-minutes, 0 crashes, 0 artifacts), so the
+        // expectation flipped with the evidence.
+        verify_fuzz_rows(&rows, &present).expect("the committed fuzz evidence must be clean");
 
         rows[0].target = "target_nobody_wrote".to_owned();
         let err = verify_fuzz_rows(&rows, &present)
