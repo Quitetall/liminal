@@ -106,6 +106,25 @@ bench-gate:
 test-threaded:
     cargo test --workspace --all-targets
 
+# Mutation lane (M17.5 F-24). cargo-mutants copies the source tree per worker.
+# `.gitignore` excludes `/target`, which it honors, but `fuzz/target` is a
+# SECOND build directory (~656 MB) that it copies in full, once per worker. On
+# a machine whose /tmp is a tmpfs — this one is 32 GB — `-j 6` is ~4 GB of
+# RAM-backed copies of a build cache no mutant reads, and the campaign dies on
+# ENOSPC. The full ~2915-mutant campaign is that same copy, repeated.
+#
+# TMPDIR is pinned here rather than left to a doc note so a fresh checkout gets
+# it without reading the findings ledger.
+#
+# It must live OUTSIDE the repo. Pointing it at `.cache/` inside the tree makes
+# cargo-mutants copy its own worker copies into each new worker copy, and the
+# run dies on `File name too long` after nesting the path ~80 times deep.
+mutants-dir := env('HOME') / ".cache/liminal-mutants"
+
+mutants *ARGS:
+    mkdir -p {{ mutants-dir }}
+    TMPDIR={{ mutants-dir }} cargo mutants {{ ARGS }}
+
 # Everything CI runs, locally, in CI order
 ci: fmt-check lint
     cargo nextest run --workspace --all-features --profile ci

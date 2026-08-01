@@ -1243,11 +1243,22 @@ Fixed by pointing the copies at the NVMe, which has 155 GB free:
 TMPDIR=$HOME/.cache/liminal-mutants cargo mutants -p liminal-format -j 6
 ```
 
+Pinned in the `mutants` recipe rather than left here, so a fresh checkout gets
+it without reading this ledger. The directory must live **outside** the repo:
+pointing `TMPDIR` at `.cache/` inside the tree makes cargo-mutants copy its own
+worker copies into each new worker copy, and the run dies on `File name too
+long` after nesting the path roughly eighty levels deep. Observed, not theorized
+— it was the first thing tried.
+
 This is load-bearing for the deferred 2915-mutant campaign, not just the scoped
-run: that campaign is the same copy repeated ~2915 times. It would have failed
-the same way, after hours, and the failure mode is a `WARN`-shaped worker error
-rather than a clean abort — a campaign that lost workers to ENOSPC could report
-a kill rate over a fraction of the mutants it claimed.
+run: that campaign is the same copy repeated ~2915 times, and would have failed
+the same way after hours of work.
+
+**Observed failure mode, stated precisely:** cargo-mutants logged one `ERROR
+Worker thread failed` per affected worker and then aborted the whole run with a
+non-zero exit. It did *not* silently report a kill rate over a subset. That
+distinction matters — a partial-credit failure would have been an evidence
+integrity problem, and this is only a cost problem.
 
 Related, and already recorded: the ENOSPC that wrote a corrupt
 `.proptest-regressions` file earlier in M17.5 came from the same full `/tmp`.
