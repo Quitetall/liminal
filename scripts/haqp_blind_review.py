@@ -17,6 +17,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -77,27 +78,68 @@ def blocked(reason: str, *, commit: str, clean: bool) -> int:
 
 
 SYSTEM = "You are an isolated HAQP adversarial reviewer. Return JSON only."
-LOCAL_PREFIX = "local:"
+CODEX_PREFIX = "codex:"
+
+
+def backend_of(model: str) -> str:
+    """`codex` for the Codex CLI, `lamu` for anything lamu can route."""
+    return "codex" if model.startswith(CODEX_PREFIX) else "lamu"
+
+
+def codex_call(model: str, prompt: str) -> str:
+    """Run one non-interactive Codex session and return its final message.
+
+    ADR-0020 §6 wants two DIFFERENT model families.  Of lamu's cloud roster only
+    MiMo still answers, so the second family comes from the Codex CLI, which
+    authenticates against a ChatGPT account rather than an API key and is
+    therefore independent of every dead key in `api-keys.env`.
+
+    `--output-last-message` is used rather than parsing stdout: Codex interleaves
+    hook lines, tool traces and a token summary with the model's answer, and a
+    runner that scraped that stream would eventually mistake a trace line for a
+    review.
+
+    The session runs `--sandbox read-only` in a throwaway directory, never
+    `--cd` into the repo (`codex exec` is non-interactive, so nothing can prompt
+    for an approval it would then wait on).  The review context is supplied
+    entirely in the prompt, so both passes see byte-identical material; a
+    reviewer that could also wander the working tree would not be reviewing the
+    same fixed base as its counterpart.
+    """
+    with tempfile.TemporaryDirectory(prefix="haqp-codex-") as scratch:
+        last = Path(scratch) / "last-message.txt"
+        argv = [
+            "codex",
+            "exec",
+            "--sandbox",
+            "read-only",
+            "--skip-git-repo-check",
+            "--color",
+            "never",
+            "--output-last-message",
+            str(last),
+        ]
+        name = model[len(CODEX_PREFIX) :]
+        if name:
+            argv += ["--model", name]
+        argv.append("-")
+        completed = subprocess.run(
+            argv,
+            input=f"{SYSTEM}\n\n{prompt}",
+            capture_output=True,
+            text=True,
+            cwd=scratch,
+            timeout=3600,
+            check=False,
+        )
+        if not last.exists():
+            tail = redact((completed.stderr or completed.stdout or "").strip()[-400:])
+            raise RuntimeError(f"{model}: codex wrote no final message (exit {completed.returncode}): {tail}")
+        return last.read_text()
 
 
 def call_arguments(model: str, prompt: str, session_id: str) -> tuple[str, dict[str, Any]]:
-    """Pick the lamu tool for `model` and build its arguments.
-
-    ADR-0020 §6 wants two DIFFERENT model families, and the cloud roster has
-    collapsed to one vendor that answers.  A locally-served model is a second
-    family that costs nothing and cannot be revoked, so the runner has to be
-    able to drive both backends.  `local:` names route to lamu's on-disk
-    `query` tool; everything else is a cloud alias.
-    """
-    if model.startswith(LOCAL_PREFIX):
-        return "query", {
-            "model": model[len(LOCAL_PREFIX) :],
-            "prompt": prompt,
-            "system": SYSTEM,
-            "max_tokens": 32000,
-            "temperature": 0.1,
-            "origin": "haqp-blind-review",
-        }
+    """Build the lamu `cloud_query` arguments for `model`."""
     return "cloud_query", {
         "model": model,
         "prompt": prompt,
@@ -111,17 +153,13 @@ def call_arguments(model: str, prompt: str, session_id: str) -> tuple[str, dict[
 
 
 def mcp_call(model: str, prompt: str, session_id: str) -> str:
-    """Call lamu's stdio MCP directly; avoids stale outer MCP transports."""
+    """Send `prompt` to `model` on whichever backend can reach it."""
+    if backend_of(model) == "codex":
+        text = codex_call(model, prompt)
+        provider_failure(model, text)
+        return text
     tool, arguments = call_arguments(model, prompt, session_id)
-    # Each `lamu start` is an independent stdio server with its own in-memory
-    # model map. A model loaded by some other MCP client is "marked loaded but
-    # missing from" this one, so a local pass loads its own before querying.
-    # The load result is ignored: already-loaded is success, and a genuine
-    # failure surfaces on the query itself with a better message.
-    calls = []
-    if tool == "query":
-        calls.append(("load_model", {"name": arguments["model"]}))
-    calls.append((tool, arguments))
+    calls = [(tool, arguments)]
     requests = [
         {
             "jsonrpc": "2.0",
@@ -316,7 +354,7 @@ def run_pass(name: str, model: str, context: str, *, pass_two: bool) -> dict[str
             # reviewer and a cloud one are isolated in different ways, and a
             # record that hid the difference would let a reader assume the
             # stronger of the two.
-            "backend": "local" if model.startswith(LOCAL_PREFIX) else "cloud",
+            "backend": backend_of(model),
         },
         "isolated_session_hash": digest(session_id.encode()),
         "sanitized_prompt_hash": prompt_hash,
@@ -331,9 +369,9 @@ def run_pass(name: str, model: str, context: str, *, pass_two: bool) -> dict[str
             # cloud-side guarantee that was never requested, so the field states
             # only what was actually asked for and `session_state` says how the
             # isolation is obtained.
-            "ephemeral_session_requested": not model.startswith(LOCAL_PREFIX),
+            "ephemeral_session_requested": backend_of(model) == "lamu",
             "session_state": (
-                "stateless-local-call" if model.startswith(LOCAL_PREFIX) else "ephemeral-cloud-session"
+                "fresh-codex-session" if backend_of(model) == "codex" else "ephemeral-cloud-session"
             ),
             "prior_pass_artifact_supplied": False,
             "pass_two_original_spec_only": pass_two,
@@ -346,15 +384,17 @@ def run_pass(name: str, model: str, context: str, *, pass_two: bool) -> dict[str
     return record
 
 
-# Pass 1 is a LOCALLY served Gemma; pass 2 is MiMo in the cloud. ADR-0020 §6
-# needs two distinct model families, and as of 2026-08-01 MiMo is the only
-# cloud vendor that answers — DeepSeek's key is invalid and OpenRouter, which
-# is the route to every other family, can afford 72 tokens. Brian's ruling:
-# use the MiMo plan we already pay for, spend nothing on DeepSeek or
-# OpenRouter. A local model is therefore the second family: free, on disk,
-# and impossible for a provider outage to revoke.
+# Pass 1 is OpenAI via the Codex CLI; pass 2 is MiMo via lamu. ADR-0020 §6 needs
+# two distinct model families, and as of 2026-08-01 MiMo is the only vendor in
+# lamu's cloud roster that answers — DeepSeek's key is invalid and OpenRouter,
+# the route to every other family, can afford 72 tokens.
+#
+# Brian's rulings: use the MiMo plan already paid for, spend nothing on DeepSeek
+# or OpenRouter, and review in the CLOUD rather than locally. Codex satisfies all
+# three — it authenticates against a ChatGPT account, so it is independent of
+# every key in `api-keys.env` without adding a bill.
 PASSES = (
-    ("pass1", os.environ.get("HAQP_BLIND_PASS1", "local:gemma-4-26b-a4b-it-q4_k_m"), False),
+    ("pass1", os.environ.get("HAQP_BLIND_PASS1", "codex:gpt-5.6-sol"), False),
     ("pass2", os.environ.get("HAQP_BLIND_PASS2", "mimo-v2.5-pro"), True),
 )
 
@@ -443,16 +483,23 @@ def self_test() -> int:
         parse_json,
         json.dumps({**good, "attempts": [{**a, "classification": "false_positive"} for a in good["attempts"]]}),
     )
-    # Backend routing: a `local:` name sent to cloud_query would be looked up in
-    # the cloud registry, fail, and be reported as an unreachable vendor — while
-    # a cloud alias sent to the local tool would silently review with whatever
-    # model happened to be loaded. Neither is visible in the recorded evidence.
-    local_tool, local_args = call_arguments("local:some-model", "p", "s")
-    if local_tool != "query" or local_args.get("model") != "some-model":
-        failures.append(f"a local: model routed to {local_tool!r} as {local_args.get('model')!r}")
+    # Backend routing. A misroute is invisible in the recorded evidence: a
+    # `codex:` name handed to lamu is looked up in the cloud registry and
+    # reported as an unreachable vendor, while a lamu alias handed to Codex is
+    # reviewed by whatever model Codex defaults to. Both would produce a record
+    # naming a reviewer that never ran.
+    if backend_of("codex:gpt-5.6-sol") != "codex":
+        failures.append("a codex: model did not route to the Codex backend")
+    if backend_of("mimo-v2.5-pro") != "lamu":
+        failures.append("a lamu alias did not route to the lamu backend")
     cloud_tool, cloud_args = call_arguments("mimo-v2.5-pro", "p", "s")
     if cloud_tool != "cloud_query" or cloud_args.get("model") != "mimo-v2.5-pro":
-        failures.append(f"a cloud model routed to {cloud_tool!r} as {cloud_args.get('model')!r}")
+        failures.append(f"a lamu alias built {cloud_tool!r} arguments for {cloud_args.get('model')!r}")
+    # The two passes must not land on one backend: §6's independence is a claim
+    # about families, and two Codex sessions or two lamu models would satisfy the
+    # name-distinctness check while sharing a vendor.
+    if len({backend_of(model) for _, model, _ in PASSES}) != 2:
+        failures.append(f"both passes route to one backend: {[model for _, model, _ in PASSES]}")
 
     # Redaction is the one guard whose failure is silent: an unmasked key would
     # still produce a correct-looking blocked.json.
@@ -481,7 +528,7 @@ def self_test() -> int:
         print(f"SELF-TEST FAILED: {problem}", file=sys.stderr)
     if failures:
         return 1
-    print(json.dumps({"result": "self-test-ok", "checks": 11}))
+    print(json.dumps({"result": "self-test-ok", "checks": 12}))
     return 0
 
 

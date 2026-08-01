@@ -1375,34 +1375,45 @@ key is invalid; OpenRouter — the route to ~370 models covering every other
 family — returns `402` and "can only afford 72 tokens"; Zhipu, Moonshot,
 DashScope and Anthropic have no key configured.
 
-**Brian's ruling:** use the MiMo plan already paid for; spend nothing on
-DeepSeek or OpenRouter.
+**Brian's rulings:** use the MiMo plan already paid for; spend nothing on
+DeepSeek or OpenRouter; and review in the **cloud**, not locally.
 
-The second family is therefore a **locally served** model, which is free and
-cannot be revoked by a provider. The runner gained a `local:` backend that
-routes to lamu's on-disk `query` tool, canaried both ways — a `local:` name
-reaching `cloud_query` would be reported as an unreachable vendor, and a cloud
-alias reaching the local tool would silently review with whatever model happened
-to be loaded, and neither is visible in the recorded evidence. The record now
-carries `reviewer.backend` and `blindness_proof.session_state` so a reader
-cannot mistake a local pass for a cloud one.
+The second family therefore comes from the **Codex CLI** (`gpt-5.6-sol`), which
+authenticates against a ChatGPT account rather than an API key — so it is
+independent of every dead key in `api-keys.env` and adds no bill. OpenAI against
+Xiaomi satisfies §6's distinct-families requirement with two cloud reviewers.
 
-The packet's reviewer rows named `deepseek-v4-pro-blind-pass` (cannot run) and
-`codex-context-free-blind-pass` (never ran; the script has always driven MiMo).
-Both now name the real roster.
+### What the runner gained
 
-### Not yet runnable, and why
+- `backend_of()` routes `codex:` names to the Codex CLI and everything else to
+  lamu, canaried both directions. A misroute is invisible in the recorded
+  evidence: a `codex:` name handed to lamu is reported as an unreachable vendor,
+  while a lamu alias handed to Codex is reviewed by whatever model Codex
+  defaults to. Either produces a record naming a reviewer that never ran.
+- A canary that **both passes do not land on one backend**. §6's independence is
+  a claim about families, so two Codex sessions would pass the name-distinctness
+  check while sharing a vendor.
+- `--output-last-message` rather than stdout scraping. Codex interleaves hook
+  lines, tool traces and a token summary with the answer; a runner that scraped
+  that stream would eventually mistake a trace line for a review.
+- The Codex session runs `--sandbox read-only` in a throwaway directory and is
+  never `--cd`'d into the repo. The review context is supplied entirely in the
+  prompt, so both passes see byte-identical material — a reviewer free to wander
+  the working tree would not be reviewing the same fixed base as its
+  counterpart.
 
-- **VRAM.** `gemma-4-26b-a4b-it-q4_k_m` needs 17.6 GB; two of Brian's own jobs
-  (`serve_l2_baseline` 5.0 GB, Tritium `salt_distill_heldout` 5.1 GB) leave
-  ~13 GB. The only model that fits is a 4B, which would give §6 the FORM of
-  two-family independence with none of the substance. Not recorded as evidence.
-- **Cross-process model visibility.** Each `lamu start` is an independent stdio
-  server with its own model map, so a model loaded by another MCP client reads
-  as "marked loaded but missing from" this one. The runner now loads its own
-  model first. Verified: the load proceeds; generation then failed with
-  `backend failed: http: error sending request` after 305 s under a six-worker
-  mutation campaign, i.e. a starved box, not a wiring fault. Untested
-  end-to-end, and recorded as such.
+Verified end to end: a structured probe through `mcp_call('codex:gpt-5.6-sol')`
+returned `{"attempts":[],"probe":"ok"}` in 8 s with no trace contamination.
 
-Run the lane when the GPU is free. Nothing about it is claimed until then.
+### Rejected: a locally served second family
+
+An earlier iteration routed pass 1 to a local Gemma. Recorded because the reason
+it failed is worth keeping: `gemma-4-26b-a4b-it-q4_k_m` needs 17.6 GB and only
+~13 GB was free, so the only model that fit was a 4B — which would have given §6
+the FORM of two-family independence with none of the substance. Brian ruled the
+local path out entirely; a cloud reviewer of comparable capability to MiMo is
+what the requirement is actually for.
+
+Also uncovered along the way, and still true of lamu: each `lamu start` is an
+independent stdio server with its own model map, so a model loaded by one MCP
+client reads as "marked loaded but missing from" another.

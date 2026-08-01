@@ -1851,7 +1851,7 @@
  ],
  "reviews": [
   {
-   "reviewer": "gemma-4-26b-local-blind-pass",
+   "reviewer": "gpt-5.6-sol-blind-pass",
    "attempts": 12,
    "unresolved_verified_findings": 0,
    "result": "planned"
