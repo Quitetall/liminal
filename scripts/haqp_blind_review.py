@@ -156,6 +156,13 @@ def redact(text: str) -> str:
     the next vendor to.  A review runner that writes a live credential into a
     committed-adjacent artifact would be a far worse defect than the one it
     was built to report.
+
+    The pattern is deliberately blunt and WILL over-mask: commit SHAs, UUIDs,
+    and long hex error codes all disappear behind `****`.  That is the intended
+    trade — a vendor prefix allowlist (`sk-`, `AIza`, ...) only masks the keys
+    someone already thought of, and the whole point is the vendor we have not
+    used yet.  Do not tighten this to recover post-mortem detail; the untouched
+    response is still available in memory to the caller that wants it.
     """
     return re.sub(r"[A-Za-z0-9_\-]{20,}", "****", text)
 
@@ -385,12 +392,23 @@ def self_test() -> int:
             failures.append("provider_failure echoed an unmasked credential into its message")
     if "short-key" not in redact("short-key stays"):
         failures.append("redact() mangles ordinary prose")
+    # The bare-object path redacts BEFORE json.loads, so a mask that broke JSON
+    # structure would make provider_failure fall through and return quietly —
+    # the error object would then reach parse_json and be misreported all over
+    # again, which is exactly the failure F-23 was about.
+    leaky_object = '{"error":"key sk-abcdef0123456789abcdef0123456789 is invalid"}'
+    try:
+        provider_failure("m", leaky_object)
+        failures.append("provider_failure accepted a leaky bare error object")
+    except RuntimeError as exc:
+        if "sk-abcdef0123456789abcdef0123456789" in str(exc):
+            failures.append("provider_failure echoed an unmasked credential from a bare error object")
 
     for problem in failures:
         print(f"SELF-TEST FAILED: {problem}", file=sys.stderr)
     if failures:
         return 1
-    print(json.dumps({"result": "self-test-ok", "guards": 7}))
+    print(json.dumps({"result": "self-test-ok", "checks": 9}))
     return 0
 
 
