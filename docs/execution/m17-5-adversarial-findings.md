@@ -1490,3 +1490,43 @@ All four verified and fixed in the follow-up:
 4. **`--ephemeral` was missing** from the Codex invocation. This machine's
    config appears not to persist sessions, but a runner that keeps untrusted
    model output off disk must not depend on an unstated default.
+
+### F-27 verification results — 7 of pass 1's 9 confirmed
+
+| finding | claim | verdict |
+|---|---|---|
+| P1-A02 | mutant kills are status strings; no execution artifact read | **CONFIRMED** — no `verify_mutant_evidence` exists |
+| P1-A03 | canary catches likewise; `canaries.json` never consumed | **CONFIRMED** — no `verify_canary_evidence` exists |
+| P1-A04 | `evidence_hash` unvalidated | **CONFIRMED** — length-64 check only; not hex, never recomputed |
+| P1-A05 | review record's attempts not checked as records | **CONFIRMED** — `verify_review_evidence` counts the array and stops; 12 empty objects pass |
+| P1-A06 | findings/resolution not reconciled with the record | **CONFIRMED** — packet fields are cross-checked against each other, never against the record's own `findings`/`unresolved_verified_findings` |
+| P1-A07 | reviewer independence, family, isolation, blindness unenforced | **CONFIRMED** — nothing reads `reviewer.backend`, `model_family`, `identity_hash` or `blindness_proof`; the runner writes them and the verifier ignores them |
+| P1-A09 | sanitizer requirement not representable | **CONFIRMED** — `FuzzEvidence` has no sanitizer field; the campaign runs ASan and the artifact cannot say so |
+| P1-A01 | incremental/full share a parser and oracle | not yet verified |
+| P1-A08 | crash scenario evidence ignored | not yet verified |
+| P2-F04 | `double_recovery` collapses §5's two-run identity into one string | plausible; needs §5 read |
+
+### The shape of it
+
+Every confirmed finding is the same defect wearing different clothes: **the
+verifier checks the packet's shape and its self-consistency, and binds only some
+fields to artifacts a run produced.** Where M17.5 already did the binding work —
+fuzz, crash, review, provenance, test names — the gate is sound. Where it did
+not — mutants, canaries, generated hashes, review record contents, reviewer
+identity — the gate reads a claim and believes it.
+
+A07 is the sharpest instance and the most embarrassing: this session BUILT the
+`reviewer.backend` / `blindness_proof` fields to make §6's independence auditable,
+and the qualification verifier never looks at them. Producing evidence is not the
+same as checking it.
+
+### Fix batch (all before the §1 clean-tree rerun)
+
+1. `verify_mutant_evidence` + `verify_canary_evidence`, binding both to
+   committed artifacts, each with a canary that a fabricated status is rejected.
+2. Recompute `evidence_hash` from the generated artifact; require hex.
+3. Reconcile the review record: per-attempt field validation, findings and
+   resolution counts, and the reviewer identity/blindness proof.
+4. Add a sanitizer field to `FuzzEvidence` and require it.
+5. F-25's `content_witness` unit tests.
+6. The campaign survivor list.
