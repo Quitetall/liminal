@@ -1,1866 +1,1866 @@
 {
-  "suite_version": "phase1-haqp1-proposed-v1",
-  "status": "proposed",
-  "ratification": "unratified",
-  "qualification_state": "not-run",
-  "locked_acceptance_corpora_touched": false,
-  "requirements": [
-    {
-      "id": "P1-R001",
-      "kind": "law",
-      "source": "docs/execution/M18.md:D18.1",
-      "critical": true
-    },
-    {
-      "id": "P1-R002",
-      "kind": "law",
-      "source": "docs/execution/M18.md:D18.2",
-      "critical": true
-    },
-    {
-      "id": "P1-R003",
-      "kind": "law",
-      "source": "docs/execution/M18.md:D18.3",
-      "critical": true
-    },
-    {
-      "id": "P1-R004",
-      "kind": "law",
-      "source": "docs/execution/M18.md:D18.4",
-      "critical": true
-    },
-    {
-      "id": "P1-R005",
-      "kind": "law",
-      "source": "docs/execution/M18.md:D18.5",
-      "critical": true
-    },
-    {
-      "id": "P1-R006",
-      "kind": "law",
-      "source": "docs/execution/M18.md:D18.6",
-      "critical": true
-    },
-    {
-      "id": "P1-R007",
-      "kind": "gate",
-      "source": "docs/execution/M18.md:exit",
-      "critical": true
-    },
-    {
-      "id": "P1-R008",
-      "kind": "law",
-      "source": "docs/execution/M19.md:D19.1",
-      "critical": true
-    },
-    {
-      "id": "P1-R009",
-      "kind": "law",
-      "source": "docs/execution/M19.md:D19.2",
-      "critical": true
-    },
-    {
-      "id": "P1-R010",
-      "kind": "law",
-      "source": "docs/execution/M19.md:D19.3",
-      "critical": true
-    },
-    {
-      "id": "P1-R011",
-      "kind": "law",
-      "source": "docs/execution/M19.md:D19.4",
-      "critical": true
-    },
-    {
-      "id": "P1-R012",
-      "kind": "gate",
-      "source": "docs/execution/M19.md:exit",
-      "critical": true
-    },
-    {
-      "id": "P1-R013",
-      "kind": "law",
-      "source": "docs/execution/M20.md:D20.1",
-      "critical": true
-    },
-    {
-      "id": "P1-R014",
-      "kind": "law",
-      "source": "docs/execution/M20.md:D20.2",
-      "critical": true
-    },
-    {
-      "id": "P1-R015",
-      "kind": "fault",
-      "source": "docs/execution/M20.md:D20.3",
-      "critical": true
-    },
-    {
-      "id": "P1-R016",
-      "kind": "abuse",
-      "source": "docs/execution/M20.md:D20.4",
-      "critical": true
-    },
-    {
-      "id": "P1-R017",
-      "kind": "law",
-      "source": "docs/execution/M21.md:D21.1",
-      "critical": true
-    },
-    {
-      "id": "P1-R018",
-      "kind": "law",
-      "source": "docs/execution/M21.md:D21.2",
-      "critical": true
-    },
-    {
-      "id": "P1-R019",
-      "kind": "law",
-      "source": "docs/execution/M21.md:D21.3",
-      "critical": true
-    },
-    {
-      "id": "P1-R020",
-      "kind": "law",
-      "source": "docs/execution/M22.md:D22.1",
-      "critical": true
-    },
-    {
-      "id": "P1-R021",
-      "kind": "law",
-      "source": "docs/execution/M22.md:D22.2",
-      "critical": true
-    },
-    {
-      "id": "P1-R022",
-      "kind": "law",
-      "source": "docs/execution/M23.md:D23.1",
-      "critical": true
-    },
-    {
-      "id": "P1-R023",
-      "kind": "law",
-      "source": "docs/execution/M23.md:D23.6",
-      "critical": true
-    },
-    {
-      "id": "P1-R024",
-      "kind": "gate",
-      "source": "docs/execution/M24.md:D24.1",
-      "critical": true
-    },
-    {
-      "id": "P1-R025",
-      "kind": "law",
-      "source": "docs/execution/M20.md:D20.5",
-      "critical": true
-    },
-    {
-      "id": "P1-R026",
-      "kind": "law",
-      "source": "docs/execution/M20.md:D20.6",
-      "critical": true
-    },
-    {
-      "id": "P1-R027",
-      "kind": "law",
-      "source": "docs/execution/M20.md:D20.7",
-      "critical": true
-    },
-    {
-      "id": "P1-R028",
-      "kind": "law",
-      "source": "docs/execution/M21.md:D21.4",
-      "critical": true
-    },
-    {
-      "id": "P1-R029",
-      "kind": "law",
-      "source": "docs/execution/M21.md:D21.5",
-      "critical": true
-    },
-    {
-      "id": "P1-R030",
-      "kind": "law",
-      "source": "docs/execution/M21.md:D21.6",
-      "critical": true
-    },
-    {
-      "id": "P1-R031",
-      "kind": "law",
-      "source": "docs/execution/M21.md:D21.7",
-      "critical": true
-    },
-    {
-      "id": "P1-R032",
-      "kind": "law",
-      "source": "docs/execution/M22.md:D22.3",
-      "critical": true
-    },
-    {
-      "id": "P1-R033",
-      "kind": "law",
-      "source": "docs/execution/M22.md:D22.4",
-      "critical": true
-    },
-    {
-      "id": "P1-R034",
-      "kind": "law",
-      "source": "docs/execution/M22.md:D22.5",
-      "critical": true
-    },
-    {
-      "id": "P1-R035",
-      "kind": "law",
-      "source": "docs/execution/M22.md:D22.6",
-      "critical": true
-    },
-    {
-      "id": "P1-R036",
-      "kind": "law",
-      "source": "docs/execution/M22.md:D22.7",
-      "critical": true
-    }
-  ],
-  "tests": [
-    {
-      "id": "P1-T01",
-      "name": "laws::formatter_idempotence_law_holds",
-      "requirements": [
-        "P1-R001",
-        "P1-R002",
-        "P1-R003",
-        "P1-R026",
-        "P1-R027"
-      ],
-      "evidence": [
-        "positive"
-      ]
-    },
-    {
-      "id": "P1-T02",
-      "name": "laws::canonical_round_trip_law_holds",
-      "requirements": [
-        "P1-R004",
-        "P1-R005",
-        "P1-R006",
-        "P1-R012"
-      ],
-      "evidence": [
-        "positive"
-      ]
-    },
-    {
-      "id": "P1-T03",
-      "name": "laws::incremental_equals_full_compile_law_holds",
-      "requirements": [
-        "P1-R008",
-        "P1-R009",
-        "P1-R010",
-        "P1-R028",
-        "P1-R029",
-        "P1-R030",
-        "P1-R031"
-      ],
-      "evidence": [
-        "positive"
-      ]
-    },
-    {
-      "id": "P1-T04",
-      "name": "classes::malformed_source::malformed_source_never_panics_and_round_trips",
-      "requirements": [
-        "P1-R011",
-        "P1-R016",
-        "P1-R023",
-        "P1-R032"
-      ],
-      "evidence": [
-        "positive"
-      ]
-    },
-    {
-      "id": "P1-T05",
-      "name": "classes::malformed_source::fuzz_regressions_stay_fixed",
-      "requirements": [
-        "P1-R022",
-        "P1-R023"
-      ],
-      "evidence": [
-        "positive"
-      ]
-    },
-    {
-      "id": "P1-T06",
-      "name": "classes::golden_render::full_document_html_matches_golden",
-      "requirements": [
-        "P1-R013",
-        "P1-R014",
-        "P1-R025",
-        "P1-R033",
-        "P1-R036"
-      ],
-      "evidence": [
-        "positive"
-      ]
-    },
-    {
-      "id": "P1-T07",
-      "name": "classes::golden_render::incremental_patch_equals_full_render",
-      "requirements": [
-        "P1-R007",
-        "P1-R015",
-        "P1-R017",
-        "P1-R018",
-        "P1-R019",
-        "P1-R034",
-        "P1-R035"
-      ],
-      "evidence": [
-        "positive"
-      ]
-    },
-    {
-      "id": "P1-T08",
-      "name": "classes::migration::old_snapshots_open_after_format_evolution",
-      "requirements": [
-        "P1-R020",
-        "P1-R021",
-        "P1-R024"
-      ],
-      "evidence": [
-        "positive"
-      ]
-    },
-    {
-      "id": "P1-T09",
-      "name": "milestones::m18::rope_edit_outside_bounds_is_rejected",
-      "requirements": [
-        "P1-R001",
-        "P1-R002",
-        "P1-R003",
-        "P1-R004",
-        "P1-R005",
-        "P1-R006",
-        "P1-R007"
-      ],
-      "evidence": [
-        "negative"
-      ]
-    },
-    {
-      "id": "P1-T10",
-      "name": "milestones::m18::cst_parses_truncated_and_hostile_bytes_without_panic",
-      "requirements": [
-        "P1-R001",
-        "P1-R002",
-        "P1-R003",
-        "P1-R004",
-        "P1-R005",
-        "P1-R006",
-        "P1-R007"
-      ],
-      "evidence": [
-        "malformed"
-      ]
-    },
-    {
-      "id": "P1-T11",
-      "name": "milestones::m18::cst_spans_resolve_against_the_declared_source_basis",
-      "requirements": [
-        "P1-R001",
-        "P1-R002",
-        "P1-R003",
-        "P1-R004",
-        "P1-R005",
-        "P1-R006",
-        "P1-R007"
-      ],
-      "evidence": [
-        "basis"
-      ]
-    },
-    {
-      "id": "P1-T12",
-      "name": "milestones::m18::cst_parse_is_byte_deterministic_across_runs",
-      "requirements": [
-        "P1-R001",
-        "P1-R002",
-        "P1-R003",
-        "P1-R004",
-        "P1-R005",
-        "P1-R006",
-        "P1-R007"
-      ],
-      "evidence": [
-        "replay"
-      ]
-    },
-    {
-      "id": "P1-T13",
-      "name": "milestones::m19::explicit_syntax_rejects_unknown_forms_with_exact_diagnostics",
-      "requirements": [
-        "P1-R008",
-        "P1-R009",
-        "P1-R010",
-        "P1-R011",
-        "P1-R012"
-      ],
-      "evidence": [
-        "negative"
-      ]
-    },
-    {
-      "id": "P1-T14",
-      "name": "milestones::m19::hir_lowering_survives_malformed_markers_without_panic",
-      "requirements": [
-        "P1-R008",
-        "P1-R009",
-        "P1-R010",
-        "P1-R011",
-        "P1-R012"
-      ],
-      "evidence": [
-        "malformed"
-      ]
-    },
-    {
-      "id": "P1-T15",
-      "name": "milestones::m19::source_map_entries_carry_their_source_basis",
-      "requirements": [
-        "P1-R008",
-        "P1-R009",
-        "P1-R010",
-        "P1-R011",
-        "P1-R012"
-      ],
-      "evidence": [
-        "basis"
-      ]
-    },
-    {
-      "id": "P1-T16",
-      "name": "milestones::m19::hir_lowering_is_deterministic_across_runs",
-      "requirements": [
-        "P1-R008",
-        "P1-R009",
-        "P1-R010",
-        "P1-R011",
-        "P1-R012"
-      ],
-      "evidence": [
-        "replay"
-      ]
-    },
-    {
-      "id": "P1-T17",
-      "name": "milestones::m20::formatter_refuses_unrepresentable_documents_instead_of_lossy_emission",
-      "requirements": [
-        "P1-R013",
-        "P1-R014",
-        "P1-R015",
-        "P1-R016",
-        "P1-R025",
-        "P1-R026",
-        "P1-R027"
-      ],
-      "evidence": [
-        "negative"
-      ]
-    },
-    {
-      "id": "P1-T18",
-      "name": "milestones::m20::lim_fmt_survives_malformed_input_without_data_loss",
-      "requirements": [
-        "P1-R013",
-        "P1-R014",
-        "P1-R015",
-        "P1-R016",
-        "P1-R025",
-        "P1-R026",
-        "P1-R027"
-      ],
-      "evidence": [
-        "malformed"
-      ]
-    },
-    {
-      "id": "P1-T19",
-      "name": "milestones::m20::formatted_output_records_the_basis_it_formatted_at",
-      "requirements": [
-        "P1-R013",
-        "P1-R014",
-        "P1-R015",
-        "P1-R016",
-        "P1-R025",
-        "P1-R026",
-        "P1-R027"
-      ],
-      "evidence": [
-        "basis"
-      ]
-    },
-    {
-      "id": "P1-T20",
-      "name": "milestones::m20::formatting_is_deterministic_across_runs_and_paths",
-      "requirements": [
-        "P1-R013",
-        "P1-R014",
-        "P1-R015",
-        "P1-R016",
-        "P1-R025",
-        "P1-R026",
-        "P1-R027"
-      ],
-      "evidence": [
-        "replay"
-      ]
-    },
-    {
-      "id": "P1-T21",
-      "name": "milestones::m20::lim_fmt_interrupted_mid_write_leaves_no_partial_file",
-      "requirements": [
-        "P1-R013",
-        "P1-R014",
-        "P1-R015",
-        "P1-R016",
-        "P1-R025",
-        "P1-R026",
-        "P1-R027"
-      ],
-      "evidence": [
-        "fault"
-      ]
-    },
-    {
-      "id": "P1-T22",
-      "name": "milestones::m20::lim_fmt_rerun_after_interruption_is_idempotent",
-      "requirements": [
-        "P1-R013",
-        "P1-R014",
-        "P1-R015",
-        "P1-R016",
-        "P1-R025",
-        "P1-R026",
-        "P1-R027"
-      ],
-      "evidence": [
-        "recovery"
-      ]
-    },
-    {
-      "id": "P1-T23",
-      "name": "milestones::m21::incremental_rejects_edits_against_a_stale_basis",
-      "requirements": [
-        "P1-R017",
-        "P1-R018",
-        "P1-R019",
-        "P1-R028",
-        "P1-R029",
-        "P1-R030",
-        "P1-R031"
-      ],
-      "evidence": [
-        "negative"
-      ]
-    },
-    {
-      "id": "P1-T24",
-      "name": "milestones::m21::incremental_survives_malformed_edit_sequences",
-      "requirements": [
-        "P1-R017",
-        "P1-R018",
-        "P1-R019",
-        "P1-R028",
-        "P1-R029",
-        "P1-R030",
-        "P1-R031"
-      ],
-      "evidence": [
-        "malformed"
-      ]
-    },
-    {
-      "id": "P1-T25",
-      "name": "milestones::m21::incremental_outputs_name_their_governing_basis",
-      "requirements": [
-        "P1-R017",
-        "P1-R018",
-        "P1-R019",
-        "P1-R028",
-        "P1-R029",
-        "P1-R030",
-        "P1-R031"
-      ],
-      "evidence": [
-        "basis"
-      ]
-    },
-    {
-      "id": "P1-T26",
-      "name": "milestones::m21::incremental_recompilation_is_deterministic_across_runs",
-      "requirements": [
-        "P1-R017",
-        "P1-R018",
-        "P1-R019",
-        "P1-R028",
-        "P1-R029",
-        "P1-R030",
-        "P1-R031"
-      ],
-      "evidence": [
-        "replay"
-      ]
-    },
-    {
-      "id": "P1-T27",
-      "name": "milestones::m22::renderer_refuses_unescapable_constructs_rather_than_emitting_raw_html",
-      "requirements": [
-        "P1-R020",
-        "P1-R021",
-        "P1-R032",
-        "P1-R033",
-        "P1-R034",
-        "P1-R035",
-        "P1-R036"
-      ],
-      "evidence": [
-        "negative"
-      ]
-    },
-    {
-      "id": "P1-T28",
-      "name": "milestones::m22::renderer_escapes_hostile_payloads_without_panic",
-      "requirements": [
-        "P1-R020",
-        "P1-R021",
-        "P1-R032",
-        "P1-R033",
-        "P1-R034",
-        "P1-R035",
-        "P1-R036"
-      ],
-      "evidence": [
-        "malformed"
-      ]
-    },
-    {
-      "id": "P1-T29",
-      "name": "milestones::m22::rendered_output_carries_its_source_basis",
-      "requirements": [
-        "P1-R020",
-        "P1-R021",
-        "P1-R032",
-        "P1-R033",
-        "P1-R034",
-        "P1-R035",
-        "P1-R036"
-      ],
-      "evidence": [
-        "basis"
-      ]
-    },
-    {
-      "id": "P1-T30",
-      "name": "milestones::m22::html_rendering_is_byte_deterministic_across_runs",
-      "requirements": [
-        "P1-R020",
-        "P1-R021",
-        "P1-R032",
-        "P1-R033",
-        "P1-R034",
-        "P1-R035",
-        "P1-R036"
-      ],
-      "evidence": [
-        "replay"
-      ]
-    },
-    {
-      "id": "P1-T31",
-      "name": "milestones::m23::benchmark_gate_fails_on_regression_beyond_threshold",
-      "requirements": [
-        "P1-R022",
-        "P1-R023"
-      ],
-      "evidence": [
-        "negative"
-      ]
-    },
-    {
-      "id": "P1-T32",
-      "name": "milestones::m23::fuzz_corpus_replays_every_minimized_artifact_without_panic",
-      "requirements": [
-        "P1-R022",
-        "P1-R023"
-      ],
-      "evidence": [
-        "malformed"
-      ]
-    },
-    {
-      "id": "P1-T33",
-      "name": "milestones::m23::fuzz_regressions_record_the_basis_that_produced_them",
-      "requirements": [
-        "P1-R022",
-        "P1-R023"
-      ],
-      "evidence": [
-        "basis"
-      ]
-    },
-    {
-      "id": "P1-T34",
-      "name": "milestones::m23::fuzz_replay_is_deterministic_from_recorded_seeds",
-      "requirements": [
-        "P1-R022",
-        "P1-R023"
-      ],
-      "evidence": [
-        "replay"
-      ]
-    },
-    {
-      "id": "P1-T35",
-      "name": "milestones::m24::aggregate_gate_fails_when_any_phase1_gate_is_red",
-      "requirements": [
-        "P1-R024"
-      ],
-      "evidence": [
-        "negative"
-      ]
-    },
-    {
-      "id": "P1-T36",
-      "name": "milestones::m24::aggregate_gate_rejects_incomplete_evidence",
-      "requirements": [
-        "P1-R024"
-      ],
-      "evidence": [
-        "malformed"
-      ]
-    },
-    {
-      "id": "P1-T37",
-      "name": "milestones::m24::aggregate_gate_records_the_basis_of_every_input",
-      "requirements": [
-        "P1-R024"
-      ],
-      "evidence": [
-        "basis"
-      ]
-    },
-    {
-      "id": "P1-T38",
-      "name": "milestones::m24::aggregate_gate_result_is_reproducible",
-      "requirements": [
-        "P1-R024"
-      ],
-      "evidence": [
-        "replay"
-      ]
-    }
-  ],
-  "mutants": [
-    {
-      "id": "P1-M001",
-      "family": "source/CST/formatting",
-      "operator": "predicate-deletion",
-      "source": "P1-R001",
-      "defect": "accept empty formatted tree",
-      "killing_tests": [
-        "P1-T09",
-        "P1-T01"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M002",
-      "family": "source/CST/formatting",
-      "operator": "predicate-inversion",
-      "source": "P1-R001",
-      "defect": "invert formatter fixed-point predicate",
-      "killing_tests": [
-        "P1-T13",
-        "P1-T02"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M003",
-      "family": "source/CST/formatting",
-      "operator": "threshold-plus-one",
-      "source": "P1-R002",
-      "defect": "shift span end forward",
-      "killing_tests": [
-        "P1-T17",
-        "P1-T03"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M004",
-      "family": "source/CST/formatting",
-      "operator": "threshold-minus-one",
-      "source": "P1-R002",
-      "defect": "shift span end backward",
-      "killing_tests": [
-        "P1-T09",
-        "P1-T04"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M005",
-      "family": "source/CST/formatting",
-      "operator": "missing-enum-dispatch",
-      "source": "P1-R003",
-      "defect": "drop trivia token kind",
-      "killing_tests": [
-        "P1-T14",
-        "P1-T05"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M006",
-      "family": "source/CST/formatting",
-      "operator": "success-error-substitution",
-      "source": "P1-R004",
-      "defect": "treat malformed parse as clean success",
-      "killing_tests": [
-        "P1-T17",
-        "P1-T06"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M007",
-      "family": "source/CST/formatting",
-      "operator": "stale-basis-acceptance",
-      "source": "P1-R005",
-      "defect": "reuse source basis after edit",
-      "killing_tests": [
-        "P1-T11",
-        "P1-T07"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M008",
-      "family": "source/CST/formatting",
-      "operator": "wrong-holder-selection",
-      "source": "P1-R006",
-      "defect": "classify source node as graph-native",
-      "killing_tests": [
-        "P1-T15",
-        "P1-T08"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M009",
-      "family": "source/CST/formatting",
-      "operator": "skipped-durable-transition",
-      "source": "P1-R007",
-      "defect": "skip regression fixture write",
-      "killing_tests": [
-        "P1-T22",
-        "P1-T01"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M010",
-      "family": "source/CST/formatting",
-      "operator": "disabled-crash-point",
-      "source": "P1-R015",
-      "defect": "remove source fault occurrence",
-      "killing_tests": [
-        "P1-T10",
-        "P1-T02"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M011",
-      "family": "source/CST/formatting",
-      "operator": "ordering-nondeterminism",
-      "source": "P1-R003",
-      "defect": "emit unordered attributes",
-      "killing_tests": [
-        "P1-T16",
-        "P1-T03"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M012",
-      "family": "source/CST/formatting",
-      "operator": "oracle-short-circuit",
-      "source": "P1-R004",
-      "defect": "compare output to itself",
-      "killing_tests": [
-        "P1-T18",
-        "P1-T04"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M013",
-      "family": "source/CST/formatting",
-      "operator": "broadened-allow-list",
-      "source": "P1-R016",
-      "defect": "allow any malformed fixture label",
-      "killing_tests": [
-        "P1-T09",
-        "P1-T05"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M014",
-      "family": "graph/interchange codecs",
-      "operator": "predicate-deletion",
-      "source": "P1-R008",
-      "defect": "drop graph round-trip equality",
-      "killing_tests": [
-        "P1-T27",
-        "P1-T06"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M015",
-      "family": "graph/interchange codecs",
-      "operator": "predicate-inversion",
-      "source": "P1-R008",
-      "defect": "invert node-presence check",
-      "killing_tests": [
-        "P1-T13",
-        "P1-T07"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M016",
-      "family": "graph/interchange codecs",
-      "operator": "threshold-plus-one",
-      "source": "P1-R009",
-      "defect": "advance relation count",
-      "killing_tests": [
-        "P1-T27",
-        "P1-T08"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M017",
-      "family": "graph/interchange codecs",
-      "operator": "threshold-minus-one",
-      "source": "P1-R009",
-      "defect": "drop relation count",
-      "killing_tests": [
-        "P1-T13",
-        "P1-T01"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M018",
-      "family": "graph/interchange codecs",
-      "operator": "missing-enum-dispatch",
-      "source": "P1-R010",
-      "defect": "drop edge kind dispatch",
-      "killing_tests": [
-        "P1-T28",
-        "P1-T02"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M019",
-      "family": "graph/interchange codecs",
-      "operator": "success-error-substitution",
-      "source": "P1-R011",
-      "defect": "accept invalid interchange payload",
-      "killing_tests": [
-        "P1-T13",
-        "P1-T03"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M020",
-      "family": "graph/interchange codecs",
-      "operator": "stale-basis-acceptance",
-      "source": "P1-R010",
-      "defect": "decode against stale schema basis",
-      "killing_tests": [
-        "P1-T29",
-        "P1-T04"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M021",
-      "family": "graph/interchange codecs",
-      "operator": "wrong-holder-selection",
-      "source": "P1-R012",
-      "defect": "resolve EXTERNAL_VALUE ungoverned",
-      "killing_tests": [
-        "P1-T15",
-        "P1-T05"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M022",
-      "family": "graph/interchange codecs",
-      "operator": "skipped-durable-transition",
-      "source": "P1-R015",
-      "defect": "omit codec checkpoint record",
-      "killing_tests": [
-        "P1-T28",
-        "P1-T06"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M023",
-      "family": "graph/interchange codecs",
-      "operator": "disabled-crash-point",
-      "source": "P1-R015",
-      "defect": "disable graph codec boundary",
-      "killing_tests": [
-        "P1-T14",
-        "P1-T07"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M024",
-      "family": "graph/interchange codecs",
-      "operator": "ordering-nondeterminism",
-      "source": "P1-R009",
-      "defect": "serialize node map unordered",
-      "killing_tests": [
-        "P1-T30",
-        "P1-T08"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M025",
-      "family": "graph/interchange codecs",
-      "operator": "oracle-short-circuit",
-      "source": "P1-R008",
-      "defect": "self-compare encoded bytes",
-      "killing_tests": [
-        "P1-T14",
-        "P1-T01"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M026",
-      "family": "graph/interchange codecs",
-      "operator": "broadened-allow-list",
-      "source": "P1-R011",
-      "defect": "allow unknown graph fields",
-      "killing_tests": [
-        "P1-T27",
-        "P1-T02"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M027",
-      "family": "transforms/projections",
-      "operator": "predicate-deletion",
-      "source": "P1-R013",
-      "defect": "skip transform equality law",
-      "killing_tests": [
-        "P1-T27",
-        "P1-T03"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M028",
-      "family": "transforms/projections",
-      "operator": "predicate-inversion",
-      "source": "P1-R013",
-      "defect": "invert projection inclusion",
-      "killing_tests": [
-        "P1-T13",
-        "P1-T04"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M029",
-      "family": "transforms/projections",
-      "operator": "threshold-plus-one",
-      "source": "P1-R014",
-      "defect": "advance patch offset",
-      "killing_tests": [
-        "P1-T27",
-        "P1-T05"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M030",
-      "family": "transforms/projections",
-      "operator": "threshold-minus-one",
-      "source": "P1-R014",
-      "defect": "retreat patch offset",
-      "killing_tests": [
-        "P1-T13",
-        "P1-T06"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M031",
-      "family": "transforms/projections",
-      "operator": "missing-enum-dispatch",
-      "source": "P1-R013",
-      "defect": "drop transform variant",
-      "killing_tests": [
-        "P1-T28",
-        "P1-T07"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M032",
-      "family": "transforms/projections",
-      "operator": "success-error-substitution",
-      "source": "P1-R016",
-      "defect": "treat rejected transform as success",
-      "killing_tests": [
-        "P1-T13",
-        "P1-T08"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M033",
-      "family": "transforms/projections",
-      "operator": "stale-basis-acceptance",
-      "source": "P1-R017",
-      "defect": "apply transform to stale revision",
-      "killing_tests": [
-        "P1-T29",
-        "P1-T01"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M034",
-      "family": "transforms/projections",
-      "operator": "wrong-holder-selection",
-      "source": "P1-R014",
-      "defect": "choose external holder for projection",
-      "killing_tests": [
-        "P1-T15",
-        "P1-T02"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M035",
-      "family": "transforms/projections",
-      "operator": "skipped-durable-transition",
-      "source": "P1-R015",
-      "defect": "skip projection journal record",
-      "killing_tests": [
-        "P1-T28",
-        "P1-T03"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M036",
-      "family": "transforms/projections",
-      "operator": "disabled-crash-point",
-      "source": "P1-R015",
-      "defect": "disable transform recovery point",
-      "killing_tests": [
-        "P1-T14",
-        "P1-T04"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M037",
-      "family": "transforms/projections",
-      "operator": "ordering-nondeterminism",
-      "source": "P1-R013",
-      "defect": "permute independent transform order",
-      "killing_tests": [
-        "P1-T30",
-        "P1-T05"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M038",
-      "family": "transforms/projections",
-      "operator": "oracle-short-circuit",
-      "source": "P1-R014",
-      "defect": "compare incremental render to itself",
-      "killing_tests": [
-        "P1-T14",
-        "P1-T06"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M039",
-      "family": "transforms/projections",
-      "operator": "broadened-allow-list",
-      "source": "P1-R016",
-      "defect": "allow unsupported projection payload",
-      "killing_tests": [
-        "P1-T27",
-        "P1-T07"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M040",
-      "family": "repair/ILRP/recovery",
-      "operator": "predicate-deletion",
-      "source": "P1-R015",
-      "defect": "delete recovery terminal check",
-      "killing_tests": [
-        "P1-T31",
-        "P1-T08"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M041",
-      "family": "repair/ILRP/recovery",
-      "operator": "predicate-inversion",
-      "source": "P1-R015",
-      "defect": "invert idempotent recovery equality",
-      "killing_tests": [
-        "P1-T17",
-        "P1-T01"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M042",
-      "family": "repair/ILRP/recovery",
-      "operator": "threshold-plus-one",
-      "source": "P1-R015",
-      "defect": "advance occurrence counter",
-      "killing_tests": [
-        "P1-T31",
-        "P1-T02"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M043",
-      "family": "repair/ILRP/recovery",
-      "operator": "threshold-minus-one",
-      "source": "P1-R015",
-      "defect": "retreat occurrence counter",
-      "killing_tests": [
-        "P1-T17",
-        "P1-T03"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M044",
-      "family": "repair/ILRP/recovery",
-      "operator": "missing-enum-dispatch",
-      "source": "P1-R015",
-      "defect": "drop Finalizing recovery branch",
-      "killing_tests": [
-        "P1-T32",
-        "P1-T04"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M045",
-      "family": "repair/ILRP/recovery",
-      "operator": "success-error-substitution",
-      "source": "P1-R016",
-      "defect": "commit contested repair",
-      "killing_tests": [
-        "P1-T17",
-        "P1-T05"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M046",
-      "family": "repair/ILRP/recovery",
-      "operator": "stale-basis-acceptance",
-      "source": "P1-R017",
-      "defect": "recover with stale Basis",
-      "killing_tests": [
-        "P1-T33",
-        "P1-T06"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M047",
-      "family": "repair/ILRP/recovery",
-      "operator": "wrong-holder-selection",
-      "source": "P1-R015",
-      "defect": "apply graph step as file step",
-      "killing_tests": [
-        "P1-T19",
-        "P1-T07"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M048",
-      "family": "repair/ILRP/recovery",
-      "operator": "skipped-durable-transition",
-      "source": "P1-R015",
-      "defect": "skip ack persistence",
-      "killing_tests": [
-        "P1-T32",
-        "P1-T08"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M049",
-      "family": "repair/ILRP/recovery",
-      "operator": "disabled-crash-point",
-      "source": "P1-R015",
-      "defect": "disable before_ack point",
-      "killing_tests": [
-        "P1-T21",
-        "P1-T01"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M050",
-      "family": "repair/ILRP/recovery",
-      "operator": "ordering-nondeterminism",
-      "source": "P1-R015",
-      "defect": "recover steps unordered",
-      "killing_tests": [
-        "P1-T34",
-        "P1-T02"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M051",
-      "family": "repair/ILRP/recovery",
-      "operator": "oracle-short-circuit",
-      "source": "P1-R015",
-      "defect": "compare recovery digest to itself",
-      "killing_tests": [
-        "P1-T18",
-        "P1-T03"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M052",
-      "family": "repair/ILRP/recovery",
-      "operator": "broadened-allow-list",
-      "source": "P1-R016",
-      "defect": "allow mixed Basis recovery",
-      "killing_tests": [
-        "P1-T31",
-        "P1-T04"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M053",
-      "family": "Basis/revision/query invalidation",
-      "operator": "predicate-deletion",
-      "source": "P1-R017",
-      "defect": "delete invalidation predicate",
-      "killing_tests": [
-        "P1-T23",
-        "P1-T05"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M054",
-      "family": "Basis/revision/query invalidation",
-      "operator": "predicate-inversion",
-      "source": "P1-R017",
-      "defect": "invert revision freshness check",
-      "killing_tests": [
-        "P1-T35",
-        "P1-T06"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M055",
-      "family": "Basis/revision/query invalidation",
-      "operator": "threshold-plus-one",
-      "source": "P1-R018",
-      "defect": "advance revision clock",
-      "killing_tests": [
-        "P1-T23",
-        "P1-T07"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M056",
-      "family": "Basis/revision/query invalidation",
-      "operator": "threshold-minus-one",
-      "source": "P1-R018",
-      "defect": "retreat revision clock",
-      "killing_tests": [
-        "P1-T35",
-        "P1-T08"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M057",
-      "family": "Basis/revision/query invalidation",
-      "operator": "missing-enum-dispatch",
-      "source": "P1-R019",
-      "defect": "drop BasisPerspective variant",
-      "killing_tests": [
-        "P1-T24",
-        "P1-T01"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M058",
-      "family": "Basis/revision/query invalidation",
-      "operator": "success-error-substitution",
-      "source": "P1-R016",
-      "defect": "accept invalid revision query",
-      "killing_tests": [
-        "P1-T35",
-        "P1-T02"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M059",
-      "family": "Basis/revision/query invalidation",
-      "operator": "stale-basis-acceptance",
-      "source": "P1-R017",
-      "defect": "serve query from stale Basis",
-      "killing_tests": [
-        "P1-T25",
-        "P1-T03"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M060",
-      "family": "Basis/revision/query invalidation",
-      "operator": "wrong-holder-selection",
-      "source": "P1-R019",
-      "defect": "bind query to wrong perspective",
-      "killing_tests": [
-        "P1-T37",
-        "P1-T04"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M061",
-      "family": "Basis/revision/query invalidation",
-      "operator": "skipped-durable-transition",
-      "source": "P1-R015",
-      "defect": "skip revision publish checkpoint",
-      "killing_tests": [
-        "P1-T24",
-        "P1-T05"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M062",
-      "family": "Basis/revision/query invalidation",
-      "operator": "disabled-crash-point",
-      "source": "P1-R015",
-      "defect": "disable revision recovery point",
-      "killing_tests": [
-        "P1-T36",
-        "P1-T06"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M063",
-      "family": "Basis/revision/query invalidation",
-      "operator": "ordering-nondeterminism",
-      "source": "P1-R018",
-      "defect": "iterate invalidations unordered",
-      "killing_tests": [
-        "P1-T26",
-        "P1-T07"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M064",
-      "family": "Basis/revision/query invalidation",
-      "operator": "oracle-short-circuit",
-      "source": "P1-R017",
-      "defect": "self-compare query result",
-      "killing_tests": [
-        "P1-T36",
-        "P1-T08"
-      ],
-      "disposition": "predeclared"
-    },
-    {
-      "id": "P1-M065",
-      "family": "Basis/revision/query invalidation",
-      "operator": "broadened-allow-list",
-      "source": "P1-R019",
-      "defect": "allow unknown Basis perspective",
-      "killing_tests": [
-        "P1-T23",
-        "P1-T01"
-      ],
-      "disposition": "predeclared"
-    }
-  ],
-  "canaries": [
-    {
-      "id": "C01",
-      "gate": "status",
-      "violation": "set status to ratified",
-      "expected_failure": "status: expected proposed",
-      "result": "predeclared"
-    },
-    {
-      "id": "C02",
-      "gate": "ratification",
-      "violation": "set ratification to approved",
-      "expected_failure": "ratification: expected unratified",
-      "result": "predeclared"
-    },
-    {
-      "id": "C03",
-      "gate": "locked corpus",
-      "violation": "set locked_acceptance_corpora_touched true",
-      "expected_failure": "locked_acceptance_corpora_touched must be false",
-      "result": "predeclared"
-    },
-    {
-      "id": "C04",
-      "gate": "requirements",
-      "violation": "duplicate requirement id",
-      "expected_failure": "duplicate requirement id",
-      "result": "predeclared"
-    },
-    {
-      "id": "C05",
-      "gate": "tests",
-      "violation": "remove P1-T08",
-      "expected_failure": "test ids differ",
-      "result": "predeclared"
-    },
-    {
-      "id": "C06",
-      "gate": "tests",
-      "violation": "empty requirement mapping",
-      "expected_failure": "has no requirement mapping",
-      "result": "predeclared"
-    },
-    {
-      "id": "C07",
-      "gate": "mutants",
-      "violation": "remove one mutant",
-      "expected_failure": "mutant count must be 65",
-      "result": "predeclared"
-    },
-    {
-      "id": "C08",
-      "gate": "mutants",
-      "violation": "operator supplies 17 mutants",
-      "expected_failure": "max 16",
-      "result": "predeclared"
-    },
-    {
-      "id": "C09",
-      "gate": "mutants",
-      "violation": "family supplies 12 mutants",
-      "expected_failure": "mutant count must be 13",
-      "result": "predeclared"
-    },
-    {
-      "id": "C10",
-      "gate": "canaries",
-      "violation": "remove C16",
-      "expected_failure": "canary ids differ",
-      "result": "predeclared"
-    },
-    {
-      "id": "C11",
-      "gate": "generated",
-      "violation": "accepted below 100000",
-      "expected_failure": "accepted cases below 100000",
-      "result": "predeclared"
-    },
-    {
-      "id": "C12",
-      "gate": "generated",
-      "violation": "discard rate above 1 percent",
-      "expected_failure": "discard rate exceeds 1%",
-      "result": "predeclared"
-    },
-    {
-      "id": "C13",
-      "gate": "fuzz",
-      "violation": "fuzz minutes below 30",
-      "expected_failure": "fuzz minutes below 30",
-      "result": "predeclared"
-    },
-    {
-      "id": "C14",
-      "gate": "crash",
-      "violation": "drop before_ack boundary",
-      "expected_failure": "crash-boundary inventory mismatch",
-      "result": "predeclared"
-    },
-    {
-      "id": "C15",
-      "gate": "reviews",
-      "violation": "review attempts below 12",
-      "expected_failure": "has fewer than 12 attempts",
-      "result": "predeclared"
-    },
-    {
-      "id": "C16",
-      "gate": "markdown",
-      "violation": "remove packet digest",
-      "expected_failure": "review packet markdown missing packet digest",
-      "result": "predeclared"
-    }
-  ],
-  "generated": [
-    {
-      "family": "source/CST/formatting",
-      "accepted": 100000,
-      "attempts": 100204,
-      "discards": 204,
-      "fuzz_minutes": 30,
-      "seed_categories": [
-        "empty",
-        "single-token",
-        "whitespace",
-        "unicode",
-        "long-line",
-        "truncated",
-        "unterminated",
-        "nested",
-        "deep",
-        "wide",
-        "control-byte",
-        "invalid-utf8",
-        "comment",
-        "escape",
-        "boundary-offset",
-        "hostile"
-      ],
-      "result": "planned",
-      "seed": 11400714819323198485,
-      "evidence_hash": "afd8a1b3b15c2287102d0a8a8fe676a02ed4a80546afc6bdff9695a1d6a786a6"
-    },
-    {
-      "family": "graph/interchange codecs",
-      "accepted": 100000,
-      "attempts": 100133,
-      "discards": 133,
-      "fuzz_minutes": 30,
-      "seed_categories": [
-        "empty",
-        "single-node",
-        "single-edge",
-        "duplicate-id",
-        "missing-node",
-        "cycle",
-        "dag",
-        "wide",
-        "deep",
-        "unknown-kind",
-        "external-value",
-        "comment",
-        "large-payload",
-        "truncated-json",
-        "invalid-json",
-        "hostile"
-      ],
-      "result": "planned",
-      "seed": 11400713719811571110,
-      "evidence_hash": "2a1a22034e3070e064c9e6e4ebbfaf69bf37af571b56431d54396adde5ea230e"
-    },
-    {
-      "family": "transforms/projections",
-      "accepted": 100000,
-      "attempts": 100000,
-      "discards": 0,
-      "fuzz_minutes": 30,
-      "seed_categories": [
-        "identity",
-        "insert",
-        "delete",
-        "replace",
-        "move",
-        "overlap",
-        "commute",
-        "conflict",
-        "empty",
-        "deep",
-        "wide",
-        "invalid-span",
-        "boundary-span",
-        "large-patch",
-        "truncated",
-        "hostile"
-      ],
-      "result": "planned",
-      "seed": 11400717018346454899,
-      "evidence_hash": "750e899f4d460edbfb9f5127d4f3484b4912265f770b0d0edc29dbd10b66ed6d"
-    },
-    {
-      "family": "repair/ILRP/recovery",
-      "accepted": 100000,
-      "attempts": 100242,
-      "discards": 242,
-      "fuzz_minutes": 30,
-      "seed_categories": [
-        "prepared",
-        "applying",
-        "external-applied",
-        "finalizing",
-        "committed",
-        "needs-review",
-        "graph-step",
-        "file-step",
-        "two-step",
-        "contested",
-        "poststate",
-        "cycle",
-        "missing-step",
-        "duplicate-ack",
-        "truncated-intent",
-        "hostile"
-      ],
-      "result": "planned",
-      "seed": 11400715918834825484,
-      "evidence_hash": "0346dbba691941b53ec5d4db8c9c8f61b055fe20680c21bd7607623d5decfa25"
-    },
-    {
-      "family": "Basis/revision/query invalidation",
-      "accepted": 100000,
-      "attempts": 100260,
-      "discards": 260,
-      "fuzz_minutes": 30,
-      "seed_categories": [
-        "empty-basis",
-        "single-revision",
-        "branch",
-        "merge",
-        "client-scoped",
-        "durable-only",
-        "published",
-        "federated",
-        "stale",
-        "fresh",
-        "invalid-token",
-        "large-frontier",
-        "unknown-perspective",
-        "truncated",
-        "reordered",
-        "hostile"
-      ],
-      "result": "planned",
-      "seed": 11400719217369709273,
-      "evidence_hash": "a13f7367cfd8aec45ad8b6a215e7944acce84dc4ef9bc18a6220fa9ce5247bbc"
-    }
-  ],
-  "crash_boundaries": [
-    {
-      "boundary": "ilrp/before_intent_commit",
-      "before": true,
-      "after": true,
-      "result": "registered"
-    },
-    {
-      "boundary": "ilrp/after_intent_commit",
-      "before": true,
-      "after": true,
-      "result": "registered"
-    },
-    {
-      "boundary": "ilrp/before_external_apply",
-      "before": true,
-      "after": true,
-      "result": "registered"
-    },
-    {
-      "boundary": "ilrp/after_external_apply",
-      "before": true,
-      "after": true,
-      "result": "registered"
-    },
-    {
-      "boundary": "ilrp/before_ack",
-      "before": true,
-      "after": true,
-      "result": "registered"
-    },
-    {
-      "boundary": "ilrp/after_ack",
-      "before": true,
-      "after": true,
-      "result": "registered"
-    },
-    {
-      "boundary": "ilrp/before_finalize",
-      "before": true,
-      "after": true,
-      "result": "registered"
-    },
-    {
-      "boundary": "ilrp/after_finalize_before_notify",
-      "before": true,
-      "after": true,
-      "result": "registered"
-    }
-  ],
-  "reviews": [
-    {
-      "reviewer": "gemma-4-26b-local-blind-pass",
-      "attempts": 12,
-      "unresolved_verified_findings": 0,
-      "result": "planned"
-    },
-    {
-      "reviewer": "mimo-v2.5-pro-context-free-blind-pass",
-      "attempts": 12,
-      "unresolved_verified_findings": 0,
-      "result": "planned"
-    }
-  ]
+ "suite_version": "phase1-haqp1-proposed-v1",
+ "status": "proposed",
+ "ratification": "unratified",
+ "qualification_state": "not-run",
+ "locked_acceptance_corpora_touched": false,
+ "requirements": [
+  {
+   "id": "P1-R001",
+   "kind": "law",
+   "source": "docs/execution/M18.md:D18.1",
+   "critical": true
+  },
+  {
+   "id": "P1-R002",
+   "kind": "law",
+   "source": "docs/execution/M18.md:D18.2",
+   "critical": true
+  },
+  {
+   "id": "P1-R003",
+   "kind": "law",
+   "source": "docs/execution/M18.md:D18.3",
+   "critical": true
+  },
+  {
+   "id": "P1-R004",
+   "kind": "law",
+   "source": "docs/execution/M18.md:D18.4",
+   "critical": true
+  },
+  {
+   "id": "P1-R005",
+   "kind": "law",
+   "source": "docs/execution/M18.md:D18.5",
+   "critical": true
+  },
+  {
+   "id": "P1-R006",
+   "kind": "law",
+   "source": "docs/execution/M18.md:D18.6",
+   "critical": true
+  },
+  {
+   "id": "P1-R007",
+   "kind": "gate",
+   "source": "docs/execution/M18.md:exit",
+   "critical": true
+  },
+  {
+   "id": "P1-R008",
+   "kind": "law",
+   "source": "docs/execution/M19.md:D19.1",
+   "critical": true
+  },
+  {
+   "id": "P1-R009",
+   "kind": "law",
+   "source": "docs/execution/M19.md:D19.2",
+   "critical": true
+  },
+  {
+   "id": "P1-R010",
+   "kind": "law",
+   "source": "docs/execution/M19.md:D19.3",
+   "critical": true
+  },
+  {
+   "id": "P1-R011",
+   "kind": "law",
+   "source": "docs/execution/M19.md:D19.4",
+   "critical": true
+  },
+  {
+   "id": "P1-R012",
+   "kind": "gate",
+   "source": "docs/execution/M19.md:exit",
+   "critical": true
+  },
+  {
+   "id": "P1-R013",
+   "kind": "law",
+   "source": "docs/execution/M20.md:D20.1",
+   "critical": true
+  },
+  {
+   "id": "P1-R014",
+   "kind": "law",
+   "source": "docs/execution/M20.md:D20.2",
+   "critical": true
+  },
+  {
+   "id": "P1-R015",
+   "kind": "fault",
+   "source": "docs/execution/M20.md:D20.3",
+   "critical": true
+  },
+  {
+   "id": "P1-R016",
+   "kind": "abuse",
+   "source": "docs/execution/M20.md:D20.4",
+   "critical": true
+  },
+  {
+   "id": "P1-R017",
+   "kind": "law",
+   "source": "docs/execution/M21.md:D21.1",
+   "critical": true
+  },
+  {
+   "id": "P1-R018",
+   "kind": "law",
+   "source": "docs/execution/M21.md:D21.2",
+   "critical": true
+  },
+  {
+   "id": "P1-R019",
+   "kind": "law",
+   "source": "docs/execution/M21.md:D21.3",
+   "critical": true
+  },
+  {
+   "id": "P1-R020",
+   "kind": "law",
+   "source": "docs/execution/M22.md:D22.1",
+   "critical": true
+  },
+  {
+   "id": "P1-R021",
+   "kind": "law",
+   "source": "docs/execution/M22.md:D22.2",
+   "critical": true
+  },
+  {
+   "id": "P1-R022",
+   "kind": "law",
+   "source": "docs/execution/M23.md:D23.1",
+   "critical": true
+  },
+  {
+   "id": "P1-R023",
+   "kind": "law",
+   "source": "docs/execution/M23.md:D23.6",
+   "critical": true
+  },
+  {
+   "id": "P1-R024",
+   "kind": "gate",
+   "source": "docs/execution/M24.md:D24.1",
+   "critical": true
+  },
+  {
+   "id": "P1-R025",
+   "kind": "law",
+   "source": "docs/execution/M20.md:D20.5",
+   "critical": true
+  },
+  {
+   "id": "P1-R026",
+   "kind": "law",
+   "source": "docs/execution/M20.md:D20.6",
+   "critical": true
+  },
+  {
+   "id": "P1-R027",
+   "kind": "law",
+   "source": "docs/execution/M20.md:D20.7",
+   "critical": true
+  },
+  {
+   "id": "P1-R028",
+   "kind": "law",
+   "source": "docs/execution/M21.md:D21.4",
+   "critical": true
+  },
+  {
+   "id": "P1-R029",
+   "kind": "law",
+   "source": "docs/execution/M21.md:D21.5",
+   "critical": true
+  },
+  {
+   "id": "P1-R030",
+   "kind": "law",
+   "source": "docs/execution/M21.md:D21.6",
+   "critical": true
+  },
+  {
+   "id": "P1-R031",
+   "kind": "law",
+   "source": "docs/execution/M21.md:D21.7",
+   "critical": true
+  },
+  {
+   "id": "P1-R032",
+   "kind": "law",
+   "source": "docs/execution/M22.md:D22.3",
+   "critical": true
+  },
+  {
+   "id": "P1-R033",
+   "kind": "law",
+   "source": "docs/execution/M22.md:D22.4",
+   "critical": true
+  },
+  {
+   "id": "P1-R034",
+   "kind": "law",
+   "source": "docs/execution/M22.md:D22.5",
+   "critical": true
+  },
+  {
+   "id": "P1-R035",
+   "kind": "law",
+   "source": "docs/execution/M22.md:D22.6",
+   "critical": true
+  },
+  {
+   "id": "P1-R036",
+   "kind": "law",
+   "source": "docs/execution/M22.md:D22.7",
+   "critical": true
+  }
+ ],
+ "tests": [
+  {
+   "id": "P1-T01",
+   "name": "laws::formatter_idempotence_law_holds",
+   "requirements": [
+    "P1-R001",
+    "P1-R002",
+    "P1-R003",
+    "P1-R026",
+    "P1-R027"
+   ],
+   "evidence": [
+    "positive"
+   ]
+  },
+  {
+   "id": "P1-T02",
+   "name": "laws::canonical_round_trip_law_holds",
+   "requirements": [
+    "P1-R004",
+    "P1-R005",
+    "P1-R006",
+    "P1-R012"
+   ],
+   "evidence": [
+    "positive"
+   ]
+  },
+  {
+   "id": "P1-T03",
+   "name": "laws::incremental_equals_full_compile_law_holds",
+   "requirements": [
+    "P1-R008",
+    "P1-R009",
+    "P1-R010",
+    "P1-R028",
+    "P1-R029",
+    "P1-R030",
+    "P1-R031"
+   ],
+   "evidence": [
+    "positive"
+   ]
+  },
+  {
+   "id": "P1-T04",
+   "name": "classes::malformed_source::malformed_source_never_panics_and_round_trips",
+   "requirements": [
+    "P1-R011",
+    "P1-R016",
+    "P1-R023",
+    "P1-R032"
+   ],
+   "evidence": [
+    "positive"
+   ]
+  },
+  {
+   "id": "P1-T05",
+   "name": "classes::malformed_source::fuzz_regressions_stay_fixed",
+   "requirements": [
+    "P1-R022",
+    "P1-R023"
+   ],
+   "evidence": [
+    "positive"
+   ]
+  },
+  {
+   "id": "P1-T06",
+   "name": "classes::golden_render::full_document_html_matches_golden",
+   "requirements": [
+    "P1-R013",
+    "P1-R014",
+    "P1-R025",
+    "P1-R033",
+    "P1-R036"
+   ],
+   "evidence": [
+    "positive"
+   ]
+  },
+  {
+   "id": "P1-T07",
+   "name": "classes::golden_render::incremental_patch_equals_full_render",
+   "requirements": [
+    "P1-R007",
+    "P1-R015",
+    "P1-R017",
+    "P1-R018",
+    "P1-R019",
+    "P1-R034",
+    "P1-R035"
+   ],
+   "evidence": [
+    "positive"
+   ]
+  },
+  {
+   "id": "P1-T08",
+   "name": "classes::migration::old_snapshots_open_after_format_evolution",
+   "requirements": [
+    "P1-R020",
+    "P1-R021",
+    "P1-R024"
+   ],
+   "evidence": [
+    "positive"
+   ]
+  },
+  {
+   "id": "P1-T09",
+   "name": "milestones::m18::rope_edit_outside_bounds_is_rejected",
+   "requirements": [
+    "P1-R001",
+    "P1-R002",
+    "P1-R003",
+    "P1-R004",
+    "P1-R005",
+    "P1-R006",
+    "P1-R007"
+   ],
+   "evidence": [
+    "negative"
+   ]
+  },
+  {
+   "id": "P1-T10",
+   "name": "milestones::m18::cst_parses_truncated_and_hostile_bytes_without_panic",
+   "requirements": [
+    "P1-R001",
+    "P1-R002",
+    "P1-R003",
+    "P1-R004",
+    "P1-R005",
+    "P1-R006",
+    "P1-R007"
+   ],
+   "evidence": [
+    "malformed"
+   ]
+  },
+  {
+   "id": "P1-T11",
+   "name": "milestones::m18::cst_spans_resolve_against_the_declared_source_basis",
+   "requirements": [
+    "P1-R001",
+    "P1-R002",
+    "P1-R003",
+    "P1-R004",
+    "P1-R005",
+    "P1-R006",
+    "P1-R007"
+   ],
+   "evidence": [
+    "basis"
+   ]
+  },
+  {
+   "id": "P1-T12",
+   "name": "milestones::m18::cst_parse_is_byte_deterministic_across_runs",
+   "requirements": [
+    "P1-R001",
+    "P1-R002",
+    "P1-R003",
+    "P1-R004",
+    "P1-R005",
+    "P1-R006",
+    "P1-R007"
+   ],
+   "evidence": [
+    "replay"
+   ]
+  },
+  {
+   "id": "P1-T13",
+   "name": "milestones::m19::explicit_syntax_rejects_unknown_forms_with_exact_diagnostics",
+   "requirements": [
+    "P1-R008",
+    "P1-R009",
+    "P1-R010",
+    "P1-R011",
+    "P1-R012"
+   ],
+   "evidence": [
+    "negative"
+   ]
+  },
+  {
+   "id": "P1-T14",
+   "name": "milestones::m19::hir_lowering_survives_malformed_markers_without_panic",
+   "requirements": [
+    "P1-R008",
+    "P1-R009",
+    "P1-R010",
+    "P1-R011",
+    "P1-R012"
+   ],
+   "evidence": [
+    "malformed"
+   ]
+  },
+  {
+   "id": "P1-T15",
+   "name": "milestones::m19::source_map_entries_carry_their_source_basis",
+   "requirements": [
+    "P1-R008",
+    "P1-R009",
+    "P1-R010",
+    "P1-R011",
+    "P1-R012"
+   ],
+   "evidence": [
+    "basis"
+   ]
+  },
+  {
+   "id": "P1-T16",
+   "name": "milestones::m19::hir_lowering_is_deterministic_across_runs",
+   "requirements": [
+    "P1-R008",
+    "P1-R009",
+    "P1-R010",
+    "P1-R011",
+    "P1-R012"
+   ],
+   "evidence": [
+    "replay"
+   ]
+  },
+  {
+   "id": "P1-T17",
+   "name": "milestones::m20::formatter_refuses_unrepresentable_documents_instead_of_lossy_emission",
+   "requirements": [
+    "P1-R013",
+    "P1-R014",
+    "P1-R015",
+    "P1-R016",
+    "P1-R025",
+    "P1-R026",
+    "P1-R027"
+   ],
+   "evidence": [
+    "negative"
+   ]
+  },
+  {
+   "id": "P1-T18",
+   "name": "milestones::m20::lim_fmt_survives_malformed_input_without_data_loss",
+   "requirements": [
+    "P1-R013",
+    "P1-R014",
+    "P1-R015",
+    "P1-R016",
+    "P1-R025",
+    "P1-R026",
+    "P1-R027"
+   ],
+   "evidence": [
+    "malformed"
+   ]
+  },
+  {
+   "id": "P1-T19",
+   "name": "milestones::m20::formatted_output_records_the_basis_it_formatted_at",
+   "requirements": [
+    "P1-R013",
+    "P1-R014",
+    "P1-R015",
+    "P1-R016",
+    "P1-R025",
+    "P1-R026",
+    "P1-R027"
+   ],
+   "evidence": [
+    "basis"
+   ]
+  },
+  {
+   "id": "P1-T20",
+   "name": "milestones::m20::formatting_is_deterministic_across_runs_and_paths",
+   "requirements": [
+    "P1-R013",
+    "P1-R014",
+    "P1-R015",
+    "P1-R016",
+    "P1-R025",
+    "P1-R026",
+    "P1-R027"
+   ],
+   "evidence": [
+    "replay"
+   ]
+  },
+  {
+   "id": "P1-T21",
+   "name": "milestones::m20::lim_fmt_interrupted_mid_write_leaves_no_partial_file",
+   "requirements": [
+    "P1-R013",
+    "P1-R014",
+    "P1-R015",
+    "P1-R016",
+    "P1-R025",
+    "P1-R026",
+    "P1-R027"
+   ],
+   "evidence": [
+    "fault"
+   ]
+  },
+  {
+   "id": "P1-T22",
+   "name": "milestones::m20::lim_fmt_rerun_after_interruption_is_idempotent",
+   "requirements": [
+    "P1-R013",
+    "P1-R014",
+    "P1-R015",
+    "P1-R016",
+    "P1-R025",
+    "P1-R026",
+    "P1-R027"
+   ],
+   "evidence": [
+    "recovery"
+   ]
+  },
+  {
+   "id": "P1-T23",
+   "name": "milestones::m21::incremental_rejects_edits_against_a_stale_basis",
+   "requirements": [
+    "P1-R017",
+    "P1-R018",
+    "P1-R019",
+    "P1-R028",
+    "P1-R029",
+    "P1-R030",
+    "P1-R031"
+   ],
+   "evidence": [
+    "negative"
+   ]
+  },
+  {
+   "id": "P1-T24",
+   "name": "milestones::m21::incremental_survives_malformed_edit_sequences",
+   "requirements": [
+    "P1-R017",
+    "P1-R018",
+    "P1-R019",
+    "P1-R028",
+    "P1-R029",
+    "P1-R030",
+    "P1-R031"
+   ],
+   "evidence": [
+    "malformed"
+   ]
+  },
+  {
+   "id": "P1-T25",
+   "name": "milestones::m21::incremental_outputs_name_their_governing_basis",
+   "requirements": [
+    "P1-R017",
+    "P1-R018",
+    "P1-R019",
+    "P1-R028",
+    "P1-R029",
+    "P1-R030",
+    "P1-R031"
+   ],
+   "evidence": [
+    "basis"
+   ]
+  },
+  {
+   "id": "P1-T26",
+   "name": "milestones::m21::incremental_recompilation_is_deterministic_across_runs",
+   "requirements": [
+    "P1-R017",
+    "P1-R018",
+    "P1-R019",
+    "P1-R028",
+    "P1-R029",
+    "P1-R030",
+    "P1-R031"
+   ],
+   "evidence": [
+    "replay"
+   ]
+  },
+  {
+   "id": "P1-T27",
+   "name": "milestones::m22::renderer_refuses_unescapable_constructs_rather_than_emitting_raw_html",
+   "requirements": [
+    "P1-R020",
+    "P1-R021",
+    "P1-R032",
+    "P1-R033",
+    "P1-R034",
+    "P1-R035",
+    "P1-R036"
+   ],
+   "evidence": [
+    "negative"
+   ]
+  },
+  {
+   "id": "P1-T28",
+   "name": "milestones::m22::renderer_escapes_hostile_payloads_without_panic",
+   "requirements": [
+    "P1-R020",
+    "P1-R021",
+    "P1-R032",
+    "P1-R033",
+    "P1-R034",
+    "P1-R035",
+    "P1-R036"
+   ],
+   "evidence": [
+    "malformed"
+   ]
+  },
+  {
+   "id": "P1-T29",
+   "name": "milestones::m22::rendered_output_carries_its_source_basis",
+   "requirements": [
+    "P1-R020",
+    "P1-R021",
+    "P1-R032",
+    "P1-R033",
+    "P1-R034",
+    "P1-R035",
+    "P1-R036"
+   ],
+   "evidence": [
+    "basis"
+   ]
+  },
+  {
+   "id": "P1-T30",
+   "name": "milestones::m22::html_rendering_is_byte_deterministic_across_runs",
+   "requirements": [
+    "P1-R020",
+    "P1-R021",
+    "P1-R032",
+    "P1-R033",
+    "P1-R034",
+    "P1-R035",
+    "P1-R036"
+   ],
+   "evidence": [
+    "replay"
+   ]
+  },
+  {
+   "id": "P1-T31",
+   "name": "milestones::m23::benchmark_gate_fails_on_regression_beyond_threshold",
+   "requirements": [
+    "P1-R022",
+    "P1-R023"
+   ],
+   "evidence": [
+    "negative"
+   ]
+  },
+  {
+   "id": "P1-T32",
+   "name": "milestones::m23::fuzz_corpus_replays_every_minimized_artifact_without_panic",
+   "requirements": [
+    "P1-R022",
+    "P1-R023"
+   ],
+   "evidence": [
+    "malformed"
+   ]
+  },
+  {
+   "id": "P1-T33",
+   "name": "milestones::m23::fuzz_regressions_record_the_basis_that_produced_them",
+   "requirements": [
+    "P1-R022",
+    "P1-R023"
+   ],
+   "evidence": [
+    "basis"
+   ]
+  },
+  {
+   "id": "P1-T34",
+   "name": "milestones::m23::fuzz_replay_is_deterministic_from_recorded_seeds",
+   "requirements": [
+    "P1-R022",
+    "P1-R023"
+   ],
+   "evidence": [
+    "replay"
+   ]
+  },
+  {
+   "id": "P1-T35",
+   "name": "milestones::m24::aggregate_gate_fails_when_any_phase1_gate_is_red",
+   "requirements": [
+    "P1-R024"
+   ],
+   "evidence": [
+    "negative"
+   ]
+  },
+  {
+   "id": "P1-T36",
+   "name": "milestones::m24::aggregate_gate_rejects_incomplete_evidence",
+   "requirements": [
+    "P1-R024"
+   ],
+   "evidence": [
+    "malformed"
+   ]
+  },
+  {
+   "id": "P1-T37",
+   "name": "milestones::m24::aggregate_gate_records_the_basis_of_every_input",
+   "requirements": [
+    "P1-R024"
+   ],
+   "evidence": [
+    "basis"
+   ]
+  },
+  {
+   "id": "P1-T38",
+   "name": "milestones::m24::aggregate_gate_result_is_reproducible",
+   "requirements": [
+    "P1-R024"
+   ],
+   "evidence": [
+    "replay"
+   ]
+  }
+ ],
+ "mutants": [
+  {
+   "id": "P1-M001",
+   "family": "source/CST/formatting",
+   "operator": "predicate-deletion",
+   "source": "P1-R001",
+   "defect": "accept empty formatted tree",
+   "killing_tests": [
+    "P1-T09",
+    "P1-T01"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M002",
+   "family": "source/CST/formatting",
+   "operator": "predicate-inversion",
+   "source": "P1-R001",
+   "defect": "invert formatter fixed-point predicate",
+   "killing_tests": [
+    "P1-T13",
+    "P1-T02"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M003",
+   "family": "source/CST/formatting",
+   "operator": "threshold-plus-one",
+   "source": "P1-R002",
+   "defect": "shift span end forward",
+   "killing_tests": [
+    "P1-T17",
+    "P1-T03"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M004",
+   "family": "source/CST/formatting",
+   "operator": "threshold-minus-one",
+   "source": "P1-R002",
+   "defect": "shift span end backward",
+   "killing_tests": [
+    "P1-T09",
+    "P1-T04"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M005",
+   "family": "source/CST/formatting",
+   "operator": "missing-enum-dispatch",
+   "source": "P1-R003",
+   "defect": "drop trivia token kind",
+   "killing_tests": [
+    "P1-T14",
+    "P1-T05"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M006",
+   "family": "source/CST/formatting",
+   "operator": "success-error-substitution",
+   "source": "P1-R004",
+   "defect": "treat malformed parse as clean success",
+   "killing_tests": [
+    "P1-T17",
+    "P1-T06"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M007",
+   "family": "source/CST/formatting",
+   "operator": "stale-basis-acceptance",
+   "source": "P1-R005",
+   "defect": "reuse source basis after edit",
+   "killing_tests": [
+    "P1-T11",
+    "P1-T07"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M008",
+   "family": "source/CST/formatting",
+   "operator": "wrong-holder-selection",
+   "source": "P1-R006",
+   "defect": "classify source node as graph-native",
+   "killing_tests": [
+    "P1-T15",
+    "P1-T08"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M009",
+   "family": "source/CST/formatting",
+   "operator": "skipped-durable-transition",
+   "source": "P1-R007",
+   "defect": "skip regression fixture write",
+   "killing_tests": [
+    "P1-T22",
+    "P1-T01"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M010",
+   "family": "source/CST/formatting",
+   "operator": "disabled-crash-point",
+   "source": "P1-R015",
+   "defect": "remove source fault occurrence",
+   "killing_tests": [
+    "P1-T10",
+    "P1-T02"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M011",
+   "family": "source/CST/formatting",
+   "operator": "ordering-nondeterminism",
+   "source": "P1-R003",
+   "defect": "emit unordered attributes",
+   "killing_tests": [
+    "P1-T16",
+    "P1-T03"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M012",
+   "family": "source/CST/formatting",
+   "operator": "oracle-short-circuit",
+   "source": "P1-R004",
+   "defect": "compare output to itself",
+   "killing_tests": [
+    "P1-T18",
+    "P1-T04"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M013",
+   "family": "source/CST/formatting",
+   "operator": "broadened-allow-list",
+   "source": "P1-R016",
+   "defect": "allow any malformed fixture label",
+   "killing_tests": [
+    "P1-T09",
+    "P1-T05"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M014",
+   "family": "graph/interchange codecs",
+   "operator": "predicate-deletion",
+   "source": "P1-R008",
+   "defect": "drop graph round-trip equality",
+   "killing_tests": [
+    "P1-T27",
+    "P1-T06"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M015",
+   "family": "graph/interchange codecs",
+   "operator": "predicate-inversion",
+   "source": "P1-R008",
+   "defect": "invert node-presence check",
+   "killing_tests": [
+    "P1-T13",
+    "P1-T07"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M016",
+   "family": "graph/interchange codecs",
+   "operator": "threshold-plus-one",
+   "source": "P1-R009",
+   "defect": "advance relation count",
+   "killing_tests": [
+    "P1-T27",
+    "P1-T08"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M017",
+   "family": "graph/interchange codecs",
+   "operator": "threshold-minus-one",
+   "source": "P1-R009",
+   "defect": "drop relation count",
+   "killing_tests": [
+    "P1-T13",
+    "P1-T01"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M018",
+   "family": "graph/interchange codecs",
+   "operator": "missing-enum-dispatch",
+   "source": "P1-R010",
+   "defect": "drop edge kind dispatch",
+   "killing_tests": [
+    "P1-T28",
+    "P1-T02"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M019",
+   "family": "graph/interchange codecs",
+   "operator": "success-error-substitution",
+   "source": "P1-R011",
+   "defect": "accept invalid interchange payload",
+   "killing_tests": [
+    "P1-T13",
+    "P1-T03"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M020",
+   "family": "graph/interchange codecs",
+   "operator": "stale-basis-acceptance",
+   "source": "P1-R010",
+   "defect": "decode against stale schema basis",
+   "killing_tests": [
+    "P1-T29",
+    "P1-T04"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M021",
+   "family": "graph/interchange codecs",
+   "operator": "wrong-holder-selection",
+   "source": "P1-R012",
+   "defect": "resolve EXTERNAL_VALUE ungoverned",
+   "killing_tests": [
+    "P1-T15",
+    "P1-T05"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M022",
+   "family": "graph/interchange codecs",
+   "operator": "skipped-durable-transition",
+   "source": "P1-R015",
+   "defect": "omit codec checkpoint record",
+   "killing_tests": [
+    "P1-T28",
+    "P1-T06"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M023",
+   "family": "graph/interchange codecs",
+   "operator": "disabled-crash-point",
+   "source": "P1-R015",
+   "defect": "disable graph codec boundary",
+   "killing_tests": [
+    "P1-T14",
+    "P1-T07"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M024",
+   "family": "graph/interchange codecs",
+   "operator": "ordering-nondeterminism",
+   "source": "P1-R009",
+   "defect": "serialize node map unordered",
+   "killing_tests": [
+    "P1-T30",
+    "P1-T08"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M025",
+   "family": "graph/interchange codecs",
+   "operator": "oracle-short-circuit",
+   "source": "P1-R008",
+   "defect": "self-compare encoded bytes",
+   "killing_tests": [
+    "P1-T14",
+    "P1-T01"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M026",
+   "family": "graph/interchange codecs",
+   "operator": "broadened-allow-list",
+   "source": "P1-R011",
+   "defect": "allow unknown graph fields",
+   "killing_tests": [
+    "P1-T27",
+    "P1-T02"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M027",
+   "family": "transforms/projections",
+   "operator": "predicate-deletion",
+   "source": "P1-R013",
+   "defect": "skip transform equality law",
+   "killing_tests": [
+    "P1-T27",
+    "P1-T03"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M028",
+   "family": "transforms/projections",
+   "operator": "predicate-inversion",
+   "source": "P1-R013",
+   "defect": "invert projection inclusion",
+   "killing_tests": [
+    "P1-T13",
+    "P1-T04"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M029",
+   "family": "transforms/projections",
+   "operator": "threshold-plus-one",
+   "source": "P1-R014",
+   "defect": "advance patch offset",
+   "killing_tests": [
+    "P1-T27",
+    "P1-T05"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M030",
+   "family": "transforms/projections",
+   "operator": "threshold-minus-one",
+   "source": "P1-R014",
+   "defect": "retreat patch offset",
+   "killing_tests": [
+    "P1-T13",
+    "P1-T06"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M031",
+   "family": "transforms/projections",
+   "operator": "missing-enum-dispatch",
+   "source": "P1-R013",
+   "defect": "drop transform variant",
+   "killing_tests": [
+    "P1-T28",
+    "P1-T07"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M032",
+   "family": "transforms/projections",
+   "operator": "success-error-substitution",
+   "source": "P1-R016",
+   "defect": "treat rejected transform as success",
+   "killing_tests": [
+    "P1-T13",
+    "P1-T08"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M033",
+   "family": "transforms/projections",
+   "operator": "stale-basis-acceptance",
+   "source": "P1-R017",
+   "defect": "apply transform to stale revision",
+   "killing_tests": [
+    "P1-T29",
+    "P1-T01"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M034",
+   "family": "transforms/projections",
+   "operator": "wrong-holder-selection",
+   "source": "P1-R014",
+   "defect": "choose external holder for projection",
+   "killing_tests": [
+    "P1-T15",
+    "P1-T02"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M035",
+   "family": "transforms/projections",
+   "operator": "skipped-durable-transition",
+   "source": "P1-R015",
+   "defect": "skip projection journal record",
+   "killing_tests": [
+    "P1-T28",
+    "P1-T03"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M036",
+   "family": "transforms/projections",
+   "operator": "disabled-crash-point",
+   "source": "P1-R015",
+   "defect": "disable transform recovery point",
+   "killing_tests": [
+    "P1-T14",
+    "P1-T04"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M037",
+   "family": "transforms/projections",
+   "operator": "ordering-nondeterminism",
+   "source": "P1-R013",
+   "defect": "permute independent transform order",
+   "killing_tests": [
+    "P1-T30",
+    "P1-T05"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M038",
+   "family": "transforms/projections",
+   "operator": "oracle-short-circuit",
+   "source": "P1-R014",
+   "defect": "compare incremental render to itself",
+   "killing_tests": [
+    "P1-T14",
+    "P1-T06"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M039",
+   "family": "transforms/projections",
+   "operator": "broadened-allow-list",
+   "source": "P1-R016",
+   "defect": "allow unsupported projection payload",
+   "killing_tests": [
+    "P1-T27",
+    "P1-T07"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M040",
+   "family": "repair/ILRP/recovery",
+   "operator": "predicate-deletion",
+   "source": "P1-R015",
+   "defect": "delete recovery terminal check",
+   "killing_tests": [
+    "P1-T31",
+    "P1-T08"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M041",
+   "family": "repair/ILRP/recovery",
+   "operator": "predicate-inversion",
+   "source": "P1-R015",
+   "defect": "invert idempotent recovery equality",
+   "killing_tests": [
+    "P1-T17",
+    "P1-T01"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M042",
+   "family": "repair/ILRP/recovery",
+   "operator": "threshold-plus-one",
+   "source": "P1-R015",
+   "defect": "advance occurrence counter",
+   "killing_tests": [
+    "P1-T31",
+    "P1-T02"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M043",
+   "family": "repair/ILRP/recovery",
+   "operator": "threshold-minus-one",
+   "source": "P1-R015",
+   "defect": "retreat occurrence counter",
+   "killing_tests": [
+    "P1-T17",
+    "P1-T03"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M044",
+   "family": "repair/ILRP/recovery",
+   "operator": "missing-enum-dispatch",
+   "source": "P1-R015",
+   "defect": "drop Finalizing recovery branch",
+   "killing_tests": [
+    "P1-T32",
+    "P1-T04"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M045",
+   "family": "repair/ILRP/recovery",
+   "operator": "success-error-substitution",
+   "source": "P1-R016",
+   "defect": "commit contested repair",
+   "killing_tests": [
+    "P1-T17",
+    "P1-T05"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M046",
+   "family": "repair/ILRP/recovery",
+   "operator": "stale-basis-acceptance",
+   "source": "P1-R017",
+   "defect": "recover with stale Basis",
+   "killing_tests": [
+    "P1-T33",
+    "P1-T06"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M047",
+   "family": "repair/ILRP/recovery",
+   "operator": "wrong-holder-selection",
+   "source": "P1-R015",
+   "defect": "apply graph step as file step",
+   "killing_tests": [
+    "P1-T19",
+    "P1-T07"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M048",
+   "family": "repair/ILRP/recovery",
+   "operator": "skipped-durable-transition",
+   "source": "P1-R015",
+   "defect": "skip ack persistence",
+   "killing_tests": [
+    "P1-T32",
+    "P1-T08"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M049",
+   "family": "repair/ILRP/recovery",
+   "operator": "disabled-crash-point",
+   "source": "P1-R015",
+   "defect": "disable before_ack point",
+   "killing_tests": [
+    "P1-T21",
+    "P1-T01"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M050",
+   "family": "repair/ILRP/recovery",
+   "operator": "ordering-nondeterminism",
+   "source": "P1-R015",
+   "defect": "recover steps unordered",
+   "killing_tests": [
+    "P1-T34",
+    "P1-T02"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M051",
+   "family": "repair/ILRP/recovery",
+   "operator": "oracle-short-circuit",
+   "source": "P1-R015",
+   "defect": "compare recovery digest to itself",
+   "killing_tests": [
+    "P1-T18",
+    "P1-T03"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M052",
+   "family": "repair/ILRP/recovery",
+   "operator": "broadened-allow-list",
+   "source": "P1-R016",
+   "defect": "allow mixed Basis recovery",
+   "killing_tests": [
+    "P1-T31",
+    "P1-T04"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M053",
+   "family": "Basis/revision/query invalidation",
+   "operator": "predicate-deletion",
+   "source": "P1-R017",
+   "defect": "delete invalidation predicate",
+   "killing_tests": [
+    "P1-T23",
+    "P1-T05"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M054",
+   "family": "Basis/revision/query invalidation",
+   "operator": "predicate-inversion",
+   "source": "P1-R017",
+   "defect": "invert revision freshness check",
+   "killing_tests": [
+    "P1-T35",
+    "P1-T06"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M055",
+   "family": "Basis/revision/query invalidation",
+   "operator": "threshold-plus-one",
+   "source": "P1-R018",
+   "defect": "advance revision clock",
+   "killing_tests": [
+    "P1-T23",
+    "P1-T07"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M056",
+   "family": "Basis/revision/query invalidation",
+   "operator": "threshold-minus-one",
+   "source": "P1-R018",
+   "defect": "retreat revision clock",
+   "killing_tests": [
+    "P1-T35",
+    "P1-T08"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M057",
+   "family": "Basis/revision/query invalidation",
+   "operator": "missing-enum-dispatch",
+   "source": "P1-R019",
+   "defect": "drop BasisPerspective variant",
+   "killing_tests": [
+    "P1-T24",
+    "P1-T01"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M058",
+   "family": "Basis/revision/query invalidation",
+   "operator": "success-error-substitution",
+   "source": "P1-R016",
+   "defect": "accept invalid revision query",
+   "killing_tests": [
+    "P1-T35",
+    "P1-T02"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M059",
+   "family": "Basis/revision/query invalidation",
+   "operator": "stale-basis-acceptance",
+   "source": "P1-R017",
+   "defect": "serve query from stale Basis",
+   "killing_tests": [
+    "P1-T25",
+    "P1-T03"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M060",
+   "family": "Basis/revision/query invalidation",
+   "operator": "wrong-holder-selection",
+   "source": "P1-R019",
+   "defect": "bind query to wrong perspective",
+   "killing_tests": [
+    "P1-T37",
+    "P1-T04"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M061",
+   "family": "Basis/revision/query invalidation",
+   "operator": "skipped-durable-transition",
+   "source": "P1-R015",
+   "defect": "skip revision publish checkpoint",
+   "killing_tests": [
+    "P1-T24",
+    "P1-T05"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M062",
+   "family": "Basis/revision/query invalidation",
+   "operator": "disabled-crash-point",
+   "source": "P1-R015",
+   "defect": "disable revision recovery point",
+   "killing_tests": [
+    "P1-T36",
+    "P1-T06"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M063",
+   "family": "Basis/revision/query invalidation",
+   "operator": "ordering-nondeterminism",
+   "source": "P1-R018",
+   "defect": "iterate invalidations unordered",
+   "killing_tests": [
+    "P1-T26",
+    "P1-T07"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M064",
+   "family": "Basis/revision/query invalidation",
+   "operator": "oracle-short-circuit",
+   "source": "P1-R017",
+   "defect": "self-compare query result",
+   "killing_tests": [
+    "P1-T36",
+    "P1-T08"
+   ],
+   "disposition": "predeclared"
+  },
+  {
+   "id": "P1-M065",
+   "family": "Basis/revision/query invalidation",
+   "operator": "broadened-allow-list",
+   "source": "P1-R019",
+   "defect": "allow unknown Basis perspective",
+   "killing_tests": [
+    "P1-T23",
+    "P1-T01"
+   ],
+   "disposition": "predeclared"
+  }
+ ],
+ "canaries": [
+  {
+   "id": "C01",
+   "gate": "status",
+   "violation": "set status to ratified",
+   "expected_failure": "status: expected proposed",
+   "result": "predeclared"
+  },
+  {
+   "id": "C02",
+   "gate": "ratification",
+   "violation": "set ratification to approved",
+   "expected_failure": "ratification: expected unratified",
+   "result": "predeclared"
+  },
+  {
+   "id": "C03",
+   "gate": "locked corpus",
+   "violation": "set locked_acceptance_corpora_touched true",
+   "expected_failure": "locked_acceptance_corpora_touched must be false",
+   "result": "predeclared"
+  },
+  {
+   "id": "C04",
+   "gate": "requirements",
+   "violation": "duplicate requirement id",
+   "expected_failure": "duplicate requirement id",
+   "result": "predeclared"
+  },
+  {
+   "id": "C05",
+   "gate": "tests",
+   "violation": "remove P1-T08",
+   "expected_failure": "test ids differ",
+   "result": "predeclared"
+  },
+  {
+   "id": "C06",
+   "gate": "tests",
+   "violation": "empty requirement mapping",
+   "expected_failure": "has no requirement mapping",
+   "result": "predeclared"
+  },
+  {
+   "id": "C07",
+   "gate": "mutants",
+   "violation": "remove one mutant",
+   "expected_failure": "mutant count must be 65",
+   "result": "predeclared"
+  },
+  {
+   "id": "C08",
+   "gate": "mutants",
+   "violation": "operator supplies 17 mutants",
+   "expected_failure": "max 16",
+   "result": "predeclared"
+  },
+  {
+   "id": "C09",
+   "gate": "mutants",
+   "violation": "family supplies 12 mutants",
+   "expected_failure": "mutant count must be 13",
+   "result": "predeclared"
+  },
+  {
+   "id": "C10",
+   "gate": "canaries",
+   "violation": "remove C16",
+   "expected_failure": "canary ids differ",
+   "result": "predeclared"
+  },
+  {
+   "id": "C11",
+   "gate": "generated",
+   "violation": "accepted below 100000",
+   "expected_failure": "accepted cases below 100000",
+   "result": "predeclared"
+  },
+  {
+   "id": "C12",
+   "gate": "generated",
+   "violation": "discard rate above 1 percent",
+   "expected_failure": "discard rate exceeds 1%",
+   "result": "predeclared"
+  },
+  {
+   "id": "C13",
+   "gate": "fuzz",
+   "violation": "fuzz minutes below 30",
+   "expected_failure": "fuzz minutes below 30",
+   "result": "predeclared"
+  },
+  {
+   "id": "C14",
+   "gate": "crash",
+   "violation": "drop before_ack boundary",
+   "expected_failure": "crash-boundary inventory mismatch",
+   "result": "predeclared"
+  },
+  {
+   "id": "C15",
+   "gate": "reviews",
+   "violation": "review attempts below 12",
+   "expected_failure": "has fewer than 12 attempts",
+   "result": "predeclared"
+  },
+  {
+   "id": "C16",
+   "gate": "markdown",
+   "violation": "remove packet digest",
+   "expected_failure": "review packet markdown missing packet digest",
+   "result": "predeclared"
+  }
+ ],
+ "generated": [
+  {
+   "family": "source/CST/formatting",
+   "accepted": 100000,
+   "attempts": 100204,
+   "discards": 204,
+   "fuzz_minutes": 30,
+   "seed_categories": [
+    "empty",
+    "single-token",
+    "whitespace",
+    "unicode",
+    "long-line",
+    "truncated",
+    "unterminated",
+    "nested",
+    "deep",
+    "wide",
+    "control-byte",
+    "invalid-utf8",
+    "comment",
+    "escape",
+    "boundary-offset",
+    "hostile"
+   ],
+   "result": "planned",
+   "seed": 11400714819323198485,
+   "evidence_hash": "afd8a1b3b15c2287102d0a8a8fe676a02ed4a80546afc6bdff9695a1d6a786a6"
+  },
+  {
+   "family": "graph/interchange codecs",
+   "accepted": 100000,
+   "attempts": 100133,
+   "discards": 133,
+   "fuzz_minutes": 30,
+   "seed_categories": [
+    "empty",
+    "single-node",
+    "single-edge",
+    "duplicate-id",
+    "missing-node",
+    "cycle",
+    "dag",
+    "wide",
+    "deep",
+    "unknown-kind",
+    "external-value",
+    "comment",
+    "large-payload",
+    "truncated-json",
+    "invalid-json",
+    "hostile"
+   ],
+   "result": "planned",
+   "seed": 11400713719811571110,
+   "evidence_hash": "2a1a22034e3070e064c9e6e4ebbfaf69bf37af571b56431d54396adde5ea230e"
+  },
+  {
+   "family": "transforms/projections",
+   "accepted": 100000,
+   "attempts": 100000,
+   "discards": 0,
+   "fuzz_minutes": 30,
+   "seed_categories": [
+    "identity",
+    "insert",
+    "delete",
+    "replace",
+    "move",
+    "overlap",
+    "commute",
+    "conflict",
+    "empty",
+    "deep",
+    "wide",
+    "invalid-span",
+    "boundary-span",
+    "large-patch",
+    "truncated",
+    "hostile"
+   ],
+   "result": "planned",
+   "seed": 11400717018346454899,
+   "evidence_hash": "750e899f4d460edbfb9f5127d4f3484b4912265f770b0d0edc29dbd10b66ed6d"
+  },
+  {
+   "family": "repair/ILRP/recovery",
+   "accepted": 100000,
+   "attempts": 100242,
+   "discards": 242,
+   "fuzz_minutes": 30,
+   "seed_categories": [
+    "prepared",
+    "applying",
+    "external-applied",
+    "finalizing",
+    "committed",
+    "needs-review",
+    "graph-step",
+    "file-step",
+    "two-step",
+    "contested",
+    "poststate",
+    "cycle",
+    "missing-step",
+    "duplicate-ack",
+    "truncated-intent",
+    "hostile"
+   ],
+   "result": "planned",
+   "seed": 11400715918834825484,
+   "evidence_hash": "0346dbba691941b53ec5d4db8c9c8f61b055fe20680c21bd7607623d5decfa25"
+  },
+  {
+   "family": "Basis/revision/query invalidation",
+   "accepted": 100000,
+   "attempts": 100260,
+   "discards": 260,
+   "fuzz_minutes": 30,
+   "seed_categories": [
+    "empty-basis",
+    "single-revision",
+    "branch",
+    "merge",
+    "client-scoped",
+    "durable-only",
+    "published",
+    "federated",
+    "stale",
+    "fresh",
+    "invalid-token",
+    "large-frontier",
+    "unknown-perspective",
+    "truncated",
+    "reordered",
+    "hostile"
+   ],
+   "result": "planned",
+   "seed": 11400719217369709273,
+   "evidence_hash": "a13f7367cfd8aec45ad8b6a215e7944acce84dc4ef9bc18a6220fa9ce5247bbc"
+  }
+ ],
+ "crash_boundaries": [
+  {
+   "boundary": "ilrp/before_intent_commit",
+   "before": true,
+   "after": true,
+   "result": "registered"
+  },
+  {
+   "boundary": "ilrp/after_intent_commit",
+   "before": true,
+   "after": true,
+   "result": "registered"
+  },
+  {
+   "boundary": "ilrp/before_external_apply",
+   "before": true,
+   "after": true,
+   "result": "registered"
+  },
+  {
+   "boundary": "ilrp/after_external_apply",
+   "before": true,
+   "after": true,
+   "result": "registered"
+  },
+  {
+   "boundary": "ilrp/before_ack",
+   "before": true,
+   "after": true,
+   "result": "registered"
+  },
+  {
+   "boundary": "ilrp/after_ack",
+   "before": true,
+   "after": true,
+   "result": "registered"
+  },
+  {
+   "boundary": "ilrp/before_finalize",
+   "before": true,
+   "after": true,
+   "result": "registered"
+  },
+  {
+   "boundary": "ilrp/after_finalize_before_notify",
+   "before": true,
+   "after": true,
+   "result": "registered"
+  }
+ ],
+ "reviews": [
+  {
+   "reviewer": "gemma-4-26b-local-blind-pass",
+   "attempts": 12,
+   "unresolved_verified_findings": 0,
+   "result": "planned"
+  },
+  {
+   "reviewer": "mimo-v2.5-pro-context-free-blind-pass",
+   "attempts": 12,
+   "unresolved_verified_findings": 0,
+   "result": "planned"
+  }
+ ]
 }

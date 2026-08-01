@@ -983,6 +983,14 @@ comment now records what replaced it.
 Noted earlier as "should be decided before qualification"; this session gave it
 a concrete demonstration.
 
+**Second demonstration, 2026-08-01.** `conformance/haqp/packet.json` was
+rewritten from 1-space to 2-space indentation — 1,864 changed lines, every byte
+of the file's layout different — and `just haq-inventory` stayed green with the
+digest **unchanged**. The digest is therefore blind to the committed artifact's
+actual bytes. That is benign for whitespace, but it means the recorded digest
+does not pin the file a reader would audit; two byte-different packets can carry
+the same digest as long as they deserialize to the same struct.
+
 `packet_digest` hashes `serde_json::to_vec(packet)` — the deserialized struct
 re-serialized — rather than the bytes of `conformance/haqp/packet.json`. Two
 consequences, both observed while closing pass-2 #20:
@@ -1265,17 +1273,23 @@ Related, and already recorded: the ENOSPC that wrote a corrupt
 
 ## F-25 — MAJOR. **OPEN.** The F-01 oracle can go vacuous without any canary noticing.
 
-Found by the full mutation campaign (3000 mutants, run of 2026-08-01):
+Found by the full mutation campaign (3000 mutants, run of 2026-08-01). At the
+~1000-mutant mark `conformance/src/laws.rs` had **21 survivors, every one of
+them in `content_witness`** — the single function that makes the §112 laws
+non-vacuous:
 
-```
-MISSED conformance/src/laws.rs:27:5: replace content_witness -> (BTreeMap<String, usize>, BTreeSet<String>)
-       with (BTreeMap::from_iter([(String::new(), 1)]), BTreeSet::from_iter(["xyzzy".into()]))
-```
+| survivors | mutation class | effect |
+|---|---|---|
+| 15 | whole-function constant returns | the witness stops witnessing |
+| 1 | `+=` → `*=` (`laws.rs:30`) | every word count stays 0, so `seen >= count` is always true |
+| 2 | `+` → `-`, `+` → `*` (`laws.rs:37`) | id-scan index arithmetic |
+| 3 | `delete !`, `&&` → `\|\|`, `\|\|` → `&&` (`laws.rs:40,41,43`) | id validation predicate |
 
 `content_witness` is the independent oracle added to close F-01 — the anchor
 outside the implementation that makes the §112 self-referential relations mean
-anything. A mutant that replaces it with a **constant** survives the entire
-suite, including all nine law canaries.
+anything. **It has no test of its own.** It is exercised only through the laws,
+and the laws' other assertions pass without it, so a mutant that replaces it
+with a constant survives the entire suite including all nine law canaries.
 
 ### Why every canary still passes
 
@@ -1303,17 +1317,33 @@ tokens while leaving the output non-empty and the survivors in order. That is
 the only failure `content_witness`'s multiset comparison uniquely catches, and
 it is precisely the case no canary covers.
 
-This is F-01's shape one layer down. F-01 was "the law compares the
-implementation to itself"; F-25 is "the check that fixed it is guarded by
-canaries that pass for other reasons". A canary that can pass on an adjacent
+This is F-01's shape one layer up. F-01 was "the law compares the
+implementation to itself"; F-25 is "the fix for that is verified only through
+canaries that do not depend on it". A canary that can pass on an adjacent
 assertion does not pin the assertion it was written for.
+
+The general lesson, which is the one worth keeping: **the canary discipline was
+applied to the laws but not to the oracle**. Every check needs a canary —
+including the checks written to BE canaries. Indirect verification of an oracle
+through the thing it verifies is not verification.
 
 ### Fix — deferred to the post-campaign batch, by Brian's sequencing
 
-A canary formatter that drops a SUBSET of tokens (non-empty output, survivors
-in order) asserting `should_panic(expected = "dropped content")`, plus one that
-drops only a durable id. Not landed yet: the campaign is mid-flight and adding
+**Direct unit tests of `content_witness` itself** against known inputs — the
+word multiset, the id set, and the id-validation predicate each pinned by value,
+not inferred from a law's verdict. Plus a canary formatter that drops a SUBSET
+of tokens (non-empty output, survivors in order) asserting
+`should_panic(expected = "dropped content")`, and one that drops only a durable
+id. The unit tests are the load-bearing half: the six operator mutants inside
+the function cannot be reached by any canary that only observes the law's
+pass/fail. Not landed yet: the campaign is mid-flight and adding
 tests now would force a rerun, which is the sequence Brian explicitly ruled out.
+
+**Tracked at:** M17.5, post-campaign test batch — the same batch that consumes
+the campaign's survivor list, before the ADR-0020 §1 clean-tree rerun. This
+finding must be closed before the rerun, not after: §1 makes any verified fix
+invalidate eligibility until the lane reruns, so a fix landed afterwards costs
+the whole lane a second time.
 
 ## F-26 — INFRASTRUCTURE. **PARTIAL.** ADR-0020 §6 needs two model families and the cloud roster collapsed to one.
 

@@ -325,10 +325,13 @@ def run_pass(name: str, model: str, context: str, *, pass_two: bool) -> dict[str
         "unresolved_verified_findings": parsed.get("unresolved_verified_findings"),
         "result": parsed.get("result"),
         "blindness_proof": {
-            # Cloud passes ask for an ephemeral conversation; local passes carry
+            # Cloud passes ASK for an ephemeral conversation; local passes carry
             # no conversation at all, which is isolation by construction rather
-            # than by request.
-            "ephemeral_session": True,
+            # than by request. Recording `True` for a local pass would assert a
+            # cloud-side guarantee that was never requested, so the field states
+            # only what was actually asked for and `session_state` says how the
+            # isolation is obtained.
+            "ephemeral_session_requested": not model.startswith(LOCAL_PREFIX),
             "session_state": (
                 "stateless-local-call" if model.startswith(LOCAL_PREFIX) else "ephemeral-cloud-session"
             ),
