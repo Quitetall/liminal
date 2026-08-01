@@ -1417,3 +1417,76 @@ what the requirement is actually for.
 Also uncovered along the way, and still true of lamu: each `lamu start` is an
 independent stdio server with its own model map, so a model loaded by one MCP
 client reads as "marked loaded but missing from" another.
+
+## F-27 — the ADR-0020 §6 blind lane ran for the first time. Both passes FAIL, and they converge.
+
+Run of 2026-08-01 from clean `2e8a2b1`, reviewers `codex:gpt-5.6-sol` (OpenAI,
+via the Codex CLI) and `mimo-v2.5-pro` (Xiaomi, via lamu).
+
+| | pass 1 `gpt-5.6-sol` | pass 2 `mimo-v2.5-pro` |
+|---|---|---|
+| result | fail | fail |
+| attempts | 12 | 12 |
+| verified defects | 9 | 6 |
+| caught violations | 3 | 4 |
+| self-declared false positives | 0 | 2 |
+| unresolved verified findings | 9 | 4 |
+
+§6 requires **zero** unresolved verified findings, so the packet stays
+unqualified. That is the lane working. Nothing was banked as release evidence:
+records live under `target/haqp/blind-review/` and `qualification_claim` is
+`false`.
+
+### Independent convergence
+
+Two model families, blind to each other, landed on the same two defects:
+
+- **mutant kills are unbound to any execution artifact** (P1-A02 / P2-F02)
+- **`generated.evidence_hash` is never checked against a committed artifact**
+  (P1-A04 / P2-F03)
+
+Convergence across families is much stronger evidence than either pass alone,
+and it is the specific thing §6's distinct-families requirement buys.
+
+### Verified at the cited lines (3 of pass 1's 9 so far)
+
+`verify_qualified_repo` binds **fuzz, crash, review, provenance and test names**
+to committed artifacts — M17.5's own earlier work — and was never extended to
+**mutants and canaries**. Five of seven evidence kinds are bound; two are not,
+and those two are satisfiable by editing a status string.
+
+- **P1-A02 CONFIRMED.** No `verify_mutant_evidence` exists. `killed` is a claim.
+- **P1-A03 CONFIRMED.** No `verify_canary_evidence` exists. `run_canary_suite`
+  writes `target/haqp/canaries.json`, which the qualified path never reads.
+- **P1-A04 CONFIRMED.** `evidence_hash` is checked for **length 64 only** — not
+  hexadecimal, never recomputed, and `target/haqp/generated.json` is never read.
+  Any 64-character string passes.
+
+**Correction to this session's own record:** a lamu reviewer raised
+`canaries.json`/`generated.json` earlier and it was dismissed as a false
+positive on the grounds that "nothing reads them; they are gitignored". The fact
+was right and the conclusion was backwards — *nothing reading them is the
+defect*. Two independent blind passes then found the same gap. Recorded because
+the failure was in the verification, not in the reviewer.
+
+### The runner's own defects, found by `gpt-5.6-terra` reviewing the commit
+
+All four verified and fixed in the follow-up:
+
+1. **The backend-diversity guard never ran during `--run`.** It lived only in
+   `--self-test`. `just haq-blind-review` happened to catch a same-backend pair
+   because it runs the self-test first, but `python3 scripts/haqp_blind_review.py
+   --run` with two `codex:` models would have recorded two OpenAI reviews as
+   independent. Moved into `main()`. **This also corrects a claim made in this
+   session**: the runner was described as refusing that configuration outright,
+   and it did not.
+2. **An empty `codex:` alias** omitted `--model`, reviewed with an unrecorded
+   default, and filed the result under the literal reviewer name `codex:` —
+   valid-looking evidence for a reviewer that never existed as named. Rejected.
+3. **Parsed review text was persisted unredacted.** `attempts` and `findings`
+   ARE model output, the same untrusted text the raw response is deliberately
+   never written for. "No credentials" in the prompt is a request, not a
+   control. `redact_deep` now covers every persisted string.
+4. **`--ephemeral` was missing** from the Codex invocation. This machine's
+   config appears not to persist sessions, but a runner that keeps untrusted
+   model output off disk must not depend on an unstated default.

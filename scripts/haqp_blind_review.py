@@ -108,21 +108,31 @@ def codex_call(model: str, prompt: str) -> str:
     """
     with tempfile.TemporaryDirectory(prefix="haqp-codex-") as scratch:
         last = Path(scratch) / "last-message.txt"
+        name = model[len(CODEX_PREFIX) :]
+        # An empty `codex:` alias would omit --model and silently review with
+        # whatever CODEX_HOME/config.toml defaults to, while the record hashes
+        # the literal string "codex:" as the reviewer identity — valid-looking
+        # evidence for a reviewer that never existed as named.
+        if not name:
+            raise RuntimeError(f"{model!r} names no model; use codex:<model>")
         argv = [
             "codex",
             "exec",
             "--sandbox",
             "read-only",
             "--skip-git-repo-check",
+            # Codex persists session transcripts by default. This machine's
+            # config appears not to, but the runner must not depend on an
+            # unstated default to keep an untrusted model response off disk.
+            "--ephemeral",
             "--color",
             "never",
             "--output-last-message",
             str(last),
+            "--model",
+            name,
+            "-",
         ]
-        name = model[len(CODEX_PREFIX) :]
-        if name:
-            argv += ["--model", name]
-        argv.append("-")
         completed = subprocess.run(
             argv,
             input=f"{SYSTEM}\n\n{prompt}",
@@ -243,6 +253,25 @@ def redact(text: str) -> str:
     return re.sub(r"[A-Za-z0-9_\-]{20,}", "****", text)
 
 
+def redact_deep(value: Any) -> Any:
+    """Apply `redact` to every string inside a parsed review.
+
+    `run_pass` persists the reviewer's `attempts` and `findings` verbatim, and
+    those are model output — the same untrusted text the raw response is
+    deliberately never written for.  "No credentials" in the prompt is a
+    request, not a control: a reviewer that quoted a key out of its context
+    would put it in an attempt's `observed_result`, and the runner would file it
+    under `target/`.
+    """
+    if isinstance(value, str):
+        return redact(value)
+    if isinstance(value, list):
+        return [redact_deep(item) for item in value]
+    if isinstance(value, dict):
+        return {key: redact_deep(item) for key, item in value.items()}
+    return value
+
+
 def provider_failure(model: str, text: str) -> None:
     """Raise if `text` is a transport/provider error rather than a review.
 
@@ -358,10 +387,10 @@ def run_pass(name: str, model: str, context: str, *, pass_two: bool) -> dict[str
         },
         "isolated_session_hash": digest(session_id.encode()),
         "sanitized_prompt_hash": prompt_hash,
-        "attempts": parsed["attempts"],
-        "findings": parsed.get("findings", []),
+        "attempts": redact_deep(parsed["attempts"]),
+        "findings": redact_deep(parsed.get("findings", [])),
         "unresolved_verified_findings": parsed.get("unresolved_verified_findings"),
-        "result": parsed.get("result"),
+        "result": redact_deep(parsed.get("result")),
         "blindness_proof": {
             # Cloud passes ASK for an ephemeral conversation; local passes carry
             # no conversation at all, which is isolation by construction rather
@@ -501,6 +530,19 @@ def self_test() -> int:
     if len({backend_of(model) for _, model, _ in PASSES}) != 2:
         failures.append(f"both passes route to one backend: {[model for _, model, _ in PASSES]}")
 
+    # An empty `codex:` alias must not reach the CLI: it would omit --model,
+    # review with an unrecorded default, and file the result under the literal
+    # reviewer name "codex:".
+    rejects("codex_call accepted an empty model alias", codex_call, "codex:", "p")
+
+    # Persisted review text is model output. A reviewer that quoted a key out of
+    # its context would put it in an attempt, and the record would carry it.
+    leaked = redact_deep({"attempts": [{"observed_result": "saw sk-abcdef0123456789abcdef0123456789"}]})
+    if "sk-abcdef0123456789abcdef0123456789" in json.dumps(leaked):
+        failures.append("redact_deep left a credential inside a persisted attempt")
+    if redact_deep({"n": 12, "ok": True, "none": None}) != {"n": 12, "ok": True, "none": None}:
+        failures.append("redact_deep mangles non-string values")
+
     # Redaction is the one guard whose failure is silent: an unmasked key would
     # still produce a correct-looking blocked.json.
     leaky = 'error: provider API: {"message":"key sk-abcdef0123456789abcdef0123456789 is invalid"}'
@@ -528,7 +570,7 @@ def self_test() -> int:
         print(f"SELF-TEST FAILED: {problem}", file=sys.stderr)
     if failures:
         return 1
-    print(json.dumps({"result": "self-test-ok", "checks": 12}))
+    print(json.dumps({"result": "self-test-ok", "checks": 15}))
     return 0
 
 
@@ -549,14 +591,24 @@ def main() -> int:
         return blocked("preflight only; --run required", commit=commit, clean=True)
     OUT.mkdir(parents=True, exist_ok=True)
     models = [model for _, model, _ in PASSES]
-    # Name-level, not family-level: this catches the same model twice, which is
-    # the mistake actually available to a caller setting HAQP_BLIND_PASS*. It
-    # canNOT catch two siblings of one family (deepseek-v4-pro vs -flash),
-    # which would need a vendor taxonomy the runner does not have. The family
-    # requirement remains a human precondition of ADR-0020 §6.
+    # Name-level, not family-level: this catches the same model twice. It canNOT
+    # catch two siblings of one family (gpt-5.6-sol vs gpt-5.6-terra), so the
+    # backend check below carries the weight. The family requirement itself
+    # remains a human precondition of ADR-0020 §6.
     if len(set(models)) != len(models):
         return blocked(
             f"ADR-0020 §6 requires distinct model families; both passes name {models[0]}",
+            commit=commit,
+            clean=True,
+        )
+    # This check lived only in --self-test, so `python3 scripts/haqp_blind_review.py
+    # --run` with HAQP_BLIND_PASS1=codex:gpt-5.6-sol HAQP_BLIND_PASS2=codex:gpt-5.6-terra
+    # recorded two OpenAI reviews as though they were independent. `just
+    # haq-blind-review` happened to catch it because it runs --self-test first,
+    # but a guard that only fires on the recommended invocation is not a guard.
+    if len({backend_of(model) for model in models}) != len(models):
+        return blocked(
+            f"ADR-0020 §6 requires distinct model families; {models} share a backend",
             commit=commit,
             clean=True,
         )
