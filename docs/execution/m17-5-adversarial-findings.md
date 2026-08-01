@@ -1339,6 +1339,29 @@ the function cannot be reached by any canary that only observes the law's
 pass/fail. Not landed yet: the campaign is mid-flight and adding
 tests now would force a rerun, which is the sequence Brian explicitly ruled out.
 
+### Addendum: the order oracle too, and a question it raises
+
+Later in the same campaign:
+
+```
+MISSED conformance/src/laws.rs:118:29: delete ! in assert_order_survives
+```
+
+That `!` is in `.filter(|token| !token.is_empty() && ...)`. Deleting it keeps
+ONLY empty tokens, so both token vectors empty and the subsequence check becomes
+vacuous. The `SortingFormatter` canary should then stop panicking — and a
+`#[should_panic(expected = "reordered content")]` test that does not panic
+FAILS, which would mean the mutant is caught.
+
+It was not caught. Either the canary still panics for a reason not yet traced,
+or **the canary tests are not being executed by the mutation lane at all**. The
+second possibility is much the worse one: it would make every canary in
+`law_canaries.rs` decorative under mutation, and the canaries are the mechanism
+the whole F-01 fix rests on.
+
+**Resolve this before writing any fix**, since which defect is real determines
+what the fix has to be. Do not assume the first explanation.
+
 **Tracked at:** M17.5, post-campaign test batch — the same batch that consumes
 the campaign's survivor list, before the ADR-0020 §1 clean-tree rerun. This
 finding must be closed before the rerun, not after: §1 makes any verified fix
