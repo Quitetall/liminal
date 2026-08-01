@@ -1271,7 +1271,7 @@ integrity problem, and this is only a cost problem.
 Related, and already recorded: the ENOSPC that wrote a corrupt
 `.proptest-regressions` file earlier in M17.5 came from the same full `/tmp`.
 
-## F-25 — MAJOR. **OPEN.** The F-01 oracle can go vacuous without any canary noticing.
+## F-25 — MAJOR. **OPEN — must close before the ADR-0020 §1 clean-tree rerun.** The F-01 oracle can go vacuous without any canary noticing.
 
 Found by the full mutation campaign (3000 mutants, run of 2026-08-01). At the
 ~1000-mutant mark `conformance/src/laws.rs` had **21 survivors, every one of
