@@ -76,26 +76,62 @@ def blocked(reason: str, *, commit: str, clean: bool) -> int:
     return 2
 
 
+SYSTEM = "You are an isolated HAQP adversarial reviewer. Return JSON only."
+LOCAL_PREFIX = "local:"
+
+
+def call_arguments(model: str, prompt: str, session_id: str) -> tuple[str, dict[str, Any]]:
+    """Pick the lamu tool for `model` and build its arguments.
+
+    ADR-0020 §6 wants two DIFFERENT model families, and the cloud roster has
+    collapsed to one vendor that answers.  A locally-served model is a second
+    family that costs nothing and cannot be revoked, so the runner has to be
+    able to drive both backends.  `local:` names route to lamu's on-disk
+    `query` tool; everything else is a cloud alias.
+    """
+    if model.startswith(LOCAL_PREFIX):
+        return "query", {
+            "model": model[len(LOCAL_PREFIX) :],
+            "prompt": prompt,
+            "system": SYSTEM,
+            "max_tokens": 32000,
+            "temperature": 0.1,
+            "origin": "haqp-blind-review",
+        }
+    return "cloud_query", {
+        "model": model,
+        "prompt": prompt,
+        "system": SYSTEM,
+        "max_tokens": 32000,
+        "temperature": 0.1,
+        "thinking_enabled": True,
+        "ephemeral": True,
+        "conversation_id": session_id,
+    }
+
+
 def mcp_call(model: str, prompt: str, session_id: str) -> str:
     """Call lamu's stdio MCP directly; avoids stale outer MCP transports."""
-    request = {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "tools/call",
-        "params": {
-            "name": "cloud_query",
-            "arguments": {
-                "model": model,
-                "prompt": prompt,
-                "system": "You are an isolated HAQP adversarial reviewer. Return JSON only.",
-                "max_tokens": 32000,
-                "temperature": 0.1,
-                "thinking_enabled": True,
-                "ephemeral": True,
-                "conversation_id": session_id,
-            },
-        },
-    }
+    tool, arguments = call_arguments(model, prompt, session_id)
+    # Each `lamu start` is an independent stdio server with its own in-memory
+    # model map. A model loaded by some other MCP client is "marked loaded but
+    # missing from" this one, so a local pass loads its own before querying.
+    # The load result is ignored: already-loaded is success, and a genuine
+    # failure surfaces on the query itself with a better message.
+    calls = []
+    if tool == "query":
+        calls.append(("load_model", {"name": arguments["model"]}))
+    calls.append((tool, arguments))
+    requests = [
+        {
+            "jsonrpc": "2.0",
+            "id": index + 1,
+            "method": "tools/call",
+            "params": {"name": call_tool, "arguments": call_args},
+        }
+        for index, (call_tool, call_args) in enumerate(calls)
+    ]
+    final_id = len(requests)
     init = {
         "jsonrpc": "2.0",
         "id": 0,
@@ -127,22 +163,24 @@ def mcp_call(model: str, prompt: str, session_id: str) -> str:
             item = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if item.get("id") == 0:
-            proc.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
-            proc.stdin.flush()
-            continue
-        if item.get("id") == 1:
+        received = item.get("id")
+        if received == final_id:
             result = item
             break
+        # id 0 is the initialize reply; any other is an intermediate call whose
+        # completion releases the next one.
+        if isinstance(received, int) and 0 <= received < final_id:
+            proc.stdin.write(json.dumps(requests[received], separators=(",", ":")) + "\n")
+            proc.stdin.flush()
     proc.kill()
     if result is None:
-        raise RuntimeError("lamu returned no cloud_query result")
+        raise RuntimeError(f"lamu returned no {tool} result for {model}")
     if "error" in result:
         raise RuntimeError(str(result["error"]))
     content = result.get("result", {}).get("content", [])
     text = "\n".join(item.get("text", "") for item in content if isinstance(item, dict))
     if not text:
-        raise RuntimeError("lamu cloud_query returned empty text")
+        raise RuntimeError(f"lamu {tool} returned empty text for {model}")
     provider_failure(model, text)
     return text
 
@@ -271,7 +309,15 @@ def run_pass(name: str, model: str, context: str, *, pass_two: bool) -> dict[str
     record = {
         "schema_version": "haqp-blind-review-v1",
         "pass": 2 if pass_two else 1,
-        "reviewer": {"model_family": model, "identity_hash": identity},
+        "reviewer": {
+            "model_family": model,
+            "identity_hash": identity,
+            # The evidence must say which backend answered. A locally served
+            # reviewer and a cloud one are isolated in different ways, and a
+            # record that hid the difference would let a reader assume the
+            # stronger of the two.
+            "backend": "local" if model.startswith(LOCAL_PREFIX) else "cloud",
+        },
         "isolated_session_hash": digest(session_id.encode()),
         "sanitized_prompt_hash": prompt_hash,
         "attempts": parsed["attempts"],
@@ -279,7 +325,13 @@ def run_pass(name: str, model: str, context: str, *, pass_two: bool) -> dict[str
         "unresolved_verified_findings": parsed.get("unresolved_verified_findings"),
         "result": parsed.get("result"),
         "blindness_proof": {
+            # Cloud passes ask for an ephemeral conversation; local passes carry
+            # no conversation at all, which is isolation by construction rather
+            # than by request.
             "ephemeral_session": True,
+            "session_state": (
+                "stateless-local-call" if model.startswith(LOCAL_PREFIX) else "ephemeral-cloud-session"
+            ),
             "prior_pass_artifact_supplied": False,
             "pass_two_original_spec_only": pass_two,
         },
@@ -291,8 +343,15 @@ def run_pass(name: str, model: str, context: str, *, pass_two: bool) -> dict[str
     return record
 
 
+# Pass 1 is a LOCALLY served Gemma; pass 2 is MiMo in the cloud. ADR-0020 §6
+# needs two distinct model families, and as of 2026-08-01 MiMo is the only
+# cloud vendor that answers — DeepSeek's key is invalid and OpenRouter, which
+# is the route to every other family, can afford 72 tokens. Brian's ruling:
+# use the MiMo plan we already pay for, spend nothing on DeepSeek or
+# OpenRouter. A local model is therefore the second family: free, on disk,
+# and impossible for a provider outage to revoke.
 PASSES = (
-    ("pass1", os.environ.get("HAQP_BLIND_PASS1", "deepseek-v4-pro"), False),
+    ("pass1", os.environ.get("HAQP_BLIND_PASS1", "local:gemma-4-26b-a4b-it-q4_k_m"), False),
     ("pass2", os.environ.get("HAQP_BLIND_PASS2", "mimo-v2.5-pro"), True),
 )
 
@@ -381,6 +440,17 @@ def self_test() -> int:
         parse_json,
         json.dumps({**good, "attempts": [{**a, "classification": "false_positive"} for a in good["attempts"]]}),
     )
+    # Backend routing: a `local:` name sent to cloud_query would be looked up in
+    # the cloud registry, fail, and be reported as an unreachable vendor — while
+    # a cloud alias sent to the local tool would silently review with whatever
+    # model happened to be loaded. Neither is visible in the recorded evidence.
+    local_tool, local_args = call_arguments("local:some-model", "p", "s")
+    if local_tool != "query" or local_args.get("model") != "some-model":
+        failures.append(f"a local: model routed to {local_tool!r} as {local_args.get('model')!r}")
+    cloud_tool, cloud_args = call_arguments("mimo-v2.5-pro", "p", "s")
+    if cloud_tool != "cloud_query" or cloud_args.get("model") != "mimo-v2.5-pro":
+        failures.append(f"a cloud model routed to {cloud_tool!r} as {cloud_args.get('model')!r}")
+
     # Redaction is the one guard whose failure is silent: an unmasked key would
     # still produce a correct-looking blocked.json.
     leaky = 'error: provider API: {"message":"key sk-abcdef0123456789abcdef0123456789 is invalid"}'
@@ -408,7 +478,7 @@ def self_test() -> int:
         print(f"SELF-TEST FAILED: {problem}", file=sys.stderr)
     if failures:
         return 1
-    print(json.dumps({"result": "self-test-ok", "checks": 9}))
+    print(json.dumps({"result": "self-test-ok", "checks": 11}))
     return 0
 
 

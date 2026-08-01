@@ -1262,3 +1262,94 @@ integrity problem, and this is only a cost problem.
 
 Related, and already recorded: the ENOSPC that wrote a corrupt
 `.proptest-regressions` file earlier in M17.5 came from the same full `/tmp`.
+
+## F-25 — MAJOR. **OPEN.** The F-01 oracle can go vacuous without any canary noticing.
+
+Found by the full mutation campaign (3000 mutants, run of 2026-08-01):
+
+```
+MISSED conformance/src/laws.rs:27:5: replace content_witness -> (BTreeMap<String, usize>, BTreeSet<String>)
+       with (BTreeMap::from_iter([(String::new(), 1)]), BTreeSet::from_iter(["xyzzy".into()]))
+```
+
+`content_witness` is the independent oracle added to close F-01 — the anchor
+outside the implementation that makes the §112 self-referential relations mean
+anything. A mutant that replaces it with a **constant** survives the entire
+suite, including all nine law canaries.
+
+### Why every canary still passes
+
+Traced, not assumed:
+
+1. **`assert_content_survives` checks emptiness directly, not through the
+   witness** (`laws.rs:56-59`). The `erased a non-empty document` assertion
+   reads `output.trim().is_empty()`. So the two content-deletion canaries
+   (`law_canaries.rs:139,146`) trip that line and pass no matter what
+   `content_witness` returns.
+2. **`assert_order_survives` tokenizes independently** (`laws.rs:116-121`). It
+   uses the witness only for the `ids` exclusion set; under the mutant that set
+   is `{"xyzzy"}`, which excludes nothing real, so the order check keeps working
+   at full strength and the two `reordered content` canaries still pass.
+
+What actually dies is the part with no canary: the **token-count survival loop**
+(`laws.rs:62-69`) and the **durable-id survival loop** (`laws.rs:76-81`). Under
+the mutant both compare a constant to itself and are tautologies.
+
+### The gap, stated exactly
+
+Every canary exercises **total** content destruction or **reordering**. Nothing
+exercises **partial** content loss: an implementation that drops *some* word
+tokens while leaving the output non-empty and the survivors in order. That is
+the only failure `content_witness`'s multiset comparison uniquely catches, and
+it is precisely the case no canary covers.
+
+This is F-01's shape one layer down. F-01 was "the law compares the
+implementation to itself"; F-25 is "the check that fixed it is guarded by
+canaries that pass for other reasons". A canary that can pass on an adjacent
+assertion does not pin the assertion it was written for.
+
+### Fix — deferred to the post-campaign batch, by Brian's sequencing
+
+A canary formatter that drops a SUBSET of tokens (non-empty output, survivors
+in order) asserting `should_panic(expected = "dropped content")`, plus one that
+drops only a durable id. Not landed yet: the campaign is mid-flight and adding
+tests now would force a rerun, which is the sequence Brian explicitly ruled out.
+
+## F-26 — INFRASTRUCTURE. **PARTIAL.** ADR-0020 §6 needs two model families and the cloud roster collapsed to one.
+
+Probed 2026-08-01: **MiMo is the only cloud vendor that answers.** DeepSeek's
+key is invalid; OpenRouter — the route to ~370 models covering every other
+family — returns `402` and "can only afford 72 tokens"; Zhipu, Moonshot,
+DashScope and Anthropic have no key configured.
+
+**Brian's ruling:** use the MiMo plan already paid for; spend nothing on
+DeepSeek or OpenRouter.
+
+The second family is therefore a **locally served** model, which is free and
+cannot be revoked by a provider. The runner gained a `local:` backend that
+routes to lamu's on-disk `query` tool, canaried both ways — a `local:` name
+reaching `cloud_query` would be reported as an unreachable vendor, and a cloud
+alias reaching the local tool would silently review with whatever model happened
+to be loaded, and neither is visible in the recorded evidence. The record now
+carries `reviewer.backend` and `blindness_proof.session_state` so a reader
+cannot mistake a local pass for a cloud one.
+
+The packet's reviewer rows named `deepseek-v4-pro-blind-pass` (cannot run) and
+`codex-context-free-blind-pass` (never ran; the script has always driven MiMo).
+Both now name the real roster.
+
+### Not yet runnable, and why
+
+- **VRAM.** `gemma-4-26b-a4b-it-q4_k_m` needs 17.6 GB; two of Brian's own jobs
+  (`serve_l2_baseline` 5.0 GB, Tritium `salt_distill_heldout` 5.1 GB) leave
+  ~13 GB. The only model that fits is a 4B, which would give §6 the FORM of
+  two-family independence with none of the substance. Not recorded as evidence.
+- **Cross-process model visibility.** Each `lamu start` is an independent stdio
+  server with its own model map, so a model loaded by another MCP client reads
+  as "marked loaded but missing from" this one. The runner now loads its own
+  model first. Verified: the load proceeds; generation then failed with
+  `backend failed: http: error sending request` after 305 s under a six-worker
+  mutation campaign, i.e. a starved box, not a wiring fault. Untested
+  end-to-end, and recorded as such.
+
+Run the lane when the GPU is free. Nothing about it is claimed until then.
