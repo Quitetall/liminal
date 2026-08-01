@@ -1173,3 +1173,56 @@ the start — three 2.5-hour cycles bought what one afternoon of probes would
 have.
 
 Promoted as `f22-bare-identifier-forms.bin`; corpus guard raised to >=26.
+
+## F-23 — MODERATE. **RESOLVED.** The blind-review runner blamed the model for a dead API key.
+
+`scripts/haqp_blind_review.py` calls lamu's `cloud_query` over stdio MCP. lamu
+reports **provider failures as ordinary MCP content**, not as an MCP-level
+`error`: a dead key comes back as the string
+
+```
+error: provider API: {"code":"invalid_request_error","message":"Authentication Fails, Your api key: ****9d40 is invalid",...}
+```
+
+`mcp_call` returned that happily and `parse_json` rejected it with **"reviewer
+JSON lacks attempts array"**. True, and useless — it accuses the reviewer of a
+malformed response when the reviewer was never reached.
+
+The runner stayed fail-closed throughout, so nothing false was ever banked;
+`blocked.json` was written and no pass recorded. The cost was diagnostic, not
+evidentiary: **two full runs were spent chasing `max_tokens`** (8k → 32k, commit
+`6ea781c`) on the strength of a reason that was never about tokens.
+
+### Fix
+
+1. `provider_failure(model, text)` runs on every response before parsing and
+   raises naming the vendor and the provider's own message. It catches both the
+   `error:`-prefixed form and a bare error object with no `attempts` key.
+2. `vendor_liveness(models)` pings each reviewer with a one-token prompt
+   **before** the ~200 KB context is sent. A dead vendor now costs three seconds
+   and names itself instead of costing a quarter-hour and blaming the model.
+3. A distinctness precondition: the runner refuses to start if both passes name
+   the same model, because ADR-0020 §6 requires distinct model families and a
+   runner that silently reviewed twice with one family would satisfy the letter
+   of the record while producing no independence at all.
+4. `--self-test` exercises all five guards against the degenerate inputs they
+   exist to reject, and against a well-formed review that must NOT be rejected.
+   `just haq-blind-review` runs it first. Verified non-vacuous: stubbing
+   `provider_failure` to a no-op makes the self-test fail with both messages.
+
+### What this does NOT fix
+
+Only one cloud vendor still answers. Probed 2026-08-01:
+
+| vendor | state |
+|---|---|
+| MiMo (Xiaomi) | live |
+| DeepSeek | `Authentication Fails` — key invalid |
+| OpenRouter (all families routed through it) | `402` — "can only afford 72 tokens" |
+| Zhipu / Moonshot / DashScope / Anthropic direct | no key configured |
+
+ADR-0020 §6 requires **two blinded reviews from distinct model families**. With
+one live vendor that is unsatisfiable, and the distinctness precondition above
+now enforces the refusal rather than letting a same-family pair be recorded.
+This is a provisioning blocker, not a code defect; it is escalated, not
+worked around.

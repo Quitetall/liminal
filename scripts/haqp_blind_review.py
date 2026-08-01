@@ -142,7 +142,36 @@ def mcp_call(model: str, prompt: str, session_id: str) -> str:
     text = "\n".join(item.get("text", "") for item in content if isinstance(item, dict))
     if not text:
         raise RuntimeError("lamu cloud_query returned empty text")
+    provider_failure(model, text)
     return text
+
+
+def provider_failure(model: str, text: str) -> None:
+    """Raise if `text` is a transport/provider error rather than a review.
+
+    lamu reports provider failures — dead API key, exhausted credits, model
+    unavailable — as ordinary MCP *content*, not as an MCP-level `error`.  The
+    runner therefore used to hand an authentication failure straight to
+    `parse_json`, which rejected it with "reviewer JSON lacks attempts array".
+    That reason is true and useless: it accuses the model of a bad response
+    when nothing was ever asked of it.  M17.5 burned two full runs chasing
+    `max_tokens` on the strength of it (F-23).
+
+    Fail-closed is correct here — it stays fail-closed.  What changes is that
+    the recorded reason now names the actual cause.
+    """
+    head = text.lstrip()[:2000]
+    if head.startswith("error:"):
+        raise RuntimeError(f"{model}: provider call failed: {head.splitlines()[0][:400]}")
+    # Some providers return a bare error object with no `error:` prefix.
+    try:
+        value = json.loads(head)
+    except json.JSONDecodeError:
+        return
+    if isinstance(value, dict) and "attempts" not in value:
+        for field in ("error", "code", "type"):
+            if field in value:
+                raise RuntimeError(f"{model}: provider returned an error object: {head[:400]}")
 
 
 def parse_json(text: str) -> dict[str, Any]:
@@ -237,10 +266,101 @@ def run_pass(name: str, model: str, context: str, *, pass_two: bool) -> dict[str
     return record
 
 
+PASSES = (
+    ("pass1", os.environ.get("HAQP_BLIND_PASS1", "deepseek-v4-pro"), False),
+    ("pass2", os.environ.get("HAQP_BLIND_PASS2", "mimo-v2.5-pro"), True),
+)
+
+
+def vendor_liveness(models: list[str]) -> str | None:
+    """Ping each reviewer with a trivial prompt; return the first failure.
+
+    Sending the ~200 KB review context to a vendor whose key is dead costs a
+    quarter-hour and produces a misleading record.  A one-token ping costs
+    three seconds and names the vendor.
+    """
+    for model in models:
+        try:
+            mcp_call(model, "Reply with the single word OK.", f"haqp-liveness-{model}")
+        except RuntimeError as exc:
+            return f"reviewer {model} is unreachable: {exc}"
+    return None
+
+
+def self_test() -> int:
+    """Prove the guards reject the degenerate inputs they exist to reject.
+
+    A fail-closed runner whose guards silently stopped rejecting would report
+    a clean review over garbage, so each guard is paired with the case that
+    must trip it.
+    """
+    failures: list[str] = []
+
+    def rejects(label: str, fn: Any, *args: Any) -> None:
+        try:
+            fn(*args)
+        except (RuntimeError, ValueError):
+            return
+        failures.append(label)
+
+    rejects(
+        "provider_failure accepted a lamu error string",
+        provider_failure,
+        "m",
+        'error: provider API: {"code":"invalid_request_error","message":"Authentication Fails"}',
+    )
+    rejects(
+        "provider_failure accepted a bare provider error object",
+        provider_failure,
+        "m",
+        '{"code":402,"message":"This request requires more credits"}',
+    )
+    # ...and must NOT reject a real review, or every pass blocks forever.
+    good = {
+        "attempts": [
+            {
+                "id": f"A{i}",
+                "attack_class": "c",
+                "target": "t",
+                "attempt": "a",
+                "observed_result": "o",
+                "independently_reproduced": True,
+                "classification": "caught_violation",
+                "resolved": "yes",
+            }
+            for i in range(12)
+        ],
+        "findings": [],
+        "unresolved_verified_findings": 0,
+        "result": "pass",
+    }
+    body = json.dumps(good)
+    try:
+        provider_failure("m", body)
+        parse_json(body)
+    except (RuntimeError, ValueError) as exc:
+        failures.append(f"a well-formed review was rejected: {exc}")
+    rejects("parse_json accepted a short attempts array", parse_json, json.dumps({**good, "attempts": good["attempts"][:11]}))
+    rejects(
+        "parse_json accepted a review with no caught violation",
+        parse_json,
+        json.dumps({**good, "attempts": [{**a, "classification": "false_positive"} for a in good["attempts"]]}),
+    )
+    for problem in failures:
+        print(f"SELF-TEST FAILED: {problem}", file=sys.stderr)
+    if failures:
+        return 1
+    print(json.dumps({"result": "self-test-ok", "guards": 5}))
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run", action="store_true", help="run model calls; default records preflight only")
+    parser.add_argument("--self-test", action="store_true", help="exercise the guards; no model calls")
     args = parser.parse_args()
+    if args.self_test:
+        return self_test()
     context, clean, commit = base_context()
     packet = packet_state()
     if not clean:
@@ -250,9 +370,21 @@ def main() -> int:
     if not args.run:
         return blocked("preflight only; --run required", commit=commit, clean=True)
     OUT.mkdir(parents=True, exist_ok=True)
+    models = [model for _, model, _ in PASSES]
+    if len(set(models)) != len(models):
+        return blocked(
+            f"ADR-0020 §6 requires distinct model families; both passes name {models[0]}",
+            commit=commit,
+            clean=True,
+        )
+    dead = vendor_liveness(models)
+    if dead is not None:
+        return blocked(dead, commit=commit, clean=True)
     try:
-        first = run_pass("pass1-deepseek-v4-pro", "deepseek-v4-pro", context, pass_two=False)
-        second = run_pass("pass2-mimo-v2.5-pro", "mimo-v2.5-pro", context, pass_two=True)
+        records = [
+            run_pass(f"{name}-{model}", model, context, pass_two=pass_two) for name, model, pass_two in PASSES
+        ]
+        first, second = records
     except (RuntimeError, ValueError, subprocess.SubprocessError) as exc:
         return blocked(f"review execution failed: {exc}", commit=commit, clean=True)
     manifest = {
