@@ -1226,3 +1226,28 @@ one live vendor that is unsatisfiable, and the distinctness precondition above
 now enforces the refusal rather than letting a same-family pair be recorded.
 This is a provisioning blocker, not a code defect; it is escalated, not
 worked around.
+
+## F-24 — INFRASTRUCTURE. **RESOLVED.** The mutation lane copies `fuzz/target` into every worker and fills `/tmp`.
+
+The scoped `liminal-format` re-run died with `No space left on device (os error 28)`
+copying `fuzz/target/.../libserde_json-*.rlib` into a worker tree.
+
+`/tmp` on this machine is a **32 GB tmpfs** (8.5 GB free). `.gitignore` excludes
+`/target` at the root, which cargo-mutants honors, but **`fuzz/target` is a
+second 656 MB build directory it copies in full** — once per concurrent worker.
+At `-j 6` that is ~4 GB of RAM-backed copies for a build cache no mutant reads.
+
+Fixed by pointing the copies at the NVMe, which has 155 GB free:
+
+```
+TMPDIR=$HOME/.cache/liminal-mutants cargo mutants -p liminal-format -j 6
+```
+
+This is load-bearing for the deferred 2915-mutant campaign, not just the scoped
+run: that campaign is the same copy repeated ~2915 times. It would have failed
+the same way, after hours, and the failure mode is a `WARN`-shaped worker error
+rather than a clean abort — a campaign that lost workers to ENOSPC could report
+a kill rate over a fraction of the mutants it claimed.
+
+Related, and already recorded: the ENOSPC that wrote a corrupt
+`.proptest-regressions` file earlier in M17.5 came from the same full `/tmp`.

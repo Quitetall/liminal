@@ -738,6 +738,116 @@ mod tests {
         );
     }
 
+    /// Kills `replace || with &&` at lib.rs:283 — the clause the test above
+    /// could not reach.
+    ///
+    /// `compact_surface_is_refused_when_any_single_condition_fails` gives the
+    /// paragraph a `node inner (id = ...)` child, which looks like it violates
+    /// only the "child carries attributes" clause. It does not: a
+    /// `NodeConstruction` child is refused two lines earlier by the `let ...
+    /// else` on the child's kind, so line 283 never runs and its mutant lived.
+    ///
+    /// Reaching it needs a child that IS a `Literal` and carries attributes
+    /// XOR children — a shape M19's grammar has no spelling for (`literal
+    /// "a";` admits neither). The check is therefore defensive, and the only
+    /// honest way to exercise it is to build the shape directly. Both halves
+    /// are tested separately: under `&&` each one alone is false, so a
+    /// non-bare literal would be emitted as though it were bare, silently
+    /// dropping whatever it carried.
+    #[test]
+    fn compact_surface_is_refused_when_the_lone_literal_is_not_bare() {
+        let formatter = MarkdownFormatter::default();
+        let source = "#!liminal-explicit-v1\nnode paragraph {\n  literal \"a\";\n}\n";
+        let document = formatter.parse(source).expect("parses");
+
+        // The fixture must be compact-representable AS PARSED, or the two
+        // assertions below would pass against a document refused for some
+        // unrelated reason.
+        assert_eq!(
+            emit_compact(&document.hir).as_deref(),
+            Some("a\n"),
+            "the bare fixture must be compact-representable, or this test proves nothing"
+        );
+
+        let literal_index = document
+            .hir
+            .items
+            .iter()
+            .position(|item| matches!(item.kind, HirItemKind::Literal { .. }))
+            .expect("the fixture has a literal");
+
+        let mut carries_attributes = document.hir.clone();
+        carries_attributes.items[literal_index]
+            .attributes
+            .insert("id".into(), HirValue::String("i".into()));
+        assert_eq!(
+            emit_compact(&carries_attributes),
+            None,
+            "a literal carrying attributes has no compact spelling; emitting one drops them"
+        );
+
+        let mut carries_children = document.hir.clone();
+        let borrowed = document.hir.roots[0];
+        carries_children.items[literal_index]
+            .children
+            .push(borrowed);
+        assert_eq!(
+            emit_compact(&carries_children),
+            None,
+            "a literal with children has no compact spelling; emitting one drops them"
+        );
+    }
+
+    /// Kills both mutants at lib.rs:503 — `Formatter::emit_in_dialect`'s
+    /// DEFAULT body (`Ok(String::new())`, `Ok("xyzzy".into())`).
+    ///
+    /// `MarkdownFormatter` overrides `emit_in_dialect`, so every existing test
+    /// runs the override at lib.rs:244 and the default body was never executed
+    /// by anything. That default carries a real promise, stated in its own
+    /// doc comment: adding this method "cannot change the behavior of any
+    /// existing implementor". Only an implementor that declines to override it
+    /// can hold it to that.
+    #[test]
+    fn the_default_dialect_emitter_defers_to_emit_for_every_dialect() {
+        struct InheritsTheDefault;
+
+        impl Formatter for InheritsTheDefault {
+            type Doc = String;
+            type Error = Phase1FormatError;
+
+            fn parse(&self, source: &str) -> Result<Self::Doc, Self::Error> {
+                Ok(source.to_owned())
+            }
+
+            fn emit(&self, doc: &Self::Doc) -> Result<String, Self::Error> {
+                Ok(format!("emitted:{doc}"))
+            }
+
+            fn format(&self, source: &str) -> Result<String, Self::Error> {
+                self.emit(&self.parse(source)?)
+            }
+
+            // emit_in_dialect deliberately NOT overridden.
+        }
+
+        let formatter = InheritsTheDefault;
+        let doc = formatter.parse("carried").expect("parses");
+        let canonical = formatter.emit(&doc).expect("emits");
+        assert_eq!(canonical, "emitted:carried");
+
+        for dialect in [
+            SourceDialect::ExplicitV1,
+            SourceDialect::CompactOrExplicitV1,
+        ] {
+            assert_eq!(
+                formatter.emit_in_dialect(&doc, dialect).expect("emits"),
+                canonical,
+                "the default emit_in_dialect must defer to emit for {dialect:?}, \
+                 or adding the method changed an existing implementor's behavior"
+            );
+        }
+    }
+
     #[test]
     fn explicit_surface_covers_all_eight_forms() {
         let source = concat!(
