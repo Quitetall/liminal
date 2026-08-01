@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -146,6 +147,19 @@ def mcp_call(model: str, prompt: str, session_id: str) -> str:
     return text
 
 
+def redact(text: str) -> str:
+    """Mask anything key-shaped before it reaches an error message.
+
+    `blocked()` persists its reason to `blocked.json`, and provider errors get
+    quoted into that reason verbatim.  DeepSeek masks its own key in the
+    authentication failure that motivated F-23 (`****9d40`); nothing obliges
+    the next vendor to.  A review runner that writes a live credential into a
+    committed-adjacent artifact would be a far worse defect than the one it
+    was built to report.
+    """
+    return re.sub(r"[A-Za-z0-9_\-]{20,}", "****", text)
+
+
 def provider_failure(model: str, text: str) -> None:
     """Raise if `text` is a transport/provider error rather than a review.
 
@@ -160,7 +174,7 @@ def provider_failure(model: str, text: str) -> None:
     Fail-closed is correct here — it stays fail-closed.  What changes is that
     the recorded reason now names the actual cause.
     """
-    head = text.lstrip()[:2000]
+    head = redact(text.lstrip()[:2000])
     if head.startswith("error:"):
         raise RuntimeError(f"{model}: provider call failed: {head.splitlines()[0][:400]}")
     # Some providers return a bare error object with no `error:` prefix.
@@ -168,6 +182,10 @@ def provider_failure(model: str, text: str) -> None:
         value = json.loads(head)
     except json.JSONDecodeError:
         return
+    # A real review always carries `attempts`, and a 12-attempt body is far
+    # longer than the 2000-byte prefix above — so it fails the `json.loads`
+    # on truncation and never reaches here. The allowlist is therefore only
+    # ever consulted for short, whole, non-review payloads.
     if isinstance(value, dict) and "attempts" not in value:
         for field in ("error", "code", "type"):
             if field in value:
@@ -282,7 +300,11 @@ def vendor_liveness(models: list[str]) -> str | None:
     for model in models:
         try:
             mcp_call(model, "Reply with the single word OK.", f"haqp-liveness-{model}")
-        except RuntimeError as exc:
+        # OSError covers a missing `lamu` binary, which is FileNotFoundError and
+        # therefore NOT a subprocess.SubprocessError. This runs outside main's
+        # try, so letting it escape would crash before any blocked.json existed
+        # — a fail-closed runner that leaves no record is not fail-closed.
+        except (RuntimeError, subprocess.SubprocessError, OSError) as exc:
             return f"reviewer {model} is unreachable: {exc}"
     return None
 
@@ -300,6 +322,12 @@ def self_test() -> int:
         try:
             fn(*args)
         except (RuntimeError, ValueError):
+            return
+        # A guard that raises the WRONG type still rejects, but signals a bug
+        # in the guard. Record it rather than crashing, so one broken guard
+        # does not hide the state of the other four.
+        except Exception as exc:  # noqa: BLE001 - self-test reports, never crashes
+            failures.append(f"{label}: rejected with an unexpected {type(exc).__name__}: {exc}")
             return
         failures.append(label)
 
@@ -346,11 +374,23 @@ def self_test() -> int:
         parse_json,
         json.dumps({**good, "attempts": [{**a, "classification": "false_positive"} for a in good["attempts"]]}),
     )
+    # Redaction is the one guard whose failure is silent: an unmasked key would
+    # still produce a correct-looking blocked.json.
+    leaky = 'error: provider API: {"message":"key sk-abcdef0123456789abcdef0123456789 is invalid"}'
+    try:
+        provider_failure("m", leaky)
+        failures.append("provider_failure accepted a leaky error string")
+    except RuntimeError as exc:
+        if "sk-abcdef0123456789abcdef0123456789" in str(exc):
+            failures.append("provider_failure echoed an unmasked credential into its message")
+    if "short-key" not in redact("short-key stays"):
+        failures.append("redact() mangles ordinary prose")
+
     for problem in failures:
         print(f"SELF-TEST FAILED: {problem}", file=sys.stderr)
     if failures:
         return 1
-    print(json.dumps({"result": "self-test-ok", "guards": 5}))
+    print(json.dumps({"result": "self-test-ok", "guards": 7}))
     return 0
 
 
@@ -371,6 +411,11 @@ def main() -> int:
         return blocked("preflight only; --run required", commit=commit, clean=True)
     OUT.mkdir(parents=True, exist_ok=True)
     models = [model for _, model, _ in PASSES]
+    # Name-level, not family-level: this catches the same model twice, which is
+    # the mistake actually available to a caller setting HAQP_BLIND_PASS*. It
+    # canNOT catch two siblings of one family (deepseek-v4-pro vs -flash),
+    # which would need a vendor taxonomy the runner does not have. The family
+    # requirement remains a human precondition of ADR-0020 §6.
     if len(set(models)) != len(models):
         return blocked(
             f"ADR-0020 §6 requires distinct model families; both passes name {models[0]}",
