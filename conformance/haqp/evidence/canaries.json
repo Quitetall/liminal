@@ -1,0 +1,114 @@
+[
+  {
+    "id": "C01",
+    "violation": "set status to ratified",
+    "expected_failure": "status: expected proposed",
+    "observed_failure": "status: expected \"proposed\", got \"ratified\"",
+    "caught": true
+  },
+  {
+    "id": "C02",
+    "violation": "set ratification to approved",
+    "expected_failure": "ratification: expected unratified",
+    "observed_failure": "ratification: expected \"unratified\", got \"approved\"",
+    "caught": true
+  },
+  {
+    "id": "C03",
+    "violation": "set locked_acceptance_corpora_touched true",
+    "expected_failure": "locked_acceptance_corpora_touched must be false",
+    "observed_failure": "locked_acceptance_corpora_touched must be false",
+    "caught": true
+  },
+  {
+    "id": "C04",
+    "violation": "duplicate requirement id",
+    "expected_failure": "duplicate requirement id",
+    "observed_failure": "duplicate requirement id P1-R001",
+    "caught": true
+  },
+  {
+    "id": "C05",
+    "violation": "remove P1-T08",
+    "expected_failure": "test ids differ",
+    "observed_failure": "test ids differ: actual={\"P1-T01\", \"P1-T02\", \"P1-T03\", \"P1-T04\", \"P1-T05\", \"P1-T06\", \"P1-T07\", \"P1-T09\", \"P1-T10\", \"P1-T11\", \"P1-T12\", \"P1-T13\", \"P1-T14\", \"P1-T15\", \"P1-T16\", \"P1-T17\", \"P1-T18\", \"P1-T19\", \"P1-T20\", \"P1-T21\", \"P1-T22\", \"P1-T23\", \"P1-T24\", \"P1-T25\", \"P1-T26\", \"P1-T27\", \"P1-T28\", \"P1-T29\", \"P1-T30\", \"P1-T31\", \"P1-T32\", \"P1-T33\", \"P1-T34\", \"P1-T35\", \"P1-T36\", \"P1-T37\", \"P1-T38\"}, expected={\"P1-T01\", \"P1-T02\", \"P1-T03\", \"P1-T04\", \"P1-T05\", \"P1-T06\", \"P1-T07\", \"P1-T08\", \"P1-T09\", \"P1-T10\", \"P1-T11\", \"P1-T12\", \"P1-T13\", \"P1-T14\", \"P1-T15\", \"P1-T16\", \"P1-T17\", \"P1-T18\", \"P1-T19\", \"P1-T20\", \"P1-T21\", \"P1-T22\", \"P1-T23\", \"P1-T24\", \"P1-T25\", \"P1-T26\", \"P1-T27\", \"P1-T28\", \"P1-T29\", \"P1-T30\", \"P1-T31\", \"P1-T32\", \"P1-T33\", \"P1-T34\", \"P1-T35\", \"P1-T36\", \"P1-T37\"}",
+    "caught": true
+  },
+  {
+    "id": "C06",
+    "violation": "empty requirement mapping",
+    "expected_failure": "has no requirement mapping",
+    "observed_failure": "P1-T01 has no requirement mapping",
+    "caught": true
+  },
+  {
+    "id": "C07",
+    "violation": "remove one mutant",
+    "expected_failure": "mutant count must be 65",
+    "observed_failure": "mutant count must be 65, got 64",
+    "caught": true
+  },
+  {
+    "id": "C08",
+    "violation": "operator supplies 17 mutants",
+    "expected_failure": "max 16",
+    "observed_failure": "operator predicate-deletion supplies 20 mutants; max 16",
+    "caught": true
+  },
+  {
+    "id": "C09",
+    "violation": "family supplies 12 mutants",
+    "expected_failure": "mutant count must be 13",
+    "observed_failure": "family graph/interchange codecs mutant count must be 13, got 14",
+    "caught": true
+  },
+  {
+    "id": "C10",
+    "violation": "remove C16",
+    "expected_failure": "canary ids differ",
+    "observed_failure": "canary ids differ: actual={\"C01\", \"C02\", \"C03\", \"C04\", \"C05\", \"C06\", \"C07\", \"C08\", \"C09\", \"C10\", \"C11\", \"C12\", \"C13\", \"C14\", \"C15\"}, expected={\"C01\", \"C02\", \"C03\", \"C04\", \"C05\", \"C06\", \"C07\", \"C08\", \"C09\", \"C10\", \"C11\", \"C12\", \"C13\", \"C14\", \"C15\", \"C16\"}",
+    "caught": true
+  },
+  {
+    "id": "C11",
+    "violation": "accepted below 100000",
+    "expected_failure": "accepted cases below 100000",
+    "observed_failure": "source/CST/formatting accepted cases below 100000",
+    "caught": true
+  },
+  {
+    "id": "C12",
+    "violation": "discard rate above 1 percent",
+    "expected_failure": "discard rate exceeds 1%",
+    "observed_failure": "source/CST/formatting discard rate exceeds 1%",
+    "caught": true
+  },
+  {
+    "id": "C13",
+    "violation": "fuzz minutes below 30",
+    "expected_failure": "fuzz minutes below 30",
+    "observed_failure": "source/CST/formatting fuzz minutes below 30",
+    "caught": true
+  },
+  {
+    "id": "C14",
+    "violation": "drop before_ack boundary",
+    "expected_failure": "crash-boundary inventory mismatch",
+    "observed_failure": "crash-boundary inventory mismatch: declared={\"ilrp/after_ack\", \"ilrp/after_external_apply\", \"ilrp/after_finalize_before_notify\", \"ilrp/after_intent_commit\", \"ilrp/before_external_apply\", \"ilrp/before_finalize\", \"ilrp/before_intent_commit\"}, registered={\"ilrp/after_ack\", \"ilrp/after_external_apply\", \"ilrp/after_finalize_before_notify\", \"ilrp/after_intent_commit\", \"ilrp/before_ack\", \"ilrp/before_external_apply\", \"ilrp/before_finalize\", \"ilrp/before_intent_commit\"}",
+    "caught": true
+  },
+  {
+    "id": "C15",
+    "violation": "review attempts below 12",
+    "expected_failure": "has fewer than 12 attempts",
+    "observed_failure": "gpt-5.6-sol-blind-pass has fewer than 12 attempts",
+    "caught": true
+  },
+  {
+    "id": "C16",
+    "violation": "remove packet digest",
+    "expected_failure": "review packet markdown missing packet digest",
+    "observed_failure": "review packet markdown missing packet digest f1c3ef95229eb2746b7bcc274baef6667fa6986af07bf18d80e495e27380f1c9",
+    "caught": true
+  }
+]

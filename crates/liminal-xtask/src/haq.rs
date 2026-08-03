@@ -44,6 +44,7 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     verify_provenance(root, &packet)?;
     verify_fuzz_evidence(root)?;
     verify_crash_evidence(root, &packet)?;
+    verify_canary_evidence(root, &packet)?;
     verify_generated_evidence(root, &packet)?;
     verify_review_evidence(root, &packet)?;
     verify_test_names_exist(root, &packet)?;
@@ -71,6 +72,80 @@ fn verify_crash_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         .map(|row| row.boundary.clone())
         .collect::<BTreeSet<_>>();
     verify_crash_rows(&recorded, &declared)
+}
+
+/// Bind the packet's canary claims to the run that produced them
+/// (M17.5 F-27 / P1-A03).
+///
+/// The qualified path accepted `result: caught` on every canary row while never
+/// invoking the runner and never reading its output. `run_canaries_repo` wrote
+/// `target/haqp/canaries.json`, which was gitignored — the same shape as the
+/// crash-evidence defect fixed at pass-2 #19, left in place for canaries.
+///
+/// Canaries are the mechanism the whole gate rests on: each one proves a
+/// deliberate violation makes the expected gate fail. A canary table nobody
+/// executed proves nothing at all.
+fn verify_canary_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    let path = root.join("conformance/haqp/evidence/canaries.json");
+    let bytes = std::fs::read(&path).with_context(|| {
+        format!("{path}: committed canary evidence is required; run `just haq-canaries`")
+    })?;
+    let recorded: Vec<CanaryEvidence> =
+        serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))?;
+    verify_canary_rows(&packet.canaries, &recorded)
+}
+
+fn verify_canary_rows(declared: &[Canary], recorded: &[CanaryEvidence]) -> Result<()> {
+    let by_id: BTreeMap<&str, &CanaryEvidence> =
+        recorded.iter().map(|row| (row.id.as_str(), row)).collect();
+    for canary in declared {
+        if canary.result != "caught" {
+            continue;
+        }
+        let evidence = by_id.get(canary.id.as_str()).with_context(|| {
+            format!(
+                "{} claims caught but the committed canary run has no such canary",
+                canary.id
+            )
+        })?;
+        if !evidence.caught {
+            anyhow::bail!(
+                "{} claims caught but the committed run recorded it as NOT caught",
+                canary.id
+            );
+        }
+        // The prose must describe the mutation that actually ran, or the table
+        // a reader trusts describes a different experiment from the one
+        // performed.
+        if evidence.violation != canary.violation {
+            anyhow::bail!(
+                "{}: packet says the violation is {:?} but the run performed {:?}",
+                canary.id,
+                canary.violation,
+                evidence.violation
+            );
+        }
+        if evidence.expected_failure != canary.expected_failure {
+            anyhow::bail!(
+                "{}: packet expects failure {:?} but the run expected {:?}",
+                canary.id,
+                canary.expected_failure,
+                evidence.expected_failure
+            );
+        }
+    }
+    // Every canary the run exercised must be declared, or the packet is a
+    // subset of the experiment and a reader cannot tell which rows are missing.
+    let declared_ids: BTreeSet<&str> = declared.iter().map(|row| row.id.as_str()).collect();
+    for row in recorded {
+        if !declared_ids.contains(row.id.as_str()) {
+            anyhow::bail!(
+                "{} was exercised by the canary run but the packet does not declare it",
+                row.id
+            );
+        }
+    }
+    Ok(())
 }
 
 /// Bind each generated family's claimed hash to the committed artifact
@@ -1332,7 +1407,7 @@ pub fn run_canaries_repo(root: &Utf8Path) -> Result<()> {
     let markdown = std::fs::read_to_string(&markdown_path)?;
     let records = run_canary_suite(&baseline, &markdown)?;
     let bytes = serde_json::to_vec_pretty(&records)?;
-    let path = root.join("target/haqp/canaries.json");
+    let path = root.join("conformance/haqp/evidence/canaries.json");
     std::fs::create_dir_all(path.parent().expect("evidence parent"))?;
     std::fs::write(&path, &bytes)?;
     println!(
@@ -2041,7 +2116,8 @@ fn generate_evidence(cases: u64) -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> {
     Ok((evidence, timings))
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct CanaryEvidence {
     id: String,
     /// The mutation that was actually performed, checked against the packet's
@@ -2783,5 +2859,76 @@ mod tests {
         let err =
             verify_generated_inventory(&packet).expect_err("64 spaces is not a digest of anything");
         assert!(err.to_string().contains("64-hex"), "{err}");
+    }
+
+    // ── M17.5 F-27 / P1-A03 ───────────────────────────────────────────────
+    // The qualified path accepted `caught` on every canary row while never
+    // invoking the runner. Canaries are what prove the gate can fail at all, so
+    // a canary table nobody executed proves nothing.
+
+    fn canary_row(id: &str) -> Canary {
+        Canary {
+            id: id.to_owned(),
+            gate: "status".to_owned(),
+            violation: "set status to ratified".to_owned(),
+            expected_failure: "status: expected proposed".to_owned(),
+            result: "caught".to_owned(),
+        }
+    }
+
+    fn canary_evidence_row(id: &str) -> CanaryEvidence {
+        CanaryEvidence {
+            id: id.to_owned(),
+            violation: "set status to ratified".to_owned(),
+            expected_failure: "status: expected proposed".to_owned(),
+            observed_failure: "status: expected proposed, found ratified".to_owned(),
+            caught: true,
+        }
+    }
+
+    #[test]
+    fn canary_rows_accept_a_packet_that_matches_its_run() {
+        verify_canary_rows(&[canary_row("C01")], &[canary_evidence_row("C01")])
+            .expect("a matching packet must pass, or every check below is vacuous");
+    }
+
+    #[test]
+    fn canary_rows_reject_a_caught_claim_with_no_run() {
+        let err = verify_canary_rows(&[canary_row("C01")], &[])
+            .expect_err("`caught` with nothing in the artifact is an assertion, not evidence");
+        assert!(err.to_string().contains("no such canary"), "{err}");
+    }
+
+    #[test]
+    fn canary_rows_reject_a_claim_the_run_contradicts() {
+        let mut missed = canary_evidence_row("C01");
+        missed.caught = false;
+        let err = verify_canary_rows(&[canary_row("C01")], &[missed])
+            .expect_err("a packet may not claim caught over a run that recorded a miss");
+        assert!(err.to_string().contains("NOT caught"), "{err}");
+    }
+
+    /// pass-2 #22 made the runner check its own prose; this extends the same
+    /// requirement to the committed artifact.
+    #[test]
+    fn canary_rows_reject_prose_that_describes_a_different_experiment() {
+        let mut relabelled = canary_evidence_row("C01");
+        relabelled.violation = "delete a crash boundary".to_owned();
+        verify_canary_rows(&[canary_row("C01")], &[relabelled])
+            .expect_err("the packet's violation must be the one performed");
+
+        let mut expectation = canary_evidence_row("C01");
+        expectation.expected_failure = "something else entirely".to_owned();
+        verify_canary_rows(&[canary_row("C01")], &[expectation])
+            .expect_err("the packet's expected failure must be the one asserted");
+    }
+
+    #[test]
+    fn canary_rows_reject_an_undeclared_canary_in_the_run() {
+        verify_canary_rows(
+            &[canary_row("C01")],
+            &[canary_evidence_row("C01"), canary_evidence_row("C99")],
+        )
+        .expect_err("a packet that is a subset of the experiment hides rows from the reader");
     }
 }
