@@ -15,6 +15,8 @@ TARGETS=(cst_parse format_idempotent canonical_round_trip incremental_full_equiv
 SEED=20260725   # fixed so the campaign is reproducible (ADR-0020 §1)
 
 mkdir -p "$(dirname "$OUT")"
+SANITIZER="${SANITIZER:-address}"
+
 echo "[" > "$OUT"
 first=1
 overall=0
@@ -23,7 +25,10 @@ for t in "${TARGETS[@]}"; do
   echo "=== fuzzing $t for ${SECS}s (ASan, seed=$SEED) ==="
   started=$(date +%s)
   log="target/haqp/fuzz-$t.log"
-  cargo +nightly fuzz run "$t" -- \
+  # -s is explicit rather than relying on cargo-fuzz's default: ADR-0020 §4
+  # requires a SANITIZER-ENABLED campaign, and a requirement satisfied by a
+  # tool default is one a tool update can silently withdraw.
+  cargo +nightly fuzz run -s "$SANITIZER" "$t" -- \
       -max_total_time="$SECS" -seed="$SEED" -rss_limit_mb=4096 -print_final_stats=1 \
       >"$log" 2>&1
   code=$?
@@ -34,8 +39,8 @@ for t in "${TARGETS[@]}"; do
   [ "$code" -ne 0 ] && overall=1
   [ "$first" -eq 0 ] && echo "," >> "$OUT"
   first=0
-  printf '{"target":"%s","seconds":%s,"elapsed_s":%s,"exit_code":%s,"execs":%s,"artifacts":%s,"seed":%s,"log":"%s"}' \
-    "$t" "$SECS" "$elapsed" "$code" "$execs" "$arts" "$SEED" "$log" >> "$OUT"
+  printf '{"target":"%s","seconds":%s,"elapsed_s":%s,"exit_code":%s,"execs":%s,"artifacts":%s,"seed":%s,"sanitizer":"%s","log":"%s"}' \
+    "$t" "$SECS" "$elapsed" "$code" "$execs" "$arts" "$SEED" "$SANITIZER" "$log" >> "$OUT"
   echo "--- $t: exit=$code execs=$execs artifacts=$arts elapsed=${elapsed}s"
 done
 

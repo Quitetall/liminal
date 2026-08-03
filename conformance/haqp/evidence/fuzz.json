@@ -1,6 +1,57 @@
 [
-{"target":"cst_parse","seconds":1800,"elapsed_s":1802,"exit_code":0,"execs":53194748,"artifacts":0,"seed":20260725,"log":"target/haqp/fuzz-cst_parse.log"},
-{"target":"format_idempotent","seconds":1800,"elapsed_s":1802,"exit_code":0,"execs":287883,"artifacts":0,"seed":20260725,"log":"target/haqp/fuzz-format_idempotent.log"},
-{"target":"canonical_round_trip","seconds":1800,"elapsed_s":1801,"exit_code":0,"execs":368352,"artifacts":0,"seed":20260725,"log":"target/haqp/fuzz-canonical_round_trip.log"},
-{"target":"incremental_full_equivalence","seconds":1800,"elapsed_s":1802,"exit_code":0,"execs":802313,"artifacts":0,"seed":20260725,"log":"target/haqp/fuzz-incremental_full_equivalence.log"},
-{"target":"html_render","seconds":1800,"elapsed_s":1802,"exit_code":0,"execs":1190830,"artifacts":0,"seed":20260725,"log":"target/haqp/fuzz-html_render.log"}]
+ {
+  "target": "cst_parse",
+  "seconds": 1800,
+  "elapsed_s": 1802,
+  "exit_code": 0,
+  "execs": 53194748,
+  "artifacts": 0,
+  "seed": 20260725,
+  "log": "target/haqp/fuzz-cst_parse.log",
+  "sanitizer": "address"
+ },
+ {
+  "target": "format_idempotent",
+  "seconds": 1800,
+  "elapsed_s": 1802,
+  "exit_code": 0,
+  "execs": 287883,
+  "artifacts": 0,
+  "seed": 20260725,
+  "log": "target/haqp/fuzz-format_idempotent.log",
+  "sanitizer": "address"
+ },
+ {
+  "target": "canonical_round_trip",
+  "seconds": 1800,
+  "elapsed_s": 1801,
+  "exit_code": 0,
+  "execs": 368352,
+  "artifacts": 0,
+  "seed": 20260725,
+  "log": "target/haqp/fuzz-canonical_round_trip.log",
+  "sanitizer": "address"
+ },
+ {
+  "target": "incremental_full_equivalence",
+  "seconds": 1800,
+  "elapsed_s": 1802,
+  "exit_code": 0,
+  "execs": 802313,
+  "artifacts": 0,
+  "seed": 20260725,
+  "log": "target/haqp/fuzz-incremental_full_equivalence.log",
+  "sanitizer": "address"
+ },
+ {
+  "target": "html_render",
+  "seconds": 1800,
+  "elapsed_s": 1802,
+  "exit_code": 0,
+  "execs": 1190830,
+  "artifacts": 0,
+  "seed": 20260725,
+  "log": "target/haqp/fuzz-html_render.log",
+  "sanitizer": "address"
+ }
+]

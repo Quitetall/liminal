@@ -576,6 +576,23 @@ fn verify_fuzz_rows(recorded: &[FuzzEvidence], present: &BTreeSet<String>) -> Re
         "fuzz target",
     )?;
 
+    // M17.5 F-27 / P1-A09: ADR-0020 §4 requires a SANITIZER-ENABLED campaign
+    // and the evidence had no way to say whether one ran. An unsanitized
+    // campaign finds crashes it can see and silently misses every
+    // memory-safety defect it cannot.
+    for row in recorded {
+        if !matches!(
+            row.sanitizer.as_str(),
+            "address" | "memory" | "thread" | "leak"
+        ) {
+            anyhow::bail!(
+                "{}: sanitizer {:?} is not a sanitizer ADR-0020 §4 accepts",
+                row.target,
+                row.sanitizer
+            );
+        }
+    }
+
     let total_minutes: u64 = recorded.iter().map(|row| row.seconds / 60).sum();
     if total_minutes < 150 {
         anyhow::bail!("recorded fuzz budget {total_minutes} target-minutes is below 150");
@@ -1242,6 +1259,14 @@ struct FuzzEvidence {
     artifacts: u64,
     /// Fixed so the campaign is reproducible (ADR-0020 §1).
     seed: u64,
+    /// Sanitizer the campaign was built with (ADR-0020 §4 requires a
+    /// sanitizer-enabled campaign; M17.5 F-27 / P1-A09).
+    ///
+    /// This binds the packet to the campaign's CONFIGURATION, not to proof the
+    /// binary was instrumented — a clean libFuzzer run emits no sanitizer
+    /// marker to grep for, so there is nothing stronger available from the
+    /// artifact. Recorded as a known limit rather than dressed up.
+    sanitizer: String,
     /// Path the campaign wrote its libFuzzer log to.
     log: String,
 }
@@ -2930,5 +2955,23 @@ mod tests {
             &[canary_evidence_row("C01"), canary_evidence_row("C99")],
         )
         .expect_err("a packet that is a subset of the experiment hides rows from the reader");
+    }
+
+    /// M17.5 F-27 / P1-A09: the requirement was unrepresentable, so it was
+    /// unverifiable.
+    #[test]
+    fn fuzz_lane_rejects_a_campaign_with_no_sanitizer() {
+        let bytes = std::fs::read(repo_root().join("conformance/haqp/evidence/fuzz.json"))
+            .expect("committed fuzz evidence");
+        let mut rows: Vec<FuzzEvidence> = serde_json::from_slice(&bytes).expect("parse");
+        let present = rows
+            .iter()
+            .map(|row| row.target.clone())
+            .collect::<BTreeSet<_>>();
+        verify_fuzz_rows(&rows, &present).expect("the committed campaign is sanitized");
+        rows[0].sanitizer = "none".to_owned();
+        let err = verify_fuzz_rows(&rows, &present)
+            .expect_err("an unsanitized campaign misses every defect ASan exists to find");
+        assert!(err.to_string().contains("sanitizer"), "{err}");
     }
 }

@@ -1530,3 +1530,48 @@ same as checking it.
 4. Add a sanitizer field to `FuzzEvidence` and require it.
 5. F-25's `content_witness` unit tests.
 6. The campaign survivor list.
+
+### F-27 fix batch — five findings resolved
+
+| finding | fix | canaries |
+|---|---|---|
+| F-25 | unit tests pinning `content_witness` and `assert_order_survives` by value; boundary canary for `assert_parse_discriminates` | 6 unit + 1 canary; **laws.rs 21 survivors → 1** |
+| P1-A03 | `verify_canary_evidence` binds every `caught` row to a committed run, including its violation prose | 5 |
+| P1-A04 / P2-F03 | `verify_generated_evidence` binds digest, counts and seed; inventory requires hex | 5 |
+| P1-A05/A06/A07 | the review record is parsed into typed structs and read: per-attempt fields, result/count reconciliation, reviewer independence and blindness proof | 6 |
+| P1-A09 | `FuzzEvidence.sanitizer`, required to be one ADR-0020 §4 accepts; campaign passes `-s` explicitly | 1 |
+
+Two runners now write committed artifacts instead of gitignored ones:
+`conformance/haqp/evidence/canaries.json` and `.../generated.json`, joining
+`crash.json` and `fuzz.json`.
+
+**Each check is paired with a canary asserting the MATCHING case is accepted**,
+not only that degenerate cases are rejected — a verifier that rejects everything
+satisfies a rejection-only suite.
+
+#### Residual limits, stated rather than papered over
+
+- **A09 binds configuration, not instrumentation.** The evidence records the
+  sanitizer the campaign was *built with*. A clean libFuzzer run emits no
+  sanitizer marker to grep for, so nothing stronger is available from the
+  artifact. `-s address` is now explicit rather than inherited from
+  cargo-fuzz's default, because a requirement satisfied by a tool default is one
+  a tool update can silently withdraw.
+- **A04 binds to the recorded digest, not a recomputation.** The hash covers a
+  100,000-case accept/discard stream that cannot be recomputed at verification
+  time. Determinism is pinned separately by
+  `generated_evidence_is_byte_identical_across_runs`.
+- **F-25's last survivor is equivalent**, documented in place: `close + 1` →
+  `close * 1` leaves `rest` starting at `}`, which cannot begin `{#`.
+
+#### Still open
+
+- **P1-A02 — mutant kills remain unbound.** This is the one finding in the
+  batch that needs a RUNNER, not a verifier: proving `killed` means applying
+  each of the 65 declared semantic mutants and showing the named killing test
+  fails. Nothing in the tree does that today, so `qualification_state:
+  complete` must stay unreachable until it exists.
+- **P1-A01** (incremental/full share a parser) and **P1-A08** (crash scenario
+  evidence) remain unverified.
+- **P2-F01, F04, F05** unverified.
+- The campaign's 1345 survivors outside `laws.rs`.
