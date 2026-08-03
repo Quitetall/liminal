@@ -124,6 +124,7 @@ fn verify_crash_rows(recorded: &CrashEvidence, declared: &BTreeSet<String>) -> R
 /// demanded only once a review claims `pass`, matching how
 /// `verify_generated_inventory` treats seeds and evidence hashes.
 fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    let mut records: Vec<(String, ReviewRecord)> = Vec::new();
     for review in &packet.reviews {
         let raised = review.findings.iter().collect::<BTreeSet<_>>();
         let unverified = review
@@ -183,21 +184,129 @@ fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
                 review.reviewer
             )
         })?;
-        let record: serde_json::Value =
+        let record: ReviewRecord =
             serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))?;
-        // A missing or malformed `attempts` array must say so. Defaulting to 0
-        // would report "declares 12 attempts but its record contains 0", which
-        // blames the packet for what is actually an unreadable record.
-        let recorded_attempts = record
-            .get("attempts")
-            .and_then(|value| value.as_array())
-            .with_context(|| format!("{path}: record has no `attempts` array"))?
-            .len() as u64;
-        if recorded_attempts != review.attempts {
+        verify_review_record(review, &record)?;
+        records.push((review.reviewer.clone(), record));
+    }
+    verify_reviewer_independence(&records)
+}
+
+/// One review row against its own committed record (M17.5 F-27 / P1-A05, A06).
+///
+/// The previous version counted the record's `attempts` array and stopped, so a
+/// record of twelve EMPTY objects satisfied it, and a record whose own `result`
+/// was `fail` satisfied a packet row claiming `pass`. Everything a reviewer
+/// actually concluded was unread.
+fn verify_review_record(review: &Review, record: &ReviewRecord) -> Result<()> {
+    let who = &review.reviewer;
+    if record.attempts.len() as u64 != review.attempts {
+        anyhow::bail!(
+            "{who} declares {} attempts but its record contains {}",
+            review.attempts,
+            record.attempts.len()
+        );
+    }
+    // P1-A05: the attempts must be attempt RECORDS, not array padding.
+    let mut seen: BTreeSet<&str> = BTreeSet::new();
+    for attempt in &record.attempts {
+        for (field, value) in [
+            ("id", &attempt.id),
+            ("attack_class", &attempt.attack_class),
+            ("target", &attempt.target),
+            ("attempt", &attempt.attempt),
+            ("observed_result", &attempt.observed_result),
+            ("classification", &attempt.classification),
+        ] {
+            if value.trim().is_empty() {
+                anyhow::bail!("{who}: attempt {:?} has an empty {field}", attempt.id);
+            }
+        }
+        if !matches!(
+            attempt.classification.as_str(),
+            "verified_defect" | "false_positive" | "caught_violation"
+        ) {
             anyhow::bail!(
-                "{} declares {} attempts but its record contains {recorded_attempts}",
-                review.reviewer,
-                review.attempts
+                "{who}: attempt {:?} has unknown classification {:?}",
+                attempt.id,
+                attempt.classification
+            );
+        }
+        if !seen.insert(attempt.id.as_str()) {
+            anyhow::bail!("{who}: attempt id {:?} appears twice", attempt.id);
+        }
+    }
+    // P1-A06: the packet must not summarize the record more kindly than the
+    // record summarizes itself. A row claiming `pass` over a record that says
+    // `fail` is the whole failure mode.
+    if record.result != review.result {
+        anyhow::bail!(
+            "{who} declares result {:?} but its record says {:?}",
+            review.result,
+            record.result
+        );
+    }
+    if record.unresolved_verified_findings != review.unresolved_verified_findings {
+        anyhow::bail!(
+            "{who} declares {} unresolved verified findings but its record counts {}",
+            review.unresolved_verified_findings,
+            record.unresolved_verified_findings
+        );
+    }
+    if record.findings.len() != review.findings.len() {
+        anyhow::bail!(
+            "{who} lists {} findings but its record contains {}",
+            review.findings.len(),
+            record.findings.len()
+        );
+    }
+    // P1-A07: blindness is a property of how the pass was RUN. The runner emits
+    // this proof; before F-27 nothing read it back.
+    if record.blindness_proof.prior_pass_artifact_supplied {
+        anyhow::bail!("{who} was shown a prior pass's artifacts; ADR-0020 §6 requires blindness");
+    }
+    if record.pass == 2 && !record.blindness_proof.pass_two_original_spec_only {
+        anyhow::bail!("{who} is pass 2 but did not start from the original spec alone");
+    }
+    Ok(())
+}
+
+/// ADR-0020 §6's independence, checked rather than assumed (M17.5 F-27 / P1-A07).
+///
+/// The runner records `reviewer.model_family`, `reviewer.backend` and an
+/// identity hash precisely so independence is auditable. The qualification
+/// verifier never looked at any of them — this session BUILT that evidence and
+/// then failed to check it, which is the same mistake as trusting a status
+/// string. Two reviews from one family satisfy every other check in this file.
+fn verify_reviewer_independence(records: &[(String, ReviewRecord)]) -> Result<()> {
+    if records.len() < 2 {
+        return Ok(());
+    }
+    let mut families: BTreeSet<&str> = BTreeSet::new();
+    let mut backends: BTreeSet<&str> = BTreeSet::new();
+    let mut identities: BTreeSet<&str> = BTreeSet::new();
+    for (who, record) in records {
+        if record.reviewer.model_family.trim().is_empty() {
+            anyhow::bail!("{who}: record names no model family");
+        }
+        if record.reviewer.identity_hash.trim().is_empty() {
+            anyhow::bail!("{who}: record carries no reviewer identity hash");
+        }
+        families.insert(record.reviewer.model_family.as_str());
+        backends.insert(record.reviewer.backend.as_str());
+        identities.insert(record.reviewer.identity_hash.as_str());
+    }
+    for (label, distinct) in [
+        ("model families", families.len()),
+        ("backends", backends.len()),
+        ("reviewer identities", identities.len()),
+    ] {
+        if distinct != records.len() {
+            anyhow::bail!(
+                "{} reviews share {label} ({distinct} distinct across {} reviews); \
+                 ADR-0020 §6 requires distinct model families with isolated state",
+                records.len(),
+                records.len()
             );
         }
     }
@@ -1070,6 +1179,47 @@ struct Review {
     #[serde(default)]
     evidence: Option<String>,
     result: String,
+}
+
+/// A blind-review run's committed record, as `scripts/haqp_blind_review.py`
+/// writes it. Typed rather than probed as a `serde_json::Value` so a field the
+/// verifier depends on cannot quietly go missing.
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+struct ReviewRecord {
+    pass: u8,
+    reviewer: ReviewRecordReviewer,
+    attempts: Vec<ReviewRecordAttempt>,
+    #[serde(default)]
+    findings: Vec<serde_json::Value>,
+    unresolved_verified_findings: u64,
+    result: String,
+    blindness_proof: ReviewRecordBlindness,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+struct ReviewRecordReviewer {
+    model_family: String,
+    identity_hash: String,
+    backend: String,
+}
+
+/// Findings carry model-chosen key names, so they stay untyped; ATTEMPTS are
+/// the runner's own contract and are pinned.
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+struct ReviewRecordAttempt {
+    id: String,
+    attack_class: String,
+    target: String,
+    attempt: String,
+    observed_result: String,
+    classification: String,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+struct ReviewRecordBlindness {
+    prior_pass_artifact_supplied: bool,
+    #[serde(default)]
+    pass_two_original_spec_only: bool,
 }
 
 /// One boundary's recorded fault-matrix outcome (committed artifact).
@@ -2342,5 +2492,138 @@ mod tests {
             "the same seed produced two different artifacts, so the recorded \
              evidence hash certifies nothing"
         );
+    }
+
+    // ── M17.5 F-27 / P1-A05, A06, A07 ─────────────────────────────────────
+    // The blind lane's own findings. `verify_review_evidence` counted the
+    // record's attempts array and read nothing else, so a record of twelve
+    // empty objects, a record contradicting its packet row, and two reviews
+    // from one model family all passed. Each check gets the degenerate case
+    // that must trip it.
+
+    fn attempt(id: &str) -> ReviewRecordAttempt {
+        ReviewRecordAttempt {
+            id: id.to_owned(),
+            attack_class: "vacuity".to_owned(),
+            target: "laws.rs".to_owned(),
+            attempt: "did a thing".to_owned(),
+            observed_result: "saw a thing".to_owned(),
+            classification: "caught_violation".to_owned(),
+        }
+    }
+
+    fn review_record(pass: u8, family: &str, backend: &str) -> ReviewRecord {
+        ReviewRecord {
+            pass,
+            reviewer: ReviewRecordReviewer {
+                model_family: family.to_owned(),
+                identity_hash: format!("hash-of-{family}"),
+                backend: backend.to_owned(),
+            },
+            attempts: (0..12).map(|i| attempt(&format!("A{i}"))).collect(),
+            findings: Vec::new(),
+            unresolved_verified_findings: 0,
+            result: "pass".to_owned(),
+            blindness_proof: ReviewRecordBlindness {
+                prior_pass_artifact_supplied: false,
+                pass_two_original_spec_only: pass == 2,
+            },
+        }
+    }
+
+    fn review_row() -> Review {
+        Review {
+            reviewer: "r".to_owned(),
+            attempts: 12,
+            findings: Vec::new(),
+            independently_reproduced: Vec::new(),
+            unresolved_verified_findings: 0,
+            evidence: Some("conformance/haqp/evidence/review.json".to_owned()),
+            result: "pass".to_owned(),
+        }
+    }
+
+    #[test]
+    fn a_well_formed_review_record_is_accepted() {
+        verify_review_record(&review_row(), &review_record(1, "openai", "codex"))
+            .expect("a complete record must pass, or every check below is vacuous");
+    }
+
+    /// P1-A05: array padding is not a set of attempts.
+    #[test]
+    fn review_record_rejects_empty_attempt_records() {
+        let mut record = review_record(1, "openai", "codex");
+        record.attempts[3].observed_result = "   ".to_owned();
+        let err = verify_review_record(&review_row(), &record)
+            .expect_err("an attempt with no observed result is not an attempt");
+        assert!(err.to_string().contains("empty observed_result"), "{err}");
+    }
+
+    #[test]
+    fn review_record_rejects_unknown_classifications_and_duplicate_ids() {
+        let mut unknown = review_record(1, "openai", "codex");
+        unknown.attempts[0].classification = "inconclusive".to_owned();
+        verify_review_record(&review_row(), &unknown)
+            .expect_err("a classification outside the declared set must be rejected");
+        let mut duplicated = review_record(1, "openai", "codex");
+        duplicated.attempts[1].id = duplicated.attempts[0].id.clone();
+        verify_review_record(&review_row(), &duplicated)
+            .expect_err("twelve attempts must be twelve DISTINCT attempts");
+    }
+
+    /// P1-A06: the packet may not summarize the record more kindly than the
+    /// record summarizes itself.
+    #[test]
+    fn review_record_rejects_a_packet_row_that_contradicts_it() {
+        let mut failed = review_record(1, "openai", "codex");
+        failed.result = "fail".to_owned();
+        let err = verify_review_record(&review_row(), &failed)
+            .expect_err("a pass row over a failing record must be rejected");
+        assert!(err.to_string().contains("record says"), "{err}");
+
+        let mut unresolved = review_record(1, "openai", "codex");
+        unresolved.unresolved_verified_findings = 9;
+        verify_review_record(&review_row(), &unresolved)
+            .expect_err("a row claiming zero unresolved findings over a record counting nine");
+    }
+
+    /// P1-A07: blindness is a property of the run, and it is recorded.
+    #[test]
+    fn review_record_rejects_a_pass_that_saw_prior_artifacts() {
+        let mut leaked = review_record(1, "openai", "codex");
+        leaked.blindness_proof.prior_pass_artifact_supplied = true;
+        verify_review_record(&review_row(), &leaked)
+            .expect_err("a reviewer shown the prior pass is not blind");
+
+        let mut informed = review_record(2, "xiaomi", "lamu");
+        informed.blindness_proof.pass_two_original_spec_only = false;
+        verify_review_record(&review_row(), &informed)
+            .expect_err("pass 2 must start from the original spec alone");
+    }
+
+    /// P1-A07: two reviews from one family satisfy every other check here.
+    #[test]
+    fn independence_rejects_reviews_that_share_a_family_backend_or_identity() {
+        let distinct = vec![
+            ("p1".to_owned(), review_record(1, "openai", "codex")),
+            ("p2".to_owned(), review_record(2, "xiaomi", "lamu")),
+        ];
+        verify_reviewer_independence(&distinct)
+            .expect("two genuinely distinct reviewers must pass");
+
+        let same_family = vec![
+            ("p1".to_owned(), review_record(1, "openai", "codex")),
+            ("p2".to_owned(), review_record(2, "openai", "lamu")),
+        ];
+        let err = verify_reviewer_independence(&same_family)
+            .expect_err("two reviews from one model family are not independent");
+        assert!(err.to_string().contains("model families"), "{err}");
+
+        let same_backend = vec![
+            ("p1".to_owned(), review_record(1, "openai", "codex")),
+            ("p2".to_owned(), review_record(2, "anthropic", "codex")),
+        ];
+        verify_reviewer_independence(&same_backend)
+            .expect_err("two reviews on one backend are not independent");
     }
 }
