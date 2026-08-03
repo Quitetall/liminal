@@ -44,6 +44,7 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     verify_provenance(root, &packet)?;
     verify_fuzz_evidence(root)?;
     verify_crash_evidence(root, &packet)?;
+    verify_mutant_killing_tests(root, &packet)?;
     verify_canary_evidence(root, &packet)?;
     verify_generated_evidence(root, &packet)?;
     verify_review_evidence(root, &packet)?;
@@ -475,6 +476,109 @@ fn verify_reviewer_independence(records: &[(String, ReviewRecord)]) -> Result<()
 /// inventory. But a packet claiming `qualification_state: complete` while
 /// naming a test nobody wrote is exactly the false green this gate exists to
 /// stop.
+/// A mutant claiming `killed` must be killed by a test that CAN RUN
+/// (M17.5 F-27 / P1-A02, F-28).
+///
+/// ADR-0020 §4 wants at least 64 semantic mutants at a 100% kill rate. The
+/// packet declares 65, each naming the tests that would catch it — and as of
+/// 2026-08-03 **not one of those 35 distinct tests is runnable**: 27 exist only
+/// as strings in the packet (M18–M24 have not been authorized, so
+/// `conformance/tests/milestones/` has no m18..m24 at all), and the remaining 8
+/// exist but are `#[ignore]`d under the AM-17.2 Phase 1 quarantine.
+///
+/// A kill demonstrated by a test that does not exist is not demonstrated. A
+/// kill demonstrated by a test nobody runs is not demonstrated either — an
+/// `#[ignore]`d test cannot fail, so it cannot witness anything.
+///
+/// This check exists so that gap cannot be closed by editing dispositions to
+/// `killed`. It is deliberately unsatisfiable today, and that is the correct
+/// state: the mutation requirement is GATED on the Phase 1 milestones writing
+/// their tests, not on anything M17.5 can produce.
+fn verify_mutant_killing_tests(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    let killed: Vec<&Mutant> = packet
+        .mutants
+        .iter()
+        .filter(|mutant| mutant.disposition == "killed")
+        .collect();
+    if killed.is_empty() {
+        return Ok(());
+    }
+    let by_id: BTreeMap<&str, &Test> = packet
+        .tests
+        .iter()
+        .map(|test| (test.id.as_str(), test))
+        .collect();
+    let ignored = ignored_test_names(root);
+    for mutant in killed {
+        if mutant.killing_tests.is_empty() {
+            anyhow::bail!("{} claims killed but names no killing test", mutant.id);
+        }
+        for test_id in &mutant.killing_tests {
+            let test = by_id.get(test_id.as_str()).with_context(|| {
+                format!(
+                    "{} names killing test {test_id}, which the packet does not declare",
+                    mutant.id
+                )
+            })?;
+            let leaf = test.name.rsplit("::").next().unwrap_or(test.name.as_str());
+            if ignored.contains(leaf) {
+                anyhow::bail!(
+                    "{} claims killed by {} ({}), which is #[ignore]d — an ignored test \
+                     never runs, so it cannot witness a kill",
+                    mutant.id,
+                    test_id,
+                    test.name
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Leaf names of every `#[ignore]`d test in the tree.
+fn ignored_test_names(root: &Utf8Path) -> BTreeSet<String> {
+    let mut names = BTreeSet::new();
+    let mut stack = vec![root.join("conformance"), root.join("crates")];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let Ok(path) = camino::Utf8PathBuf::from_path_buf(entry.path()) else {
+                continue;
+            };
+            if path.is_dir() {
+                if path.file_name() != Some("target") {
+                    stack.push(path);
+                }
+            } else if path.extension() == Some("rs")
+                && let Ok(text) = std::fs::read_to_string(&path)
+            {
+                collect_ignored(&text, &mut names);
+            }
+        }
+    }
+    names
+}
+
+/// An `#[ignore]` attribute applies to the next `fn` declaration.
+fn collect_ignored(text: &str, names: &mut BTreeSet<String>) {
+    let mut pending = false;
+    for line in text.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("#[ignore") {
+            pending = true;
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix("fn ") {
+            if pending && let Some(name) = rest.split('(').next() {
+                names.insert(name.trim().to_owned());
+            }
+            pending = false;
+        }
+    }
+}
+
 fn verify_test_names_exist(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let mut sources = String::new();
     let mut stack = vec![root.join("conformance"), root.join("crates")];
@@ -2973,5 +3077,53 @@ mod tests {
         let err = verify_fuzz_rows(&rows, &present)
             .expect_err("an unsanitized campaign misses every defect ASan exists to find");
         assert!(err.to_string().contains("sanitizer"), "{err}");
+    }
+
+    // ── M17.5 F-28 / P1-A02 ───────────────────────────────────────────────
+    // A kill witnessed by a test that cannot run is not a kill.
+
+    #[test]
+    fn ignored_attribute_is_attached_to_the_following_test() {
+        let mut names = BTreeSet::new();
+        collect_ignored(
+            "#[test]\n#[ignore = \"Phase 1\"]\nfn quarantined() {}\n#[test]\nfn active() {}\n",
+            &mut names,
+        );
+        assert!(
+            names.contains("quarantined"),
+            "the ignored test must be seen"
+        );
+        assert!(
+            !names.contains("active"),
+            "an #[ignore] must not leak onto the next test after it"
+        );
+    }
+
+    /// The packet as committed declares every mutant `predeclared`, so the
+    /// check is inert — flipping one to `killed` must wake it.
+    #[test]
+    fn qualified_layer_rejects_a_kill_witnessed_by_an_ignored_test() {
+        let root = repo_root();
+        let mut packet = read_packet(&root).expect("packet");
+        verify_mutant_killing_tests(&root, &packet)
+            .expect("no mutant claims killed, so nothing to check");
+
+        // P1-M001's killing tests are P1-T09 and P1-T01; T01 is
+        // `laws::formatter_idempotence_law_holds`, quarantined by AM-17.2.
+        packet.mutants[0].disposition = "killed".to_owned();
+        let err = verify_mutant_killing_tests(&root, &packet)
+            .expect_err("an #[ignore]d test cannot witness a kill");
+        assert!(err.to_string().contains("#[ignore]d"), "{err}");
+    }
+
+    #[test]
+    fn qualified_layer_rejects_a_kill_with_no_killing_test_at_all() {
+        let root = repo_root();
+        let mut packet = read_packet(&root).expect("packet");
+        packet.mutants[0].disposition = "killed".to_owned();
+        packet.mutants[0].killing_tests.clear();
+        let err = verify_mutant_killing_tests(&root, &packet)
+            .expect_err("a kill with no witness is an assertion");
+        assert!(err.to_string().contains("names no killing test"), "{err}");
     }
 }

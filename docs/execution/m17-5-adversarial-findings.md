@@ -1575,3 +1575,57 @@ satisfies a rejection-only suite.
   evidence) remain unverified.
 - **P2-F01, F04, F05** unverified.
 - The campaign's 1345 survivors outside `laws.rs`.
+
+## F-28 — CRITICAL. The mutation requirement cannot be demonstrated at all yet, and nothing said so.
+
+Found while starting to build the mutant runner P1-A02 asks for. Before writing
+it, the obvious question: what would it run?
+
+ADR-0020 §4 requires **at least 64 semantic mutants at a 100% kill rate**. The
+packet declares 65, each naming the tests that would catch it. Those 65 rows
+name **35 distinct killing tests**. Measured 2026-08-03:
+
+| killing tests | state |
+|---|---|
+| 27 | **do not exist** — they appear only as strings in `packet.json` |
+| 8 | exist but are `#[ignore]`d under the AM-17.2 Phase 1 quarantine |
+| **0** | **runnable** |
+
+The 27 are `milestones::m18::…` through `m24::…`. `conformance/tests/milestones/`
+contains m03–m11 and no m18–m24 at all, because M18–M24 are authored but
+unauthorized. Verified by grepping the whole tree for one of them: the only hit
+is `conformance/haqp/packet.json:353`.
+
+### Why this is bigger than P1-A02
+
+A02 said mutation kills are self-asserted status strings with no execution
+evidence, and proposed binding them to a runner. That fix is not available: a
+runner built today would have nothing to run. **The mutation requirement is
+gated on the Phase 1 milestones writing their tests**, and no amount of M17.5
+work can satisfy it.
+
+That is not a defect in the packet — predeclaring tests a future milestone will
+write is exactly what an inventory is for, and every mutant is honestly marked
+`predeclared`. The defect is that **nothing prevented the gap from being closed
+by editing 65 dispositions to `killed`**, and nothing stated the dependency.
+
+### Fix
+
+`verify_mutant_killing_tests` at the qualified layer: a mutant claiming `killed`
+must name killing tests that the packet declares AND that are not `#[ignore]`d.
+An ignored test never runs, so it cannot witness anything; a test that does not
+exist witnesses even less (`verify_test_names_exist` already covers that half).
+
+The check is **deliberately unsatisfiable today**, and that is the correct
+state. It converts an unstated dependency into a gate that fails with the
+reason: *"P1-M001 claims killed by P1-T01 (laws::formatter_idempotence_law_holds),
+which is #[ignore]d — an ignored test never runs, so it cannot witness a kill."*
+
+Three canaries, including one proving the `#[ignore]` scanner attaches the
+attribute to the following test and not the one after it.
+
+### Consequence for the milestone
+
+`qualification_state: complete` is unreachable until M18–M24 run. That was
+already true; it is now machine-enforced and stated. Any plan that plots HAQP-1
+qualification before Phase 1 execution is wrong, and this is the proof.
