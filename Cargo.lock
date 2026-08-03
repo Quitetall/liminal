@@ -580,6 +580,7 @@ dependencies = [
  "liminal-daemon",
  "liminal-format",
  "liminal-graph",
+ "liminal-hir",
  "liminal-history",
  "liminal-id",
  "liminal-jurisdiction",

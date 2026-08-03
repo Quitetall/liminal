@@ -1629,3 +1629,55 @@ attribute to the following test and not the one after it.
 `qualification_state: complete` is unreachable until M18–M24 run. That was
 already true; it is now machine-enforced and stated. Any plan that plots HAQP-1
 qualification before Phase 1 execution is wrong, and this is the proof.
+
+### F-28 follow-up — the M18–M23 milestone tests now exist
+
+Brian's instruction: write the tests for m18–m24. 20 of the packet's 27 declared
+Phase 1 milestone tests are written and pass; **7 are deliberately not written.**
+
+| module | written | passing under `--ignored` |
+|---|---|---|
+| m18 CST frontend | 3 | 3 |
+| m19 HIR lowering | 4 | 4 |
+| m20 formatter | 2 of 5 | 2 |
+| m21 incremental | 4 | 4 |
+| m22 renderer | 4 | 4 |
+| m23 fuzz corpus | 3 of 4 | 3 |
+| m24 aggregate gate | 0 of 3 | — |
+
+All remain `#[ignore]`d under AM-17.2. They exercise real surfaces and all 20
+pass when run, so un-ignoring one is an authorization decision at M17.6, not a
+rewrite. **No mutant disposition was touched**, so F-28's gate stays closed:
+`killed` still requires a killing test that is not `#[ignore]`d.
+
+#### The seven not written, and why that is the stronger choice
+
+| test | missing subject |
+|---|---|
+| `lim_fmt_interrupted_mid_write_leaves_no_partial_file` | no `lim fmt` command exists |
+| `lim_fmt_rerun_after_interruption_is_idempotent` | same |
+| `lim_fmt_survives_malformed_input_without_data_loss` | same |
+| `benchmark_gate_fails_on_regression_beyond_threshold` | `benches/baselines/` has only `phase1-candidate.json`; there is no baseline to regress against |
+| `aggregate_gate_fails_when_any_phase1_gate_is_red` | M24 unimplemented; `bin/gates.rs` is the spec-debt meter, not a Phase 1 aggregate gate |
+| `aggregate_gate_records_the_basis_of_every_input` | same |
+| `aggregate_gate_rejects_incomplete_evidence` | same |
+
+A test whose subject does not exist can only be a stub that fails
+unconditionally — and under F-28's new gate an unconditionally-failing test is a
+**vacuity vector**: once un-ignored it would "witness" the kill of any mutant
+naming it, with the mutation having nothing to do with the failure. That is
+strictly worse than the gap it appears to close.
+
+One near-miss worth recording: the first draft of the benchmark test asserted
+`verdict.is_ok() || verdict.is_err()`, which is a tautology — the exact defect
+class this milestone exists to find, written by the same hand that has been
+finding it. It was caught before commit, and the test was removed rather than
+weakened into something that passes.
+
+#### F-03 exposure, restated
+
+These tests were authored by the same agent that authored the implementation
+they exercise. F-03 (oracle authorship independence) remains OPEN and this
+enlarges it: the Phase 1 suite and the Phase 1 implementation now share an
+author across 20 more tests. That is an argument for M17.9 — Brian's own
+adversarial review of the suite — not something the author can resolve.
