@@ -44,6 +44,7 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     verify_provenance(root, &packet)?;
     verify_fuzz_evidence(root)?;
     verify_crash_evidence(root, &packet)?;
+    verify_generated_evidence(root, &packet)?;
     verify_review_evidence(root, &packet)?;
     verify_test_names_exist(root, &packet)?;
     Ok(())
@@ -70,6 +71,80 @@ fn verify_crash_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         .map(|row| row.boundary.clone())
         .collect::<BTreeSet<_>>();
     verify_crash_rows(&recorded, &declared)
+}
+
+/// Bind each generated family's claimed hash to the committed artifact
+/// (M17.5 F-27 / P1-A04, and P2-F03 — both blind passes found it).
+///
+/// `evidence_hash` was checked for length and nothing else: never recomputed,
+/// never compared against a run, and `target/haqp/generated.json` — the file the
+/// generator actually writes — was gitignored and therefore unreadable.
+fn verify_generated_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    let path = root.join("conformance/haqp/evidence/generated.json");
+    let bytes = std::fs::read(&path).with_context(|| {
+        format!("{path}: committed generated evidence is required; run `just haq-generated`")
+    })?;
+    let recorded: Vec<GeneratedEvidence> =
+        serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))?;
+    verify_generated_rows(&packet.generated, &recorded)
+}
+
+fn verify_generated_rows(declared: &[Generated], recorded: &[GeneratedEvidence]) -> Result<()> {
+    let by_family: BTreeMap<&str, &GeneratedEvidence> = recorded
+        .iter()
+        .map(|row| (row.family.as_str(), row))
+        .collect();
+    for family in declared {
+        if family.result != "pass" {
+            continue;
+        }
+        let evidence = by_family.get(family.family.as_str()).with_context(|| {
+            format!(
+                "{} claims pass but the committed generated evidence has no such family",
+                family.family
+            )
+        })?;
+        // The hash covers the family's whole accept/discard stream and cannot
+        // be recomputed here without rerunning 100,000 cases. It is bound
+        // instead to the digest the RUN recorded, which is the strongest check
+        // available at verification time: the packet may no longer cite a
+        // number no run produced. Determinism of that digest is pinned
+        // separately by `generated_evidence_is_byte_identical_across_runs`, so
+        // editing the committed artifact to match a doctored packet is
+        // detectable by rerunning the generator.
+        let claimed = family
+            .evidence_hash
+            .as_deref()
+            .context("inventory layer requires a hash before `pass`")?;
+        if !claimed.eq_ignore_ascii_case(&evidence.evidence_hash) {
+            anyhow::bail!(
+                "{}: packet claims evidence hash {claimed} but the committed run recorded {}",
+                family.family,
+                evidence.evidence_hash
+            );
+        }
+        for (label, packet_value, evidence_value) in [
+            ("accepted", family.accepted, evidence.accepted),
+            ("attempts", family.attempts, evidence.attempts),
+            ("discards", family.discards, evidence.discards),
+        ] {
+            if packet_value != evidence_value {
+                anyhow::bail!(
+                    "{}: packet declares {packet_value} {label} but the committed run recorded {evidence_value}",
+                    family.family
+                );
+            }
+        }
+        if family.seed != Some(evidence.seed) {
+            anyhow::bail!(
+                "{}: packet declares seed {:?} but the committed run used {}",
+                family.family,
+                family.seed,
+                evidence.seed
+            );
+        }
+    }
+    Ok(())
 }
 
 fn verify_crash_rows(recorded: &CrashEvidence, declared: &BTreeSet<String>) -> Result<()> {
@@ -914,10 +989,13 @@ fn verify_generated_inventory(packet: &Packet) -> Result<()> {
             if family.seed.is_none() {
                 anyhow::bail!("{} claims pass without a recorded seed", family.family);
             }
+            // M17.5 F-27 / P1-A04: this checked LENGTH only, so any 64
+            // characters passed — including 64 spaces. A hash that is not
+            // hexadecimal cannot be the digest of anything.
             if family
                 .evidence_hash
                 .as_ref()
-                .is_none_or(|hash| hash.len() != 64)
+                .is_none_or(|hash| hash.len() != 64 || !hash.chars().all(|c| c.is_ascii_hexdigit()))
             {
                 anyhow::bail!(
                     "{} claims pass without a 64-hex evidence hash",
@@ -1864,7 +1942,7 @@ type Family = (&'static str, fn(&mut Rng) -> Result<Case>);
 pub fn run_generated_repo(root: &Utf8Path, cases: u64) -> Result<()> {
     let (evidence, timings) = generate_evidence(cases)?;
     let bytes = serde_json::to_vec_pretty(&evidence)?;
-    let path = root.join("target/haqp/generated.json");
+    let path = root.join("conformance/haqp/evidence/generated.json");
     std::fs::create_dir_all(path.parent().expect("evidence parent"))?;
     std::fs::write(&path, &bytes)?;
     for (row, elapsed_ms) in evidence.iter().zip(&timings) {
@@ -1982,7 +2060,8 @@ struct CanaryEvidence {
 /// 94→110, 12→15 ms), so the artifact could never be compared against a
 /// recorded digest (M17.5 pass-2 #18). Timing is operational telemetry, not
 /// evidence; it is printed to stdout instead.
-#[derive(Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, PartialEq, Eq, serde::Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct GeneratedEvidence {
     family: String,
     accepted: u64,
@@ -2625,5 +2704,84 @@ mod tests {
         ];
         verify_reviewer_independence(&same_backend)
             .expect_err("two reviews on one backend are not independent");
+    }
+
+    // ── M17.5 F-27 / P1-A04, P2-F03 ───────────────────────────────────────
+    // Both blind passes, independently, found generated evidence unbound: the
+    // hash was checked for LENGTH only and the artifact the generator wrote was
+    // gitignored, so nothing could read it back.
+
+    fn generated_row(family: &str) -> Generated {
+        Generated {
+            family: family.to_owned(),
+            accepted: 100_000,
+            attempts: 100_000,
+            discards: 0,
+            fuzz_minutes: 30,
+            seed_categories: (0..16).map(|i| format!("s{i}")).collect(),
+            result: "pass".to_owned(),
+            seed: Some(7),
+            evidence_hash: Some("ab".repeat(32)),
+        }
+    }
+
+    fn generated_evidence_row(family: &str) -> GeneratedEvidence {
+        GeneratedEvidence {
+            family: family.to_owned(),
+            accepted: 100_000,
+            attempts: 100_000,
+            discards: 0,
+            seed: 7,
+            evidence_hash: "ab".repeat(32),
+        }
+    }
+
+    #[test]
+    fn generated_rows_accept_a_packet_that_matches_its_run() {
+        verify_generated_rows(&[generated_row("f")], &[generated_evidence_row("f")])
+            .expect("a matching packet must pass, or every check below is vacuous");
+    }
+
+    #[test]
+    fn generated_rows_reject_a_hash_no_run_produced() {
+        let mut doctored = generated_row("f");
+        doctored.evidence_hash = Some("cd".repeat(32));
+        let err = verify_generated_rows(&[doctored], &[generated_evidence_row("f")])
+            .expect_err("a packet may not cite a digest the run never recorded");
+        assert!(err.to_string().contains("evidence hash"), "{err}");
+    }
+
+    #[test]
+    fn generated_rows_reject_counts_and_seeds_that_disagree_with_the_run() {
+        let mut counts = generated_row("f");
+        counts.accepted = 99_999;
+        counts.discards = 1;
+        verify_generated_rows(&[counts], &[generated_evidence_row("f")])
+            .expect_err("packet counts must match the committed run");
+
+        let mut seed = generated_row("f");
+        seed.seed = Some(8);
+        verify_generated_rows(&[seed], &[generated_evidence_row("f")])
+            .expect_err("packet seed must match the committed run");
+    }
+
+    #[test]
+    fn generated_rows_reject_a_family_with_no_committed_run() {
+        verify_generated_rows(&[generated_row("ghost")], &[generated_evidence_row("f")])
+            .expect_err("a family claiming pass with no run in the artifact");
+    }
+
+    /// The inventory layer accepted any 64 characters, including 64 spaces.
+    #[test]
+    fn inventory_rejects_an_evidence_hash_that_is_not_hexadecimal() {
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        for family in &mut packet.generated {
+            family.result = "pass".to_owned();
+            family.seed = Some(1);
+            family.evidence_hash = Some(" ".repeat(64));
+        }
+        let err =
+            verify_generated_inventory(&packet).expect_err("64 spaces is not a digest of anything");
+        assert!(err.to_string().contains("64-hex"), "{err}");
     }
 }
