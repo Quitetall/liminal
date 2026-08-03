@@ -172,6 +172,21 @@ fn canary_idempotence_law_rejects_constant_parser() {
     liminal_conformance::laws::check_formatter_idempotence(&ConstantParseFormatter, &SOURCES);
 }
 
+/// The constant-parser guard must also fire for exactly TWO sources.
+///
+/// M17.5 F-25: `assert_parse_discriminates` early-returns on
+/// `sources.len() < 2`, and mutants changing that to `<= 2` or `== 2` survived
+/// the whole suite. Every existing canary passes three sources, so the guard
+/// was only ever exercised above the boundary — and two distinct sources is the
+/// smallest input for which "the parser discriminates" is a meaningful claim,
+/// so it is exactly where the check must not be skipped.
+#[test]
+#[should_panic(expected = "same document")]
+fn canary_constant_parser_is_rejected_at_the_two_source_boundary() {
+    let pair = [SOURCES[0], SOURCES[1]];
+    liminal_conformance::laws::check_formatter_idempotence(&ConstantParseFormatter, &pair);
+}
+
 /// The incremental law must reject a compiler that ignores its input.
 #[test]
 #[should_panic(expected = "same output as the")]

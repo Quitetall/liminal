@@ -44,6 +44,14 @@ fn content_witness(text: &str) -> (BTreeMap<String, usize>, BTreeSet<String>) {
         {
             ids.insert(candidate.to_owned());
         }
+        // M17.5 F-25: `cargo mutants` reports `close + 1` -> `close * 1` as a
+        // surviving mutant here, and it is EQUIVALENT rather than untested.
+        // `&after[close..]` leaves `rest` starting at the `}`; the loop's only
+        // subsequent read is `rest.find("{#")`, and `}` cannot begin `{#`, so
+        // every later iteration is identical. Progress is guaranteed either way
+        // because `after` already skipped past the opening `{#`. Killing it
+        // would require asserting on an intermediate value the function does
+        // not expose — i.e. changing what the oracle means to satisfy a tool.
         rest = &after[close + 1..];
     }
     (words, ids)
@@ -353,4 +361,119 @@ where
     b.merge(&a);
     assert_eq!(a.state(), b.state(), "pairwise merge must converge");
     assert_eq!(a.state(), a_then_b.state(), "all schedules must agree");
+}
+
+#[cfg(test)]
+mod oracle_tests {
+    use super::*;
+
+    // M17.5 F-25. The full mutation campaign left 21 survivors in this file and
+    // every one of them was `content_witness` or `assert_order_survives` — the
+    // two functions that make the §112 laws non-vacuous.
+    //
+    // They had no test of their own. They were exercised only THROUGH the laws,
+    // and the laws' other assertions pass without them: `assert_content_survives`
+    // checks emptiness directly (`output.trim().is_empty()`), and
+    // `assert_order_survives` tokenizes independently. So a witness replaced by
+    // a constant left both content-deletion canaries and both reordering
+    // canaries passing, and nothing went red.
+    //
+    // The canary discipline was applied to the laws and not to the oracle. These
+    // tests pin the oracle BY VALUE, which is the only thing that can reach the
+    // operator mutants inside it — a canary that observes only a law's pass/fail
+    // verdict cannot distinguish `+=` from `*=` in a counter.
+
+    /// Kills `replace += with *=` at the word counter.
+    ///
+    /// Under `*=`, `or_default()` seeds 0 and every count stays 0, so
+    /// `assert_content_survives`'s `seen >= *count` is satisfied by anything.
+    #[test]
+    fn content_witness_counts_repeated_tokens() {
+        let (words, _) = content_witness("alpha beta alpha alpha");
+        assert_eq!(
+            words.get("alpha"),
+            Some(&3),
+            "repeat counts must accumulate"
+        );
+        assert_eq!(words.get("beta"), Some(&1));
+        assert_eq!(
+            words.len(),
+            2,
+            "punctuation and empties must not become tokens"
+        );
+    }
+
+    /// Underscores are word characters; everything else splits. Pins the
+    /// tokenizer itself rather than inferring it from a law's verdict.
+    #[test]
+    fn content_witness_splits_on_non_word_characters() {
+        let (words, _) = content_witness("a_b, c-d\ne\tf");
+        let mut keys: Vec<&str> = words.keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        assert_eq!(keys, ["a_b", "c", "d", "e", "f"]);
+    }
+
+    /// Kills the `+ 2` arithmetic mutants at the `{#` scan: `- 2` or `* 2`
+    /// misplace the slice and the id comes out wrong or not at all.
+    #[test]
+    fn content_witness_extracts_durable_ids() {
+        let (_, ids) = content_witness("hello {#a} world {#b-2_c}");
+        let found: Vec<&str> = ids.iter().map(String::as_str).collect();
+        assert_eq!(found, ["a", "b-2_c"], "both ids, exact values, no braces");
+    }
+
+    /// Kills `delete !`, `&& -> ||` and `|| -> &&` in the id-validation
+    /// predicate. Each rejected case is rejected for a DIFFERENT clause, so no
+    /// single mutant can leave them all passing.
+    #[test]
+    fn content_witness_rejects_ids_outside_the_grammar() {
+        // Empty: `!candidate.is_empty()` — `delete !` admits it.
+        let (_, empty) = content_witness("x {#}");
+        assert!(empty.is_empty(), "an empty id is not an id");
+        // Illegal character: the `all(...)` clause — `&& -> ||` admits it.
+        let (_, spaced) = content_witness("x {#a b}");
+        assert!(spaced.is_empty(), "an id with a space is not an id");
+        let (_, dotted) = content_witness("x {#a.b}");
+        assert!(dotted.is_empty(), "`.` is not in the id character set");
+        // Unterminated: the `find('}')` break.
+        let (_, unterminated) = content_witness("x {#abc");
+        assert!(unterminated.is_empty(), "an unterminated id is not an id");
+        // ...and a legal one still survives, or the checks above are satisfied
+        // by an oracle that simply never returns an id.
+        let (_, legal) = content_witness("x {#a-b_C9}");
+        assert_eq!(legal.len(), 1, "a legal id must still be extracted");
+    }
+
+    /// Kills `delete !` at `assert_order_survives`'s `!token.is_empty()`
+    /// filter, which would keep only empty tokens and make the subsequence
+    /// check vacuous for every input.
+    #[test]
+    fn order_survival_rejects_a_permutation_and_accepts_an_insertion() {
+        let ids = BTreeSet::new();
+        // A permutation must fail.
+        let permuted = std::panic::catch_unwind(|| {
+            assert_order_survives("alpha beta", "beta alpha", &BTreeSet::new(), "test");
+        });
+        assert!(permuted.is_err(), "reordered content must be rejected");
+        // A declared surface transform that INSERTS tokens must pass.
+        assert_order_survives("alpha beta", "node alpha mid beta tail", &ids, "test");
+    }
+
+    /// Ids are excluded from the order sequence because the explicit surface
+    /// hoists them into a node header. That exclusion must not silently widen
+    /// into "exclude everything".
+    #[test]
+    fn order_survival_excludes_only_the_declared_ids() {
+        let ids = BTreeSet::from(["a".to_owned()]);
+        // The id may move ahead of its text.
+        assert_order_survives("alpha {#a}", "node paragraph a alpha", &ids, "test");
+        // A non-id word may not.
+        let moved = std::panic::catch_unwind(|| {
+            assert_order_survives("alpha beta {#a}", "beta a alpha", &ids, "test");
+        });
+        assert!(
+            moved.is_err(),
+            "excluding ids must not excuse reordering content"
+        );
+    }
 }
