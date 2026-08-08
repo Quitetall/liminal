@@ -16,6 +16,10 @@ fn main() -> Result<()> {
             HaqCommand::RunCanaries => {
                 liminal_xtask::haq::run_canaries_repo(&liminal_xtask::repo_root()?)?;
             }
+            HaqCommand::Hash { path } => {
+                let bytes = std::fs::read(&path)?;
+                println!("{}", blake3::hash(&bytes).to_hex());
+            }
             HaqCommand::Generate { cases } => {
                 liminal_xtask::haq::run_generated_repo(&liminal_xtask::repo_root()?, cases)?;
             }
@@ -64,6 +68,15 @@ enum HaqCommand {
     VerifyInventory,
     /// Execute every disposable canary against in-memory packet mutations.
     RunCanaries,
+    /// BLAKE3 of one file, for the fuzz campaign's `log_blake3` (M17.5 F-17).
+    ///
+    /// The campaign shells out here rather than to `b3sum`, which is not
+    /// installed on this machine and would be an undeclared build dependency of
+    /// the evidence lane.
+    Hash {
+        /// File to digest.
+        path: camino::Utf8PathBuf,
+    },
     /// Run deterministic generated evidence for all five HAQP families.
     Generate {
         /// Accepted cases per family (qualification uses 100000).

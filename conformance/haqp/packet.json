@@ -1632,8 +1632,8 @@
   {
    "id": "C13",
    "gate": "fuzz",
-   "violation": "fuzz minutes below 30",
-   "expected_failure": "fuzz minutes below 30",
+   "violation": "claim another family's fuzz target",
+   "expected_failure": "is claimed by both",
    "result": "predeclared"
   },
   {
@@ -1664,7 +1664,6 @@
    "accepted": 100000,
    "attempts": 100204,
    "discards": 204,
-   "fuzz_minutes": 30,
    "seed_categories": [
     "empty",
     "single-token",
@@ -1685,14 +1684,18 @@
    ],
    "result": "planned",
    "seed": 11400714819323198485,
-   "evidence_hash": "afd8a1b3b15c2287102d0a8a8fe676a02ed4a80546afc6bdff9695a1d6a786a6"
+   "evidence_hash": "afd8a1b3b15c2287102d0a8a8fe676a02ed4a80546afc6bdff9695a1d6a786a6",
+   "fuzz_targets": [
+    "cst_parse",
+    "canonical_round_trip",
+    "format_idempotent"
+   ]
   },
   {
    "family": "graph/interchange codecs",
    "accepted": 100000,
    "attempts": 100133,
    "discards": 133,
-   "fuzz_minutes": 30,
    "seed_categories": [
     "empty",
     "single-node",
@@ -1713,14 +1716,14 @@
    ],
    "result": "planned",
    "seed": 11400713719811571110,
-   "evidence_hash": "2a1a22034e3070e064c9e6e4ebbfaf69bf37af571b56431d54396adde5ea230e"
+   "evidence_hash": "2a1a22034e3070e064c9e6e4ebbfaf69bf37af571b56431d54396adde5ea230e",
+   "fuzz_targets": []
   },
   {
    "family": "transforms/projections",
    "accepted": 100000,
    "attempts": 100000,
    "discards": 0,
-   "fuzz_minutes": 30,
    "seed_categories": [
     "identity",
     "insert",
@@ -1741,14 +1744,16 @@
    ],
    "result": "planned",
    "seed": 11400717018346454899,
-   "evidence_hash": "750e899f4d460edbfb9f5127d4f3484b4912265f770b0d0edc29dbd10b66ed6d"
+   "evidence_hash": "750e899f4d460edbfb9f5127d4f3484b4912265f770b0d0edc29dbd10b66ed6d",
+   "fuzz_targets": [
+    "html_render"
+   ]
   },
   {
    "family": "repair/ILRP/recovery",
    "accepted": 100000,
    "attempts": 100242,
    "discards": 242,
-   "fuzz_minutes": 30,
    "seed_categories": [
     "prepared",
     "applying",
@@ -1769,14 +1774,14 @@
    ],
    "result": "planned",
    "seed": 11400715918834825484,
-   "evidence_hash": "0346dbba691941b53ec5d4db8c9c8f61b055fe20680c21bd7607623d5decfa25"
+   "evidence_hash": "0346dbba691941b53ec5d4db8c9c8f61b055fe20680c21bd7607623d5decfa25",
+   "fuzz_targets": []
   },
   {
    "family": "Basis/revision/query invalidation",
    "accepted": 100000,
    "attempts": 100260,
    "discards": 260,
-   "fuzz_minutes": 30,
    "seed_categories": [
     "empty-basis",
     "single-revision",
@@ -1797,7 +1802,10 @@
    ],
    "result": "planned",
    "seed": 11400719217369709273,
-   "evidence_hash": "a13f7367cfd8aec45ad8b6a215e7944acce84dc4ef9bc18a6220fa9ce5247bbc"
+   "evidence_hash": "a13f7367cfd8aec45ad8b6a215e7944acce84dc4ef9bc18a6220fa9ce5247bbc",
+   "fuzz_targets": [
+    "incremental_full_equivalence"
+   ]
   }
  ],
  "crash_boundaries": [

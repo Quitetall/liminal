@@ -31,7 +31,18 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     verify_packet_statuses(
         &packet,
         PacketStatusExpectations {
-            mutant: "killed",
+            // ADR-0021 stages the mutation requirement, so the expected mutant
+            // disposition is stage-dependent. Hardcoding `killed` here made
+            // HAQP-1a UNREACHABLE: leave mutants `predeclared` and this gate
+            // failed; mark one `killed` and verify_qualification_stage failed.
+            // The first version of ADR-0021 shipped with exactly that
+            // contradiction — the deadlock it existed to break, reintroduced
+            // one layer down.
+            mutant: if packet.qualification_stage == "1b" {
+                "killed"
+            } else {
+                "predeclared"
+            },
             canary: "caught",
             generated: "pass",
             crash: "pass",
@@ -42,7 +53,7 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     // artifacts a run actually produced, or the whole gate is satisfiable by
     // editing two files.
     verify_provenance(root, &packet)?;
-    verify_fuzz_evidence(root)?;
+    verify_fuzz_evidence(root, &packet)?;
     verify_crash_evidence(root, &packet)?;
     verify_qualification_stage(&packet)?;
     if packet.qualification_stage == "1b" {
@@ -599,7 +610,14 @@ fn collect_ignored(text: &str, names: &mut BTreeSet<String>) {
     let mut pending = false;
     for line in text.lines() {
         let trimmed = line.trim_start();
-        if trimmed.starts_with("#[ignore") {
+        // A test is non-runnable if it is ignored OUTRIGHT, ignored
+        // CONDITIONALLY, or compiled out. All three cannot witness a kill, and
+        // only the first was recognised: `#[cfg_attr(unix, ignore)]` and
+        // `#[cfg(any())]` both vanish at run time while reading as live source.
+        if trimmed.starts_with("#[ignore")
+            || (trimmed.starts_with("#[cfg_attr(") && trimmed.contains("ignore"))
+            || trimmed.starts_with("#[cfg(any())]")
+        {
             pending = true;
             continue;
         }
@@ -668,7 +686,7 @@ fn verify_test_names_exist(root: &Utf8Path, packet: &Packet) -> Result<()> {
 /// ADR-0020 or the packet. Inventing one here would be improvising qualification
 /// semantics, so the two independent claims about one campaign stay
 /// unreconciled until that mapping is decided.
-fn verify_fuzz_evidence(root: &Utf8Path) -> Result<()> {
+fn verify_fuzz_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let path = root.join("conformance/haqp/evidence/fuzz.json");
     let bytes = std::fs::read(&path)
         .with_context(|| format!("{path}: committed fuzz evidence is required"))?;
@@ -694,7 +712,8 @@ fn verify_fuzz_evidence(root: &Utf8Path) -> Result<()> {
             present.insert(stem.to_owned());
         }
     }
-    verify_fuzz_rows(&recorded, &present)
+    verify_fuzz_rows(&recorded, &present)?;
+    verify_fuzz_budget(&packet.generated, &recorded)
 }
 
 fn verify_fuzz_rows(recorded: &[FuzzEvidence], present: &BTreeSet<String>) -> Result<()> {
@@ -712,6 +731,19 @@ fn verify_fuzz_rows(recorded: &[FuzzEvidence], present: &BTreeSet<String>) -> Re
         recorded.iter().map(|row| row.target.as_str()),
         "fuzz target",
     )?;
+
+    // M17.5 F-17: `log` names a gitignored path, so the counts it would
+    // substantiate were unfalsifiable once the run ended. The digest makes a
+    // later-produced log checkable.
+    for row in recorded {
+        if row.log_blake3.len() != 64 || !row.log_blake3.chars().all(|c| c.is_ascii_hexdigit()) {
+            anyhow::bail!(
+                "{}: log_blake3 {:?} is not a 64-hex digest, so its log can never be checked",
+                row.target,
+                row.log_blake3
+            );
+        }
+    }
 
     // M17.5 F-27 / P1-A09: ADR-0020 §4 requires a SANITIZER-ENABLED campaign
     // and the evidence had no way to say whether one ran. An unsanitized
@@ -1190,14 +1222,6 @@ fn verify_generated_inventory(packet: &Packet) -> Result<()> {
         if family.discards * 100 > family.attempts {
             anyhow::bail!("{} discard rate exceeds 1%", family.family);
         }
-        // ADR-0020 line 90: one 30-minute sanitizer campaign per family. This
-        // demanded 31, and packet.json was populated with 31 to match — so the
-        // packet claimed 155 target-minutes while the campaign performed 150
-        // (M17.5 F-18). The ADR is canonical; a verifier does not get to
-        // redefine the protocol it checks.
-        if family.fuzz_minutes < 30 {
-            anyhow::bail!("{} fuzz minutes below 30", family.family);
-        }
         if family.seed_categories.len() < 16 {
             anyhow::bail!("{} has fewer than 16 seed categories", family.family);
         }
@@ -1233,10 +1257,87 @@ fn verify_generated_inventory(packet: &Packet) -> Result<()> {
             }
         }
     }
-    let total_minutes: u64 = packet.generated.iter().map(|row| row.fuzz_minutes).sum();
+    // The fuzz budget is no longer checkable here: it is DERIVED from the
+    // committed campaign by `verify_fuzz_budget` at the qualified layer. What
+    // the inventory layer can still check is the mapping's shape.
+    verify_fuzz_target_mapping(&packet.generated)
+}
+
+/// The family→target mapping must be a partition, not an overlap
+/// (M17.5 F-17, F-29).
+///
+/// ADR-0020 §4 gives each family its own 30-minute campaign. If one target
+/// evidenced two families, a single campaign would satisfy two budgets and both
+/// would pass on half the work — so a target may be claimed at most once.
+///
+/// Empty is allowed HERE and refused at the qualified layer. The inventory
+/// layer describes a plan, and a family whose fuzz target has not been written
+/// yet is a legitimate plan; claiming `pass` for it is not.
+fn verify_fuzz_target_mapping(declared: &[Generated]) -> Result<()> {
+    let mut claimed: BTreeMap<&str, &str> = BTreeMap::new();
+    for family in declared {
+        for target in &family.fuzz_targets {
+            if let Some(other) = claimed.insert(target.as_str(), family.family.as_str()) {
+                anyhow::bail!(
+                    "fuzz target {target:?} is claimed by both {other:?} and {:?}; \
+                     one campaign cannot satisfy two families' budgets",
+                    family.family
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Derive each family's fuzz minutes from the committed campaign and enforce
+/// ADR-0020 §4's floors against the DERIVED value (M17.5 F-17).
+///
+/// The packet used to declare `fuzz_minutes` per family while the artifact
+/// recorded `seconds` per target, with no mapping between them — two
+/// independently-assertable claims about one campaign. Only the artifact
+/// asserts anything now; the packet says which targets belong to which family.
+fn verify_fuzz_budget(declared: &[Generated], recorded: &[FuzzEvidence]) -> Result<()> {
+    let seconds: BTreeMap<&str, u64> = recorded
+        .iter()
+        .map(|row| (row.target.as_str(), row.seconds))
+        .collect();
+    let mut total_minutes = 0_u64;
+    for family in declared {
+        if family.result != "pass" {
+            continue;
+        }
+        if family.fuzz_targets.is_empty() {
+            anyhow::bail!(
+                "{} claims pass but names no fuzz target; ADR-0020 §4 gives every \
+                 family its own sanitizer campaign, and a family with no target \
+                 has had none",
+                family.family
+            );
+        }
+        let mut family_minutes = 0_u64;
+        for target in &family.fuzz_targets {
+            let recorded_seconds = seconds.get(target.as_str()).with_context(|| {
+                format!(
+                    "{} names fuzz target {target:?}, which the committed campaign did not run",
+                    family.family
+                )
+            })?;
+            family_minutes += recorded_seconds / 60;
+        }
+        // ADR-0020 line 90: one 30-minute sanitizer campaign per family.
+        if family_minutes < 30 {
+            anyhow::bail!(
+                "{}: its targets {:?} recorded {family_minutes} minutes, below the 30 \
+                 ADR-0020 §4 requires per family",
+                family.family,
+                family.fuzz_targets
+            );
+        }
+        total_minutes += family_minutes;
+    }
     // ADR-0020 line 92: "Total fuzz budget is at least 150 target-minutes."
     if total_minutes < 150 {
-        anyhow::bail!("total fuzz minutes below 150: {total_minutes}");
+        anyhow::bail!("derived fuzz budget {total_minutes} target-minutes is below 150");
     }
     Ok(())
 }
@@ -1413,6 +1514,20 @@ struct FuzzEvidence {
     sanitizer: String,
     /// Path the campaign wrote its libFuzzer log to.
     log: String,
+    /// BLAKE3 of that log (M17.5 F-17).
+    ///
+    /// Defaulted so a pre-F-17 artifact still parses at the inventory layer;
+    /// the qualified layer requires 64 hex, so an empty digest cannot reach a
+    /// `complete` packet. Populating it needs a fresh campaign — the digest of
+    /// a log nobody kept cannot be reconstructed.
+    ///
+    /// `log` names a file under `target/`, which is gitignored and therefore
+    /// guaranteed absent by the time anyone verifies — so execs, timings and
+    /// exit codes were unfalsifiable in the committed state. The digest makes a
+    /// later-produced log checkable without committing megabytes of libFuzzer
+    /// output; `--keep-logs` commits them when someone actually wants them.
+    #[serde(default)]
+    log_blake3: String,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -1460,7 +1575,20 @@ struct Generated {
     accepted: u64,
     attempts: u64,
     discards: u64,
-    fuzz_minutes: u64,
+    /// Fuzz targets that evidence THIS family (ADR-0020 §4; M17.5 F-29).
+    ///
+    /// Replaces a per-family `fuzz_minutes` number. The packet declared minutes
+    /// per family while the artifact records seconds per target, with no mapping
+    /// between them — two independently-assertable claims about one campaign,
+    /// which is how drift enters. The mapping is a RELATION, never a second
+    /// number: minutes are derived by summing these targets' recorded seconds,
+    /// so nothing here can be asserted independently of a run.
+    ///
+    /// May be empty at the inventory layer, which describes a plan; the
+    /// qualified layer refuses a family claiming `pass` with no target, the
+    /// same way it refuses a test name that does not exist.
+    #[serde(default)]
+    fuzz_targets: Vec<String>,
     seed_categories: Vec<String>,
     result: String,
     /// Seed the recorded run used; required once `result` is `pass` so the
@@ -1727,8 +1855,18 @@ fn mutate_canary(
             "discard rate above 1 percent"
         }
         "C13" => {
-            packet.generated[0].fuzz_minutes = 0;
-            "fuzz minutes below 30"
+            // Was "fuzz minutes below 30". F-17 removed the per-family minutes
+            // (they were a second, independently-assertable claim about one
+            // campaign); the budget is now derived from the artifact, so the
+            // packet-level violation this canary can perform is an overlapping
+            // mapping — one campaign satisfying two families' budgets.
+            let stolen = packet.generated[1]
+                .fuzz_targets
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "cst_parse".to_owned());
+            packet.generated[0].fuzz_targets.push(stolen);
+            "claim another family's fuzz target"
         }
         "C14" => {
             packet
@@ -2593,6 +2731,12 @@ mod tests {
         let bytes = std::fs::read(repo_root().join("conformance/haqp/evidence/fuzz.json"))
             .expect("committed fuzz evidence");
         let mut rows: Vec<FuzzEvidence> = serde_json::from_slice(&bytes).expect("parse");
+        // The committed artifact predates F-17 and carries no log digest. Each
+        // of these tests doctors ONE field to exercise ONE check, so the
+        // unrelated missing digest is normalised rather than left to fire first.
+        for row in &mut rows {
+            row.log_blake3 = "ab".repeat(32);
+        }
         let present = rows
             .iter()
             .map(|row| row.target.clone())
@@ -2621,6 +2765,12 @@ mod tests {
         let bytes = std::fs::read(repo_root().join("conformance/haqp/evidence/fuzz.json"))
             .expect("committed fuzz evidence");
         let mut rows: Vec<FuzzEvidence> = serde_json::from_slice(&bytes).expect("parse");
+        // The committed artifact predates F-17 and carries no log digest. Each
+        // of these tests doctors ONE field to exercise ONE check, so the
+        // unrelated missing digest is normalised rather than left to fire first.
+        for row in &mut rows {
+            row.log_blake3 = "ab".repeat(32);
+        }
         let present = rows
             .iter()
             .map(|row| row.target.clone())
@@ -2654,6 +2804,12 @@ mod tests {
         let bytes = std::fs::read(repo_root().join("conformance/haqp/evidence/fuzz.json"))
             .expect("committed fuzz evidence");
         let mut rows: Vec<FuzzEvidence> = serde_json::from_slice(&bytes).expect("parse");
+        // The committed artifact predates F-17 and carries no log digest. Each
+        // of these tests doctors ONE field to exercise ONE check, so the
+        // unrelated missing digest is normalised rather than left to fire first.
+        for row in &mut rows {
+            row.log_blake3 = "ab".repeat(32);
+        }
         let present = rows
             .iter()
             .map(|row| row.target.clone())
@@ -2962,7 +3118,7 @@ mod tests {
             accepted: 100_000,
             attempts: 100_000,
             discards: 0,
-            fuzz_minutes: 30,
+            fuzz_targets: vec!["cst_parse".to_owned()],
             seed_categories: (0..16).map(|i| format!("s{i}")).collect(),
             result: "pass".to_owned(),
             seed: Some(7),
@@ -3108,6 +3264,12 @@ mod tests {
         let bytes = std::fs::read(repo_root().join("conformance/haqp/evidence/fuzz.json"))
             .expect("committed fuzz evidence");
         let mut rows: Vec<FuzzEvidence> = serde_json::from_slice(&bytes).expect("parse");
+        // The committed artifact predates F-17 and carries no log digest. Each
+        // of these tests doctors ONE field to exercise ONE check, so the
+        // unrelated missing digest is normalised rather than left to fire first.
+        for row in &mut rows {
+            row.log_blake3 = "ab".repeat(32);
+        }
         let present = rows
             .iter()
             .map(|row| row.target.clone())
@@ -3205,5 +3367,109 @@ mod tests {
         let mut packet = read_packet(&repo_root()).expect("packet");
         packet.qualification_stage = "1c".to_owned();
         verify_qualification_stage(&packet).expect_err("an unknown stage must not pass");
+    }
+
+    // ── M17.5 F-17 / F-29: derived fuzz budget and the family→target mapping ──
+    // The packet declared minutes per FAMILY while the artifact recorded seconds
+    // per TARGET, with no mapping between them. Only the artifact asserts a
+    // number now; the packet says which targets belong to which family.
+
+    fn fuzz_row(target: &str, seconds: u64) -> FuzzEvidence {
+        FuzzEvidence {
+            target: target.to_owned(),
+            seconds,
+            elapsed_s: seconds,
+            exit_code: 0,
+            execs: 1,
+            artifacts: 0,
+            seed: 1,
+            sanitizer: "address".to_owned(),
+            log: format!("target/haqp/fuzz-{target}.log"),
+            log_blake3: "ab".repeat(32),
+        }
+    }
+
+    fn family_row(name: &str, targets: &[&str]) -> Generated {
+        Generated {
+            family: name.to_owned(),
+            accepted: 100_000,
+            attempts: 100_000,
+            discards: 0,
+            fuzz_targets: targets.iter().map(|t| (*t).to_owned()).collect(),
+            seed_categories: (0..16).map(|i| format!("s{i}")).collect(),
+            result: "pass".to_owned(),
+            seed: Some(7),
+            evidence_hash: Some("ab".repeat(32)),
+        }
+    }
+
+    #[test]
+    fn a_family_whose_targets_meet_the_floor_is_accepted() {
+        let families = [
+            family_row("a", &["t1", "t2"]),
+            family_row("b", &["t3"]),
+            family_row("c", &["t4"]),
+            family_row("d", &["t5"]),
+            family_row("e", &["t6"]),
+        ];
+        let recorded: Vec<FuzzEvidence> = ["t1", "t2", "t3", "t4", "t5", "t6"]
+            .iter()
+            .map(|t| fuzz_row(t, 1800))
+            .collect();
+        verify_fuzz_budget(&families, &recorded)
+            .expect("6 targets x 30 min = 180 >= 150, every family >= 30");
+    }
+
+    /// One campaign must not satisfy two families' budgets.
+    #[test]
+    fn a_fuzz_target_may_not_be_claimed_by_two_families() {
+        let families = [family_row("a", &["shared"]), family_row("b", &["shared"])];
+        let err = verify_fuzz_target_mapping(&families)
+            .expect_err("a shared target double-counts into two budgets");
+        assert!(err.to_string().contains("claimed by both"), "{err}");
+    }
+
+    /// ADR-0020 §4 gives EVERY family its own campaign. Two families currently
+    /// have no fuzz target at all (F-29), and `pass` must be unreachable for
+    /// them until one exists.
+    #[test]
+    fn a_family_claiming_pass_with_no_fuzz_target_is_refused() {
+        let families = [family_row("uncovered", &[])];
+        let err = verify_fuzz_budget(&families, &[])
+            .expect_err("a family with no target has had no campaign");
+        assert!(err.to_string().contains("names no fuzz target"), "{err}");
+    }
+
+    #[test]
+    fn a_family_below_the_thirty_minute_floor_is_refused() {
+        let families = [family_row("a", &["t1"])];
+        let err = verify_fuzz_budget(&families, &[fuzz_row("t1", 60)])
+            .expect_err("one minute is not thirty");
+        assert!(err.to_string().contains("below the 30"), "{err}");
+    }
+
+    #[test]
+    fn a_family_naming_a_target_the_campaign_never_ran_is_refused() {
+        let families = [family_row("a", &["ghost"])];
+        verify_fuzz_budget(&families, &[fuzz_row("t1", 1800)])
+            .expect_err("a target with no recorded run evidences nothing");
+    }
+
+    /// F-17: the log lives under target/, so its digest is the only thing that
+    /// can make the recorded counts checkable afterwards.
+    #[test]
+    fn fuzz_rows_require_a_real_log_digest() {
+        let present = BTreeSet::from(["t1".to_owned()]);
+        let good = vec![fuzz_row("t1", 9000)];
+        verify_fuzz_rows(&good, &present).expect("a well-formed row must pass");
+
+        let mut empty = good.clone();
+        empty[0].log_blake3 = String::new();
+        verify_fuzz_rows(&empty, &present)
+            .expect_err("an absent digest leaves the counts unfalsifiable");
+
+        let mut garbage = good;
+        garbage[0].log_blake3 = " ".repeat(64);
+        verify_fuzz_rows(&garbage, &present).expect_err("64 spaces is not a digest");
     }
 }

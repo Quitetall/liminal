@@ -85,9 +85,9 @@
   },
   {
     "id": "C13",
-    "violation": "fuzz minutes below 30",
-    "expected_failure": "fuzz minutes below 30",
-    "observed_failure": "source/CST/formatting fuzz minutes below 30",
+    "violation": "claim another family's fuzz target",
+    "expected_failure": "is claimed by both",
+    "observed_failure": "fuzz target \"cst_parse\" is claimed by both \"source/CST/formatting\" and \"source/CST/formatting\"; one campaign cannot satisfy two families' budgets",
     "caught": true
   },
   {
@@ -108,7 +108,7 @@
     "id": "C16",
     "violation": "remove packet digest",
     "expected_failure": "review packet markdown missing packet digest",
-    "observed_failure": "review packet markdown missing packet digest 907490b38769f127ac2410ccf8579b2ac440a4d363113439e83dd9f665ed338d",
+    "observed_failure": "review packet markdown missing packet digest c7203099412cfcfd42629790da23be47a8e6a09c0df9072cd769dea5abc91ee9",
     "caught": true
   }
 ]

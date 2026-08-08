@@ -16,6 +16,9 @@ SEED=20260725   # fixed so the campaign is reproducible (ADR-0020 §1)
 
 mkdir -p "$(dirname "$OUT")"
 SANITIZER="${SANITIZER:-address}"
+# Opt-in: committing every libFuzzer log bloats the repo permanently, and the
+# digest is enough unless you actually want to read them.
+KEEP_LOGS="${KEEP_LOGS:-0}"
 
 echo "[" > "$OUT"
 first=1
@@ -39,8 +42,16 @@ for t in "${TARGETS[@]}"; do
   [ "$code" -ne 0 ] && overall=1
   [ "$first" -eq 0 ] && echo "," >> "$OUT"
   first=0
-  printf '{"target":"%s","seconds":%s,"elapsed_s":%s,"exit_code":%s,"execs":%s,"artifacts":%s,"seed":%s,"sanitizer":"%s","log":"%s"}' \
-    "$t" "$SECS" "$elapsed" "$code" "$execs" "$arts" "$SEED" "$SANITIZER" "$log" >> "$OUT"
+  # F-17: the log lives under target/ (gitignored), so its digest is what makes
+  # the counts above checkable after the run. --keep-logs commits the log itself
+  # for anyone who wants more than a hash.
+  loghash=$(cargo run -q -p liminal-xtask -- haq hash "$log" 2>/dev/null || echo "")
+  if [ "$KEEP_LOGS" = "1" ]; then
+    mkdir -p conformance/haqp/evidence/logs
+    cp "$log" "conformance/haqp/evidence/logs/$t.log"
+  fi
+  printf '{"target":"%s","seconds":%s,"elapsed_s":%s,"exit_code":%s,"execs":%s,"artifacts":%s,"seed":%s,"sanitizer":"%s","log":"%s","log_blake3":"%s"}' \
+    "$t" "$SECS" "$elapsed" "$code" "$execs" "$arts" "$SEED" "$SANITIZER" "$log" "$loghash" >> "$OUT"
   echo "--- $t: exit=$code execs=$execs artifacts=$arts elapsed=${elapsed}s"
 done
 

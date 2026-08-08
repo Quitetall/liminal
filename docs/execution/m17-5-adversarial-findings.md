@@ -1681,3 +1681,72 @@ they exercise. F-03 (oracle authorship independence) remains OPEN and this
 enlarges it: the Phase 1 suite and the Phase 1 implementation now share an
 author across 20 more tests. That is an argument for M17.9 — Brian's own
 adversarial review of the suite — not something the author can resolve.
+
+## F-29 — MAJOR. Two of the five critical families have no fuzz target at all.
+
+Found while implementing F-17's family→target mapping. Requiring the mapping is
+what made the gap visible, which is the argument for requiring it.
+
+ADR-0020 §4: "Each family also receives one **30-minute sanitizer-enabled fuzz
+campaign**." The packet declared `fuzz_minutes: 30` for all five families. What
+the five targets actually exercise:
+
+| family | fuzz targets |
+|---|---|
+| source/CST/formatting | `cst_parse`, `canonical_round_trip`, `format_idempotent` |
+| transforms/projections | `html_render` |
+| Basis/revision/query invalidation | `incremental_full_equivalence` |
+| **graph/interchange codecs** | **none** |
+| **repair/ILRP/recovery** | **none** |
+
+So two of the five per-family budgets were backed by nothing, and the packet's
+own numbers said otherwise. Not fraud — `result` was `planned` throughout — but
+the numbers were shaped to look satisfied, which is F-04's pattern.
+
+A bijection over families and targets is therefore impossible, and the mapping
+is declared as the honest partition above: two families name an empty list.
+
+### Fix
+
+- `Generated.fuzz_minutes` is gone. It was one of two independently-assertable
+  claims about a single campaign, which is how drift enters; the artifact's
+  per-target `seconds` is now the only assertion.
+- `Generated.fuzz_targets` names which targets evidence which family — a
+  RELATION, not a number. Nothing in it can be asserted independently of a run.
+- `verify_fuzz_budget` derives each family's minutes by summing its targets'
+  recorded seconds and enforces §4's 30-per-family and 150-total floors against
+  the DERIVED value.
+- `verify_fuzz_target_mapping` refuses a target claimed by two families: one
+  campaign must not satisfy two budgets.
+- A family claiming `pass` with no target is refused. Empty is legal at the
+  inventory layer, which describes a plan; `pass` for it is not.
+
+### Still open — this is a blocker for HAQP-1a
+
+`graph/interchange codecs` and `repair/ILRP/recovery` need fuzz targets before
+either family can reach `pass`, and therefore before HAQP-1a can complete. The
+surfaces exist (`liminal-graph`, and the repair/ILRP paths under
+`liminal-jurisdiction` and `liminal-cli`), so this is authoring work plus one
+60-minute campaign, not a structural problem.
+
+The gate now states the gap rather than hiding it:
+*"graph/interchange codecs claims pass but names no fuzz target; ADR-0020 §4
+gives every family its own sanitizer campaign, and a family with no target has
+had none."*
+
+### Also from this work
+
+- **`log_blake3`** (F-17): every fuzz row now carries the BLAKE3 of its
+  libFuzzer log. `log` names a path under `target/`, gitignored and guaranteed
+  absent at verification time, so execs/timings/exit codes were unfalsifiable
+  once the run ended. Required 64-hex at the qualified layer, defaulted at the
+  inventory layer so the pre-F-17 artifact still parses.
+  **The committed `fuzz.json` cannot pass the qualified gate until the lane is
+  rerun** — the digest of a log nobody kept cannot be reconstructed.
+- **`--keep-logs`** commits the logs themselves, opt-in via `KEEP_LOGS=1`.
+  Default off: the digest is enough unless someone actually wants to read them.
+- **`haq hash`** subcommand, because `b3sum` is not installed here and shelling
+  to it would have made an undeclared tool a dependency of the evidence lane.
+- **Canary C13** attacked `fuzz_minutes`, which no longer exists. It now claims
+  another family's fuzz target, which is the packet-level violation the derived
+  budget makes possible.
