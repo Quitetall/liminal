@@ -1835,7 +1835,29 @@ run in `m17-5-verifier-campaign.log`, committed rather than left in a session
 scratchpad: the earlier 3-hour workspace campaign's only record was in a temp
 directory and is gone, and an unreproducible measurement is not evidence.
 
-Bulk of what remains is the generated-evidence machinery — `case_repair` (8),
-`generate_evidence` (7), `run_generated_repo` (4), `Rng` (4) and the other
-`case_*` builders (6) — i.e. ADR-0020 §4's 100,000-case generators. That is the
-next tier-1 batch.
+### ADR-0020 §4's generator machinery
+
+The 100,000-case evidence is only as good as the generator behind it. A constant
+RNG, or a `word()` returning one string, yields 100,000 "cases" that are one
+case repeated — and every count in the packet still looks satisfied.
+
+Killed: the seeded stream is pinned as a fixed sequence from a fixed seed
+(reproducibility under §1 IS "this seed yields this stream"); `below()` is
+pinned in range and for actual variation; `word()` for content, length bounds
+and alphabet; and `generate_evidence`'s shape — five distinct families, each
+meeting its acceptance target with counts describing one run.
+
+**`generated_evidence_is_byte_identical_across_runs` passed under every one of
+the three whole-function replacements**, because it compares two runs to each
+other and two EMPTY runs are identical. A determinism test is not a shape test.
+
+`validate_case_count` was extracted from `generate_evidence` so its boundaries
+are testable: `>` → `>=` at the safety limit can only be discriminated by a run
+of exactly 10,000,000 cases, which no test can afford. Extracted, it is checked
+from both sides in microseconds.
+
+**Tier 1 total: 75 → 44 survivors, 226 → 248 caught.**
+
+Remaining: `case_repair` (8, the cyclic-dependency construction),
+`run_generated_repo` (4), `verify_test_names_exist` (3), `verify_packet_shape`
+(3), `verify_generated_inventory` (3), `mutate_canary` (3), and 20 others.

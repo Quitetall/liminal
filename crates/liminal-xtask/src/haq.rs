@@ -2354,13 +2354,24 @@ pub fn run_generated_repo(root: &Utf8Path, cases: u64) -> Result<()> {
 /// purpose: the rows are the hashable artifact and must be a pure function of
 /// the seed and the code under test, while the timings are telemetry for the
 /// operator (M17.5 pass-2 #18).
-fn generate_evidence(cases: u64) -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> {
+///
+/// The case-count guard is a separate function so its BOUNDARIES are testable:
+/// `>` -> `>=` at the safety limit can only be discriminated by a case that
+/// runs at exactly 10,000,000, which no test can afford. Extracting the
+/// predicate makes the boundary checkable in microseconds (M17.5 F-30).
+/// Reject a case count that is zero or beyond the safety limit.
+fn validate_case_count(cases: u64) -> Result<()> {
     if cases == 0 {
         anyhow::bail!("generated case count must be positive");
     }
     if cases > 10_000_000 {
         anyhow::bail!("generated case count exceeds safety limit: {cases} > 10000000");
     }
+    Ok(())
+}
+
+fn generate_evidence(cases: u64) -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> {
+    validate_case_count(cases)?;
     let families: [Family; 5] = [
         ("source/CST/formatting", case_source_cst),
         ("graph/interchange codecs", case_interchange),
@@ -3726,5 +3737,111 @@ mod tests {
 
         verify_inventory_repo(root)
             .expect_err("a packet declaring itself ratified must be refused");
+    }
+
+    // ── M17.5 F-30: ADR-0020 §4's generator machinery ─────────────────────
+    // The 100,000-case evidence is only as good as the generator behind it. A
+    // constant RNG, or a `word()` that returns one string, produces 100,000
+    // "cases" that are one case repeated — and every count in the packet would
+    // still look satisfied.
+
+    /// Kills `^` -> `|`/`&` and `>>` -> `<<` in `Rng::next`.
+    ///
+    /// Pinned as a GOLDEN prefix from a fixed seed rather than by a statistical
+    /// property: the recorded packet seed exists to make a campaign
+    /// reproducible (ADR-0020 §1), and reproducibility is exactly "this seed
+    /// yields this stream".
+    #[test]
+    fn the_seeded_stream_is_a_fixed_sequence() {
+        let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
+        let drawn: Vec<u64> = (0..4).map(|_| rng.next()).collect();
+        let mut again = Rng(0x9E37_79B9_7F4A_7C15);
+        let repeat: Vec<u64> = (0..4).map(|_| again.next()).collect();
+        assert_eq!(drawn, repeat, "the same seed must yield the same stream");
+        // Distinct draws: a stream that repeats one value reproduces nothing.
+        assert!(
+            drawn.iter().collect::<BTreeSet<_>>().len() == 4,
+            "four draws collapsed to fewer values: {drawn:?}"
+        );
+    }
+
+    /// Kills `Rng::below -> 1`, and pins the contract callers rely on.
+    #[test]
+    fn below_stays_in_range_and_actually_varies() {
+        let mut rng = Rng(12_345);
+        let draws: Vec<u64> = (0..500).map(|_| rng.below(7)).collect();
+        assert!(draws.iter().all(|d| *d < 7), "below(7) escaped its bound");
+        assert!(
+            draws.iter().collect::<BTreeSet<_>>().len() >= 5,
+            "below(7) produced fewer than 5 distinct values in 500 draws — a \
+             generator that returns a constant makes 100,000 cases into one"
+        );
+        // below(0) must not divide by zero.
+        assert_eq!(rng.below(0), 0, "below(0) must be total");
+    }
+
+    /// Kills `Rng::word -> "xyzzy"` and `+` -> `*` in its length.
+    #[test]
+    fn words_vary_in_content_and_length() {
+        let mut rng = Rng(999);
+        let words: Vec<String> = (0..200).map(|_| rng.word()).collect();
+        assert!(
+            words.iter().collect::<BTreeSet<_>>().len() > 100,
+            "200 draws produced fewer than 100 distinct words"
+        );
+        for word in &words {
+            assert!(
+                (1..=12).contains(&word.len()),
+                "word {word:?} has length {} outside 1..=12",
+                word.len()
+            );
+            assert!(
+                word.bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b" -_".contains(&b)),
+                "word {word:?} left the declared alphabet"
+            );
+        }
+        assert!(
+            words.iter().any(|w| w.len() > 1),
+            "`1 + below(12)` became `1 * below(12)` if every word is one char"
+        );
+    }
+
+    /// Kills `>` -> `>=`/`==` at the safety limit and `== 0` at the floor.
+    /// Both boundaries, from both sides — the reason the guard was extracted.
+    #[test]
+    fn the_case_count_guard_holds_exactly_at_its_boundaries() {
+        validate_case_count(0).expect_err("zero cases is not a campaign");
+        validate_case_count(1).expect("one case is a legal, if small, request");
+        validate_case_count(10_000_000).expect("the limit itself must be allowed");
+        validate_case_count(10_000_001).expect_err("one past the limit must be refused");
+    }
+
+    /// Kills the three `generate_evidence -> Ok((vec![], ...))` replacements.
+    ///
+    /// `generated_evidence_is_byte_identical_across_runs` compares two runs to
+    /// each other, and two EMPTY runs are identical — so it passed under every
+    /// one of them. Shape has to be asserted directly.
+    #[test]
+    fn generated_evidence_has_one_row_per_family_that_met_its_target() {
+        let (rows, timings) = generate_evidence(64).expect("a small run must succeed");
+        assert_eq!(rows.len(), 5, "ADR-0020 §4 names five critical families");
+        assert_eq!(timings.len(), 5, "one timing per family");
+        let families: BTreeSet<&str> = rows.iter().map(|row| row.family.as_str()).collect();
+        assert_eq!(families.len(), 5, "family names must be distinct");
+        for row in &rows {
+            assert_eq!(
+                row.accepted, 64,
+                "{}: acceptance target not met",
+                row.family
+            );
+            assert_eq!(
+                row.accepted + row.discards,
+                row.attempts,
+                "{}: counts do not describe one run",
+                row.family
+            );
+            assert_eq!(row.evidence_hash.len(), 64, "{}: no digest", row.family);
+        }
     }
 }
