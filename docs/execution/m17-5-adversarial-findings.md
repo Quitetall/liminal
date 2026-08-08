@@ -1750,3 +1750,62 @@ had none."*
 - **Canary C13** attacked `fuzz_minutes`, which no longer exists. It now claims
   another family's fuzz target, which is the packet-level violation the derived
   budget makes possible.
+
+### F-29 follow-up — both uncovered families now have fuzz targets
+
+`fuzz/fuzz_targets/graph_interchange_codec.rs` and `.../ilrp_recovery.rs`, so
+every family in the mapping names a target and none is claimed twice.
+
+- **graph/interchange codec** — decode/encode round-trip stability over
+  `Transaction`, not merely totality. Totality alone is satisfied by a decoder
+  that rejects everything; a decoder that accepts a value it cannot faithfully
+  re-emit is the interesting bug, because it silently rewrites a document on
+  save. Encoding determinism is asserted too, or no digest over this codec
+  means anything.
+- **ilrp_recovery** — R4 §10 / v4 §7.8: an intent driven only through legal
+  transitions must always be able to reach a terminal state, and a terminal
+  state must never transition onward. Reachability is computed in the target by
+  breadth-first search rather than asked of the implementation, per ADR-0020 §5.
+
+Smoke-run at 20s each: 894,420 and 381,885 execs, zero artifacts. The scoring
+campaign is part of the lane rerun.
+
+## F-30 — Stage 3 tier 1: the verifier's own kill rate, and what its survivors say.
+
+Scoped campaign over `crates/liminal-xtask/src/haq.rs` — the gate that decides
+whether everything else passes. **306 mutants: 75 missed → 65, 226 caught, 15
+unviable.**
+
+Ten of the original survivors were in gate logic written THIS session, and they
+shared one cause: **the canaries asserted that bad input is rejected and never
+that good input is accepted.** Any mutant that widens a guard therefore
+survived — a verifier that rejects everything satisfies a rejection-only suite.
+That is the same defect this milestone has been finding in other people's code
+all along, in the code written to find it.
+
+Killed, with the accept case added:
+
+| site | mutant | why it lived |
+|---|---|---|
+| evidence-path guard | `== ParentDir` → `!=` | nothing asserted an ordinary relative path is accepted |
+| `verify_qualification_stage` | `1b if !claims_kills` guard → `true` | nothing asserted a 1b packet WITH kills passes |
+| `collect_ignored` | `&&` → `\|\|`, `\|\|` → `&&` | only `#[ignore]` was tested, not `#[cfg(any())]` or a false positive |
+| `verify_fuzz_budget` | `< 150` → `==`, `<=` | the floor was never checked from both sides |
+
+**A test that looked like coverage and was not.** The first boundary test used
+five targets at 1800s and claimed to exercise the total-minutes floor. It never
+reached it: the per-target floor fires first, so line 766 was never executed and
+three mutants there survived a test named for them. Reaching the total floor
+needs FOUR targets; reaching the per-target floor with the total satisfied needs
+six, one of them between 90s and 1800s so a mutant that moves the floor to
+`30+60` or `30/60` is actually discriminated. Both cases are now explicit.
+
+`verify_reviewer_independence`'s `< 2` → `> 2` is **equivalent** and documented
+in place: with fewer than two records the loop's `distinct != records.len()` is
+false either way, so both return `Ok`. The early return states the intent —
+independence is a claim about a pair — and costs nothing.
+
+The remaining 65 are recorded in `m17-5-verifier-survivors.txt` with the full
+run in `m17-5-verifier-campaign.log`, committed rather than left in a session
+scratchpad: the earlier 3-hour workspace campaign's only record was in a temp
+directory and is gone, and an unreproducible measurement is not evidence.

@@ -13,10 +13,13 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 liminal-cst = { path = "../crates/liminal-cst" }
 liminal-format = { path = "../crates/liminal-format" }
+liminal-graph = { path = "../crates/liminal-graph" }
+liminal-jurisdiction = { path = "../crates/liminal-jurisdiction" }
 liminal-id = { path = "../crates/liminal-id" }
 liminal-query = { path = "../crates/liminal-query" }
 liminal-revision = { path = "../crates/liminal-revision" }
 liminal-source = { path = "../crates/liminal-source" }
+serde_json = "1"
 
 [[bin]]
 name = "canonical_round_trip"
@@ -49,6 +52,20 @@ bench = false
 [[bin]]
 name = "incremental_full_equivalence"
 path = "fuzz_targets/incremental_full_equivalence.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "graph_interchange_codec"
+path = "fuzz_targets/graph_interchange_codec.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ilrp_recovery"
+path = "fuzz_targets/ilrp_recovery.rs"
 test = false
 doc = false
 bench = false

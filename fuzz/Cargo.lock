@@ -251,6 +251,7 @@ dependencies = [
  "liminal-source",
  "serde_json",
  "thiserror",
+ "uuid",
 ]
 
 [[package]]
@@ -260,10 +261,13 @@ dependencies = [
  "libfuzzer-sys",
  "liminal-cst",
  "liminal-format",
+ "liminal-graph",
  "liminal-id",
+ "liminal-jurisdiction",
  "liminal-query",
  "liminal-revision",
  "liminal-source",
+ "serde_json",
 ]
 
 [[package]]
@@ -301,6 +305,20 @@ dependencies = [
  "serde",
  "thiserror",
  "uuid",
+]
+
+[[package]]
+name = "liminal-jurisdiction"
+version = "0.0.0"
+dependencies = [
+ "liminal-graph",
+ "liminal-id",
+ "liminal-revision",
+ "liminal-scratch",
+ "liminal-source",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

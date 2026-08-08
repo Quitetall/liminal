@@ -1717,7 +1717,9 @@
    "result": "planned",
    "seed": 11400713719811571110,
    "evidence_hash": "2a1a22034e3070e064c9e6e4ebbfaf69bf37af571b56431d54396adde5ea230e",
-   "fuzz_targets": []
+   "fuzz_targets": [
+    "graph_interchange_codec"
+   ]
   },
   {
    "family": "transforms/projections",
@@ -1775,7 +1777,9 @@
    "result": "planned",
    "seed": 11400715918834825484,
    "evidence_hash": "0346dbba691941b53ec5d4db8c9c8f61b055fe20680c21bd7607623d5decfa25",
-   "fuzz_targets": []
+   "fuzz_targets": [
+    "ilrp_recovery"
+   ]
   },
   {
    "family": "Basis/revision/query invalidation",

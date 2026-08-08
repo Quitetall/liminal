@@ -444,6 +444,11 @@ fn verify_review_record(review: &Review, record: &ReviewRecord) -> Result<()> {
 /// then failed to check it, which is the same mistake as trusting a status
 /// string. Two reviews from one family satisfy every other check in this file.
 fn verify_reviewer_independence(records: &[(String, ReviewRecord)]) -> Result<()> {
+    // M17.5 Stage 3: `< 2` -> `> 2` survives here and is EQUIVALENT, not
+    // untested. With fewer than two records the loop below builds sets of size
+    // `records.len()`, and `distinct != records.len()` is then false, so the
+    // function returns Ok either way. The early return states the intent —
+    // independence is a claim about a PAIR — and costs nothing.
     if records.len() < 2 {
         return Ok(());
     }
@@ -3471,5 +3476,138 @@ mod tests {
         let mut garbage = good;
         garbage[0].log_blake3 = " ".repeat(64);
         verify_fuzz_rows(&garbage, &present).expect_err("64 spaces is not a digest");
+    }
+
+    // ── M17.5 Stage 3, tier 1: the verifier's own survivors ────────────────
+    // A scoped campaign over haq.rs left 75. The ones below are in gate logic
+    // written THIS session, and they share a cause worth naming: the canaries
+    // asserted that bad input is rejected and never that good input is
+    // accepted, so any mutant that widens a guard survived. That is the exact
+    // defect this milestone has been finding elsewhere.
+
+    /// Kills `== ParentDir` -> `!=` at the evidence-path guard: under `!=`
+    /// every ordinary component looks like an escape and nothing can pass.
+    #[test]
+    fn an_ordinary_relative_evidence_path_is_accepted() {
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        packet.reviews[0].result = "pass".to_owned();
+        packet.reviews[0].evidence = Some("conformance/haqp/evidence/nope.json".to_owned());
+        let err = verify_review_evidence(&repo_root(), &packet)
+            .expect_err("the file does not exist, so this must fail on ABSENCE");
+        assert!(
+            err.to_string().contains("record is missing"),
+            "a plain relative path must reach the read, not be refused as an escape: {err}"
+        );
+    }
+
+    /// Kills the `1b if !claims_kills` guard -> `true`: a 1b packet that DOES
+    /// carry kills must be accepted, or the stage can never be satisfied.
+    #[test]
+    fn stage_1b_with_kills_is_accepted() {
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        packet.qualification_stage = "1b".to_owned();
+        for mutant in &mut packet.mutants {
+            mutant.disposition = "killed".to_owned();
+        }
+        verify_qualification_stage(&packet)
+            .expect("1b carrying mutation evidence is the whole point of 1b");
+    }
+
+    /// Kills both boolean mutants in the non-runnable scanner.
+    #[test]
+    fn the_scanner_recognises_each_non_runnable_form_and_nothing_else() {
+        let mut names = BTreeSet::new();
+        collect_ignored(
+            "#[cfg(any())]\nfn compiled_out() {}\n\
+             #[cfg_attr(unix, ignore)]\nfn conditionally_ignored() {}\n\
+             // a comment mentioning ignore\nfn merely_mentioned() {}\n\
+             #[cfg_attr(unix, should_panic)]\nfn other_cfg_attr() {}\n",
+            &mut names,
+        );
+        assert!(names.contains("compiled_out"), "#[cfg(any())] never runs");
+        assert!(
+            names.contains("conditionally_ignored"),
+            "a conditional ignore still cannot witness a kill"
+        );
+        assert!(
+            !names.contains("merely_mentioned"),
+            "prose containing the word must not mark the next test non-runnable"
+        );
+        assert!(
+            !names.contains("other_cfg_attr"),
+            "a cfg_attr that is not an ignore leaves the test runnable"
+        );
+    }
+
+    /// Kills `seconds / 60` -> `* 60`, `< 150` -> `>`, `30 * 60` -> `+`/`/`,
+    /// and `elapsed_s + 60` -> `*` / `<=`. Each bound is checked from BOTH
+    /// sides, because a one-sided check is satisfied by a mutant that moves it.
+    #[test]
+    fn fuzz_row_floors_hold_exactly_at_their_boundaries() {
+        let targets: BTreeSet<String> = (0..5).map(|i| format!("t{i}")).collect();
+        let rows = |secs: u64| -> Vec<FuzzEvidence> {
+            (0..5).map(|i| fuzz_row(&format!("t{i}"), secs)).collect()
+        };
+
+        // 5 x 1800s = 150 minutes exactly: the floor is inclusive.
+        verify_fuzz_rows(&rows(1800), &targets).expect("exactly 150 target-minutes must pass");
+        // One second under the per-target floor must fail.
+        verify_fuzz_rows(&rows(1799), &targets)
+            .expect_err("1799s is below the 30-minute per-target floor");
+
+        // The TOTAL floor has to be reached on its own. Five targets at 1800s
+        // can never breach it, so the first version of this test never
+        // executed line 766 at all and three mutants there survived a check
+        // that looked like it covered them. Four targets do reach it.
+        let four: BTreeSet<String> = (0..4).map(|i| format!("t{i}")).collect();
+        let four_rows: Vec<FuzzEvidence> =
+            (0..4).map(|i| fuzz_row(&format!("t{i}"), 1800)).collect();
+        verify_fuzz_rows(&four_rows, &four)
+            .expect_err("4 x 30 = 120 target-minutes is below the 150 total");
+
+        // And the per-target floor must be reached with the total SATISFIED,
+        // or a mutant that moves the floor down (30*60 -> 30+60, or -> 30/60)
+        // is never exercised: those need a target above 90s and below 1800s.
+        let six: BTreeSet<String> = (0..6).map(|i| format!("t{i}")).collect();
+        let mut six_rows: Vec<FuzzEvidence> =
+            (0..6).map(|i| fuzz_row(&format!("t{i}"), 1800)).collect();
+        six_rows[5].seconds = 600;
+        six_rows[5].elapsed_s = 600;
+        verify_fuzz_rows(&six_rows, &six)
+            .expect_err("600s is above 90 and below 1800: only the real floor rejects it");
+
+        // The early-exit check compares elapsed against budget with 60s slack.
+        let mut exact = rows(1800);
+        exact[0].elapsed_s = 1740; // 1740 + 60 == 1800, the boundary
+        verify_fuzz_rows(&exact, &targets).expect("elapsed + 60 == seconds is not an early exit");
+        let mut early = rows(1800);
+        early[0].elapsed_s = 1739;
+        verify_fuzz_rows(&early, &targets)
+            .expect_err("a clean campaign that stopped early states a contradiction");
+    }
+
+    /// Kills `< 150` -> `==` / `<=` in the DERIVED budget: 150 exactly passes,
+    /// 149 fails.
+    #[test]
+    fn the_derived_budget_floor_is_inclusive() {
+        let families: Vec<Generated> = (0..5)
+            .map(|i| family_row(&format!("f{i}"), &[&format!("t{i}")]))
+            .collect();
+        let recorded: Vec<FuzzEvidence> =
+            (0..5).map(|i| fuzz_row(&format!("t{i}"), 1800)).collect();
+        verify_fuzz_budget(&families, &recorded).expect("exactly 150 derived minutes must pass");
+
+        let short: Vec<FuzzEvidence> = recorded
+            .iter()
+            .enumerate()
+            .map(|(i, row)| {
+                let mut row = row.clone();
+                if i == 0 {
+                    row.seconds = 1740; // 29 minutes: family floor AND total floor
+                }
+                row
+            })
+            .collect();
+        verify_fuzz_budget(&families, &short).expect_err("149 derived minutes is below 150");
     }
 }
