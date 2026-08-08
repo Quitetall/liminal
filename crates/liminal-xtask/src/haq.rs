@@ -1974,7 +1974,16 @@ enum Case {
     /// the runner folds those into the digest. An empty witness is refused.
     Accepted(Vec<u8>),
     /// Out of the declared domain; not evidence either way.
-    Discarded,
+    /// Out of domain, or a relation that legitimately does not apply. Carries
+    /// a WITNESS of WHY, for the same reason `Accepted` does (M17.5 F-30).
+    ///
+    /// The runner used to record a discard as the single byte `b"D"`, so the
+    /// digest absorbed the COUNT of discards and nothing about them. Six
+    /// mutants inside `case_repair`'s cycle construction survived on exactly
+    /// that: each kept the plan cyclic, so each still discarded, and the
+    /// evidence could not tell the shapes apart. ADR-0020 §4 says attempts and
+    /// discards are RECORDED; counting is not recording.
+    Discarded(Vec<u8>),
 }
 
 /// Family 0 — source/CST/formatting. Metamorphic relations: **lossless
@@ -1984,7 +1993,9 @@ fn case_source_cst(rng: &mut Rng) -> Result<Case> {
     let source = rng.word();
     // Out of domain: the compact surface has no all-whitespace document.
     if source.trim().is_empty() {
-        return Ok(Case::Discarded);
+        return Ok(Case::Discarded(
+            format!("whitespace-source:{source:?}").into_bytes(),
+        ));
     }
     let basis = liminal_source::SourceBasis {
         source: liminal_id::SourceId::from_name("haqp-generated"),
@@ -2026,7 +2037,9 @@ fn case_interchange(rng: &mut Rng) -> Result<Case> {
     // Domain rule: a node claiming a durable id must carry payload text.
     // Candidates violating it are out of domain and discarded, not "fixed".
     if durable && text.trim().is_empty() {
-        return Ok(Case::Discarded);
+        return Ok(Case::Discarded(
+            format!("durable-without-payload:{text:?}").into_bytes(),
+        ));
     }
     let node = Node {
         id: liminal_id::NodeId::from_uuid(rng.uuid()),
@@ -2089,7 +2102,9 @@ fn case_transform(rng: &mut Rng) -> Result<Case> {
         .join("\n\n");
     // Out of domain: a degenerate base has no slots to align.
     if base.trim().is_empty() {
-        return Ok(Case::Discarded);
+        return Ok(Case::Discarded(
+            format!("degenerate-base:{base:?}").into_bytes(),
+        ));
     }
     let mutate = |rng: &mut Rng, text: &str| -> String {
         text.lines()
@@ -2215,8 +2230,11 @@ fn case_repair(rng: &mut Rng) -> Result<Case> {
         inverse: None,
     };
     let Ok(order) = topo_order(&plan) else {
-        // Cyclic plans are correctly refused; not acceptance evidence.
-        return Ok(Case::Discarded);
+        // Cyclic plans are correctly refused; not acceptance evidence. The
+        // witness carries the EDGES, so the shape of the refused cycle reaches
+        // the digest — without it, every cycle looks alike and the
+        // construction that built it is unobservable (M17.5 F-30).
+        return Ok(Case::Discarded(format!("cyclic:{edges:?}").into_bytes()));
     };
     anyhow::ensure!(
         !cyclic,
@@ -2278,7 +2296,7 @@ fn case_invalidation(rng: &mut Rng) -> Result<Case> {
     }
     // Out of domain: nothing was read, so invalidation is vacuous.
     if expected.is_empty() {
-        return Ok(Case::Discarded);
+        return Ok(Case::Discarded(b"vacuous-invalidation".to_vec()));
     }
 
     for key in &expected {
@@ -2414,9 +2432,15 @@ fn generate_evidence(cases: u64) -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> {
                     digest.update(b"A");
                     digest.update(&witness);
                 }
-                Case::Discarded => {
+                Case::Discarded(witness) => {
+                    anyhow::ensure!(
+                        !witness.is_empty(),
+                        "{family}: discarded attempt {attempts} with an empty witness, so \
+                         the evidence records that something was discarded and not what"
+                    );
                     discards += 1;
                     digest.update(b"D");
+                    digest.update(&witness);
                 }
             }
             // The RNG state binds the INPUT; the witness above binds the OUTPUT.
@@ -3842,6 +3866,62 @@ mod tests {
                 row.family
             );
             assert_eq!(row.evidence_hash.len(), 64, "{}: no digest", row.family);
+        }
+    }
+
+    /// Golden digests for a fixed 64-case run — the strongest available pin on
+    /// the case BUILDERS (M17.5 F-30).
+    ///
+    /// `case_repair` alone left eight survivors, all in the cyclic-dependency
+    /// construction: edge density, the `count >= 2` guard, and four operators
+    /// inside the `retain` that clears the back edge before closing a real
+    /// cycle. Eight behavioural assertions over an RNG-driven builder would be
+    /// fragile and would still miss combinations; the digest covers every arm
+    /// at once, because any change to what a case CONTAINS changes it.
+    ///
+    /// `generated_evidence_is_byte_identical_across_runs` cannot do this job:
+    /// it compares two runs to each other, so it is satisfied by any builder
+    /// that is merely consistent — including a mutated one.
+    ///
+    /// These constants are expected to change when a generator is deliberately
+    /// changed. That is the point: an unexplained change here means a case
+    /// builder moved, and ADR-0020 §1 makes an unreproducible campaign
+    /// ineligible. Re-record only alongside the change that caused it.
+    #[test]
+    fn generated_case_builders_match_their_recorded_goldens() {
+        const GOLDENS: [(&str, &str); 5] = [
+            (
+                "source/CST/formatting",
+                "9e670f70ef7ff2a755a399a1b12b686d3e050a654af046240499f0747c66d581",
+            ),
+            (
+                "graph/interchange codecs",
+                "9c051ab379bb0a31f2f5af36a0ed014137e226688fec4647daa47643ce6cde39",
+            ),
+            (
+                "transforms/projections",
+                "8228d2bea8348dee308675e43cb80a0f9a421cbca1a101e3355803de2839ef9d",
+            ),
+            (
+                "repair/ILRP/recovery",
+                "47b7ad5ee6e85b43ae80cbca33fa01303cac5bb01f8dcebe75c2bfcd515c6fec",
+            ),
+            (
+                "Basis/revision/query invalidation",
+                "c6f05f745d546e33df83a53d87d834dc122c049041a918cc616a31b280a2ed9d",
+            ),
+        ];
+        // 3,000 rather than 64: `case_repair` closes a genuine cycle on
+        // roughly 1 case in 384, so a 64-case run never executes the branch and
+        // six mutants inside it survived a golden that appeared to cover them.
+        // 3,000 exercises every arm and still runs in ~0.6s.
+        let (rows, _) = generate_evidence(3_000).expect("a small run must succeed");
+        for (row, (family, digest)) in rows.iter().zip(GOLDENS) {
+            assert_eq!(row.family, family, "family order must be stable");
+            assert_eq!(
+                row.evidence_hash, digest,
+                "{family}: a case builder changed without its golden being re-recorded"
+            );
         }
     }
 }

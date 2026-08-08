@@ -1,5 +1,5 @@
-crates/liminal-xtask/src/haq.rs:41:51: replace == with != in verify_qualified_repo
 crates/liminal-xtask/src/haq.rs:59:35: replace == with != in verify_qualified_repo
+crates/liminal-xtask/src/haq.rs:41:51: replace == with != in verify_qualified_repo
 crates/liminal-xtask/src/haq.rs:452:22: replace < with > in verify_reviewer_independence
 crates/liminal-xtask/src/haq.rs:650:37: replace != with == in verify_test_names_exist
 crates/liminal-xtask/src/haq.rs:653:40: replace == with != in verify_test_names_exist
@@ -18,27 +18,9 @@ crates/liminal-xtask/src/haq.rs:1706:5: replace run_canaries_repo -> Result<()> 
 crates/liminal-xtask/src/haq.rs:1821:46: replace != with == in mutate_canary
 crates/liminal-xtask/src/haq.rs:1851:49: replace != with == in mutate_canary
 crates/liminal-xtask/src/haq.rs:1879:44: replace != with == in mutate_canary
-crates/liminal-xtask/src/haq.rs:1919:16: replace ^ with | in Rng::next
-crates/liminal-xtask/src/haq.rs:1919:16: replace ^ with & in Rng::next
-crates/liminal-xtask/src/haq.rs:1919:26: replace >> with << in Rng::next
-crates/liminal-xtask/src/haq.rs:2025:32: replace == with != in case_interchange
-crates/liminal-xtask/src/haq.rs:2034:34: replace == with != in case_interchange
-crates/liminal-xtask/src/haq.rs:2085:20: replace + with * in case_transform
-crates/liminal-xtask/src/haq.rs:2097:33: replace == with != in case_transform
-crates/liminal-xtask/src/haq.rs:2185:29: replace == with != in case_repair
-crates/liminal-xtask/src/haq.rs:2192:24: replace >= with < in case_repair
-crates/liminal-xtask/src/haq.rs:2194:40: delete ! in case_repair
-crates/liminal-xtask/src/haq.rs:2194:55: replace && with || in case_repair
-crates/liminal-xtask/src/haq.rs:2194:50: replace == with != in case_repair
-crates/liminal-xtask/src/haq.rs:2194:74: replace - with + in case_repair
-crates/liminal-xtask/src/haq.rs:2194:65: replace == with != in case_repair
-crates/liminal-xtask/src/haq.rs:2194:74: replace - with / in case_repair
-crates/liminal-xtask/src/haq.rs:2270:11: replace + with * in case_invalidation
-crates/liminal-xtask/src/haq.rs:2293:8: delete ! in case_invalidation
-crates/liminal-xtask/src/haq.rs:2337:48: replace / with % in run_generated_repo
-crates/liminal-xtask/src/haq.rs:2337:48: replace / with * in run_generated_repo
-crates/liminal-xtask/src/haq.rs:2330:5: replace run_generated_repo -> Result<()> with Ok(())
-crates/liminal-xtask/src/haq.rs:2337:40: replace * with + in run_generated_repo
-crates/liminal-xtask/src/haq.rs:2337:40: replace * with / in run_generated_repo
-crates/liminal-xtask/src/haq.rs:2386:46: replace ^ with | in generate_evidence
-crates/liminal-xtask/src/haq.rs:2386:46: replace ^ with & in generate_evidence
+crates/liminal-xtask/src/haq.rs:2311:8: delete ! in case_invalidation
+crates/liminal-xtask/src/haq.rs:2355:48: replace / with % in run_generated_repo
+crates/liminal-xtask/src/haq.rs:2348:5: replace run_generated_repo -> Result<()> with Ok(())
+crates/liminal-xtask/src/haq.rs:2355:48: replace / with * in run_generated_repo
+crates/liminal-xtask/src/haq.rs:2355:40: replace * with + in run_generated_repo
+crates/liminal-xtask/src/haq.rs:2355:40: replace * with / in run_generated_repo

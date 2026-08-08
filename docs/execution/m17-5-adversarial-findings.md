@@ -1856,8 +1856,33 @@ are testable: `>` → `>=` at the safety limit can only be discriminated by a ru
 of exactly 10,000,000 cases, which no test can afford. Extracted, it is checked
 from both sides in microseconds.
 
-**Tier 1 total: 75 → 44 survivors, 226 → 248 caught.**
+### A golden that covered nothing, and the discard that recorded nothing
 
-Remaining: `case_repair` (8, the cyclic-dependency construction),
-`run_generated_repo` (4), `verify_test_names_exist` (3), `verify_packet_shape`
-(3), `verify_generated_inventory` (3), `mutate_canary` (3), and 20 others.
+`case_repair`'s eight survivors were all in the cyclic-dependency construction.
+Two attempts failed before the real cause surfaced, and both are worth keeping:
+
+1. **A 64-case golden never executed the branch.** `case_repair` closes a
+   genuine cycle on roughly 1 case in 384, so a 64-case run never reached the
+   code the golden was written to pin. Raised to 3,000 (~0.6s), which exercises
+   every arm.
+2. **At 3,000 cases the branch ran and the mutants still survived.** A cyclic
+   plan is correctly refused by `topo_order` and returns `Case::Discarded` — and
+   the runner recorded a discard as the single byte `b"D"`. So the digest
+   absorbed the COUNT of discards and nothing about them. Every one of the six
+   mutants kept the plan cyclic and only changed the cycle's SHAPE, which the
+   evidence had no way to see.
+
+ADR-0020 §4 says generator attempts and discards are **recorded**. Counting is
+not recording. `Case::Discarded` now carries a witness the digest absorbs, the
+same way `Accepted` has since pass-2 #16, and the runner rejects an empty one —
+otherwise the evidence records that something was discarded and not what.
+`case_repair`'s witness carries the refused edge set, so the shape of the cycle
+reaches the digest.
+
+All six died on the next run.
+
+**Tier 1 total: 75 → 26 survivors, 216 → 266 caught.**
+
+Remaining: `run_generated_repo` (4), `verify_test_names_exist` (3),
+`verify_packet_shape` (3), `verify_generated_inventory` (3), `mutate_canary`
+(3), and 10 others across the verify_* inventory checks.
