@@ -44,7 +44,10 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     verify_provenance(root, &packet)?;
     verify_fuzz_evidence(root)?;
     verify_crash_evidence(root, &packet)?;
-    verify_mutant_killing_tests(root, &packet)?;
+    verify_qualification_stage(&packet)?;
+    if packet.qualification_stage == "1b" {
+        verify_mutant_killing_tests(root, &packet)?;
+    }
     verify_canary_evidence(root, &packet)?;
     verify_generated_evidence(root, &packet)?;
     verify_review_evidence(root, &packet)?;
@@ -476,6 +479,36 @@ fn verify_reviewer_independence(records: &[(String, ReviewRecord)]) -> Result<()
 /// inventory. But a packet claiming `qualification_state: complete` while
 /// naming a test nobody wrote is exactly the false green this gate exists to
 /// stop.
+/// The declared stage must match what the packet actually claims (ADR-0021).
+///
+/// HAQP-1 is evaluated in two stages because ADR-0020 §3 assumed the suite it
+/// mutates already exists, and for Phase 1 it does not (F-28). Stage `1a` is
+/// everything provable before Phase 1 authorization; `1b` adds the mutation
+/// requirement at M24.
+///
+/// Both directions are errors. A `1a` packet claiming kills would smuggle the
+/// deferred requirement back in as an unwitnessed assertion — the exact thing
+/// the deferral exists to prevent. A `1b` packet without kills would claim the
+/// stronger stage while supplying the weaker evidence.
+fn verify_qualification_stage(packet: &Packet) -> Result<()> {
+    let claims_kills = packet
+        .mutants
+        .iter()
+        .any(|mutant| mutant.disposition == "killed");
+    match packet.qualification_stage.as_str() {
+        "1a" if claims_kills => anyhow::bail!(
+            "packet declares stage 1a but claims mutant kills; ADR-0021 defers the \
+             mutation requirement to 1b at M24, when a killing test can actually run"
+        ),
+        "1b" if !claims_kills => anyhow::bail!(
+            "packet declares stage 1b, which carries ADR-0020 §3's mutation \
+             requirement, but no mutant is killed"
+        ),
+        "1a" | "1b" => Ok(()),
+        other => anyhow::bail!("unknown qualification stage {other:?}; expected 1a or 1b"),
+    }
+}
+
 /// A mutant claiming `killed` must be killed by a test that CAN RUN
 /// (M17.5 F-27 / P1-A02, F-28).
 ///
@@ -1320,6 +1353,13 @@ struct Packet {
     status: String,
     ratification: String,
     qualification_state: String,
+    /// Which HAQP stage this packet claims (ADR-0021).
+    ///
+    /// `1a` is everything Phase 0 can prove; `1b` adds ADR-0020 §3's mutation
+    /// requirement and runs at M24, when M18–M23 have written the tests that
+    /// witness a kill. Required, not defaulted: a packet that did not say which
+    /// stage it completed would let a reader assume the stronger one.
+    qualification_stage: String,
     locked_acceptance_corpora_touched: bool,
     requirements: Vec<Requirement>,
     tests: Vec<Test>,
@@ -3125,5 +3165,45 @@ mod tests {
         let err = verify_mutant_killing_tests(&root, &packet)
             .expect_err("a kill with no witness is an assertion");
         assert!(err.to_string().contains("names no killing test"), "{err}");
+    }
+
+    // ── ADR-0021: staged qualification ────────────────────────────────────
+    // The mutation requirement defers to 1b because ADR-0020 §3 assumed the
+    // suite it mutates exists, and for Phase 1 it does not (F-28). Both
+    // directions of the stage claim must be errors.
+
+    #[test]
+    fn the_committed_packet_declares_a_stage_it_satisfies() {
+        let packet = read_packet(&repo_root()).expect("packet");
+        assert_eq!(packet.qualification_stage, "1a");
+        verify_qualification_stage(&packet).expect("the committed packet must be consistent");
+    }
+
+    #[test]
+    fn stage_1a_may_not_claim_mutant_kills() {
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        packet.mutants[0].disposition = "killed".to_owned();
+        let err = verify_qualification_stage(&packet)
+            .expect_err("1a defers the mutation requirement; claiming a kill smuggles it back");
+        assert!(
+            err.to_string().contains("defers the mutation requirement"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn stage_1b_must_actually_carry_the_mutation_evidence() {
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        packet.qualification_stage = "1b".to_owned();
+        let err = verify_qualification_stage(&packet)
+            .expect_err("1b without kills claims the stronger stage on the weaker evidence");
+        assert!(err.to_string().contains("no mutant is killed"), "{err}");
+    }
+
+    #[test]
+    fn an_unknown_stage_is_refused() {
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        packet.qualification_stage = "1c".to_owned();
+        verify_qualification_stage(&packet).expect_err("an unknown stage must not pass");
     }
 }

@@ -40,3 +40,24 @@ implements the compact surface for the compact-representable subset (a
 `paragraph` node whose only child is a literal, carrying at most an `id`) and
 falls back to the explicit surface for anything richer, never emitting a lossy
 approximation. Addition over mutation, per Brian's direction 2026-07-20.
+
+AM-17.4 (user-ratified 2026-08-08, ADR-0021): stage HAQP-1 around Phase 1
+authorization. M17.5's exit criterion becomes **HAQP-1a** — everything ADR-0020
+requires except §3's mutant clauses, which defer to **HAQP-1b** at M24.
+
+Rationale (M17.5 finding F-28): §3 requires 64 semantic mutants at a 100% kill
+rate, and all 35 distinct killing tests backing the packet's 65 mutants were
+unrunnable — 27 did not exist and 8 are `#[ignore]`d under AM-17.2. Lifting the
+quarantine needs Phase 1 authorization, which M17.6 grants AFTER M17.5. ADR-0020
+§3 assumed the suite it mutates already exists; for Phase 1 it does not.
+
+No threshold is reduced: every §3 clause survives verbatim into 1b, only its
+evaluation point moves. §3's gate-canary clause stays in 1a, because canaries
+run against the packet's own gates rather than against Phase 1 tests. The packet
+records `qualification_stage`, and the verifier rejects a 1a packet claiming
+mutant kills as well as a 1b packet without them.
+
+Also reconciles M17.8's predicted counts, which were authored before the suite
+grew: it predicted 237 active / 21 backlog; the meter reads 356 active / 43
+backlog (Phase 1 deferred rose to 27 as M18–M23's 20 milestone tests were
+written and quarantined). The prediction is corrected rather than the meter.

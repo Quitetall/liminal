@@ -3,6 +3,7 @@
  "status": "proposed",
  "ratification": "unratified",
  "qualification_state": "not-run",
+ "qualification_stage": "1a",
  "locked_acceptance_corpora_touched": false,
  "requirements": [
   {

@@ -108,7 +108,7 @@
     "id": "C16",
     "violation": "remove packet digest",
     "expected_failure": "review packet markdown missing packet digest",
-    "observed_failure": "review packet markdown missing packet digest f1c3ef95229eb2746b7bcc274baef6667fa6986af07bf18d80e495e27380f1c9",
+    "observed_failure": "review packet markdown missing packet digest 907490b38769f127ac2410ccf8579b2ac440a4d363113439e83dd9f665ed338d",
     "caught": true
   }
 ]
