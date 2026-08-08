@@ -1,26 +1,21 @@
-crates/liminal-xtask/src/haq.rs:59:35: replace == with != in verify_qualified_repo
 crates/liminal-xtask/src/haq.rs:41:51: replace == with != in verify_qualified_repo
+crates/liminal-xtask/src/haq.rs:59:35: replace == with != in verify_qualified_repo
 crates/liminal-xtask/src/haq.rs:452:22: replace < with > in verify_reviewer_independence
-crates/liminal-xtask/src/haq.rs:650:37: replace != with == in verify_test_names_exist
 crates/liminal-xtask/src/haq.rs:653:40: replace == with != in verify_test_names_exist
+crates/liminal-xtask/src/haq.rs:650:37: replace != with == in verify_test_names_exist
 crates/liminal-xtask/src/haq.rs:670:12: delete ! in verify_test_names_exist
 crates/liminal-xtask/src/haq.rs:714:29: replace == with != in verify_fuzz_evidence
 crates/liminal-xtask/src/haq.rs:898:34: replace < with == in verify_packet_shape
 crates/liminal-xtask/src/haq.rs:898:34: replace < with <= in verify_packet_shape
-crates/liminal-xtask/src/haq.rs:952:47: replace || with && in verify_packet_shape
-crates/liminal-xtask/src/haq.rs:1056:18: replace > with >= in verify_kill_concentration
-crates/liminal-xtask/src/haq.rs:1195:18: replace > with >= in verify_mutant_inventory
-crates/liminal-xtask/src/haq.rs:1227:34: replace > with >= in verify_generated_inventory
-crates/liminal-xtask/src/haq.rs:1227:28: replace * with + in verify_generated_inventory
-crates/liminal-xtask/src/haq.rs:1230:41: replace < with > in verify_generated_inventory
-crates/liminal-xtask/src/haq.rs:1414:24: replace || with && in verify_crash_boundary_inventory
-crates/liminal-xtask/src/haq.rs:1706:5: replace run_canaries_repo -> Result<()> with Ok(())
-crates/liminal-xtask/src/haq.rs:1821:46: replace != with == in mutate_canary
-crates/liminal-xtask/src/haq.rs:1851:49: replace != with == in mutate_canary
-crates/liminal-xtask/src/haq.rs:1879:44: replace != with == in mutate_canary
-crates/liminal-xtask/src/haq.rs:2311:8: delete ! in case_invalidation
-crates/liminal-xtask/src/haq.rs:2355:48: replace / with % in run_generated_repo
-crates/liminal-xtask/src/haq.rs:2348:5: replace run_generated_repo -> Result<()> with Ok(())
-crates/liminal-xtask/src/haq.rs:2355:48: replace / with * in run_generated_repo
-crates/liminal-xtask/src/haq.rs:2355:40: replace * with + in run_generated_repo
-crates/liminal-xtask/src/haq.rs:2355:40: replace * with / in run_generated_repo
+crates/liminal-xtask/src/haq.rs:1060:18: replace > with >= in verify_kill_concentration
+crates/liminal-xtask/src/haq.rs:1236:34: replace > with >= in verify_generated_inventory
+crates/liminal-xtask/src/haq.rs:1715:5: replace run_canaries_repo -> Result<()> with Ok(())
+crates/liminal-xtask/src/haq.rs:1830:46: replace != with == in mutate_canary
+crates/liminal-xtask/src/haq.rs:1888:44: replace != with == in mutate_canary
+crates/liminal-xtask/src/haq.rs:1860:49: replace != with == in mutate_canary
+crates/liminal-xtask/src/haq.rs:2320:8: delete ! in case_invalidation
+crates/liminal-xtask/src/haq.rs:2357:5: replace run_generated_repo -> Result<()> with Ok(())
+crates/liminal-xtask/src/haq.rs:2364:48: replace / with % in run_generated_repo
+crates/liminal-xtask/src/haq.rs:2364:40: replace * with + in run_generated_repo
+crates/liminal-xtask/src/haq.rs:2364:48: replace / with * in run_generated_repo
+crates/liminal-xtask/src/haq.rs:2364:40: replace * with / in run_generated_repo

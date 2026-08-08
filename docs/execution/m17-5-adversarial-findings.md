@@ -1881,8 +1881,30 @@ reaches the digest.
 
 All six died on the next run.
 
-**Tier 1 total: 75 → 26 survivors, 216 → 266 caught.**
+### Thresholds, and a test that proved whichever case it happened to take
 
-Remaining: `run_generated_repo` (4), `verify_test_names_exist` (3),
-`verify_packet_shape` (3), `verify_generated_inventory` (3), `mutate_canary`
-(3), and 10 others across the verify_* inventory checks.
+Seven survivors sat on inventory bounds tested only from the failing side, so
+any mutant that moved a bound by one survived. A bound is defined by the pair of
+values that straddle it, and each now has both.
+
+**One of those tests was conditional.** The operator-ceiling fixture used a
+running counter and then BRANCHED on where it landed — so whichever side it hit
+was the only side asserted, and the bound stayed unpinned either way. It now
+places exactly 16 on the target operator and spreads the remainder round-robin
+so no OTHER operator breaches the same ceiling and masks the case under test.
+
+**Two bounds are unreachable and are documented as equivalent rather than
+contorted into a test:**
+
+- `share > MAX_KILL_SHARE` — `share` is `count / total` over 65 declared
+  mutants, and 65/4 is not an integer, so `share == 0.25` exactly cannot occur.
+- `discards * 100 > attempts` — exactly 1% needs `accepted == 99 * discards`,
+  which is not expressible alongside the packet's ≥100,000 accepted floor and
+  its own declared counts. The ceiling is checked from both sides at the nearest
+  reachable pair (1,010 passes, 1,011 fails).
+
+**Tier 1 total: 75 → 21 survivors, 216 → 271 caught (92.8% of viable).**
+
+Remaining: `run_generated_repo` (5, mostly its progress arithmetic),
+`verify_test_names_exist` (3), `mutate_canary` (3), `verify_qualified_repo` (2),
+`verify_packet_shape` (2), and 6 others.

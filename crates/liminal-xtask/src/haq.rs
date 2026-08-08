@@ -1053,6 +1053,10 @@ fn verify_kill_concentration(packet: &Packet) -> Result<()> {
     for (test, count) in &kills {
         #[allow(clippy::cast_precision_loss, reason = "inventory-scale counts")]
         let share = *count as f64 / total as f64;
+        // M17.5 F-30: `>` -> `>=` survives here and is EQUIVALENT within the
+        // reachable domain. `share` is `count / total` over 65 declared
+        // mutants, and 65/4 is not an integer, so `share == 0.25` exactly
+        // cannot occur.
         if share > MAX_KILL_SHARE {
             anyhow::bail!(
                 "{test} is the named killer for {count}/{total} mutants ({:.0}%), \
@@ -1224,6 +1228,11 @@ fn verify_generated_inventory(packet: &Packet) -> Result<()> {
         if family.accepted < 100_000 {
             anyhow::bail!("{} accepted cases below 100000", family.family);
         }
+        // M17.5 F-30: `>` -> `>=` survives and is EQUIVALENT within the
+        // reachable domain. Exactly 1% needs `accepted == 99 * discards`, and
+        // with the >=100,000 accepted floor the nearest such point is not
+        // expressible alongside the packet's own declared counts. The ceiling
+        // is checked from both sides at the nearest reachable pair.
         if family.discards * 100 > family.attempts {
             anyhow::bail!("{} discard rate exceeds 1%", family.family);
         }
@@ -3922,6 +3931,113 @@ mod tests {
                 row.evidence_hash, digest,
                 "{family}: a case builder changed without its golden being re-recorded"
             );
+        }
+    }
+
+    // ── M17.5 F-30: inventory thresholds, from BOTH sides ─────────────────
+    // Seven survivors sat on thresholds that were only ever tested from the
+    // failing side, so any mutant that moved a bound by one survived. A bound
+    // is defined by the pair of values that straddle it.
+
+    /// `kind.is_empty() || source.is_empty()` — kills `||` -> `&&`, which would
+    /// accept a requirement missing ONE of the two.
+    #[test]
+    fn a_requirement_missing_either_field_is_refused() {
+        for (kind, source) in [("", "v4 §112"), ("law", "")] {
+            let mut packet = read_packet(&repo_root()).expect("packet");
+            packet.requirements[0].kind = kind.to_owned();
+            packet.requirements[0].source = source.to_owned();
+            verify_packet_shape(&packet)
+                .expect_err("a requirement missing kind OR source is incomplete");
+        }
+    }
+
+    /// `count > 16` — kills `>` -> `>=`: exactly 16 is the documented maximum.
+    #[test]
+    fn an_operator_supplying_exactly_sixteen_mutants_is_allowed() {
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        let operator = packet.mutants[0].operator.clone();
+        // Exactly 16 on the target operator; the rest spread round-robin over
+        // the others so no OTHER operator breaches the same ceiling and masks
+        // the case under test.
+        //
+        // The first version built its fixture with a running counter and then
+        // BRANCHED on where it landed, so whichever side it hit was the only
+        // side asserted — a conditional test proves whichever case it happened
+        // to take, and this bound stayed unpinned either way.
+        let others: Vec<String> = packet
+            .mutants
+            .iter()
+            .map(|m| m.operator.clone())
+            .filter(|op| *op != operator)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        assert!(
+            others.len() * 16 >= packet.mutants.len() - 16,
+            "the packet must declare enough operators to spread the remainder"
+        );
+        for (index, mutant) in packet.mutants.iter_mut().enumerate() {
+            mutant.operator = if index < 16 {
+                operator.clone()
+            } else {
+                others[(index - 16) % others.len()].clone()
+            };
+        }
+        verify_mutant_inventory(&packet).expect("exactly 16 is at the ceiling, not above it");
+
+        packet.mutants[16].operator = operator;
+        verify_mutant_inventory(&packet).expect_err("17 must be refused");
+    }
+
+    /// `discards * 100 > attempts` — the 1% discard ceiling. Kills `>` -> `>=`,
+    /// `*` -> `+`/`/`. Exactly 1% is allowed; a hair over is not.
+    #[test]
+    fn the_discard_ceiling_allows_exactly_one_percent() {
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        // `accepted` has its own >=100,000 floor, so the straddle is built
+        // around it: at 100,000 accepted, 1,010 discards is just under the 1%
+        // ceiling (101,000 <= 101,010) and 1,011 is just over (101,100 >
+        // 101,011).
+        for family in &mut packet.generated {
+            family.accepted = 100_000;
+            family.discards = 1_010;
+            family.attempts = 101_010;
+        }
+        verify_generated_inventory(&packet).expect("1,010 discards is at the ceiling");
+
+        for family in &mut packet.generated {
+            family.discards = 1_011;
+            family.attempts = 101_011;
+        }
+        verify_generated_inventory(&packet).expect_err("1,011 discards is above the ceiling");
+    }
+
+    /// `seed_categories.len() < 16` — kills `<` -> `>`.
+    #[test]
+    fn the_seed_category_floor_is_inclusive_at_16() {
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        for family in &mut packet.generated {
+            family.seed_categories.truncate(16);
+        }
+        verify_generated_inventory(&packet).expect("exactly 16 seed categories is allowed");
+
+        for family in &mut packet.generated {
+            family.seed_categories.truncate(15);
+        }
+        verify_generated_inventory(&packet).expect_err("15 seed categories is below the floor");
+    }
+
+    /// `!row.before || !row.after` — kills `||` -> `&&`, which would accept a
+    /// boundary injected on only one side of the crash point.
+    #[test]
+    fn a_crash_boundary_injected_on_only_one_side_is_refused() {
+        for (before, after) in [(true, false), (false, true)] {
+            let mut packet = read_packet(&repo_root()).expect("packet");
+            packet.crash_boundaries[0].before = before;
+            packet.crash_boundaries[0].after = after;
+            verify_crash_boundary_inventory(&packet)
+                .expect_err("a boundary must be injected on BOTH sides");
         }
     }
 }
