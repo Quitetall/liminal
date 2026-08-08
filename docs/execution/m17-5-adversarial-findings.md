@@ -1908,3 +1908,88 @@ contorted into a test:**
 Remaining: `run_generated_repo` (5, mostly its progress arithmetic),
 `verify_test_names_exist` (3), `mutate_canary` (3), `verify_qualified_repo` (2),
 `verify_packet_shape` (2), and 6 others.
+
+## F-31 — Stage 4: the five unverified blind-pass findings, adjudicated.
+
+Each read at its cited line. Three real, one real-but-known, one already closed.
+
+### P1-A01 — **CONFIRMED, and it is a VACUITY, not a bug.**
+
+`ParagraphCompiler::incremental` (`crates/liminal-query/src/lib.rs:91`) is:
+
+```rust
+let edited = self.apply(source, edits);
+self.full(&edited, basis)
+```
+
+with a comment saying it "deliberately shares the canonical parser with full
+compilation until subtree reuse has its own benchmark and oracle evidence".
+
+That is a defensible implementation choice. Its consequence is not: §112's
+incremental law is `incremental(x, edits) == full(apply(x, edits))`, and this
+implementation satisfies it **by construction**. The law cannot fail. So
+`incremental_equals_full_compile_law_holds` — an M21 exit gate — proves nothing
+about the implementation it names, and neither do the four `m21.rs` milestone
+tests written this session, which assert the same identity.
+
+What still has force is the canary: `ConstantCompiler` proves the LAW rejects an
+input-ignoring compiler. That is a statement about the law, not about
+`ParagraphCompiler`.
+
+**Disposition:** record, do not "fix". Making `incremental` diverge from `full`
+to give the law something to catch would be tuning the implementation to the
+measure. The law becomes meaningful at M21, when subtree reuse arrives — and it
+must be re-examined then, because a law that has been green throughout is the
+easiest kind to assume is working. Added to the M21 exit criteria.
+
+### P1-A08 — **CONFIRMED.** The before/after fault matrix is declared, not evidenced.
+
+The packet declares `before: true, after: true` per boundary, and
+`verify_crash_boundary_inventory` requires both. The committed artifact records
+a single `occurrences_exercised` count per boundary. **Nothing carries which
+SIDE was exercised**, so a boundary injected only before the crash point
+satisfies every check while half its matrix went unrun.
+
+**Fix (scoped):** `CrashEvidenceBoundary` needs per-side counts, and
+`verify_crash_rows` must require both non-zero. Requires the fault lane to
+record them, so it lands with the crash-lane rerun.
+
+### P2-F04 — **CONFIRMED, same shape as A08.**
+
+`double_recovery` is a `String` that reads `"pass"`. ADR-0020 §5 requires that a
+second recovery run produce an **identical state**; the artifact records the
+lane's own verdict on that comparison and no state identity at all. It is a
+self-assertion, exactly the class M17.5 has spent its length converting into
+evidence elsewhere.
+
+**Fix (scoped):** record a state digest per recovery run and compare the two in
+the verifier, rather than accepting the lane's `"pass"`. Same rerun as A08.
+
+### P2-F05 — **CONFIRMED as stated, but half-closed since.**
+
+C14 drops a crash boundary from the packet and expects
+`crash-boundary inventory mismatch` — it exercises the INVENTORY layer only.
+When F-27 added `verify_crash_evidence`, no canary was added for the binding
+layer.
+
+The unit test `every_evidence_binder_rejects_a_claim_its_artifact_contradicts`
+now covers it. What is still missing is a packet-level **canary row**, which is
+what a reader of the canary table would look for. **Fix (scoped):** a C17 row
+that doctors the packet against the committed crash artifact.
+
+### P2-F01 — **NOT REPRODUCED as stated.**
+
+The claim is that `case_invalidation`'s irrelevant-input invariance goes vacuous
+when an unrelated key collides with an expected one. The relation discards when
+`expected.is_empty()`, and the collision path the reviewer describes would make
+the case *stronger* (a collision means the unrelated write DID touch a watched
+key, so the invariance assertion becomes non-trivial). Recorded as unreproduced
+rather than dismissed: pass 2 declared 2 of its own findings false positives, so
+its precision is not in doubt, and this may be a description of a real defect
+that the summary did not capture. Re-examine if `case_invalidation` changes.
+
+### Net
+
+Two of pass 1's nine and two of pass 2's four remain open, all four requiring
+the crash/fault lane to record more than a verdict. None can be closed by the
+verifier alone, which is why they were not folded into Stage 3.
