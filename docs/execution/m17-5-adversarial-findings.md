@@ -1805,7 +1805,37 @@ in place: with fewer than two records the loop's `distinct != records.len()` is
 false either way, so both return `Ok`. The early return states the intent —
 independence is a claim about a pair — and costs nothing.
 
-The remaining 65 are recorded in `m17-5-verifier-survivors.txt` with the full
+### The repo-level gates had no test at all
+
+Ten survivors were whole-function deletions — `verify_inventory_repo`,
+`verify_qualified_repo`, `verify_provenance`, `verify_markdown_surface` and
+every evidence binder survived being replaced with `Ok(())`.
+
+They are exercised **only by justfile recipes**. `just ci` catches a break, and
+`cargo mutants` runs `cargo test`, so the mutation lane could not see them:
+the gates that decide qualification were invisible to the measurement that
+judges the suite. Each is now driven directly, and the evidence binders are
+driven with doctored packets, because the qualified gate's `qualification_state`
+check fires first and they were otherwise never reached.
+
+**One of those tests did not kill its mutant either.** The first version
+asserted `verify_inventory_repo` ACCEPTS the committed tree — which `Ok(())`
+also does. A gate is only pinned by a tree it must REFUSE, so the test now
+builds one in a `ScratchDir`, verifies the unmodified copy still passes (or the
+refusal proves nothing), then doctors the packet to declare itself ratified.
+Same lesson as the boundary test above, from the opposite direction: asserting
+the accept case is necessary and is not sufficient.
+
+**75 → 55 survivors; whole-function deletions 10 → 2.** The two remaining are
+`run_canaries_repo` and `run_generated_repo`, thin IO wrappers whose logic is
+tested through `run_canary_suite` and `generate_evidence`.
+
+The remaining 55 are recorded in `m17-5-verifier-survivors.txt` with the full
 run in `m17-5-verifier-campaign.log`, committed rather than left in a session
 scratchpad: the earlier 3-hour workspace campaign's only record was in a temp
 directory and is gone, and an unreproducible measurement is not evidence.
+
+Bulk of what remains is the generated-evidence machinery — `case_repair` (8),
+`generate_evidence` (7), `run_generated_repo` (4), `Rng` (4) and the other
+`case_*` builders (6) — i.e. ADR-0020 §4's 100,000-case generators. That is the
+next tier-1 batch.

@@ -27,3 +27,6 @@ uuid.workspace = true                 # deterministic (v5) ids for the generated
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+liminal-scratch = { path = "../liminal-scratch" }

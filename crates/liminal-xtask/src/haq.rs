@@ -3610,4 +3610,121 @@ mod tests {
             .collect();
         verify_fuzz_budget(&families, &short).expect_err("149 derived minutes is below 150");
     }
+
+    // ── M17.5 F-30: the repo-level gates had no test at all ────────────────
+    // `verify_inventory_repo`, `verify_qualified_repo` and every evidence
+    // binder survived being replaced with `Ok(())`. They are exercised only by
+    // justfile recipes, so `just ci` catches a break and the MUTATION lane
+    // cannot see them — a gate invisible to the measurement that judges the
+    // suite. Each is now driven directly.
+
+    #[test]
+    fn the_inventory_gate_accepts_the_committed_tree() {
+        verify_inventory_repo(&repo_root())
+            .expect("the committed packet must satisfy its own inventory gate");
+    }
+
+    /// The packet is `proposed`/`not-run`, so the qualified gate must REFUSE
+    /// it — and refuse it for that reason, not by accident.
+    #[test]
+    fn the_qualified_gate_refuses_a_packet_that_has_not_run() {
+        let err =
+            verify_qualified_repo(&repo_root()).expect_err("a not-run packet is not qualified");
+        assert!(
+            err.to_string().contains("qualification_state"),
+            "it must refuse for the stated reason: {err}"
+        );
+    }
+
+    /// Each evidence binder must actually READ its artifact. Replacing any of
+    /// them with `Ok(())` was invisible because the qualified gate's
+    /// `qualification_state` check fires first and they were never reached.
+    #[test]
+    fn every_evidence_binder_rejects_a_claim_its_artifact_contradicts() {
+        let root = repo_root();
+
+        let mut generated = read_packet(&root).expect("packet");
+        generated.generated[0].result = "pass".to_owned();
+        generated.generated[0].seed = Some(999_999);
+        generated.generated[0].evidence_hash = Some("cd".repeat(32));
+        verify_generated_evidence(&root, &generated)
+            .expect_err("a generated family citing a run that did not happen");
+
+        let mut canaries = read_packet(&root).expect("packet");
+        canaries.canaries[0].result = "caught".to_owned();
+        canaries.canaries[0].violation = "something the run never performed".to_owned();
+        verify_canary_evidence(&root, &canaries)
+            .expect_err("a canary whose prose contradicts the committed run");
+
+        let mut crash = read_packet(&root).expect("packet");
+        crash.crash_boundaries.remove(0);
+        verify_crash_evidence(&root, &crash)
+            .expect_err("a packet that drops a boundary the fault lane exercised");
+
+        let mut fuzz = read_packet(&root).expect("packet");
+        for family in &mut fuzz.generated {
+            family.result = "pass".to_owned();
+        }
+        verify_fuzz_evidence(&root, &fuzz)
+            .expect_err("the committed campaign predates log_blake3, so it cannot qualify");
+
+        let mut markdown = read_packet(&root).expect("packet");
+        markdown.suite_version = "tampered".to_owned();
+        verify_markdown_surface(&root, &markdown)
+            .expect_err("a packet whose digest no longer matches the reviewed markdown");
+    }
+
+    /// `verify_provenance` binds qualification to a specific commit and a clean
+    /// tree; replacing it with `Ok(())` unbinds the packet from any tree.
+    #[test]
+    fn provenance_rejects_a_packet_bound_to_another_commit() {
+        let root = repo_root();
+        let mut packet = read_packet(&root).expect("packet");
+        if let Some(provenance) = packet.provenance.as_mut() {
+            provenance.commit = "0".repeat(40);
+            verify_provenance(&root, &packet)
+                .expect_err("a packet naming a commit that is not HEAD is bound to nothing");
+        } else {
+            verify_provenance(&root, &packet)
+                .expect_err("a packet with no provenance block is bound to nothing");
+        }
+    }
+
+    /// Kills `verify_inventory_repo -> Ok(())`.
+    ///
+    /// The earlier test asserted the gate ACCEPTS the committed tree, which
+    /// `Ok(())` also does — so the mutant survived a test written for it. A
+    /// gate is only pinned by a tree it must REFUSE, which means building one.
+    #[test]
+    fn the_inventory_gate_refuses_a_doctored_tree() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-inventory-gate").expect("scratch dir");
+        let root: &Utf8Path = &scratch;
+        let source = repo_root();
+
+        for rel in [
+            "conformance/haqp/packet.json",
+            "docs/execution/phase1-suite-review.md",
+        ] {
+            let dest = root.join(rel);
+            std::fs::create_dir_all(dest.parent().expect("parent")).expect("mkdir");
+            std::fs::copy(source.join(rel), &dest).expect("copy fixture");
+        }
+        // Sanity: the COPY must pass, or the refusal below proves nothing about
+        // the doctoring.
+        verify_inventory_repo(root).expect("an unmodified copy must still pass");
+
+        // A proposed packet may not declare itself ratified.
+        let path = root.join("conformance/haqp/packet.json");
+        let mut packet: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).expect("read")).expect("parse");
+        packet["ratification"] = serde_json::Value::String("ratified".to_owned());
+        std::fs::write(
+            &path,
+            serde_json::to_vec_pretty(&packet).expect("serialize"),
+        )
+        .expect("write");
+
+        verify_inventory_repo(root)
+            .expect_err("a packet declaring itself ratified must be refused");
+    }
 }

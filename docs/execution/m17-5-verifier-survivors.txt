@@ -1,33 +1,23 @@
-crates/liminal-xtask/src/haq.rs:13:5: replace verify_inventory_repo -> Result<()> with Ok(())
-crates/liminal-xtask/src/haq.rs:23:5: replace verify_qualified_repo -> Result<()> with Ok(())
-crates/liminal-xtask/src/haq.rs:41:51: replace == with != in verify_qualified_repo
-crates/liminal-xtask/src/haq.rs:173:5: replace verify_generated_evidence -> Result<()> with Ok(())
 crates/liminal-xtask/src/haq.rs:59:35: replace == with != in verify_qualified_repo
-crates/liminal-xtask/src/haq.rs:104:5: replace verify_canary_evidence -> Result<()> with Ok(())
-crates/liminal-xtask/src/haq.rs:77:5: replace verify_crash_evidence -> Result<()> with Ok(())
+crates/liminal-xtask/src/haq.rs:41:51: replace == with != in verify_qualified_repo
 crates/liminal-xtask/src/haq.rs:452:22: replace < with > in verify_reviewer_independence
 crates/liminal-xtask/src/haq.rs:650:37: replace != with == in verify_test_names_exist
-crates/liminal-xtask/src/haq.rs:653:40: replace == with != in verify_test_names_exist
 crates/liminal-xtask/src/haq.rs:670:12: delete ! in verify_test_names_exist
+crates/liminal-xtask/src/haq.rs:653:40: replace == with != in verify_test_names_exist
 crates/liminal-xtask/src/haq.rs:714:29: replace == with != in verify_fuzz_evidence
-crates/liminal-xtask/src/haq.rs:695:5: replace verify_fuzz_evidence -> Result<()> with Ok(())
 crates/liminal-xtask/src/haq.rs:898:34: replace < with == in verify_packet_shape
-crates/liminal-xtask/src/haq.rs:852:5: replace verify_provenance -> Result<()> with Ok(())
 crates/liminal-xtask/src/haq.rs:898:34: replace < with <= in verify_packet_shape
 crates/liminal-xtask/src/haq.rs:952:47: replace || with && in verify_packet_shape
 crates/liminal-xtask/src/haq.rs:1056:18: replace > with >= in verify_kill_concentration
 crates/liminal-xtask/src/haq.rs:1195:18: replace > with >= in verify_mutant_inventory
-crates/liminal-xtask/src/haq.rs:1227:34: replace > with >= in verify_generated_inventory
-crates/liminal-xtask/src/haq.rs:1230:41: replace < with > in verify_generated_inventory
 crates/liminal-xtask/src/haq.rs:1227:28: replace * with + in verify_generated_inventory
-crates/liminal-xtask/src/haq.rs:1373:5: replace verify_markdown_surface -> Result<()> with Ok(())
+crates/liminal-xtask/src/haq.rs:1230:41: replace < with > in verify_generated_inventory
+crates/liminal-xtask/src/haq.rs:1227:34: replace > with >= in verify_generated_inventory
 crates/liminal-xtask/src/haq.rs:1414:24: replace || with && in verify_crash_boundary_inventory
 crates/liminal-xtask/src/haq.rs:1706:5: replace run_canaries_repo -> Result<()> with Ok(())
 crates/liminal-xtask/src/haq.rs:1821:46: replace != with == in mutate_canary
 crates/liminal-xtask/src/haq.rs:1851:49: replace != with == in mutate_canary
 crates/liminal-xtask/src/haq.rs:1879:44: replace != with == in mutate_canary
-crates/liminal-xtask/src/haq.rs:1903:5: replace packet_digest -> Result<String> with Ok("xyzzy".into())
-crates/liminal-xtask/src/haq.rs:1903:5: replace packet_digest -> Result<String> with Ok(String::new())
 crates/liminal-xtask/src/haq.rs:1919:16: replace ^ with | in Rng::next
 crates/liminal-xtask/src/haq.rs:1919:16: replace ^ with & in Rng::next
 crates/liminal-xtask/src/haq.rs:1919:26: replace >> with << in Rng::next
@@ -35,9 +25,9 @@ crates/liminal-xtask/src/haq.rs:1922:9: replace Rng::below -> u64 with 1
 crates/liminal-xtask/src/haq.rs:1947:9: replace Rng::word -> String with "xyzzy".into()
 crates/liminal-xtask/src/haq.rs:1948:21: replace + with * in Rng::word
 crates/liminal-xtask/src/haq.rs:2025:32: replace == with != in case_interchange
+crates/liminal-xtask/src/haq.rs:2085:20: replace + with * in case_transform
 crates/liminal-xtask/src/haq.rs:2034:34: replace == with != in case_interchange
 crates/liminal-xtask/src/haq.rs:2097:33: replace == with != in case_transform
-crates/liminal-xtask/src/haq.rs:2085:20: replace + with * in case_transform
 crates/liminal-xtask/src/haq.rs:2185:29: replace == with != in case_repair
 crates/liminal-xtask/src/haq.rs:2192:24: replace >= with < in case_repair
 crates/liminal-xtask/src/haq.rs:2194:40: delete ! in case_repair
@@ -49,17 +39,17 @@ crates/liminal-xtask/src/haq.rs:2194:74: replace - with / in case_repair
 crates/liminal-xtask/src/haq.rs:2270:11: replace + with * in case_invalidation
 crates/liminal-xtask/src/haq.rs:2293:8: delete ! in case_invalidation
 crates/liminal-xtask/src/haq.rs:2337:48: replace / with % in run_generated_repo
+crates/liminal-xtask/src/haq.rs:2337:40: replace * with / in run_generated_repo
 crates/liminal-xtask/src/haq.rs:2337:48: replace / with * in run_generated_repo
 crates/liminal-xtask/src/haq.rs:2330:5: replace run_generated_repo -> Result<()> with Ok(())
 crates/liminal-xtask/src/haq.rs:2337:40: replace * with + in run_generated_repo
-crates/liminal-xtask/src/haq.rs:2337:40: replace * with / in run_generated_repo
 crates/liminal-xtask/src/haq.rs:2358:5: replace generate_evidence -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> with Ok((vec![], vec![]))
 crates/liminal-xtask/src/haq.rs:2358:5: replace generate_evidence -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> with Ok((vec![], vec![0]))
-crates/liminal-xtask/src/haq.rs:2358:5: replace generate_evidence -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> with Ok((vec![], vec![1]))
 crates/liminal-xtask/src/haq.rs:2361:14: replace > with == in generate_evidence
-crates/liminal-xtask/src/haq.rs:2375:46: replace ^ with & in generate_evidence
-crates/liminal-xtask/src/haq.rs:2386:24: replace < with > in generate_evidence
-crates/liminal-xtask/src/haq.rs:2361:14: replace > with >= in generate_evidence
-crates/liminal-xtask/src/haq.rs:2386:24: replace < with <= in generate_evidence
-crates/liminal-xtask/src/haq.rs:2375:46: replace ^ with | in generate_evidence
+crates/liminal-xtask/src/haq.rs:2358:5: replace generate_evidence -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> with Ok((vec![], vec![1]))
 crates/liminal-xtask/src/haq.rs:2386:24: replace < with == in generate_evidence
+crates/liminal-xtask/src/haq.rs:2375:46: replace ^ with & in generate_evidence
+crates/liminal-xtask/src/haq.rs:2361:14: replace > with >= in generate_evidence
+crates/liminal-xtask/src/haq.rs:2375:46: replace ^ with | in generate_evidence
+crates/liminal-xtask/src/haq.rs:2386:24: replace < with <= in generate_evidence
+crates/liminal-xtask/src/haq.rs:2386:24: replace < with > in generate_evidence

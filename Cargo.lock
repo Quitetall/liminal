@@ -805,6 +805,7 @@ dependencies = [
  "liminal-id",
  "liminal-jurisdiction",
  "liminal-revision",
+ "liminal-scratch",
  "liminal-source",
  "serde",
  "serde_json",
