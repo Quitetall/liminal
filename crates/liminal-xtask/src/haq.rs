@@ -259,6 +259,46 @@ fn verify_crash_rows(recorded: &CrashEvidence, declared: &BTreeSet<String>) -> R
             recorded.exercised
         );
     }
+    // M17.5 F-31 / P1-A08: the scenarios block was written and never read.
+    anyhow::ensure!(
+        !recorded.scenarios.is_empty(),
+        "crash evidence records no scenarios; an empty fault matrix proves nothing"
+    );
+    for scenario in &recorded.scenarios {
+        if scenario.result != "pass" {
+            anyhow::bail!(
+                "crash scenario {} reports result {:?}",
+                scenario.scenario,
+                scenario.result
+            );
+        }
+        if scenario.faults_injected == 0 {
+            anyhow::bail!(
+                "crash scenario {} injected no faults, so it exercised nothing",
+                scenario.scenario
+            );
+        }
+        // A scenario's own boundary list must be a subset of the declared
+        // registry, or it exercised a boundary nobody registered.
+        for boundary in &scenario.boundaries {
+            if !declared.contains(boundary) {
+                anyhow::bail!(
+                    "crash scenario {} exercised unregistered boundary {boundary}",
+                    scenario.scenario
+                );
+            }
+        }
+        // ...and `faults_injected` must be consistent with it: fewer faults
+        // than distinct boundaries is arithmetically impossible.
+        if scenario.faults_injected < scenario.boundaries.len() as u64 {
+            anyhow::bail!(
+                "crash scenario {} reports {} faults across {} distinct boundaries",
+                scenario.scenario,
+                scenario.faults_injected,
+                scenario.boundaries.len()
+            );
+        }
+    }
     for row in &recorded.boundaries {
         if row.occurrences_exercised == 0 {
             anyhow::bail!("crash boundary {} was never exercised", row.boundary);
@@ -1686,6 +1726,21 @@ struct ReviewRecordBlindness {
     pass_two_original_spec_only: bool,
 }
 
+/// One scenario's fault-matrix outcome (M17.5 F-31 / P1-A08).
+///
+/// The artifact has always carried this block and the verifier has always
+/// ignored it — the field was typed `Vec<serde_json::Value>` and read by
+/// nothing, so a scenario that injected no faults, or reported a non-pass
+/// result, satisfied every check.
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct CrashScenario {
+    scenario: String,
+    faults_injected: u64,
+    boundaries: BTreeSet<String>,
+    result: String,
+}
+
 /// One boundary's recorded fault-matrix outcome (committed artifact).
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
@@ -1695,7 +1750,7 @@ struct CrashEvidence {
     /// Per-scenario rows; carried so `deny_unknown_fields` cannot be defeated
     /// by the lane emitting a field the verifier silently drops (the F-17
     /// lesson applied before it bites).
-    scenarios: Vec<serde_json::Value>,
+    scenarios: Vec<CrashScenario>,
     boundaries: Vec<CrashEvidenceBoundary>,
 }
 
@@ -4039,5 +4094,46 @@ mod tests {
             verify_crash_boundary_inventory(&packet)
                 .expect_err("a boundary must be injected on BOTH sides");
         }
+    }
+
+    /// M17.5 F-31 / P1-A08: the scenarios block was written by the fault lane
+    /// and read by nothing.
+    #[test]
+    fn crash_scenarios_are_verified_not_merely_carried() {
+        let bytes = std::fs::read(repo_root().join("conformance/haqp/evidence/crash.json"))
+            .expect("committed crash evidence");
+        let recorded: CrashEvidence = serde_json::from_slice(&bytes).expect("parse");
+        let declared: BTreeSet<String> = recorded
+            .boundaries
+            .iter()
+            .map(|row| row.boundary.clone())
+            .collect();
+        verify_crash_rows(&recorded, &declared).expect("the committed matrix must pass");
+
+        let mut failed = recorded.clone();
+        failed.scenarios[0].result = "fail".to_owned();
+        verify_crash_rows(&failed, &declared)
+            .expect_err("a scenario reporting failure must not pass");
+
+        let mut inert = recorded.clone();
+        inert.scenarios[0].faults_injected = 0;
+        verify_crash_rows(&inert, &declared)
+            .expect_err("a scenario that injected nothing exercised nothing");
+
+        let mut stray = recorded.clone();
+        stray.scenarios[0]
+            .boundaries
+            .insert("ilrp/not_registered".to_owned());
+        verify_crash_rows(&stray, &declared)
+            .expect_err("a scenario may not exercise an unregistered boundary");
+
+        let mut miscounted = recorded.clone();
+        miscounted.scenarios[0].faults_injected = 1;
+        verify_crash_rows(&miscounted, &declared)
+            .expect_err("fewer faults than distinct boundaries is impossible");
+
+        let mut empty = recorded;
+        empty.scenarios.clear();
+        verify_crash_rows(&empty, &declared).expect_err("an empty fault matrix proves nothing");
     }
 }

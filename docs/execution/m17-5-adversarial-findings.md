@@ -1942,28 +1942,53 @@ measure. The law becomes meaningful at M21, when subtree reuse arrives — and i
 must be re-examined then, because a law that has been green throughout is the
 easiest kind to assume is working. Added to the M21 exit criteria.
 
-### P1-A08 — **CONFIRMED.** The before/after fault matrix is declared, not evidenced.
+### P1-A08 — **NOT CONFIRMED as I first recorded it. Correcting my own verdict.**
 
-The packet declares `before: true, after: true` per boundary, and
-`verify_crash_boundary_inventory` requires both. The committed artifact records
-a single `occurrences_exercised` count per boundary. **Nothing carries which
-SIDE was exercised**, so a boundary injected only before the crash point
-satisfies every check while half its matrix went unrun.
+I initially confirmed this on the reasoning that the packet declares
+`before: true, after: true` per boundary while the artifact records one
+occurrence count, so "nothing carries which SIDE was exercised". **That was
+wrong, and I should have read the registry before writing it down.**
 
-**Fix (scoped):** `CrashEvidenceBoundary` needs per-side counts, and
-`verify_crash_rows` must require both non-zero. Requires the fault lane to
-record them, so it lands with the crash-lane rerun.
+The before/after matrix is not two unrecorded sides of one boundary. It is
+**eight separately registered boundaries** — `ilrp/before_intent_commit` and
+`ilrp/after_intent_commit` are distinct names — and `crash_evidence` fails if
+any registered boundary never fires (`never_fired.is_empty()`) or if any
+unregistered boundary does. All eight fire. `ToyRun::crash_matrix` then crashes
+at every `(point, occurrence)`, recovers twice, and compares terminal state and
+world digest. The matrix is run and it is exhaustive.
+
+This is the second time this session my own verification, not a reviewer's
+claim, was the weak link — the first being the `canaries.json`/`generated.json`
+dismissal that two blind passes then found independently. Both failures share a
+shape: I reasoned from the shape of the data to a conclusion about the code
+without reading the code that produces it.
+
+**What IS real, and smaller:** the artifact carries a `scenarios` block —
+per-scenario `faults_injected`, `boundaries`, `result` — and `verify_crash_rows`
+never reads it. `CrashEvidence.scenarios` is typed `Vec<serde_json::Value>` and
+goes nowhere. So "crash scenario evidence is ignored" is literally true of the
+verifier, just not for the reason given. **Fixed below.**
+
+Also real and smaller still: the packet's `before`/`after` booleans are constant
+`true` on every row and are checked only against each other. Their meaning is
+already carried by the boundary NAMES, so they are a declared field with no
+evidence behind it — the same shape as the `fuzz_minutes` F-17 removed.
 
 ### P2-F04 — **CONFIRMED, same shape as A08.**
 
-`double_recovery` is a `String` that reads `"pass"`. ADR-0020 §5 requires that a
-second recovery run produce an **identical state**; the artifact records the
-lane's own verdict on that comparison and no state identity at all. It is a
-self-assertion, exactly the class M17.5 has spent its length converting into
-evidence elsewhere.
+`double_recovery` is a `String` that reads `"pass"` — and it is a **literal in
+the generator**, not a measurement written from one.
 
-**Fix (scoped):** record a state digest per recovery run and compare the two in
-the verifier, rather than accepting the lane's `"pass"`. Same rerun as A08.
+Stated precisely, because the distinction matters: `ToyRun::crash_matrix` DOES
+recover twice and compare terminal state and world digest, and it errors if they
+differ, so the `"pass"` is a consequence of the matrix having succeeded rather
+than a fabrication. But the artifact cannot distinguish "double recovery was
+verified" from "someone typed pass", which is exactly the property M17.5 has
+spent its length removing everywhere else.
+
+**Fix (scoped):** record the two recovery state digests and have the verifier
+compare them, rather than accepting a constant. Lands with the crash-lane
+rerun.
 
 ### P2-F05 — **CONFIRMED as stated, but half-closed since.**
 
@@ -1990,6 +2015,7 @@ that the summary did not capture. Re-examine if `case_invalidation` changes.
 
 ### Net
 
-Two of pass 1's nine and two of pass 2's four remain open, all four requiring
-the crash/fault lane to record more than a verdict. None can be closed by the
-verifier alone, which is why they were not folded into Stage 3.
+One of pass 1's nine (A01, recorded as DG21.1) and two of pass 2's four remain
+open. A08 is downgraded to "the verifier ignores the scenarios block", which is
+fixed here; the rest need the crash lane to record more than a verdict, which is
+why they were not folded into Stage 3.
