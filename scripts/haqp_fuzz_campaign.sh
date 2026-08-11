@@ -11,7 +11,15 @@ set -uo pipefail
 
 SECS="${1:-1800}"
 OUT="${2:-target/haqp/fuzz.json}"
-TARGETS=(cst_parse format_idempotent canonical_round_trip incremental_full_equivalence html_render)
+TARGETS=(
+  cst_parse
+  format_idempotent
+  canonical_round_trip
+  incremental_full_equivalence
+  html_render
+  graph_interchange_codec
+  ilrp_recovery
+)
 SEED=20260725   # fixed so the campaign is reproducible (ADR-0020 §1)
 
 mkdir -p "$(dirname "$OUT")"
