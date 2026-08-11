@@ -70,9 +70,12 @@ fn format_workspace_inner(root: &Utf8Path, fail_after: Option<usize>) -> Result<
                 "injected formatter interruption before replacement {path}"
             ));
         }
-        pending
-            .commit_if(Some(ContentHash::of(&plan.original)))
-            .with_context(|| format!("replace {}", plan.path))?;
+        if let Err(error) = pending.commit_if(Some(ContentHash::of(&plan.original))) {
+            for (_, leftover) in pending_writes {
+                let _ = leftover.abandon();
+            }
+            return Err(error).with_context(|| format!("replace {}", plan.path));
+        }
         committed += 1;
     }
     Ok(FormatOutcome {
