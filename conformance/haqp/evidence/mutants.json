@@ -1,0 +1,20 @@
+{
+  "schema_version": "haqp-mutants-v1",
+  "source_commit": "b9c66f4f020c681ca7910d9f2f62eaa3abacd569",
+  "lockfile_blake3": "6ae9c6130e3ce6761e405b7b3cac5fda71bc08951cbc33c1f8d927e7afe78385",
+  "runner": "liminal-xtask haq mutants",
+  "rows": [
+    {
+      "id": "P1-M001",
+      "disposition": "predeclared",
+      "status": "not-ready",
+      "patch": null,
+      "runnable_tests": [],
+      "failed_tests": [],
+      "exit_codes": [],
+      "stdout_blake3": [],
+      "stderr_blake3": [],
+      "reason": "no patch declared"
+    }
+  ]
+}
