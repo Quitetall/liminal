@@ -1281,8 +1281,8 @@ fn verify_fuzz_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
 
     // M17.5 pass-2 #17: the count was compared against `packet.generated.len()`,
     // which is a category error — fuzz TARGETS are not generated FAMILIES. The
-    // two happen to both be 5, so the check passed while comparing unrelated
-    // things, and a row naming a target that does not exist was accepted.
+    // the counts can differ, so comparing them would be a category error and
+    // could accept a row naming a target that does not exist.
     // Bind to the targets that actually exist in the tree instead.
     let mut present = BTreeSet::new();
     let targets_dir = root.join("fuzz/fuzz_targets");
@@ -1466,7 +1466,7 @@ fn verify_packet_shape(packet: &Packet) -> Result<()> {
     require_eq(
         "suite_version",
         &packet.suite_version,
-        "phase1-haqp1-proposed-v1",
+        "phase1-haqp1-proposed-v2-seven-fuzz",
     )?;
     require_eq("status", &packet.status, "proposed")?;
     require_eq("ratification", &packet.ratification, "unratified")?;
@@ -3477,7 +3477,7 @@ mod tests {
             .expect("committed fuzz evidence");
         let rows: Vec<FuzzEvidence> =
             serde_json::from_slice(&bytes).expect("every recorded field must be declared");
-        assert_eq!(rows.len(), 5, "five targets");
+        assert_eq!(rows.len(), 7, "seven targets");
         assert!(
             rows.iter().all(|row| row.seed != 0),
             "the campaign seed must survive parsing"
@@ -3512,7 +3512,7 @@ mod tests {
         // The honest artifact must PASS, or the rejection below proves nothing.
         // This assertion used to expect failure, because the committed evidence
         // still carried F-09's crash; the campaign of 2026-07-30 is clean
-        // (5 targets, 150 target-minutes, 0 crashes, 0 artifacts), so the
+        // (seven targets, 217 target-minutes, 0 crashes, 0 artifacts), so the
         // expectation flipped with the evidence.
         verify_fuzz_rows(&rows, &present).expect("the committed fuzz evidence must be clean");
 

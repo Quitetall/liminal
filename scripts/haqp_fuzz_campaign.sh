@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# HAQP-1 §4 fuzz lane: one sanitizer-enabled campaign per critical family.
+# HAQP-1 §4 fuzz lane: one sanitizer-enabled campaign per frozen target.
 #
 # Every crash, panic, timeout, OOM, or divergence is a FAILING result — the
 # script records a nonzero exit per target and never swallows it. Minimized
@@ -9,7 +9,7 @@
 # Usage: scripts/haqp_fuzz_campaign.sh [seconds-per-target] [out.json]
 set -uo pipefail
 
-SECS="${1:-1800}"
+SECS="${1:-1860}"
 OUT="${2:-target/haqp/fuzz.json}"
 TARGETS=(
   cst_parse

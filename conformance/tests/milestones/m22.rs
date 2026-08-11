@@ -1,6 +1,7 @@
 //! M22 exit-gate tests: HTML rendering.
 //!
-//! **All `#[ignore]`d under AM-17.2** — see the note in `m18.rs`.
+//! M22 tests exercise deterministic escaped HTML rendering in the Phase 1
+//! qualified lane.
 
 use liminal_format::MarkdownRenderer;
 use liminal_id::ContentHash;
@@ -22,7 +23,6 @@ const HOSTILE: [&str; 8] = [
 /// `full_document_html_matches_golden` — an M22 exit gate — would be flaky
 /// rather than wrong, which is the harder failure to diagnose.
 #[test]
-#[ignore = "Phase 1: M22 HTML rendering (AM-17.2 quarantine)"]
 fn html_rendering_is_byte_deterministic_across_runs() {
     let renderer = MarkdownRenderer;
     let source = "alpha {#a}\n\nbeta {#b}\n\n<script>x</script>";
@@ -43,7 +43,6 @@ fn html_rendering_is_byte_deterministic_across_runs() {
 /// renderer's own bookkeeping: two different sources must not render
 /// identically, or the output cannot identify its input at all.
 #[test]
-#[ignore = "Phase 1: M22 HTML rendering (AM-17.2 quarantine)"]
 fn rendered_output_carries_its_source_basis() {
     let renderer = MarkdownRenderer;
     let left = "alpha {#a}";
@@ -68,7 +67,6 @@ fn rendered_output_carries_its_source_basis() {
 
 /// D22: hostile payloads are escaped, never executed and never dropped.
 #[test]
-#[ignore = "Phase 1: M22 HTML rendering (AM-17.2 quarantine)"]
 fn renderer_escapes_hostile_payloads_without_panic() {
     let renderer = MarkdownRenderer;
     for payload in HOSTILE {
@@ -89,7 +87,6 @@ fn renderer_escapes_hostile_payloads_without_panic() {
 /// escaped — ADR-0020 §5 forbids proving a relation with the implementation's
 /// own accounting.
 #[test]
-#[ignore = "Phase 1: M22 HTML rendering (AM-17.2 quarantine)"]
 fn renderer_refuses_unescapable_constructs_rather_than_emitting_raw_html() {
     let renderer = MarkdownRenderer;
     let output = renderer

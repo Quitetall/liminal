@@ -61,6 +61,7 @@ zstd.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
+liminal-cli.workspace = true
 liminal-transform.workspace = true
 liminal-xtask.workspace = true
 proptest.workspace = true

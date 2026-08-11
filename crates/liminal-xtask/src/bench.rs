@@ -6,6 +6,12 @@ use std::time::Instant;
 
 use anyhow::{Context, Result};
 use camino::Utf8Path;
+use liminal_graph::{
+    GraphStore, Node, NodeFlags, Operation, Origin, PayloadRef, Relation, RelationFlags, Target,
+    TxnMeta,
+};
+use liminal_id::{KindId, NodeId, RelationId, RevisionId, Timestamp};
+use liminal_scratch::ScratchDir;
 use serde::{Deserialize, Serialize};
 
 const BENCHMARKS: [&str; 7] = [
@@ -23,6 +29,14 @@ pub fn sample_repo(root: &Utf8Path, sample_count: usize) -> Result<()> {
     if sample_count != 30 {
         anyhow::bail!("Phase 1 benchmark sample count must be exactly 30, got {sample_count}");
     }
+    let baseline_path = root.join("benches/baselines/phase1.json");
+    let compared_baseline_commit = if baseline_path.exists() {
+        let baseline = read_artifact(&baseline_path)?;
+        validate_artifact(&baseline, "baseline")?;
+        Some(baseline.subject_commit)
+    } else {
+        None
+    };
     let mut rows = Vec::new();
     for name in BENCHMARKS {
         let mut samples = Vec::with_capacity(sample_count);
@@ -48,7 +62,7 @@ pub fn sample_repo(root: &Utf8Path, sample_count: usize) -> Result<()> {
         schema_version: 1,
         kind: "candidate".to_owned(),
         subject_commit: git_head(root)?,
-        compared_baseline_commit: None,
+        compared_baseline_commit,
         reference_environment: reference_environment(),
         toolchain: rustc_version(),
         sample_count,
@@ -82,6 +96,12 @@ pub fn gate_repo(root: &Utf8Path) -> Result<()> {
     if baseline.toolchain != candidate.toolchain {
         anyhow::bail!("benchmark toolchain mismatch");
     }
+    if candidate.subject_commit != git_head(root)? {
+        anyhow::bail!("candidate subject commit is not current HEAD");
+    }
+    if candidate.compared_baseline_commit.as_deref() != Some(baseline.subject_commit.as_str()) {
+        anyhow::bail!("candidate is not bound to accepted baseline subject commit");
+    }
     for (base, cand) in baseline.benchmarks.iter().zip(&candidate.benchmarks) {
         if base.name != cand.name {
             anyhow::bail!(
@@ -107,33 +127,115 @@ fn exercise(name: &str) {
             let _ = liminal_format::MarkdownRenderer.render("one {#a}\n\ntwo {#b}");
         }
         "mem_per_node_and_relation" => {
-            std::hint::black_box(
-                size_of::<liminal_graph::Node>() + size_of::<liminal_graph::Relation>(),
-            );
+            std::hint::black_box(size_of::<Node>() + size_of::<Relation>());
         }
         "store_append_txn" => {
-            // Phase 1 registry proxy: the real store benchmark remains
-            // pending store implementation and must not be baseline-blessed.
-            std::hint::black_box(blake3::hash(b"append"));
+            let dir = ScratchDir::new("bench-sample-append").expect("scratch directory");
+            let store = GraphStore::open(&dir).expect("open store");
+            commit_ops(
+                &store,
+                vec![Operation::CreateNode {
+                    node: text_node("sample append"),
+                }],
+            );
         }
         "store_commit_fsync" => {
-            // Phase 1 registry proxy; no durable baseline is accepted here.
-            std::hint::black_box(blake3::hash(b"fsync"));
+            let dir = ScratchDir::new("bench-sample-fsync").expect("scratch directory");
+            let store = GraphStore::open(&dir).expect("open store");
+            commit_ops(
+                &store,
+                vec![Operation::CreateNode {
+                    node: text_node(""),
+                }],
+            );
         }
         "store_recover_1k_records" => {
-            // Phase 1 registry proxy; recovery benchmark awaits real store.
-            std::hint::black_box(blake3::hash(&[0u8; 1024]));
+            let dir = ScratchDir::new("bench-sample-recover").expect("scratch directory");
+            let store = GraphStore::open(&dir).expect("open store");
+            for _ in 0..10 {
+                let ops = (0..100)
+                    .map(|_| Operation::CreateNode {
+                        node: text_node("recovery record"),
+                    })
+                    .collect();
+                commit_ops(&store, ops);
+            }
+            drop(store);
+            std::hint::black_box(GraphStore::open(&dir).expect("recover store"));
         }
         "relation_traversal" => {
-            // Phase 1 registry proxy; real graph traversal remains pending.
-            std::hint::black_box((0..999u64).sum::<u64>());
+            let dir = ScratchDir::new("bench-sample-traversal").expect("scratch directory");
+            let store = GraphStore::open(&dir).expect("open store");
+            let hub = text_node("hub");
+            let hub_id = hub.id;
+            let mut ops = vec![Operation::CreateNode { node: hub }];
+            for _ in 0..999 {
+                let spoke = text_node("spoke");
+                ops.push(Operation::CreateNode {
+                    node: spoke.clone(),
+                });
+                ops.push(Operation::AddRelation {
+                    relation: empty_relation(hub_id, spoke.id),
+                });
+            }
+            commit_ops(&store, ops);
+            let head = store.head().expect("head revision");
+            std::hint::black_box(store.relations_from(head, hub_id).expect("traverse"));
         }
         "graph_query_latency" => {
-            // Phase 1 registry proxy; real query benchmark remains pending.
-            std::hint::black_box(blake3::hash(b"query"));
+            let dir = ScratchDir::new("bench-sample-query").expect("scratch directory");
+            let store = GraphStore::open(&dir).expect("open store");
+            let mut ids = Vec::with_capacity(1000);
+            let mut ops = Vec::with_capacity(1000);
+            for _ in 0..1000 {
+                let node = text_node("query target");
+                ids.push(node.id);
+                ops.push(Operation::CreateNode { node });
+            }
+            commit_ops(&store, ops);
+            let head = store.head().expect("head revision");
+            std::hint::black_box(store.node_at(head, ids[ids.len() / 2]).expect("query"));
         }
         _ => unreachable!("frozen benchmark name"),
     }
+}
+
+fn text_node(payload: &str) -> Node {
+    Node {
+        id: NodeId::new(),
+        kind: KindId(0),
+        payload: PayloadRef::Text(payload.to_owned()),
+        revision: RevisionId(0),
+        flags: NodeFlags::default(),
+    }
+}
+
+fn empty_relation(source: NodeId, target: NodeId) -> Relation {
+    Relation {
+        id: RelationId::new(),
+        source,
+        target: Target::Node(target),
+        kind: KindId(0),
+        payload: PayloadRef::Text(String::new()),
+        revision: RevisionId(0),
+        flags: RelationFlags::default(),
+        requires: None,
+    }
+}
+
+fn commit_ops(store: &GraphStore, ops: Vec<Operation>) {
+    let mut txn = store.begin().expect("begin transaction");
+    for op in ops {
+        txn.apply(op).expect("apply operation");
+    }
+    txn.commit(TxnMeta {
+        actor: None,
+        origin: Origin::Human,
+        at: Timestamp::now(),
+        provenance: None,
+        inverse: None,
+    })
+    .expect("commit transaction");
 }
 
 fn read_artifact(path: &Utf8Path) -> Result<Artifact> {
@@ -144,6 +246,18 @@ fn read_artifact(path: &Utf8Path) -> Result<Artifact> {
 fn validate_artifact(artifact: &Artifact, expected_kind: &str) -> Result<()> {
     if artifact.schema_version != 1 || artifact.kind != expected_kind {
         anyhow::bail!("invalid benchmark artifact kind/schema");
+    }
+    if artifact.subject_commit.len() != 40
+        || !artifact
+            .subject_commit
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit())
+        || artifact
+            .subject_commit
+            .bytes()
+            .any(|byte| byte.is_ascii_uppercase())
+    {
+        anyhow::bail!("benchmark subject commit must be lowercase 40-character hex");
     }
     if artifact.sample_count != 30 || artifact.benchmarks.len() != BENCHMARKS.len() {
         anyhow::bail!("benchmark sample inventory must be exactly seven x 30");

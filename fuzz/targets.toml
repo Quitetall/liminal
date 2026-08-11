@@ -20,10 +20,24 @@ regression_dir = "conformance/corpora/regression/phase1/format_idempotent"
 minimum_seed_count = 16
 
 [[target]]
+name = "graph_interchange_codec"
+family = "graph"
+seed_dir = "fuzz/corpus/graph_interchange_codec"
+regression_dir = "conformance/corpora/regression/phase1/graph_interchange_codec"
+minimum_seed_count = 16
+
+[[target]]
 name = "html_render"
 family = "render"
 seed_dir = "fuzz/corpus/html_render"
 regression_dir = "conformance/corpora/regression/phase1/html_render"
+minimum_seed_count = 16
+
+[[target]]
+name = "ilrp_recovery"
+family = "ilrp"
+seed_dir = "fuzz/corpus/ilrp_recovery"
+regression_dir = "conformance/corpora/regression/phase1/ilrp_recovery"
 minimum_seed_count = 16
 
 [[target]]

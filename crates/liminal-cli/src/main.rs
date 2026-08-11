@@ -41,6 +41,11 @@ enum Cmd {
     },
     /// Repair records and nonterminal ILRP intents.
     Repairs,
+    /// Format governed Markdown source files atomically through the Phase 1
+    /// formatter.
+    Fmt,
+    /// Emit one canonical Phase 1 stable debug-JSON document.
+    Expand,
     /// Repair operations.
     Repair {
         #[command(subcommand)]
@@ -77,11 +82,44 @@ enum JurisdictionCmd {
 fn main() -> ExitCode {
     let args = Lim::parse();
     match args.cmd {
-        Cmd::Check => cmd::check::run(&args.workspace),
+        Cmd::Check => {
+            if liminal_cli::has_markdown_files(&args.workspace) {
+                match liminal_cli::check_workspace(&args.workspace) {
+                    Ok(()) => ExitCode::SUCCESS,
+                    Err(error) => {
+                        eprintln!("{error}");
+                        ExitCode::from(1)
+                    }
+                }
+            } else {
+                cmd::check::run(&args.workspace)
+            }
+        }
         Cmd::Jurisdiction {
             cmd: JurisdictionCmd::Explain { subject },
         } => cmd::jurisdiction::explain(&args.workspace, &subject),
         Cmd::Repairs => cmd::repairs::run(&args.workspace),
+        Cmd::Fmt => match liminal_cli::format_workspace(&args.workspace) {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("{error}");
+                ExitCode::from(1)
+            }
+        },
+        Cmd::Expand => match liminal_cli::expand_workspace(&args.workspace) {
+            Ok(bytes) => {
+                use std::io::Write as _;
+                if std::io::stdout().write_all(&bytes).is_ok() {
+                    ExitCode::SUCCESS
+                } else {
+                    ExitCode::from(1)
+                }
+            }
+            Err(error) => {
+                eprintln!("{error}");
+                ExitCode::from(1)
+            }
+        },
         Cmd::Repair {
             cmd: RepairCmd::Undo { repair_id },
         } => cmd::repair_undo::run(&args.workspace, &repair_id),

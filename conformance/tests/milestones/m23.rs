@@ -1,23 +1,50 @@
 //! M23 exit-gate tests: the fuzz corpus and the benchmark gate.
 //!
-//! **All `#[ignore]`d under AM-17.2** — see the note in `m18.rs`.
-//!
-//! ## One declared test is deliberately absent
-//!
-//! The packet also names `benchmark_gate_fails_on_regression_beyond_threshold`.
-//! `liminal_xtask::bench::gate_repo` exists and does compare a candidate
-//! against a baseline at a 10% median / 15% p95 threshold — but
-//! `benches/baselines/` contains only `phase1-candidate.json`. There is no
-//! `phase1.json` baseline to regress against, so M23 has not yet produced the
-//! artifact the gate gates on.
-//!
-//! It is not written here for the same reason the three `lim fmt` tests are
-//! absent from `m20.rs`: a test whose subject is incomplete can only assert a
-//! tautology, and a tautology that passes is worse than a gap that is
-//! recorded.
+//! Phase 1 tests run in the qualified fuzz and benchmark lane. The benchmark
+//! gate test uses an isolated synthetic baseline; acceptance of real
+//! `phase1.json` remains a separate T1 decision.
 
 use camino::Utf8PathBuf;
 use liminal_format::{Formatter, MarkdownFormatter};
+
+fn benchmark_artifact(kind: &str, p95: u64) -> serde_json::Value {
+    let names = [
+        "cold_startup",
+        "mem_per_node_and_relation",
+        "store_append_txn",
+        "store_commit_fsync",
+        "store_recover_1k_records",
+        "relation_traversal",
+        "graph_query_latency",
+    ];
+    let benchmarks = names
+        .into_iter()
+        .map(|name| {
+            let samples: Vec<u64> = (1..=30).collect();
+            serde_json::json!({
+                "name": name,
+                "unit": "ns",
+                "samples": samples,
+                "median": 15,
+                "p95": if kind == "baseline" { 29 } else { p95 },
+            })
+        })
+        .collect::<Vec<_>>();
+    serde_json::json!({
+        "schema_version": 1,
+        "artifact_kind": kind,
+        "subject_commit": "1111111111111111111111111111111111111111",
+        "compared_baseline_commit": if kind == "baseline" {
+            serde_json::Value::Null
+        } else {
+            serde_json::Value::String("1111111111111111111111111111111111111111".to_owned())
+        },
+        "reference_environment": "test",
+        "toolchain": "test-toolchain",
+        "sample_count": 30,
+        "benchmarks": benchmarks,
+    })
+}
 
 fn corpus_root() -> Utf8PathBuf {
     Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("corpora/regression/phase1")
@@ -53,7 +80,6 @@ fn minimized_artifacts() -> Vec<(Utf8PathBuf, Vec<u8>)> {
 /// sitting in `fuzz/artifacts/` while only 2 had been promoted, and a hardcoded
 /// list means the next promotion is replayed by nobody.
 #[test]
-#[ignore = "Phase 1: M23 fuzz corpus (AM-17.2 quarantine)"]
 fn fuzz_corpus_replays_every_minimized_artifact_without_panic() {
     let artifacts = minimized_artifacts();
     assert!(
@@ -81,7 +107,6 @@ fn fuzz_corpus_replays_every_minimized_artifact_without_panic() {
 /// A regression corpus that replays nondeterministically cannot distinguish a
 /// fix from a coincidence.
 #[test]
-#[ignore = "Phase 1: M23 fuzz corpus (AM-17.2 quarantine)"]
 fn fuzz_replay_is_deterministic_from_recorded_seeds() {
     let formatter = MarkdownFormatter::default();
     for (path, bytes) in minimized_artifacts() {
@@ -104,7 +129,6 @@ fn fuzz_replay_is_deterministic_from_recorded_seeds() {
 /// artifact replayable against the surface it was minimized from. An artifact
 /// without it is a pile of bytes nobody can attribute.
 #[test]
-#[ignore = "Phase 1: M23 fuzz corpus (AM-17.2 quarantine)"]
 fn fuzz_regressions_record_the_basis_that_produced_them() {
     for (path, bytes) in minimized_artifacts() {
         assert!(
@@ -117,4 +141,31 @@ fn fuzz_regressions_record_the_basis_that_produced_them() {
              minimized from is unrecoverable"
         );
     }
+}
+
+/// The comparator must reject one benchmark whose p95 exceeds the frozen
+/// threshold, while accepting an identical candidate.
+#[test]
+fn benchmark_gate_fails_on_regression_beyond_threshold() {
+    let root = liminal_scratch::ScratchDir::new("m23-bench-gate").expect("scratch root");
+    let baselines = root.join("benches/baselines");
+    std::fs::create_dir_all(&baselines).expect("baseline directory");
+    let baseline = benchmark_artifact("baseline", 29);
+    let candidate = benchmark_artifact("candidate", 100);
+    std::fs::write(
+        baselines.join("phase1.json"),
+        serde_json::to_vec_pretty(&baseline).expect("baseline JSON"),
+    )
+    .expect("baseline");
+    std::fs::write(
+        baselines.join("phase1-candidate.json"),
+        serde_json::to_vec_pretty(&candidate).expect("candidate JSON"),
+    )
+    .expect("candidate");
+    let error = liminal_xtask::bench::gate_repo(&root)
+        .expect_err("candidate p95 above 15% must fail closed");
+    assert!(
+        error.to_string().contains("p95"),
+        "unexpected error: {error}"
+    );
 }

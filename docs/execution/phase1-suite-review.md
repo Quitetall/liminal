@@ -1,6 +1,6 @@
 # Phase 1 suite review packet
 
-suite_version: phase1-haqp1-proposed-v1
+suite_version: phase1-haqp1-proposed-v2-seven-fuzz
 fixed_review_base: NOT_RUN
 status: proposed
 
@@ -24,7 +24,7 @@ authorization, suite ratification, or access to locked acceptance inputs.
 | intended campaign ceiling | 8 hours |
 | complete post-fix qualification rerun | NOT_RUN |
 | machine inventory | `conformance/haqp/packet.json` (`cargo run -p liminal-xtask -- haq verify-inventory`) |
-| machine inventory BLAKE3 | `a305f2fc194e69ab4c85adba8e265001d6098322bcc234e60b19f6f24eb14f08` |
+| machine inventory BLAKE3 | `b886c60f0fc5440a4da17fd727a5471201b01c80a04844b42db0abb99f646ec3` |
 
 ## Execution lanes
 

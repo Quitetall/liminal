@@ -1,23 +1,34 @@
 //! M20 exit-gate tests: the canonical formatter.
 //!
-//! **All `#[ignore]`d under AM-17.2** — see the note in `m18.rs`.
+//! Phase 1 tests run in the qualified source-to-HTML lane.
 //!
-//! ## Three declared tests are deliberately absent
-//!
-//! The packet also names `lim_fmt_interrupted_mid_write_leaves_no_partial_file`,
-//! `lim_fmt_rerun_after_interruption_is_idempotent` and
-//! `lim_fmt_survives_malformed_input_without_data_loss`. All three are about the
-//! `lim fmt` COMMAND, and no such command exists — `crates/liminal-cli/src/cmd/`
-//! has check, jurisdiction, overlays, repair_undo and repairs, and nothing else.
-//!
-//! They are not written here, and writing them would have been the worse
-//! choice. A test whose subject does not exist can only be a stub that fails
-//! unconditionally, and an unconditionally-failing test is a *vacuity vector*
-//! under F-28's new gate: once un-ignored it would "witness" the kill of any
-//! mutant that named it, without the mutation having anything to do with the
-//! failure. An honest absence is stronger than a dishonest witness.
-//!
-//! M20 writes them when M20 writes `lim fmt`.
+//! The CLI pipeline is exercised through the shared formatter API so tests can
+//! inject a deterministic interruption without process-signal timing.
+
+use std::fs;
+
+use camino::Utf8Path;
+use liminal_cli::{format_workspace, format_workspace_with_failure_after};
+use liminal_scratch::ScratchDir;
+
+fn fixture() -> ScratchDir {
+    let root = ScratchDir::new("m20-cli").expect("scratch root");
+    fs::write(
+        root.join("a.md"),
+        "#!liminal-explicit-v1\nnode a { literal \"alpha\"; }\n",
+    )
+    .expect("a");
+    fs::write(
+        root.join("b.md"),
+        "#!liminal-explicit-v1\nnode b { literal \"beta\"; }\n",
+    )
+    .expect("b");
+    root
+}
+
+fn bytes(root: &Utf8Path, name: &str) -> Vec<u8> {
+    fs::read(root.join(name)).expect("fixture bytes")
+}
 
 use liminal_format::{Formatter, MarkdownFormatter};
 use liminal_hir::SourceDialect;
@@ -30,7 +41,6 @@ use liminal_id::ContentHash;
 /// bookkeeping (ADR-0020 §5): two sources that differ must not format to the
 /// same bytes, or the output cannot name its input at all.
 #[test]
-#[ignore = "Phase 1: M20 canonical formatter (AM-17.2 quarantine)"]
 fn formatted_output_records_the_basis_it_formatted_at() {
     let formatter = MarkdownFormatter::default();
     let left = "alpha {#a}";
@@ -67,7 +77,6 @@ fn formatted_output_records_the_basis_it_formatted_at() {
 /// back is always available because the explicit surface can express every
 /// form.
 #[test]
-#[ignore = "Phase 1: M20 canonical formatter (AM-17.2 quarantine)"]
 fn formatter_refuses_unrepresentable_documents_instead_of_lossy_emission() {
     let formatter = MarkdownFormatter::default();
     // Richer than the compact surface can spell: a relation and an ordered
@@ -95,4 +104,59 @@ fn formatter_refuses_unrepresentable_documents_instead_of_lossy_emission() {
         round, document,
         "the fallback surface must round-trip the document it could not compact"
     );
+}
+
+/// A failure after one replacement leaves no staged sibling and preserves the
+/// already-completed file as durable partial progress.
+#[test]
+fn lim_fmt_interrupted_mid_write_leaves_no_partial_file() {
+    let root = fixture();
+    let before_b = bytes(&root, "b.md");
+    let error = format_workspace_with_failure_after(&root, Some(1))
+        .expect_err("the injected interruption must fail");
+    assert!(
+        error
+            .to_string()
+            .contains("injected formatter interruption")
+    );
+    assert_ne!(
+        bytes(&root, "a.md"),
+        b"#!liminal-explicit-v1\nnode a { literal \"alpha\"; }\n"
+    );
+    assert_eq!(bytes(&root, "b.md"), before_b);
+    assert!(
+        liminal_source::scan_staged(&root)
+            .expect("scan staged")
+            .is_empty()
+    );
+}
+
+/// Rerunning after partial failure completes remaining files and a third run
+/// is byte-idempotent.
+#[test]
+fn lim_fmt_rerun_after_interruption_is_idempotent() {
+    let root = fixture();
+    let _ = format_workspace_with_failure_after(&root, Some(1));
+    format_workspace(&root).expect("rerun must complete");
+    let a = bytes(&root, "a.md");
+    let b = bytes(&root, "b.md");
+    let outcome = format_workspace(&root).expect("third run");
+    assert_eq!(outcome.changed_files, 0);
+    assert_eq!(bytes(&root, "a.md"), a);
+    assert_eq!(bytes(&root, "b.md"), b);
+}
+
+/// Malformed syntax remains recoverable and does not cause data loss during
+/// formatting.
+#[test]
+fn lim_fmt_survives_malformed_input_without_data_loss() {
+    let root = ScratchDir::new("m20-malformed").expect("scratch root");
+    let source = "#!liminal-explicit-v1\nnode broken { literal \"unterminated;\n";
+    fs::write(root.join("broken.md"), source).expect("source");
+    format_workspace(&root).expect("malformed source must remain format-safe");
+    let formatted = bytes(&root, "broken.md");
+    assert!(!formatted.is_empty());
+    let reparsed =
+        MarkdownFormatter::default().parse(std::str::from_utf8(&formatted).expect("UTF-8"));
+    assert!(reparsed.is_ok(), "formatted malformed source must reparse");
 }
