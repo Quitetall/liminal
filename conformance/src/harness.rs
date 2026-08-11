@@ -188,6 +188,28 @@ pub struct RecoveryReport {
     pub world_digest: String,
 }
 
+/// One derived crash case's measured recovery identity. Both digests are
+/// emitted so the evidence lane can prove idempotence without trusting a
+/// literal status string.
+#[derive(Debug, Clone)]
+pub struct CrashCaseEvidence {
+    /// Registered crash boundary name.
+    pub boundary: String,
+    /// Occurrence index in scenario baseline trace.
+    pub occurrence: u64,
+    /// World digest after first recovery.
+    pub first_recovery_digest: String,
+    /// World digest after second recovery.
+    pub second_recovery_digest: String,
+}
+
+/// Measured output of one scenario's complete crash matrix.
+#[derive(Debug, Clone, Default)]
+pub struct CrashMatrixEvidence {
+    /// One measured pair for every derived crash case.
+    pub cases: Vec<CrashCaseEvidence>,
+}
+
 /// One toy workspace under harness control: a scratch directory holding
 /// `state/` (the store) and the scenario's files.
 #[derive(Debug)]
@@ -355,7 +377,7 @@ impl ToyRun {
     /// observed `(point, occurrence)`: crash, recover, assert terminal +
     /// no hidden half-state + recovery idempotence (world digests equal on a
     /// second recovery).
-    pub fn crash_matrix(scenario: &ScenarioScript) -> anyhow::Result<()> {
+    pub fn crash_matrix(scenario: &ScenarioScript) -> anyhow::Result<CrashMatrixEvidence> {
         // 1. Baseline in its own root.
         let baseline_run = Self::new(&format!("baseline-{}", scenario.scenario.id))?;
         let trace = baseline_run.baseline(scenario)?;
@@ -369,6 +391,7 @@ impl ToyRun {
         let normalize = |s: &str| s.to_lowercase().replace('-', "");
         let expected_norm = normalize(expected);
 
+        let mut evidence = CrashMatrixEvidence::default();
         // 2. For every (point, occurrence) in the trace → crash + recover.
         for (point, occurrence) in trace.enumerate_faults() {
             let label = format!(
@@ -400,6 +423,12 @@ impl ToyRun {
                     "crash matrix [{label}]: {} staged files remain after pre-intent crash",
                     staged.len()
                 );
+                evidence.cases.push(CrashCaseEvidence {
+                    boundary: point,
+                    occurrence,
+                    first_recovery_digest: r1.world_digest,
+                    second_recovery_digest: r2.world_digest,
+                });
                 continue;
             }
             anyhow::ensure!(
@@ -442,9 +471,15 @@ impl ToyRun {
                 "crash matrix [{label}]: {} staged files remain after recovery",
                 staged.len()
             );
+            evidence.cases.push(CrashCaseEvidence {
+                boundary: point,
+                occurrence,
+                first_recovery_digest: r1.world_digest,
+                second_recovery_digest: r2.world_digest,
+            });
         }
 
-        Ok(())
+        Ok(evidence)
     }
 
     /// Path of the workspace store.

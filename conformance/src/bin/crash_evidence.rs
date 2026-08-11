@@ -36,6 +36,7 @@ fn main() -> anyhow::Result<()> {
     // how many occurrences? This is the RUNTIME discovery side of §5.
     let mut exercised: BTreeMap<String, u64> = BTreeMap::new();
     let mut per_scenario = Vec::new();
+    let mut recovery_by_boundary: BTreeMap<String, Vec<serde_json::Value>> = BTreeMap::new();
     for scenario in &scenarios {
         let id = scenario.scenario.id.clone();
         let run = ToyRun::new(&format!("evidence-{id}"))?;
@@ -52,7 +53,18 @@ fn main() -> anyhow::Result<()> {
         // Run the full matrix: crash at every (point, occurrence), recover
         // TWICE, compare terminal state and world digest, require no staged
         // residue, and converge the file world against baseline.
-        ToyRun::crash_matrix(scenario)?;
+        let matrix = ToyRun::crash_matrix(scenario)?;
+        for case in &matrix.cases {
+            recovery_by_boundary
+                .entry(case.boundary.clone())
+                .or_default()
+                .push(serde_json::json!({
+                    "scenario": id.clone(),
+                    "occurrence": case.occurrence,
+                    "first_recovery_digest": case.first_recovery_digest.clone(),
+                    "second_recovery_digest": case.second_recovery_digest.clone(),
+                }));
+        }
         per_scenario.push(serde_json::json!({
             "scenario": id,
             "faults_injected": faults.len(),
@@ -85,7 +97,7 @@ fn main() -> anyhow::Result<()> {
             serde_json::json!({
                 "boundary": name,
                 "occurrences_exercised": exercised.get(name).copied().unwrap_or(0),
-                "double_recovery": "pass",
+                "recovery_pairs": recovery_by_boundary.get(name).cloned().unwrap_or_default(),
                 "staged_residue": "none",
                 "result": "pass",
             })

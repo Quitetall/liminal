@@ -2,57 +2,173 @@
   "boundaries": [
     {
       "boundary": "ilrp/after_ack",
-      "double_recovery": "pass",
       "occurrences_exercised": 3,
+      "recovery_pairs": [
+        {
+          "first_recovery_digest": "b6a9b86ce423feb51c13cf6e7ca5ff76e1fac1b2edb6a21a369346c424f831df",
+          "occurrence": 1,
+          "scenario": "promote_single_step",
+          "second_recovery_digest": "b6a9b86ce423feb51c13cf6e7ca5ff76e1fac1b2edb6a21a369346c424f831df"
+        },
+        {
+          "first_recovery_digest": "a28d2f6c96c54584025f7ca3d2318e552704cdbcd6dd11d1bb053e82543b535e",
+          "occurrence": 1,
+          "scenario": "dag_accept",
+          "second_recovery_digest": "a28d2f6c96c54584025f7ca3d2318e552704cdbcd6dd11d1bb053e82543b535e"
+        },
+        {
+          "first_recovery_digest": "33c82dcc7719bdb563a4733227e3015e39cdbd261e869fe2e1fd0713ab1f56bf",
+          "occurrence": 2,
+          "scenario": "dag_accept",
+          "second_recovery_digest": "33c82dcc7719bdb563a4733227e3015e39cdbd261e869fe2e1fd0713ab1f56bf"
+        }
+      ],
       "result": "pass",
       "staged_residue": "none"
     },
     {
       "boundary": "ilrp/after_external_apply",
-      "double_recovery": "pass",
       "occurrences_exercised": 2,
+      "recovery_pairs": [
+        {
+          "first_recovery_digest": "c40537c12486be7b68d07b68919c3e9eabaee02546193104f5916dc42a4aece0",
+          "occurrence": 1,
+          "scenario": "promote_single_step",
+          "second_recovery_digest": "c40537c12486be7b68d07b68919c3e9eabaee02546193104f5916dc42a4aece0"
+        },
+        {
+          "first_recovery_digest": "d7cf91d7247f7a910f990713045e990647e896d7039e9b7baa7f4c713f114e66",
+          "occurrence": 1,
+          "scenario": "dag_accept",
+          "second_recovery_digest": "d7cf91d7247f7a910f990713045e990647e896d7039e9b7baa7f4c713f114e66"
+        }
+      ],
       "result": "pass",
       "staged_residue": "none"
     },
     {
       "boundary": "ilrp/after_finalize_before_notify",
-      "double_recovery": "pass",
       "occurrences_exercised": 2,
+      "recovery_pairs": [
+        {
+          "first_recovery_digest": "f95e5e00aa839d9f678bba3bc5788e689ebfb7797133041198afd8edb73e1e29",
+          "occurrence": 1,
+          "scenario": "promote_single_step",
+          "second_recovery_digest": "f95e5e00aa839d9f678bba3bc5788e689ebfb7797133041198afd8edb73e1e29"
+        },
+        {
+          "first_recovery_digest": "19f349482688884c15ee83411d110db065e054fadaec86c41bdaae2383eea3d7",
+          "occurrence": 1,
+          "scenario": "dag_accept",
+          "second_recovery_digest": "19f349482688884c15ee83411d110db065e054fadaec86c41bdaae2383eea3d7"
+        }
+      ],
       "result": "pass",
       "staged_residue": "none"
     },
     {
       "boundary": "ilrp/after_intent_commit",
-      "double_recovery": "pass",
       "occurrences_exercised": 2,
+      "recovery_pairs": [
+        {
+          "first_recovery_digest": "b88cea1cbefd59f73ab56c741fa16364dce5cdbca93f25d1437bee42305d5dbe",
+          "occurrence": 1,
+          "scenario": "promote_single_step",
+          "second_recovery_digest": "b88cea1cbefd59f73ab56c741fa16364dce5cdbca93f25d1437bee42305d5dbe"
+        },
+        {
+          "first_recovery_digest": "f69c6e6c9bb6956dec581953a2f10ce1a898f23341bd9056aa9f18b7ab7fe82b",
+          "occurrence": 1,
+          "scenario": "dag_accept",
+          "second_recovery_digest": "f69c6e6c9bb6956dec581953a2f10ce1a898f23341bd9056aa9f18b7ab7fe82b"
+        }
+      ],
       "result": "pass",
       "staged_residue": "none"
     },
     {
       "boundary": "ilrp/before_ack",
-      "double_recovery": "pass",
       "occurrences_exercised": 3,
+      "recovery_pairs": [
+        {
+          "first_recovery_digest": "e6e2f7be5b91345b744753f4f750bd659d9f48ad4f4063c91fa9c695f043f594",
+          "occurrence": 1,
+          "scenario": "promote_single_step",
+          "second_recovery_digest": "e6e2f7be5b91345b744753f4f750bd659d9f48ad4f4063c91fa9c695f043f594"
+        },
+        {
+          "first_recovery_digest": "2363d462bbf94fb2a3fc14992d21a1bc6744332ba262a3c65ce0352492b65e2a",
+          "occurrence": 1,
+          "scenario": "dag_accept",
+          "second_recovery_digest": "2363d462bbf94fb2a3fc14992d21a1bc6744332ba262a3c65ce0352492b65e2a"
+        },
+        {
+          "first_recovery_digest": "8eb9c14e4898dc0eef8462ebc6f1959348433685b87ccd0979d88d6eda250773",
+          "occurrence": 2,
+          "scenario": "dag_accept",
+          "second_recovery_digest": "8eb9c14e4898dc0eef8462ebc6f1959348433685b87ccd0979d88d6eda250773"
+        }
+      ],
       "result": "pass",
       "staged_residue": "none"
     },
     {
       "boundary": "ilrp/before_external_apply",
-      "double_recovery": "pass",
       "occurrences_exercised": 2,
+      "recovery_pairs": [
+        {
+          "first_recovery_digest": "095f912defe430f81930a1ecdd6adae2753aa46091fa388cf3b491e8a10cfe77",
+          "occurrence": 1,
+          "scenario": "promote_single_step",
+          "second_recovery_digest": "095f912defe430f81930a1ecdd6adae2753aa46091fa388cf3b491e8a10cfe77"
+        },
+        {
+          "first_recovery_digest": "fb61bdc80e1d6fa925cf889d016066804aee671c74879c8eeeee7a0f00c42434",
+          "occurrence": 1,
+          "scenario": "dag_accept",
+          "second_recovery_digest": "fb61bdc80e1d6fa925cf889d016066804aee671c74879c8eeeee7a0f00c42434"
+        }
+      ],
       "result": "pass",
       "staged_residue": "none"
     },
     {
       "boundary": "ilrp/before_finalize",
-      "double_recovery": "pass",
       "occurrences_exercised": 2,
+      "recovery_pairs": [
+        {
+          "first_recovery_digest": "44b9fbe006b85e418c54e6fa5c52eb28a94cc0259e50797a1eb7b0dc3f22875e",
+          "occurrence": 1,
+          "scenario": "promote_single_step",
+          "second_recovery_digest": "44b9fbe006b85e418c54e6fa5c52eb28a94cc0259e50797a1eb7b0dc3f22875e"
+        },
+        {
+          "first_recovery_digest": "93bb8ee50dc137f71aaacaf1a3f5c605303a0a23a26e977ae17cf65be906ab5e",
+          "occurrence": 1,
+          "scenario": "dag_accept",
+          "second_recovery_digest": "93bb8ee50dc137f71aaacaf1a3f5c605303a0a23a26e977ae17cf65be906ab5e"
+        }
+      ],
       "result": "pass",
       "staged_residue": "none"
     },
     {
       "boundary": "ilrp/before_intent_commit",
-      "double_recovery": "pass",
       "occurrences_exercised": 2,
+      "recovery_pairs": [
+        {
+          "first_recovery_digest": "c7da35b812f626fcf6ad5268a6ba6356203fd1806d1d8e62a763538fec76c4f1",
+          "occurrence": 1,
+          "scenario": "promote_single_step",
+          "second_recovery_digest": "c7da35b812f626fcf6ad5268a6ba6356203fd1806d1d8e62a763538fec76c4f1"
+        },
+        {
+          "first_recovery_digest": "6459d3ee1353171cf402443a727e7904df0f31574b9f98927a3b0983336ae67d",
+          "occurrence": 1,
+          "scenario": "dag_accept",
+          "second_recovery_digest": "6459d3ee1353171cf402443a727e7904df0f31574b9f98927a3b0983336ae67d"
+        }
+      ],
       "result": "pass",
       "staged_residue": "none"
     }

@@ -307,14 +307,14 @@ fn verify_crash_rows(recorded: &CrashEvidence, declared: &BTreeSet<String>) -> R
         if row.occurrences_exercised == 0 {
             anyhow::bail!("crash boundary {} was never exercised", row.boundary);
         }
-        for (field, value) in [
-            ("result", &row.result),
-            ("double_recovery", &row.double_recovery),
-        ] {
-            if value != "pass" {
-                anyhow::bail!("crash boundary {} reports {field} {value:?}", row.boundary);
-            }
+        if row.result != "pass" {
+            anyhow::bail!(
+                "crash boundary {} reports result {:?}",
+                row.boundary,
+                row.result
+            );
         }
+        verify_recovery_pairs(row)?;
         if row.staged_residue != "none" {
             anyhow::bail!(
                 "crash boundary {} left staged residue {:?}",
@@ -322,6 +322,49 @@ fn verify_crash_rows(recorded: &CrashEvidence, declared: &BTreeSet<String>) -> R
                 row.staged_residue
             );
         }
+    }
+    Ok(())
+}
+
+fn verify_recovery_pairs(row: &CrashEvidenceBoundary) -> Result<()> {
+    anyhow::ensure!(
+        row.recovery_pairs.len() as u64 == row.occurrences_exercised,
+        "crash boundary {} records {} recovery pairs for {} exercised occurrences",
+        row.boundary,
+        row.recovery_pairs.len(),
+        row.occurrences_exercised
+    );
+    let mut pair_ids = BTreeSet::new();
+    for pair in &row.recovery_pairs {
+        anyhow::ensure!(
+            !pair.scenario.trim().is_empty(),
+            "crash boundary {} has empty recovery scenario",
+            row.boundary
+        );
+        anyhow::ensure!(
+            pair_ids.insert((pair.scenario.as_str(), pair.occurrence)),
+            "crash boundary {} repeats recovery case {}:{}",
+            row.boundary,
+            pair.scenario,
+            pair.occurrence
+        );
+        for (label, digest) in [
+            ("first_recovery_digest", &pair.first_recovery_digest),
+            ("second_recovery_digest", &pair.second_recovery_digest),
+        ] {
+            anyhow::ensure!(
+                digest.len() == 64 && digest.chars().all(|ch| ch.is_ascii_hexdigit()),
+                "crash boundary {} has invalid {label}",
+                row.boundary
+            );
+        }
+        anyhow::ensure!(
+            pair.first_recovery_digest == pair.second_recovery_digest,
+            "crash boundary {} recovery case {}:{} changed world digest on second recovery",
+            row.boundary,
+            pair.scenario,
+            pair.occurrence
+        );
     }
     Ok(())
 }
@@ -2309,9 +2352,18 @@ struct CrashEvidence {
 struct CrashEvidenceBoundary {
     boundary: String,
     occurrences_exercised: u64,
-    double_recovery: String,
+    recovery_pairs: Vec<RecoveryPair>,
     staged_residue: String,
     result: String,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct RecoveryPair {
+    scenario: String,
+    occurrence: u64,
+    first_recovery_digest: String,
+    second_recovery_digest: String,
 }
 
 /// Execute every declared disposable gate canary without touching the working
@@ -4725,6 +4777,11 @@ mod tests {
         failed.scenarios[0].result = "fail".to_owned();
         verify_crash_rows(&failed, &declared)
             .expect_err("a scenario reporting failure must not pass");
+
+        let mut non_idempotent = recorded.clone();
+        non_idempotent.boundaries[0].recovery_pairs[0].second_recovery_digest = "00".repeat(32);
+        verify_crash_rows(&non_idempotent, &declared)
+            .expect_err("a second recovery digest that changes must be rejected");
 
         let mut inert = recorded.clone();
         inert.scenarios[0].faults_injected = 0;
