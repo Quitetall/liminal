@@ -4077,9 +4077,11 @@ mod tests {
         verify_mutant_killing_tests(&root, &packet)
             .expect("no mutant claims killed, so nothing to check");
 
-        // P1-M001's killing tests are P1-T09 and P1-T01; T01 is
-        // `laws::formatter_idempotence_law_holds`, quarantined by AM-17.2.
+        // Use P1-T08, the migration test that remains quarantined pending a
+        // persisted-format ADR. The active Phase 1 tests cannot witness this
+        // negative case after suite breadth is enabled.
         packet.mutants[0].disposition = "killed".to_owned();
+        packet.mutants[0].killing_tests = vec!["P1-T08".to_owned()];
         let err = verify_mutant_killing_tests(&root, &packet)
             .expect_err("an #[ignore]d test cannot witness a kill");
         assert!(err.to_string().contains("#[ignore]d"), "{err}");
