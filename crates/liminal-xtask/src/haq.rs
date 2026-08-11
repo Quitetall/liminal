@@ -66,7 +66,12 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     verify_canary_evidence(root, &packet)?;
     verify_generated_evidence(root, &packet)?;
     verify_review_evidence(root, &packet)?;
-    verify_test_names_exist(root, &packet)?;
+    // HAQP-1a qualifies packet machinery before Phase 1 authorization; its
+    // inventory may still name future M18-M24 tests. HAQP-1b runs at M24 and
+    // must bind every declared test to a real, runnable function.
+    if packet.qualification_stage == "1b" {
+        verify_test_names_exist(root, &packet)?;
+    }
     Ok(())
 }
 
