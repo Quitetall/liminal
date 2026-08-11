@@ -7,7 +7,7 @@ use std::process::{Command, Stdio};
 use std::time::Instant;
 
 use anyhow::{Context, Result};
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use liminal_format::Formatter;
 use serde::Deserialize;
 
@@ -997,6 +997,52 @@ fn reset_mutant_worktree(worktree: &Utf8Path, source_commit: &str) -> Result<()>
     Ok(())
 }
 
+struct WorktreeGuard {
+    repo: Utf8PathBuf,
+    path: Utf8PathBuf,
+    active: bool,
+}
+
+impl WorktreeGuard {
+    fn new(repo: &Utf8Path, path: &Utf8Path) -> Self {
+        Self {
+            repo: repo.to_owned(),
+            path: path.to_owned(),
+            active: true,
+        }
+    }
+
+    fn remove(&mut self) -> Result<()> {
+        if !self.active {
+            return Ok(());
+        }
+        let output = Command::new("git")
+            .current_dir(&self.repo)
+            .args(["worktree", "remove", "-f"])
+            .arg(&self.path)
+            .output()?;
+        anyhow::ensure!(
+            output.status.success(),
+            "git worktree remove failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+        self.active = false;
+        Ok(())
+    }
+}
+
+impl Drop for WorktreeGuard {
+    fn drop(&mut self) {
+        if self.active {
+            let _ = Command::new("git")
+                .current_dir(&self.repo)
+                .args(["worktree", "remove", "-f"])
+                .arg(&self.path)
+                .output();
+        }
+    }
+}
+
 /// Execute source patches in disposable git worktrees. This command writes only
 /// digests and statuses; raw test/model output never enters the repository.
 pub fn run_mutants_repo(root: &Utf8Path, ids: &[String], run_ignored: bool) -> Result<()> {
@@ -1043,6 +1089,7 @@ pub fn run_mutants_repo(root: &Utf8Path, ids: &[String], run_ignored: bool) -> R
         "git worktree add failed: {}",
         String::from_utf8_lossy(&add.stderr).trim()
     );
+    let mut worktree_guard = WorktreeGuard::new(root, &worktree);
 
     let mut rows = Vec::with_capacity(selected.len());
     for mutant in selected {
@@ -1055,12 +1102,7 @@ pub fn run_mutants_repo(root: &Utf8Path, ids: &[String], run_ignored: bool) -> R
         )?);
         reset_mutant_worktree(&worktree, &source_commit)?;
     }
-    let remove = Command::new("git")
-        .current_dir(root)
-        .args(["worktree", "remove", "--force", "--quiet"])
-        .arg(&worktree)
-        .output()?;
-    anyhow::ensure!(remove.status.success(), "git worktree remove failed");
+    worktree_guard.remove()?;
     drop(scratch);
 
     let evidence = MutantEvidence {
@@ -1089,7 +1131,7 @@ fn ignored_test_names(root: &Utf8Path) -> BTreeSet<String> {
             continue;
         };
         for entry in entries.flatten() {
-            let Ok(path) = camino::Utf8PathBuf::from_path_buf(entry.path()) else {
+            let Ok(path) = Utf8PathBuf::from_path_buf(entry.path()) else {
                 continue;
             };
             if path.is_dir() {
@@ -1139,7 +1181,7 @@ fn verify_test_names_exist(root: &Utf8Path, packet: &Packet) -> Result<()> {
             continue;
         };
         for entry in entries.flatten() {
-            let Ok(path) = camino::Utf8PathBuf::from_path_buf(entry.path()) else {
+            let Ok(path) = Utf8PathBuf::from_path_buf(entry.path()) else {
                 continue;
             };
             if path.is_dir() {
@@ -1204,7 +1246,7 @@ fn verify_fuzz_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let entries = fs::read_dir(&targets_dir)
         .with_context(|| format!("{targets_dir}: fuzz targets are required to verify the lane"))?;
     for entry in entries.flatten() {
-        let Ok(file) = camino::Utf8PathBuf::from_path_buf(entry.path()) else {
+        let Ok(file) = Utf8PathBuf::from_path_buf(entry.path()) else {
             continue;
         };
         if file.extension() == Some("rs")
@@ -3071,8 +3113,8 @@ struct GeneratedEvidence {
 mod tests {
     use super::*;
 
-    fn repo_root() -> camino::Utf8PathBuf {
-        camino::Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    fn repo_root() -> Utf8PathBuf {
+        Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .expect("crates dir")
             .parent()
