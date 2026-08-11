@@ -23,6 +23,13 @@ fn main() -> Result<()> {
             HaqCommand::Generate { cases } => {
                 liminal_xtask::haq::run_generated_repo(&liminal_xtask::repo_root()?, cases)?;
             }
+            HaqCommand::Mutants { ids, run_ignored } => {
+                liminal_xtask::haq::run_mutants_repo(
+                    &liminal_xtask::repo_root()?,
+                    &ids,
+                    run_ignored,
+                )?;
+            }
         },
         Command::Bench { command } => match command {
             BenchCommand::Sample { count } => {
@@ -82,6 +89,15 @@ enum HaqCommand {
         /// Accepted cases per family (qualification uses 100000).
         #[arg(long, default_value_t = 100_000)]
         cases: u64,
+    },
+    /// Run declared source patches in isolated git worktrees and record results.
+    Mutants {
+        /// Restrict run to one or more mutant IDs; default runs all declared rows.
+        #[arg(long = "id")]
+        ids: Vec<String>,
+        /// Include tests marked `#[ignore]` in the runnable set.
+        #[arg(long)]
+        run_ignored: bool,
     },
 }
 

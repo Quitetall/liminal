@@ -1,6 +1,9 @@
 //! HAQP-1 packet verification.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+use std::path::{Component, Path};
+use std::process::{Command, Stdio};
 use std::time::Instant;
 
 use anyhow::{Context, Result};
@@ -39,7 +42,7 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
             // contradiction — the deadlock it existed to break, reintroduced
             // one layer down.
             mutant: if packet.qualification_stage == "1b" {
-                "killed"
+                "resolved"
             } else {
                 "predeclared"
             },
@@ -58,6 +61,7 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     verify_qualification_stage(&packet)?;
     if packet.qualification_stage == "1b" {
         verify_mutant_killing_tests(root, &packet)?;
+        verify_mutant_evidence(root, &packet)?;
     }
     verify_canary_evidence(root, &packet)?;
     verify_generated_evidence(root, &packet)?;
@@ -75,7 +79,7 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
 /// two. The packet's crash rows were pure assertion.
 fn verify_crash_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let path = root.join("conformance/haqp/evidence/crash.json");
-    let bytes = std::fs::read(&path).with_context(|| {
+    let bytes = fs::read(&path).with_context(|| {
         format!("{path}: committed crash evidence is required; run `just haq-crash`")
     })?;
     let recorded: CrashEvidence =
@@ -102,7 +106,7 @@ fn verify_crash_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
 /// executed proves nothing at all.
 fn verify_canary_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let path = root.join("conformance/haqp/evidence/canaries.json");
-    let bytes = std::fs::read(&path).with_context(|| {
+    let bytes = fs::read(&path).with_context(|| {
         format!("{path}: committed canary evidence is required; run `just haq-canaries`")
     })?;
     let recorded: Vec<CanaryEvidence> =
@@ -171,7 +175,7 @@ fn verify_canary_rows(declared: &[Canary], recorded: &[CanaryEvidence]) -> Resul
 /// generator actually writes — was gitignored and therefore unreadable.
 fn verify_generated_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let path = root.join("conformance/haqp/evidence/generated.json");
-    let bytes = std::fs::read(&path).with_context(|| {
+    let bytes = fs::read(&path).with_context(|| {
         format!("{path}: committed generated evidence is required; run `just haq-generated`")
     })?;
     let recorded: Vec<GeneratedEvidence> =
@@ -383,7 +387,7 @@ fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
             );
         }
         let path = root.join(candidate);
-        let bytes = std::fs::read(&path).with_context(|| {
+        let bytes = fs::read(&path).with_context(|| {
             format!(
                 "{path}: {} claims pass but its record is missing",
                 review.reviewer
@@ -547,18 +551,18 @@ fn verify_reviewer_independence(records: &[(String, ReviewRecord)]) -> Result<()
 /// the deferral exists to prevent. A `1b` packet without kills would claim the
 /// stronger stage while supplying the weaker evidence.
 fn verify_qualification_stage(packet: &Packet) -> Result<()> {
-    let claims_kills = packet
+    let claims_resolved = packet
         .mutants
         .iter()
-        .any(|mutant| mutant.disposition == "killed");
+        .any(|mutant| mutant.disposition != "predeclared");
     match packet.qualification_stage.as_str() {
-        "1a" if claims_kills => anyhow::bail!(
-            "packet declares stage 1a but claims mutant kills; ADR-0021 defers the \
-             mutation requirement to 1b at M24, when a killing test can actually run"
+        "1a" if claims_resolved => anyhow::bail!(
+            "packet declares stage 1a but claims evaluated mutants; ADR-0021 defers the \
+             mutation requirement to 1b at M24, when the runner can produce evidence"
         ),
-        "1b" if !claims_kills => anyhow::bail!(
+        "1b" if !claims_resolved => anyhow::bail!(
             "packet declares stage 1b, which carries ADR-0020 §3's mutation \
-             requirement, but no mutant is killed"
+             requirement, but no mutant is killed or otherwise evaluated"
         ),
         "1a" | "1b" => Ok(()),
         other => anyhow::bail!("unknown qualification stage {other:?}; expected 1a or 1b"),
@@ -624,12 +628,464 @@ fn verify_mutant_killing_tests(root: &Utf8Path, packet: &Packet) -> Result<()> {
     Ok(())
 }
 
+fn verify_mutant_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    let path = root.join("conformance/haqp/evidence/mutants.json");
+    let bytes = fs::read(&path).with_context(|| {
+        format!("{path}: committed mutant evidence is required; run `just haq-mutants`")
+    })?;
+    let evidence: MutantEvidence =
+        serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))?;
+    require_eq(
+        "mutant evidence schema_version",
+        &evidence.schema_version,
+        "haqp-mutants-v1",
+    )?;
+    require_eq(
+        "mutant evidence source_commit",
+        &evidence.source_commit,
+        &git_text(root, &["rev-parse", "HEAD"])?,
+    )?;
+    let lockfile_blake3 = hex_digest(&fs::read(root.join("Cargo.lock"))?);
+    require_eq(
+        "mutant evidence lockfile_blake3",
+        &evidence.lockfile_blake3,
+        &lockfile_blake3,
+    )?;
+    require_eq(
+        "mutant evidence runner",
+        &evidence.runner,
+        "liminal-xtask haq mutants",
+    )?;
+
+    let declared = packet
+        .mutants
+        .iter()
+        .map(|mutant| (mutant.id.as_str(), mutant))
+        .collect::<BTreeMap<_, _>>();
+    let mut seen = BTreeSet::<String>::new();
+    for row in &evidence.rows {
+        verify_mutant_evidence_row(row, &declared, &mut seen)?;
+    }
+    let expected = packet
+        .mutants
+        .iter()
+        .filter(|mutant| mutant.disposition != "predeclared")
+        .map(|mutant| mutant.id.clone())
+        .collect::<BTreeSet<_>>();
+    anyhow::ensure!(
+        seen == expected,
+        "mutant evidence rows differ: recorded={seen:?}, expected={expected:?}"
+    );
+    Ok(())
+}
+
+fn verify_mutant_evidence_row(
+    row: &MutantEvidenceRow,
+    declared: &BTreeMap<&str, &Mutant>,
+    seen: &mut BTreeSet<String>,
+) -> Result<()> {
+    anyhow::ensure!(
+        seen.insert(row.id.clone()),
+        "duplicate mutant evidence row {}",
+        row.id
+    );
+    let mutant = declared
+        .get(row.id.as_str())
+        .with_context(|| format!("mutant evidence names undeclared {}", row.id))?;
+    anyhow::ensure!(
+        mutant.disposition != "predeclared",
+        "predeclared mutant {} has evaluated evidence",
+        row.id
+    );
+    require_eq(
+        "mutant evidence disposition",
+        &row.disposition,
+        &mutant.disposition,
+    )?;
+    let mutant_patch = mutant
+        .patch
+        .as_ref()
+        .context("evaluated mutant lacks patch")?;
+    anyhow::ensure!(
+        row.patch.as_ref() == Some(mutant_patch),
+        "{} evidence patch differs from packet",
+        row.id
+    );
+    anyhow::ensure!(
+        row.runnable_tests.len() == row.exit_codes.len()
+            && row.runnable_tests.len() == row.stdout_blake3.len()
+            && row.runnable_tests.len() == row.stderr_blake3.len(),
+        "{} evidence vectors have different lengths",
+        row.id
+    );
+    for digest in row.stdout_blake3.iter().chain(row.stderr_blake3.iter()) {
+        anyhow::ensure!(
+            digest.len() == 64 && digest.chars().all(|ch| ch.is_ascii_hexdigit()),
+            "{} has invalid output digest",
+            row.id
+        );
+    }
+    match row.disposition.as_str() {
+        "killed" => {
+            require_eq("mutant evidence status", &row.status, "killed")?;
+            anyhow::ensure!(
+                !row.failed_tests.is_empty(),
+                "{} claims killed with no failed test",
+                row.id
+            );
+        }
+        "equivalent" | "duplicate" => {
+            require_eq(
+                "mutant evidence status",
+                &row.status,
+                row.disposition.as_str(),
+            )?;
+        }
+        other => anyhow::bail!("{} has unsupported evaluated disposition {other:?}", row.id),
+    }
+    Ok(())
+}
+
+fn validate_mutant_patch(patch: &MutantPatch) -> Result<()> {
+    anyhow::ensure!(!patch.file.trim().is_empty(), "mutant patch names no file");
+    let source_path = Path::new(&patch.file);
+    anyhow::ensure!(
+        !source_path.is_absolute(),
+        "mutant patch path {:?} is absolute",
+        patch.file
+    );
+    anyhow::ensure!(
+        !source_path.components().any(|component| {
+            matches!(
+                component,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
+        }),
+        "mutant patch path {:?} escapes worktree",
+        patch.file
+    );
+    anyhow::ensure!(
+        !patch.before.is_empty(),
+        "mutant patch {:?} has empty before text",
+        patch.file
+    );
+    Ok(())
+}
+
+fn apply_mutant_patch(root: &Utf8Path, patch: &MutantPatch) -> Result<()> {
+    validate_mutant_patch(patch)?;
+    let target_path = root.join(&patch.file);
+    let text = fs::read_to_string(&target_path)
+        .with_context(|| format!("read mutant target {target_path}"))?;
+    let matches = text.match_indices(&patch.before).count();
+    anyhow::ensure!(
+        matches == 1,
+        "mutant patch {:?} expected one before occurrence, found {matches}",
+        patch.file
+    );
+    let replaced = text.replacen(&patch.before, &patch.after, 1);
+    fs::write(&target_path, replaced)
+        .with_context(|| format!("write mutant target {target_path}"))?;
+    Ok(())
+}
+
+fn validate_disposition(mutant: &Mutant) -> Result<()> {
+    if mutant.disposition == "predeclared" {
+        return Ok(());
+    }
+    let patch = mutant
+        .patch
+        .as_ref()
+        .with_context(|| format!("{} has evaluated disposition but no patch", mutant.id))?;
+    validate_mutant_patch(patch)?;
+    if matches!(mutant.disposition.as_str(), "equivalent" | "duplicate") {
+        anyhow::ensure!(
+            mutant
+                .disposition_proof
+                .as_deref()
+                .is_some_and(|proof| !proof.trim().is_empty()),
+            "{} requires written proof for {} disposition",
+            mutant.id,
+            mutant.disposition
+        );
+        let mut concurrence = BTreeSet::new();
+        for reviewer in &mutant.disposition_concurrence {
+            anyhow::ensure!(
+                !reviewer.trim().is_empty(),
+                "{} has empty concurrence",
+                mutant.id
+            );
+            concurrence.insert(reviewer);
+        }
+        anyhow::ensure!(
+            concurrence.len() >= 2,
+            "{} requires concurrence from both adversarial passes",
+            mutant.id
+        );
+    }
+    if mutant.disposition == "killed" {
+        anyhow::ensure!(
+            !mutant.killing_tests.is_empty(),
+            "{} claims killed but names no killing test",
+            mutant.id
+        );
+    }
+    Ok(())
+}
+
+fn hex_digest(bytes: &[u8]) -> String {
+    blake3::hash(bytes).to_hex().to_string()
+}
+
+fn git_text(root: &Utf8Path, args: &[&str]) -> Result<String> {
+    let output = Command::new("git")
+        .current_dir(root)
+        .args(args)
+        .output()
+        .with_context(|| format!("run git {args:?}"))?;
+    anyhow::ensure!(
+        output.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+    Ok(String::from_utf8(output.stdout)?.trim().to_owned())
+}
+
+fn regex_literal(value: &str) -> String {
+    value
+        .chars()
+        .flat_map(|ch| match ch {
+            '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '[' | ']' | '{' | '}' | '^' | '$' | '|' => {
+                vec!['\\', ch]
+            }
+            other => vec![other],
+        })
+        .collect()
+}
+
+fn run_one_mutant_test(
+    worktree: &Utf8Path,
+    test_name: &str,
+    run_ignored: bool,
+) -> Result<(i32, Vec<u8>, Vec<u8>)> {
+    let leaf = test_name.rsplit("::").next().unwrap_or(test_name);
+    let expression = format!("test(/^{}$/)", regex_literal(leaf));
+    let mut command = Command::new("cargo");
+    command
+        .current_dir(worktree)
+        .args([
+            "nextest",
+            "run",
+            "--workspace",
+            "--all-features",
+            "--profile",
+            "ci",
+        ])
+        .arg("-E")
+        .arg(expression);
+    if run_ignored {
+        command.args(["--run-ignored", "all"]);
+    }
+    let output = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .with_context(|| format!("run mutation witness {test_name}"))?;
+    let code = output.status.code().unwrap_or(-1);
+    Ok((code, output.stdout, output.stderr))
+}
+
+fn run_mutant_row(
+    worktree: &Utf8Path,
+    packet: &Packet,
+    mutant: &Mutant,
+    ignored: &BTreeSet<String>,
+    run_ignored: bool,
+) -> Result<MutantEvidenceRow> {
+    let Some(patch) = mutant.patch.clone() else {
+        return Ok(MutantEvidenceRow {
+            id: mutant.id.clone(),
+            disposition: mutant.disposition.clone(),
+            status: "not-ready".to_owned(),
+            patch: None,
+            runnable_tests: Vec::new(),
+            failed_tests: Vec::new(),
+            exit_codes: Vec::new(),
+            stdout_blake3: Vec::new(),
+            stderr_blake3: Vec::new(),
+            reason: Some("no patch declared".to_owned()),
+        });
+    };
+    let runnable = mutant
+        .killing_tests
+        .iter()
+        .filter_map(|test_id| packet.tests.iter().find(|test| &test.id == test_id))
+        .map(|test| test.name.clone())
+        .filter(|name| run_ignored || !ignored.contains(name.rsplit("::").next().unwrap_or(name)))
+        .collect::<Vec<_>>();
+    if runnable.is_empty() {
+        return Ok(MutantEvidenceRow {
+            id: mutant.id.clone(),
+            disposition: mutant.disposition.clone(),
+            status: "not-runnable".to_owned(),
+            patch: Some(patch),
+            runnable_tests: Vec::new(),
+            failed_tests: Vec::new(),
+            exit_codes: Vec::new(),
+            stdout_blake3: Vec::new(),
+            stderr_blake3: Vec::new(),
+            reason: Some("no runnable killing tests".to_owned()),
+        });
+    }
+    if let Err(error) = apply_mutant_patch(worktree, &patch) {
+        return Ok(MutantEvidenceRow {
+            id: mutant.id.clone(),
+            disposition: mutant.disposition.clone(),
+            status: "error".to_owned(),
+            patch: Some(patch),
+            runnable_tests: runnable,
+            failed_tests: Vec::new(),
+            exit_codes: Vec::new(),
+            stdout_blake3: Vec::new(),
+            stderr_blake3: Vec::new(),
+            reason: Some(error.to_string()),
+        });
+    }
+    let mut failed_tests = Vec::new();
+    let mut exit_codes = Vec::new();
+    let mut stdout_blake3 = Vec::new();
+    let mut stderr_blake3 = Vec::new();
+    for test_name in &runnable {
+        let (code, stdout, stderr) = run_one_mutant_test(worktree, test_name, run_ignored)?;
+        if code != 0 {
+            failed_tests.push(test_name.clone());
+        }
+        exit_codes.push(code);
+        stdout_blake3.push(hex_digest(&stdout));
+        stderr_blake3.push(hex_digest(&stderr));
+    }
+    let status = if failed_tests.is_empty() {
+        "survived"
+    } else {
+        "killed"
+    };
+    Ok(MutantEvidenceRow {
+        id: mutant.id.clone(),
+        disposition: mutant.disposition.clone(),
+        status: status.to_owned(),
+        patch: Some(patch),
+        runnable_tests: runnable,
+        failed_tests,
+        exit_codes,
+        stdout_blake3,
+        stderr_blake3,
+        reason: None,
+    })
+}
+
+fn reset_mutant_worktree(worktree: &Utf8Path, source_commit: &str) -> Result<()> {
+    let reset = Command::new("git")
+        .current_dir(worktree)
+        .args(["reset", "--hard", "--quiet", source_commit])
+        .output()?;
+    anyhow::ensure!(reset.status.success(), "reset mutant worktree failed");
+    let clean = Command::new("git")
+        .current_dir(worktree)
+        .args(["clean", "-fdx", "-q"])
+        .output()?;
+    anyhow::ensure!(clean.status.success(), "clean mutant worktree failed");
+    Ok(())
+}
+
+/// Execute source patches in disposable git worktrees. This command writes only
+/// digests and statuses; raw test/model output never enters the repository.
+pub fn run_mutants_repo(root: &Utf8Path, ids: &[String], run_ignored: bool) -> Result<()> {
+    let packet = read_packet(root)?;
+    verify_packet_shape(&packet)?;
+    anyhow::ensure!(
+        git_text(root, &["status", "--porcelain"])?.is_empty(),
+        "mutant runner requires a clean source tree"
+    );
+    let source_commit = git_text(root, &["rev-parse", "HEAD"])?;
+    let lockfile_blake3 = hex_digest(&fs::read(root.join("Cargo.lock"))?);
+    let selected = if ids.is_empty() {
+        packet.mutants.iter().collect::<Vec<_>>()
+    } else {
+        let wanted = ids.iter().cloned().collect::<BTreeSet<_>>();
+        let selected = packet
+            .mutants
+            .iter()
+            .filter(|mutant| wanted.contains(&mutant.id))
+            .collect::<Vec<_>>();
+        let present = selected
+            .iter()
+            .map(|mutant| mutant.id.clone())
+            .collect::<BTreeSet<_>>();
+        anyhow::ensure!(
+            present.len() == wanted.len(),
+            "unknown mutant id(s): {:?}",
+            wanted.difference(&present).collect::<Vec<_>>()
+        );
+        selected
+    };
+
+    let ignored = ignored_test_names(root);
+    let scratch = liminal_scratch::ScratchDir::new("haq-mutants")?;
+    let worktree = scratch.path().to_owned();
+    let add = Command::new("git")
+        .current_dir(root)
+        .args(["worktree", "add", "--detach", "--quiet"])
+        .arg(&worktree)
+        .arg(&source_commit)
+        .output()?;
+    anyhow::ensure!(
+        add.status.success(),
+        "git worktree add failed: {}",
+        String::from_utf8_lossy(&add.stderr).trim()
+    );
+
+    let mut rows = Vec::with_capacity(selected.len());
+    for mutant in selected {
+        rows.push(run_mutant_row(
+            &worktree,
+            &packet,
+            mutant,
+            &ignored,
+            run_ignored,
+        )?);
+        reset_mutant_worktree(&worktree, &source_commit)?;
+    }
+    let remove = Command::new("git")
+        .current_dir(root)
+        .args(["worktree", "remove", "--force", "--quiet"])
+        .arg(&worktree)
+        .output()?;
+    anyhow::ensure!(remove.status.success(), "git worktree remove failed");
+    drop(scratch);
+
+    let evidence = MutantEvidence {
+        schema_version: "haqp-mutants-v1".to_owned(),
+        source_commit,
+        lockfile_blake3,
+        runner: "liminal-xtask haq mutants".to_owned(),
+        rows,
+    };
+    let path = root.join("conformance/haqp/evidence/mutants.json");
+    fs::create_dir_all(path.parent().expect("evidence parent"))?;
+    fs::write(&path, serde_json::to_vec_pretty(&evidence)?)?;
+    println!(
+        "mutant evidence written to {path}; rows={}",
+        evidence.rows.len()
+    );
+    Ok(())
+}
+
 /// Leaf names of every `#[ignore]`d test in the tree.
 fn ignored_test_names(root: &Utf8Path) -> BTreeSet<String> {
     let mut names = BTreeSet::new();
     let mut stack = vec![root.join("conformance"), root.join("crates")];
     while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
+        let Ok(entries) = fs::read_dir(&dir) else {
             continue;
         };
         for entry in entries.flatten() {
@@ -641,7 +1097,7 @@ fn ignored_test_names(root: &Utf8Path) -> BTreeSet<String> {
                     stack.push(path);
                 }
             } else if path.extension() == Some("rs")
-                && let Ok(text) = std::fs::read_to_string(&path)
+                && let Ok(text) = fs::read_to_string(&path)
             {
                 collect_ignored(&text, &mut names);
             }
@@ -679,7 +1135,7 @@ fn verify_test_names_exist(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let mut sources = String::new();
     let mut stack = vec![root.join("conformance"), root.join("crates")];
     while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
+        let Ok(entries) = fs::read_dir(&dir) else {
             continue;
         };
         for entry in entries.flatten() {
@@ -691,7 +1147,7 @@ fn verify_test_names_exist(root: &Utf8Path, packet: &Packet) -> Result<()> {
                     stack.push(path);
                 }
             } else if path.extension() == Some("rs")
-                && let Ok(text) = std::fs::read_to_string(&path)
+                && let Ok(text) = fs::read_to_string(&path)
             {
                 sources.push_str(&text);
                 sources.push('\n');
@@ -733,8 +1189,8 @@ fn verify_test_names_exist(root: &Utf8Path, packet: &Packet) -> Result<()> {
 /// unreconciled until that mapping is decided.
 fn verify_fuzz_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let path = root.join("conformance/haqp/evidence/fuzz.json");
-    let bytes = std::fs::read(&path)
-        .with_context(|| format!("{path}: committed fuzz evidence is required"))?;
+    let bytes =
+        fs::read(&path).with_context(|| format!("{path}: committed fuzz evidence is required"))?;
     let recorded: Vec<FuzzEvidence> =
         serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))?;
 
@@ -745,7 +1201,7 @@ fn verify_fuzz_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
     // Bind to the targets that actually exist in the tree instead.
     let mut present = BTreeSet::new();
     let targets_dir = root.join("fuzz/fuzz_targets");
-    let entries = std::fs::read_dir(&targets_dir)
+    let entries = fs::read_dir(&targets_dir)
         .with_context(|| format!("{targets_dir}: fuzz targets are required to verify the lane"))?;
     for entry in entries.flatten() {
         let Ok(file) = camino::Utf8PathBuf::from_path_buf(entry.path()) else {
@@ -893,10 +1349,7 @@ fn verify_provenance(root: &Utf8Path, packet: &Packet) -> Result<()> {
         anyhow::bail!("packet has no provenance block; qualification is unbound to any tree");
     };
     let git = |args: &[&str]| -> Result<String> {
-        let out = std::process::Command::new("git")
-            .current_dir(root)
-            .args(args)
-            .output()?;
+        let out = Command::new("git").current_dir(root).args(args).output()?;
         anyhow::ensure!(out.status.success(), "git {args:?} failed");
         Ok(String::from_utf8(out.stdout)?.trim().to_owned())
     };
@@ -908,7 +1361,7 @@ fn verify_provenance(root: &Utf8Path, packet: &Packet) -> Result<()> {
         "qualification requires a clean tree; {} path(s) are dirty",
         dirty.lines().count()
     );
-    let lockfile = std::fs::read(root.join("Cargo.lock"))?;
+    let lockfile = fs::read(root.join("Cargo.lock"))?;
     let digest = blake3::hash(&lockfile).to_hex().to_string();
     require_eq(
         "provenance.lockfile_blake3",
@@ -920,7 +1373,7 @@ fn verify_provenance(root: &Utf8Path, packet: &Packet) -> Result<()> {
 
 fn read_packet(root: &Utf8Path) -> Result<Packet> {
     let path = root.join("conformance/haqp/packet.json");
-    let bytes = std::fs::read(&path).with_context(|| format!("read {path}"))?;
+    let bytes = fs::read(&path).with_context(|| format!("read {path}"))?;
     serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))
 }
 
@@ -1121,7 +1574,15 @@ struct PacketStatusExpectations {
 
 fn verify_packet_statuses(packet: &Packet, expected: PacketStatusExpectations) -> Result<()> {
     for mutant in &packet.mutants {
-        require_eq("mutant.disposition", &mutant.disposition, expected.mutant)?;
+        if expected.mutant == "resolved" {
+            anyhow::ensure!(
+                mutant.disposition != "predeclared",
+                "mutant {} remains predeclared in a resolved packet",
+                mutant.id
+            );
+        } else {
+            require_eq("mutant.disposition", &mutant.disposition, expected.mutant)?;
+        }
     }
     for canary in &packet.canaries {
         require_eq("canary.result", &canary.result, expected.canary)?;
@@ -1224,9 +1685,10 @@ fn verify_mutant_inventory(packet: &Packet) -> Result<()> {
         if mutant.defect.trim().is_empty() {
             anyhow::bail!("{} describes no defect", mutant.id);
         }
+        validate_disposition(mutant)?;
         *by_family.entry(mutant.family.as_str()).or_default() += 1;
         *by_operator.entry(mutant.operator.as_str()).or_default() += 1;
-        if mutant.killing_tests.is_empty() {
+        if mutant.disposition == "predeclared" && mutant.killing_tests.is_empty() {
             anyhow::bail!("{} has no killing test", mutant.id);
         }
     }
@@ -1420,7 +1882,7 @@ fn verify_reviews_inventory(packet: &Packet) -> Result<()> {
 
 fn verify_markdown_surface(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let path = root.join("docs/execution/phase1-suite-review.md");
-    let text = std::fs::read_to_string(&path).with_context(|| format!("read {path}"))?;
+    let text = fs::read_to_string(&path).with_context(|| format!("read {path}"))?;
     verify_markdown_surface_text(&text, packet)
 }
 
@@ -1612,6 +2074,52 @@ struct Mutant {
     defect: String,
     killing_tests: Vec<String>,
     disposition: String,
+    /// Exact source replacement used by the mutation runner. Predeclared
+    /// inventory rows may omit this until their owning milestone supplies the
+    /// implementation coordinate; every evaluated disposition must carry it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    patch: Option<MutantPatch>,
+    /// Required proof for an equivalent or duplicate disposition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    disposition_proof: Option<String>,
+    /// Reviewer names that concurred with an equivalent/duplicate proof.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    disposition_concurrence: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize, PartialEq, Eq)]
+struct MutantPatch {
+    file: String,
+    before: String,
+    after: String,
+}
+
+/// Durable result of one mutation-run invocation. Raw test output is never
+/// persisted; digests and exit states are enough to audit what ran without
+/// turning model/test output into a secret-bearing artifact.
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct MutantEvidence {
+    schema_version: String,
+    source_commit: String,
+    lockfile_blake3: String,
+    runner: String,
+    rows: Vec<MutantEvidenceRow>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct MutantEvidenceRow {
+    id: String,
+    disposition: String,
+    status: String,
+    patch: Option<MutantPatch>,
+    runnable_tests: Vec<String>,
+    failed_tests: Vec<String>,
+    exit_codes: Vec<i32>,
+    stdout_blake3: Vec<String>,
+    stderr_blake3: Vec<String>,
+    reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -1770,12 +2278,12 @@ pub fn run_canaries_repo(root: &Utf8Path) -> Result<()> {
     let baseline = read_packet(root)?;
     verify_inventory_repo(root)?;
     let markdown_path = root.join("docs/execution/phase1-suite-review.md");
-    let markdown = std::fs::read_to_string(&markdown_path)?;
+    let markdown = fs::read_to_string(&markdown_path)?;
     let records = run_canary_suite(&baseline, &markdown)?;
     let bytes = serde_json::to_vec_pretty(&records)?;
     let path = root.join("conformance/haqp/evidence/canaries.json");
-    std::fs::create_dir_all(path.parent().expect("evidence parent"))?;
-    std::fs::write(&path, &bytes)?;
+    fs::create_dir_all(path.parent().expect("evidence parent"))?;
+    fs::write(&path, &bytes)?;
     println!(
         "all {} canaries caught; evidence {path}; blake3={}",
         records.len(),
@@ -2412,8 +2920,8 @@ pub fn run_generated_repo(root: &Utf8Path, cases: u64) -> Result<()> {
     let (evidence, timings) = generate_evidence(cases)?;
     let bytes = serde_json::to_vec_pretty(&evidence)?;
     let path = root.join("conformance/haqp/evidence/generated.json");
-    std::fs::create_dir_all(path.parent().expect("evidence parent"))?;
-    std::fs::write(&path, &bytes)?;
+    fs::create_dir_all(path.parent().expect("evidence parent"))?;
+    fs::write(&path, &bytes)?;
     for (row, elapsed_ms) in evidence.iter().zip(&timings) {
         #[allow(clippy::cast_precision_loss, reason = "reporting only")]
         let rate = row.discards as f64 * 100.0 / row.attempts.max(1) as f64;
@@ -2580,6 +3088,11 @@ mod tests {
         packet.qualification_state = "complete".to_owned();
         for mutant in &mut packet.mutants {
             mutant.disposition = "killed".to_owned();
+            mutant.patch = Some(MutantPatch {
+                file: "Cargo.toml".to_owned(),
+                before: "[workspace]".to_owned(),
+                after: "[workspace]".to_owned(),
+            });
         }
         for canary in &mut packet.canaries {
             canary.result = "caught".to_owned();
@@ -2612,6 +3125,62 @@ mod tests {
             },
         )
         .expect("complete statuses accepted by qualified verifier");
+    }
+
+    #[test]
+    fn mutant_patch_requires_one_relative_source_coordinate() {
+        let good = MutantPatch {
+            file: "crates/example.rs".to_owned(),
+            before: "old".to_owned(),
+            after: "new".to_owned(),
+        };
+        validate_mutant_patch(&good).expect("ordinary relative patch is valid");
+        for file in ["/tmp/example.rs", "../example.rs"] {
+            let bad = MutantPatch {
+                file: file.to_owned(),
+                ..good.clone()
+            };
+            validate_mutant_patch(&bad).expect_err("patch must not escape worktree");
+        }
+    }
+
+    #[test]
+    fn evaluated_equivalent_mutant_requires_proof_and_two_concurrences() {
+        let mut packet = packet_from_repo();
+        packet.mutants[0].disposition = "equivalent".to_owned();
+        packet.mutants[0].patch = Some(MutantPatch {
+            file: "Cargo.toml".to_owned(),
+            before: "[workspace]".to_owned(),
+            after: "[workspace]".to_owned(),
+        });
+        verify_mutant_inventory(&packet).expect_err("equivalence without proof must fail");
+        packet.mutants[0].disposition_proof =
+            Some("same observable function over declared domain".to_owned());
+        packet.mutants[0].disposition_concurrence = vec!["pass-1".to_owned()];
+        verify_mutant_inventory(&packet).expect_err("equivalence needs both pass concurrences");
+        packet.mutants[0]
+            .disposition_concurrence
+            .push("pass-2".to_owned());
+        verify_mutant_inventory(&packet).expect("fully documented equivalence is admissible");
+    }
+
+    #[test]
+    fn mutant_patch_replacement_rejects_zero_or_multiple_matches() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-mutant-patch").expect("scratch");
+        let fixture_path = scratch.join("target.txt");
+        fs::write(&fixture_path, "one old two old").expect("write fixture");
+        let replacement = MutantPatch {
+            file: "target.txt".to_owned(),
+            before: "old".to_owned(),
+            after: "new".to_owned(),
+        };
+        apply_mutant_patch(&scratch, &replacement).expect_err("ambiguous replacement must fail");
+        fs::write(&fixture_path, "one old").expect("rewrite fixture");
+        apply_mutant_patch(&scratch, &replacement).expect("unique replacement succeeds");
+        assert_eq!(
+            fs::read_to_string(fixture_path).expect("read fixture"),
+            "one new"
+        );
     }
 
     /// M17.5 F-05 canary: dropping one evidence kind must fail the shape
@@ -2767,7 +3336,7 @@ mod tests {
     #[test]
     fn canary_runner_rejects_prose_that_misdescribes_its_own_mutation() {
         let root = repo_root();
-        let markdown = std::fs::read_to_string(root.join("docs/execution/phase1-suite-review.md"))
+        let markdown = fs::read_to_string(root.join("docs/execution/phase1-suite-review.md"))
             .expect("review markdown");
         let baseline = packet_from_repo();
 
@@ -2810,7 +3379,7 @@ mod tests {
     /// all three (#17).
     #[test]
     fn committed_fuzz_evidence_parses_with_every_field_checked() {
-        let bytes = std::fs::read(repo_root().join("conformance/haqp/evidence/fuzz.json"))
+        let bytes = fs::read(repo_root().join("conformance/haqp/evidence/fuzz.json"))
             .expect("committed fuzz evidence");
         let rows: Vec<FuzzEvidence> =
             serde_json::from_slice(&bytes).expect("every recorded field must be declared");
@@ -2832,7 +3401,7 @@ mod tests {
     /// not targets — so an invented target name passed.
     #[test]
     fn fuzz_lane_rejects_a_target_that_does_not_exist() {
-        let bytes = std::fs::read(repo_root().join("conformance/haqp/evidence/fuzz.json"))
+        let bytes = fs::read(repo_root().join("conformance/haqp/evidence/fuzz.json"))
             .expect("committed fuzz evidence");
         let mut rows: Vec<FuzzEvidence> = serde_json::from_slice(&bytes).expect("parse");
         // The committed artifact predates F-17 and carries no log digest. Each
@@ -2866,7 +3435,7 @@ mod tests {
     /// short of its budget is stating a contradiction.
     #[test]
     fn fuzz_lane_rejects_a_clean_campaign_that_exited_early() {
-        let bytes = std::fs::read(repo_root().join("conformance/haqp/evidence/fuzz.json"))
+        let bytes = fs::read(repo_root().join("conformance/haqp/evidence/fuzz.json"))
             .expect("committed fuzz evidence");
         let mut rows: Vec<FuzzEvidence> = serde_json::from_slice(&bytes).expect("parse");
         // The committed artifact predates F-17 and carries no log digest. Each
@@ -2905,7 +3474,7 @@ mod tests {
     /// let the comment claim more than the code enforced.
     #[test]
     fn fuzz_lane_rejects_rows_from_different_campaigns() {
-        let bytes = std::fs::read(repo_root().join("conformance/haqp/evidence/fuzz.json"))
+        let bytes = fs::read(repo_root().join("conformance/haqp/evidence/fuzz.json"))
             .expect("committed fuzz evidence");
         let mut rows: Vec<FuzzEvidence> = serde_json::from_slice(&bytes).expect("parse");
         // The committed artifact predates F-17 and carries no log digest. Each
@@ -2935,7 +3504,7 @@ mod tests {
     }
 
     fn crash_evidence_from_repo() -> (CrashEvidence, BTreeSet<String>) {
-        let bytes = std::fs::read(repo_root().join("conformance/haqp/evidence/crash.json"))
+        let bytes = fs::read(repo_root().join("conformance/haqp/evidence/crash.json"))
             .expect("committed crash evidence");
         let recorded: CrashEvidence = serde_json::from_slice(&bytes).expect("parse");
         let declared = packet_from_repo()
@@ -3365,7 +3934,7 @@ mod tests {
     /// unverifiable.
     #[test]
     fn fuzz_lane_rejects_a_campaign_with_no_sanitizer() {
-        let bytes = std::fs::read(repo_root().join("conformance/haqp/evidence/fuzz.json"))
+        let bytes = fs::read(repo_root().join("conformance/haqp/evidence/fuzz.json"))
             .expect("committed fuzz evidence");
         let mut rows: Vec<FuzzEvidence> = serde_json::from_slice(&bytes).expect("parse");
         // The committed artifact predates F-17 and carries no log digest. Each
@@ -3805,8 +4374,8 @@ mod tests {
             "docs/execution/phase1-suite-review.md",
         ] {
             let dest = root.join(rel);
-            std::fs::create_dir_all(dest.parent().expect("parent")).expect("mkdir");
-            std::fs::copy(source.join(rel), &dest).expect("copy fixture");
+            fs::create_dir_all(dest.parent().expect("parent")).expect("mkdir");
+            fs::copy(source.join(rel), &dest).expect("copy fixture");
         }
         // Sanity: the COPY must pass, or the refusal below proves nothing about
         // the doctoring.
@@ -3815,9 +4384,9 @@ mod tests {
         // A proposed packet may not declare itself ratified.
         let path = root.join("conformance/haqp/packet.json");
         let mut packet: serde_json::Value =
-            serde_json::from_slice(&std::fs::read(&path).expect("read")).expect("parse");
+            serde_json::from_slice(&fs::read(&path).expect("read")).expect("parse");
         packet["ratification"] = serde_json::Value::String("ratified".to_owned());
-        std::fs::write(
+        fs::write(
             &path,
             serde_json::to_vec_pretty(&packet).expect("serialize"),
         )
@@ -4100,7 +4669,7 @@ mod tests {
     /// and read by nothing.
     #[test]
     fn crash_scenarios_are_verified_not_merely_carried() {
-        let bytes = std::fs::read(repo_root().join("conformance/haqp/evidence/crash.json"))
+        let bytes = fs::read(repo_root().join("conformance/haqp/evidence/crash.json"))
             .expect("committed crash evidence");
         let recorded: CrashEvidence = serde_json::from_slice(&bytes).expect("parse");
         let declared: BTreeSet<String> = recorded
