@@ -1,57 +1,8 @@
 [
- {
-  "target": "cst_parse",
-  "seconds": 1800,
-  "elapsed_s": 1802,
-  "exit_code": 0,
-  "execs": 53194748,
-  "artifacts": 0,
-  "seed": 20260725,
-  "log": "target/haqp/fuzz-cst_parse.log",
-  "sanitizer": "address"
- },
- {
-  "target": "format_idempotent",
-  "seconds": 1800,
-  "elapsed_s": 1802,
-  "exit_code": 0,
-  "execs": 287883,
-  "artifacts": 0,
-  "seed": 20260725,
-  "log": "target/haqp/fuzz-format_idempotent.log",
-  "sanitizer": "address"
- },
- {
-  "target": "canonical_round_trip",
-  "seconds": 1800,
-  "elapsed_s": 1801,
-  "exit_code": 0,
-  "execs": 368352,
-  "artifacts": 0,
-  "seed": 20260725,
-  "log": "target/haqp/fuzz-canonical_round_trip.log",
-  "sanitizer": "address"
- },
- {
-  "target": "incremental_full_equivalence",
-  "seconds": 1800,
-  "elapsed_s": 1802,
-  "exit_code": 0,
-  "execs": 802313,
-  "artifacts": 0,
-  "seed": 20260725,
-  "log": "target/haqp/fuzz-incremental_full_equivalence.log",
-  "sanitizer": "address"
- },
- {
-  "target": "html_render",
-  "seconds": 1800,
-  "elapsed_s": 1802,
-  "exit_code": 0,
-  "execs": 1190830,
-  "artifacts": 0,
-  "seed": 20260725,
-  "log": "target/haqp/fuzz-html_render.log",
-  "sanitizer": "address"
- }
-]
+{"target":"cst_parse","seconds":1860,"elapsed_s":1862,"exit_code":0,"execs":26798985,"artifacts":0,"seed":20260725,"sanitizer":"address","log":"target/haqp/fuzz-cst_parse.log","log_blake3":"464bb4d336d9e8fdbdc1313f716610a7766065fd05d017e750e8ea25960dd5e4"},
+{"target":"format_idempotent","seconds":1860,"elapsed_s":1862,"exit_code":0,"execs":139182,"artifacts":0,"seed":20260725,"sanitizer":"address","log":"target/haqp/fuzz-format_idempotent.log","log_blake3":"c19be4965dff90b04f7f5ced907e208e2937edfa474c320a60f898586365d973"},
+{"target":"canonical_round_trip","seconds":1860,"elapsed_s":1862,"exit_code":0,"execs":222667,"artifacts":0,"seed":20260725,"sanitizer":"address","log":"target/haqp/fuzz-canonical_round_trip.log","log_blake3":"c1167464a324b8b8ef644cde03451d7b30642585a3a61b51380a9ed4fb7512be"},
+{"target":"incremental_full_equivalence","seconds":1860,"elapsed_s":1861,"exit_code":0,"execs":895871,"artifacts":0,"seed":20260725,"sanitizer":"address","log":"target/haqp/fuzz-incremental_full_equivalence.log","log_blake3":"d469917ff2b56e9d8be9a6467dece26663f68863d36fde97e69457495ecd6bc1"},
+{"target":"html_render","seconds":1860,"elapsed_s":1862,"exit_code":0,"execs":1703585,"artifacts":0,"seed":20260725,"sanitizer":"address","log":"target/haqp/fuzz-html_render.log","log_blake3":"a3774d401659de4c0d0507d19f513a1439a5ca3f991aa2f5a647873c22eaf611"},
+{"target":"graph_interchange_codec","seconds":1860,"elapsed_s":1861,"exit_code":0,"execs":223954532,"artifacts":0,"seed":20260725,"sanitizer":"address","log":"target/haqp/fuzz-graph_interchange_codec.log","log_blake3":"abd8a3cdaf2706f405af76082314dfd970e7ee38d9ff7c7298331bb5fa83ea45"},
+{"target":"ilrp_recovery","seconds":1860,"elapsed_s":1862,"exit_code":0,"execs":27097590,"artifacts":0,"seed":20260725,"sanitizer":"address","log":"target/haqp/fuzz-ilrp_recovery.log","log_blake3":"3aebab75886f4837397e493e42ca1fb92c95084cda04cfa4e93bf206758e163e"}]

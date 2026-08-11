@@ -4434,8 +4434,9 @@ mod tests {
         for family in &mut fuzz.generated {
             family.result = "pass".to_owned();
         }
+        fuzz.generated[0].fuzz_targets[0] = "never_ran".to_owned();
         verify_fuzz_evidence(&root, &fuzz)
-            .expect_err("the committed campaign predates log_blake3, so it cannot qualify");
+            .expect_err("a packet claiming an unrecorded target cannot qualify");
 
         let mut markdown = read_packet(&root).expect("packet");
         markdown.suite_version = "tampered".to_owned();
