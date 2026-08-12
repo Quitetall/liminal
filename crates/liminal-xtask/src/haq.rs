@@ -476,6 +476,16 @@ fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
             &record.fixed_base.commit,
             &provenance.fixed_commit,
         )?;
+        require_eq(
+            "review record fixed_base.tree",
+            &record.fixed_base.tree,
+            &provenance.fixed_tree,
+        )?;
+        anyhow::ensure!(
+            record.fixed_base.clean,
+            "{} review record was produced from a dirty fixed base",
+            review.reviewer
+        );
         records.push((review.reviewer.clone(), record));
     }
     verify_reviewer_independence(&records)
@@ -499,6 +509,7 @@ fn verify_review_record(review: &Review, record: &ReviewRecord) -> Result<()> {
         &record.sanitized_prompt_hash,
     )?;
     require_hex_digest("review fixed_base.commit", &record.fixed_base.commit)?;
+    require_hex_digest("review fixed_base.tree", &record.fixed_base.tree)?;
     if record.attempts.len() as u64 != review.attempts {
         anyhow::bail!(
             "{who} declares {} attempts but its record contains {}",
@@ -2486,6 +2497,8 @@ struct ReviewRecordAttempt {
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct ReviewFixedBase {
     commit: String,
+    tree: String,
+    clean: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -4013,6 +4026,8 @@ mod tests {
             sanitized_prompt_hash: "ab".repeat(32),
             fixed_base: ReviewFixedBase {
                 commit: "ab".repeat(32),
+                tree: "cd".repeat(32),
+                clean: true,
             },
             blindness_proof: ReviewRecordBlindness {
                 prior_pass_artifact_supplied: false,
@@ -4059,6 +4074,14 @@ mod tests {
         duplicated.attempts[1].id = duplicated.attempts[0].id.clone();
         verify_review_record(&review_row(), &duplicated)
             .expect_err("twelve attempts must be twelve DISTINCT attempts");
+    }
+
+    #[test]
+    fn review_record_rejects_an_unbound_fixed_tree() {
+        let mut record = review_record(1, "openai", "codex");
+        record.fixed_base.tree = "not-a-digest".to_owned();
+        verify_review_record(&review_row(), &record)
+            .expect_err("a review record without a fixed tree binding is untrusted");
     }
 
     /// P1-A06: the packet may not summarize the record more kindly than the

@@ -1,42 +1,46 @@
-[
-  {
-    "family": "source/CST/formatting",
-    "accepted": 100000,
-    "attempts": 100204,
-    "discards": 204,
-    "seed": 11400714819323198485,
-    "evidence_hash": "04303bc0856351d17d39ccf8cb0d5df562b3d821f2455b08883b34f8bdbb6168"
-  },
-  {
-    "family": "graph/interchange codecs",
-    "accepted": 100000,
-    "attempts": 100102,
-    "discards": 102,
-    "seed": 11400713719811571110,
-    "evidence_hash": "cde6d32a0aad4fb13e8736ee9587769133c8acb67b0101a93fec59c56ef546e6"
-  },
-  {
-    "family": "transforms/projections",
-    "accepted": 100000,
-    "attempts": 100000,
-    "discards": 0,
-    "seed": 11400717018346454899,
-    "evidence_hash": "9e41fb6ecdb215ec667790359eec726a021bc3d037200b7cc193e76cf2a7efb0"
-  },
-  {
-    "family": "repair/ILRP/recovery",
-    "accepted": 100000,
-    "attempts": 100258,
-    "discards": 258,
-    "seed": 11400715918834825484,
-    "evidence_hash": "bd9d1b2877211e070663d3d62f61e52c89c3d7c90dadd58f37c2b23b443003f8"
-  },
-  {
-    "family": "Basis/revision/query invalidation",
-    "accepted": 100000,
-    "attempts": 100260,
-    "discards": 260,
-    "seed": 11400719217369709273,
-    "evidence_hash": "174aef276f2dd63272430a838a4dd186529d181a764aa64ac26f3fe3d4c522b1"
-  }
-]
+{
+  "schema_version": "haqp-generated-v1",
+  "artifact_blake3": "afd827a5091128c688517c2006c2c9b00451d71f321b080ac184c3a392e388f2",
+  "rows": [
+    {
+      "family": "source/CST/formatting",
+      "accepted": 100000,
+      "attempts": 100204,
+      "discards": 204,
+      "seed": 11400714819323198485,
+      "evidence_hash": "04303bc0856351d17d39ccf8cb0d5df562b3d821f2455b08883b34f8bdbb6168"
+    },
+    {
+      "family": "graph/interchange codecs",
+      "accepted": 100000,
+      "attempts": 100102,
+      "discards": 102,
+      "seed": 11400713719811571110,
+      "evidence_hash": "cde6d32a0aad4fb13e8736ee9587769133c8acb67b0101a93fec59c56ef546e6"
+    },
+    {
+      "family": "transforms/projections",
+      "accepted": 100000,
+      "attempts": 100000,
+      "discards": 0,
+      "seed": 11400717018346454899,
+      "evidence_hash": "9e41fb6ecdb215ec667790359eec726a021bc3d037200b7cc193e76cf2a7efb0"
+    },
+    {
+      "family": "repair/ILRP/recovery",
+      "accepted": 100000,
+      "attempts": 100258,
+      "discards": 258,
+      "seed": 11400715918834825484,
+      "evidence_hash": "bd9d1b2877211e070663d3d62f61e52c89c3d7c90dadd58f37c2b23b443003f8"
+    },
+    {
+      "family": "Basis/revision/query invalidation",
+      "accepted": 100000,
+      "attempts": 100238,
+      "discards": 238,
+      "seed": 11400719217369709273,
+      "evidence_hash": "c0ea0ceda31a50660ea0fcda536ea494fff7caa40e3540ca9fe01485ea966bcf"
+    }
+  ]
+}

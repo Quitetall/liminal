@@ -1679,8 +1679,8 @@
     "invalid-utf8",
     "comment",
     "escape",
-    "boundary-offset",
-    "hostile"
+   "boundary-offset",
+   "hostile"
    ],
    "result": "planned",
    "seed": 11400714819323198485,
@@ -1784,8 +1784,8 @@
   {
    "family": "Basis/revision/query invalidation",
    "accepted": 100000,
-   "attempts": 100260,
-   "discards": 260,
+   "attempts": 100238,
+   "discards": 238,
    "seed_categories": [
     "empty-basis",
     "single-revision",
@@ -1801,12 +1801,12 @@
     "large-frontier",
     "unknown-perspective",
     "truncated",
-    "reordered",
-    "hostile"
+   "reordered",
+   "hostile"
    ],
    "result": "planned",
    "seed": 11400719217369709273,
-   "evidence_hash": "174aef276f2dd63272430a838a4dd186529d181a764aa64ac26f3fe3d4c522b1",
+   "evidence_hash": "c0ea0ceda31a50660ea0fcda536ea494fff7caa40e3540ca9fe01485ea966bcf",
    "fuzz_targets": [
     "incremental_full_equivalence"
    ]
