@@ -50,16 +50,18 @@ for t in "${TARGETS[@]}"; do
   [ "$code" -ne 0 ] && overall=1
   [ "$first" -eq 0 ] && echo "," >> "$OUT"
   first=0
-  # F-17: the log lives under target/ (gitignored), so its digest is what makes
-  # the counts above checkable after the run. --keep-logs commits the log itself
-  # for anyone who wants more than a hash.
+  # F-17: release qualification retains each log in tracked evidence. A digest
+  # alone cannot prove that later counts came from the campaign's output.
   loghash=$(cargo run -q -p liminal-xtask -- haq hash "$log" 2>/dev/null || echo "")
   if [ "$KEEP_LOGS" = "1" ]; then
     mkdir -p conformance/haqp/evidence/logs
     cp "$log" "conformance/haqp/evidence/logs/$t.log"
+    evidence_log="conformance/haqp/evidence/logs/$t.log"
+  else
+    evidence_log="$log"
   fi
   printf '{"target":"%s","seconds":%s,"elapsed_s":%s,"exit_code":%s,"execs":%s,"artifacts":%s,"seed":%s,"sanitizer":"%s","log":"%s","log_blake3":"%s"}' \
-    "$t" "$SECS" "$elapsed" "$code" "$execs" "$arts" "$SEED" "$SANITIZER" "$log" "$loghash" >> "$OUT"
+    "$t" "$SECS" "$elapsed" "$code" "$execs" "$arts" "$SEED" "$SANITIZER" "$evidence_log" "$loghash" >> "$OUT"
   echo "--- $t: exit=$code execs=$execs artifacts=$arts elapsed=${elapsed}s"
 done
 

@@ -157,6 +157,12 @@ fn verify_canary_rows(declared: &[Canary], recorded: &[CanaryEvidence]) -> Resul
                 evidence.expected_failure
             );
         }
+        require_eq("canary evidence gate", &evidence.gate, &canary.gate)?;
+        require_eq(
+            "canary evidence mutation semantics",
+            &evidence.mutation_semantics,
+            canary_mutation_semantics(&canary.id)?,
+        )?;
     }
     // Every canary the run exercised must be declared, or the packet is a
     // subset of the experiment and a reader cannot tell which rows are missing.
@@ -183,16 +189,33 @@ fn verify_generated_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let bytes = fs::read(&path).with_context(|| {
         format!("{path}: committed generated evidence is required; run `just haq-generated`")
     })?;
-    let recorded: Vec<GeneratedEvidence> =
+    let recorded: GeneratedEvidenceArtifact =
         serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))?;
-    verify_generated_rows(&packet.generated, &recorded)
+    require_eq(
+        "generated evidence schema_version",
+        &recorded.schema_version,
+        "haqp-generated-v1",
+    )?;
+    require_eq(
+        "generated evidence artifact_blake3",
+        &recorded.artifact_blake3,
+        &generated_artifact_digest(&recorded.rows)?,
+    )?;
+    require_exact_ids(
+        recorded.rows.iter().map(|row| row.family.as_str()),
+        GENERATED_FAMILIES.iter().map(|family| (*family).to_owned()),
+        "generated evidence family",
+    )?;
+    verify_generated_rows(&packet.generated, &recorded.rows)
 }
 
 fn verify_generated_rows(declared: &[Generated], recorded: &[GeneratedEvidence]) -> Result<()> {
-    let by_family: BTreeMap<&str, &GeneratedEvidence> = recorded
-        .iter()
-        .map(|row| (row.family.as_str(), row))
-        .collect();
+    let mut by_family = BTreeMap::new();
+    for row in recorded {
+        if by_family.insert(row.family.as_str(), row).is_some() {
+            anyhow::bail!("generated evidence repeats family {:?}", row.family);
+        }
+    }
     for family in declared {
         if family.result != "pass" {
             continue;
@@ -444,6 +467,15 @@ fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         let record: ReviewRecord =
             serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))?;
         verify_review_record(review, &record)?;
+        let provenance = packet
+            .provenance
+            .as_ref()
+            .context("qualified review evidence requires packet provenance")?;
+        require_eq(
+            "review record fixed_base.commit",
+            &record.fixed_base.commit,
+            &provenance.fixed_commit,
+        )?;
         records.push((review.reviewer.clone(), record));
     }
     verify_reviewer_independence(&records)
@@ -457,6 +489,16 @@ fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
 /// actually concluded was unread.
 fn verify_review_record(review: &Review, record: &ReviewRecord) -> Result<()> {
     let who = &review.reviewer;
+    require_eq(
+        "review record schema_version",
+        &record.schema_version,
+        "haqp-blind-review-v1",
+    )?;
+    require_hex_digest(
+        "review sanitized_prompt_hash",
+        &record.sanitized_prompt_hash,
+    )?;
+    require_hex_digest("review fixed_base.commit", &record.fixed_base.commit)?;
     if record.attempts.len() as u64 != review.attempts {
         anyhow::bail!(
             "{who} declares {} attempts but its record contains {}",
@@ -510,11 +552,31 @@ fn verify_review_record(review: &Review, record: &ReviewRecord) -> Result<()> {
             record.unresolved_verified_findings
         );
     }
-    if record.findings.len() != review.findings.len() {
+    let record_findings = review_finding_ids(&record.findings, who)?;
+    let packet_findings = review
+        .findings
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    if record_findings.len() != review.findings.len() {
         anyhow::bail!(
             "{who} lists {} findings but its record contains {}",
             review.findings.len(),
             record.findings.len()
+        );
+    }
+    if record_findings != packet_findings {
+        anyhow::bail!("{who} packet findings do not match its committed record");
+    }
+    let verified_unresolved = record
+        .attempts
+        .iter()
+        .filter(|attempt| attempt.classification == "verified_defect" && !attempt.resolved)
+        .count() as u64;
+    if record.unresolved_verified_findings != verified_unresolved {
+        anyhow::bail!(
+            "{who} record counts {} unresolved verified findings but its attempts prove {verified_unresolved}",
+            record.unresolved_verified_findings
         );
     }
     // P1-A07: blindness is a property of how the pass was RUN. The runner emits
@@ -525,6 +587,33 @@ fn verify_review_record(review: &Review, record: &ReviewRecord) -> Result<()> {
     if record.pass == 2 && !record.blindness_proof.pass_two_original_spec_only {
         anyhow::bail!("{who} is pass 2 but did not start from the original spec alone");
     }
+    Ok(())
+}
+
+fn review_finding_ids<'a>(
+    findings: &'a [serde_json::Value],
+    who: &str,
+) -> Result<BTreeSet<&'a str>> {
+    let mut ids = BTreeSet::new();
+    for finding in findings {
+        let id = finding
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .filter(|id| !id.trim().is_empty())
+            .with_context(|| format!("{who}: record finding has no non-empty id"))?;
+        anyhow::ensure!(
+            ids.insert(id),
+            "{who}: record finding id {id:?} appears twice"
+        );
+    }
+    Ok(ids)
+}
+
+fn require_hex_digest(label: &str, digest: &str) -> Result<()> {
+    anyhow::ensure!(
+        digest.len() == 64 && digest.chars().all(|ch| ch.is_ascii_hexdigit()),
+        "{label} must be a 64-hex digest"
+    );
     Ok(())
 }
 
@@ -1222,7 +1311,7 @@ fn collect_ignored(text: &str, names: &mut BTreeSet<String>) {
 }
 
 fn verify_test_names_exist(root: &Utf8Path, packet: &Packet) -> Result<()> {
-    let mut sources = String::new();
+    let mut runnable = BTreeSet::new();
     let mut stack = vec![root.join("conformance"), root.join("crates")];
     while let Some(dir) = stack.pop() {
         let Ok(entries) = fs::read_dir(&dir) else {
@@ -1239,8 +1328,7 @@ fn verify_test_names_exist(root: &Utf8Path, packet: &Packet) -> Result<()> {
             } else if path.extension() == Some("rs")
                 && let Ok(text) = fs::read_to_string(&path)
             {
-                sources.push_str(&text);
-                sources.push('\n');
+                collect_runnable_test_functions(&text, &mut runnable);
             }
         }
     }
@@ -1253,7 +1341,7 @@ fn verify_test_names_exist(root: &Utf8Path, packet: &Packet) -> Result<()> {
         if leaf.trim().is_empty() {
             anyhow::bail!("{} declares an empty test name", test.id);
         }
-        if !sources.contains(&format!("fn {leaf}(")) {
+        if !runnable.contains(leaf) {
             missing.push(format!("{} -> {}", test.id, test.name));
         }
     }
@@ -1265,6 +1353,35 @@ fn verify_test_names_exist(root: &Utf8Path, packet: &Packet) -> Result<()> {
         );
     }
     Ok(())
+}
+
+fn collect_runnable_test_functions(text: &str, names: &mut BTreeSet<String>) {
+    let mut test_pending = false;
+    let mut excluded = false;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("#[test]") {
+            test_pending = true;
+            excluded = false;
+        } else if test_pending && (trimmed.starts_with("#[ignore") || trimmed.starts_with("#[cfg("))
+        {
+            excluded = true;
+        } else if test_pending {
+            let declaration = trimmed.strip_prefix("pub ").unwrap_or(trimmed);
+            let declaration = declaration.strip_prefix("async ").unwrap_or(declaration);
+            if let Some(rest) = declaration.strip_prefix("fn ") {
+                if let Some(name) = rest
+                    .split('(')
+                    .next()
+                    .filter(|name| !name.trim().is_empty())
+                    && !excluded
+                {
+                    names.insert(name.trim().to_owned());
+                }
+                test_pending = false;
+            }
+        }
+    }
 }
 
 /// The recorded fuzz campaign is too long to re-run per verification (150
@@ -1304,6 +1421,7 @@ fn verify_fuzz_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         }
     }
     verify_fuzz_rows(&recorded, &present)?;
+    verify_fuzz_logs(root, &recorded)?;
     verify_fuzz_budget(&packet.generated, &recorded)
 }
 
@@ -1431,6 +1549,27 @@ fn verify_fuzz_rows(recorded: &[FuzzEvidence], present: &BTreeSet<String>) -> Re
     Ok(())
 }
 
+/// Counts and exit states are only useful if their retained logs are the bytes
+/// the campaign actually produced. The release artifact keeps one log per
+/// target under the tracked evidence directory and binds its digest here.
+fn verify_fuzz_logs(root: &Utf8Path, recorded: &[FuzzEvidence]) -> Result<()> {
+    for row in recorded {
+        let expected = format!("conformance/haqp/evidence/logs/{}.log", row.target);
+        require_eq("fuzz log path", &row.log, &expected)?;
+        let path = root.join(&expected);
+        let metadata = fs::symlink_metadata(&path)
+            .with_context(|| format!("{path}: retained fuzz log is required"))?;
+        anyhow::ensure!(
+            metadata.file_type().is_file(),
+            "{path}: retained fuzz log must be a regular file",
+        );
+        let bytes = fs::read(&path).with_context(|| format!("read retained fuzz log {path}"))?;
+        let digest = blake3::hash(&bytes).to_hex().to_string();
+        require_eq("fuzz log_blake3", &row.log_blake3, &digest)?;
+    }
+    Ok(())
+}
+
 /// ADR-0020 §1: the qualification lane runs from ONE fixed clean commit and
 /// tree. Without this binding the packet describes no particular state of the
 /// repository (pass-2 finding #21).
@@ -1445,6 +1584,22 @@ fn verify_provenance(root: &Utf8Path, packet: &Packet) -> Result<()> {
     };
     let head = git(&["rev-parse", "HEAD"])?;
     require_eq("provenance.commit", &provenance.commit, &head)?;
+    let parent = git(&["rev-parse", "HEAD^"])?;
+    require_eq(
+        "provenance.evidence_parent",
+        &provenance.evidence_parent,
+        &parent,
+    )?;
+    require_eq(
+        "provenance.fixed_commit/evidence_parent",
+        &provenance.fixed_commit,
+        &provenance.evidence_parent,
+    )?;
+    let fixed_tree = git(&[
+        "rev-parse",
+        &format!("{}^{{tree}}", provenance.fixed_commit),
+    ])?;
+    require_eq("provenance.fixed_tree", &provenance.fixed_tree, &fixed_tree)?;
     let dirty = git(&["status", "--porcelain"])?;
     anyhow::ensure!(
         dirty.is_empty(),
@@ -1698,6 +1853,8 @@ const MUTANT_FAMILIES: [&str; 5] = [
     "repair/ILRP/recovery",
     "Basis/revision/query invalidation",
 ];
+
+const GENERATED_FAMILIES: [&str; 5] = MUTANT_FAMILIES;
 
 /// The declared mutation operators. Closed by design (M17.5 pass-2 #13): an
 /// open vocabulary lets a fabricated inventory invent an operator per mutant
@@ -2084,8 +2241,13 @@ struct Packet {
 /// The fixed base a qualification run was taken from.
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct Provenance {
+    /// Metadata commit that committed the qualification evidence.
     commit: String,
     lockfile_blake3: String,
+    /// Clean source commit the evidence ran against; must be HEAD's parent.
+    fixed_commit: String,
+    fixed_tree: String,
+    evidence_parent: String,
 }
 
 /// One target's recorded fuzz campaign (committed artifact).
@@ -2288,6 +2450,7 @@ struct Review {
 /// verifier depends on cannot quietly go missing.
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct ReviewRecord {
+    schema_version: String,
     pass: u8,
     reviewer: ReviewRecordReviewer,
     attempts: Vec<ReviewRecordAttempt>,
@@ -2295,6 +2458,8 @@ struct ReviewRecord {
     findings: Vec<serde_json::Value>,
     unresolved_verified_findings: u64,
     result: String,
+    sanitized_prompt_hash: String,
+    fixed_base: ReviewFixedBase,
     blindness_proof: ReviewRecordBlindness,
 }
 
@@ -2315,6 +2480,12 @@ struct ReviewRecordAttempt {
     attempt: String,
     observed_result: String,
     classification: String,
+    resolved: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+struct ReviewFixedBase {
+    commit: String,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -2441,10 +2612,12 @@ fn run_canary_suite(baseline: &Packet, markdown: &str) -> Result<Vec<CanaryEvide
         }
         records.push(CanaryEvidence {
             id: row.id.clone(),
+            gate: row.gate.clone(),
             violation: row.violation.clone(),
             expected_failure: row.expected_failure.clone(),
             observed_failure: observed,
             caught: true,
+            mutation_semantics: canary_mutation_semantics(&row.id)?.to_owned(),
         });
     }
     Ok(records)
@@ -2574,6 +2747,34 @@ fn packet_digest(packet: &Packet) -> Result<String> {
     Ok(blake3::hash(&serde_json::to_vec(packet)?)
         .to_hex()
         .to_string())
+}
+
+fn generated_artifact_digest(rows: &[GeneratedEvidence]) -> Result<String> {
+    Ok(blake3::hash(&serde_json::to_vec(rows)?)
+        .to_hex()
+        .to_string())
+}
+
+fn canary_mutation_semantics(id: &str) -> Result<&'static str> {
+    match id {
+        "C01" => Ok("packet.status := ratified"),
+        "C02" => Ok("packet.ratification := approved"),
+        "C03" => Ok("packet.locked_acceptance_corpora_touched := true"),
+        "C04" => Ok("duplicate requirements[0]"),
+        "C05" => Ok("remove test P1-T08"),
+        "C06" => Ok("clear tests[0].requirements"),
+        "C07" => Ok("remove final mutant"),
+        "C08" => Ok("set first 17 mutant operators to predicate-deletion"),
+        "C09" => Ok("move first mutant to another family"),
+        "C10" => Ok("remove canary C16"),
+        "C11" => Ok("set generated[0].accepted := 0"),
+        "C12" => Ok("set generated[0].discards := attempts"),
+        "C13" => Ok("duplicate one fuzz target across families"),
+        "C14" => Ok("remove crash boundary ilrp/before_ack"),
+        "C15" => Ok("set reviews[0].attempts := 0"),
+        "C16" => Ok("remove baseline packet digest from markdown"),
+        _ => anyhow::bail!("unknown canary {id}"),
+    }
 }
 
 /// Run deterministic generated checks for all five HAQP families. This records
@@ -3017,7 +3218,12 @@ type Family = (&'static str, fn(&mut Rng) -> Result<Case>);
 /// (M17.5 finding F-07).
 pub fn run_generated_repo(root: &Utf8Path, cases: u64) -> Result<()> {
     let (evidence, timings) = generate_evidence(cases)?;
-    let bytes = serde_json::to_vec_pretty(&evidence)?;
+    let artifact = GeneratedEvidenceArtifact {
+        schema_version: "haqp-generated-v1".to_owned(),
+        artifact_blake3: generated_artifact_digest(&evidence)?,
+        rows: evidence.clone(),
+    };
+    let bytes = serde_json::to_vec_pretty(&artifact)?;
     let path = root.join("conformance/haqp/evidence/generated.json");
     fs::create_dir_all(path.parent().expect("evidence parent"))?;
     fs::write(&path, &bytes)?;
@@ -3138,12 +3344,14 @@ fn generate_evidence(cases: u64) -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> {
 #[serde(deny_unknown_fields)]
 struct CanaryEvidence {
     id: String,
+    gate: String,
     /// The mutation that was actually performed, checked against the packet's
     /// own prose (M17.5 pass-2 #22).
     violation: String,
     expected_failure: String,
     observed_failure: String,
     caught: bool,
+    mutation_semantics: String,
 }
 
 /// One family's generated-evidence row.
@@ -3154,7 +3362,7 @@ struct CanaryEvidence {
 /// 94→110, 12→15 ms), so the artifact could never be compared against a
 /// recorded digest (M17.5 pass-2 #18). Timing is operational telemetry, not
 /// evidence; it is printed to stdout instead.
-#[derive(Debug, PartialEq, Eq, serde::Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct GeneratedEvidence {
     family: String,
@@ -3164,6 +3372,14 @@ struct GeneratedEvidence {
     /// Recorded so the run is reproducible (ADR-0020 §1).
     seed: u64,
     evidence_hash: String,
+}
+
+#[derive(Debug, PartialEq, Eq, serde::Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GeneratedEvidenceArtifact {
+    schema_version: String,
+    artifact_blake3: String,
+    rows: Vec<GeneratedEvidence>,
 }
 
 #[cfg(test)]
@@ -3405,6 +3621,16 @@ mod tests {
 
         // The same packet stays valid at the inventory layer.
         verify_packet_shape(&packet).expect("predeclared names are legal in a proposed inventory");
+    }
+
+    #[test]
+    fn runnable_test_scanner_rejects_comments_helpers_and_ignored_tests() {
+        let mut names = BTreeSet::new();
+        collect_runnable_test_functions(
+            "// fn commented() { }\nfn helper() {}\n#[test]\nfn live() {}\n#[test]\n#[ignore]\nfn dormant() {}",
+            &mut names,
+        );
+        assert_eq!(names, BTreeSet::from(["live".to_owned()]));
     }
 
     #[test]
@@ -3761,11 +3987,13 @@ mod tests {
             attempt: "did a thing".to_owned(),
             observed_result: "saw a thing".to_owned(),
             classification: "caught_violation".to_owned(),
+            resolved: false,
         }
     }
 
     fn review_record(pass: u8, family: &str, backend: &str) -> ReviewRecord {
         ReviewRecord {
+            schema_version: "haqp-blind-review-v1".to_owned(),
             pass,
             reviewer: ReviewRecordReviewer {
                 model_family: family.to_owned(),
@@ -3776,6 +4004,10 @@ mod tests {
             findings: Vec::new(),
             unresolved_verified_findings: 0,
             result: "pass".to_owned(),
+            sanitized_prompt_hash: "ab".repeat(32),
+            fixed_base: ReviewFixedBase {
+                commit: "ab".repeat(32),
+            },
             blindness_proof: ReviewRecordBlindness {
                 prior_pass_artifact_supplied: false,
                 pass_two_original_spec_only: pass == 2,
@@ -3944,6 +4176,44 @@ mod tests {
             .expect_err("a family claiming pass with no run in the artifact");
     }
 
+    #[test]
+    fn generated_artifact_requires_exact_unique_family_set() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-generated-artifact").expect("scratch");
+        let root: &Utf8Path = &scratch;
+        let rows = GENERATED_FAMILIES
+            .iter()
+            .map(|family| generated_evidence_row(family))
+            .collect::<Vec<_>>();
+        let artifact = GeneratedEvidenceArtifact {
+            schema_version: "haqp-generated-v1".to_owned(),
+            artifact_blake3: generated_artifact_digest(&rows).expect("digest"),
+            rows: rows.clone(),
+        };
+        let path = root.join("conformance/haqp/evidence/generated.json");
+        fs::create_dir_all(path.parent().expect("evidence parent")).expect("mkdir");
+        fs::write(&path, serde_json::to_vec(&artifact).expect("json")).expect("write");
+        let packet_rows = GENERATED_FAMILIES
+            .iter()
+            .map(|family| generated_row(family))
+            .collect::<Vec<_>>();
+        let packet = Packet {
+            generated: packet_rows,
+            ..read_packet(&repo_root()).expect("packet")
+        };
+        verify_generated_evidence(root, &packet).expect("exact family artifact must pass");
+
+        let mut duplicate = rows;
+        duplicate[0].family = duplicate[1].family.clone();
+        let tampered = GeneratedEvidenceArtifact {
+            schema_version: "haqp-generated-v1".to_owned(),
+            artifact_blake3: generated_artifact_digest(&duplicate).expect("digest"),
+            rows: duplicate,
+        };
+        fs::write(&path, serde_json::to_vec(&tampered).expect("json")).expect("write");
+        verify_generated_evidence(root, &packet)
+            .expect_err("duplicate or missing family cannot qualify generated evidence");
+    }
+
     /// The inventory layer accepted any 64 characters, including 64 spaces.
     #[test]
     fn inventory_rejects_an_evidence_hash_that_is_not_hexadecimal() {
@@ -3976,10 +4246,12 @@ mod tests {
     fn canary_evidence_row(id: &str) -> CanaryEvidence {
         CanaryEvidence {
             id: id.to_owned(),
+            gate: "status".to_owned(),
             violation: "set status to ratified".to_owned(),
             expected_failure: "status: expected proposed".to_owned(),
             observed_failure: "status: expected proposed, found ratified".to_owned(),
             caught: true,
+            mutation_semantics: "packet.status := ratified".to_owned(),
         }
     }
 
@@ -4018,6 +4290,18 @@ mod tests {
         expectation.expected_failure = "something else entirely".to_owned();
         verify_canary_rows(&[canary_row("C01")], &[expectation])
             .expect_err("the packet's expected failure must be the one asserted");
+    }
+
+    #[test]
+    fn canary_rows_reject_wrong_gate_or_mutation_semantics() {
+        let mut wrong_gate = canary_evidence_row("C01");
+        wrong_gate.gate = "markdown".to_owned();
+        verify_canary_rows(&[canary_row("C01")], &[wrong_gate])
+            .expect_err("the evidence must name the gate actually exercised");
+        let mut wrong_mutation = canary_evidence_row("C01");
+        wrong_mutation.mutation_semantics = "no mutation".to_owned();
+        verify_canary_rows(&[canary_row("C01")], &[wrong_mutation])
+            .expect_err("the exact mutation semantics must be bound");
     }
 
     #[test]

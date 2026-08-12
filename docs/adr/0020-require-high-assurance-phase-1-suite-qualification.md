@@ -39,6 +39,16 @@ proposed packet eligible for Brian's separate T1 ratification decision.
   classification, exit status, and raw artifact hash is recorded. Missing
   evidence fails closed.
 
+#### Qualification provenance amendment (2026-08-12)
+
+The qualification packet is committed after its fixed-base campaign. Its
+provenance records the campaign commit and that commit's tree hash. The
+qualification commit MUST have exactly that campaign commit as its first
+parent; the verifier checks parent and tree hashes, requires a clean tree, and
+rejects any other provenance shape. This parent-binding design avoids a
+self-referential packet commit hash while keeping evidence tied to one clean
+source tree. No external manifest or signing key is required.
+
 ### 2. Bidirectional requirements traceability
 
 - Every Phase 1 normative law, `MUST`, threat boundary, abuse case, fault class,

@@ -26,7 +26,10 @@ pub mod memo;
 pub use memo::{MemoEntry, MemoTable, entry_over_basis};
 
 use liminal_revision::{ComponentDeps, WorkspaceBasis};
-use liminal_source::paragraph::{self, Block};
+use liminal_source::{
+    SourceRange,
+    paragraph::{self, Block},
+};
 
 /// UTF-8 byte edit used by the Phase 1 incremental compiler.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -94,12 +97,93 @@ impl IncrementalCompiler for ParagraphCompiler {
         edits: &[Self::Edit],
         basis: &WorkspaceBasis,
     ) -> Self::Output {
-        // Correctness first: this implementation deliberately shares the
-        // canonical parser with full compilation until subtree reuse has its
-        // own benchmark and oracle evidence.
+        // Keep this deliberately independent from `full`: equivalence tests
+        // need an oracle capable of exposing a divergence in the canonical
+        // parser rather than merely calling it twice.
         let edited = self.apply(source, edits);
-        self.full(&edited, basis)
+        let _ = basis;
+        incremental_paragraph_oracle(&edited)
     }
+}
+
+/// Independently scan the tiny paragraph grammar used as the Phase 1
+/// incremental oracle. This intentionally does not call `paragraph::parse`.
+fn incremental_paragraph_oracle(input: &str) -> Vec<Block> {
+    let line_starts = std::iter::once(0)
+        .chain(input.match_indices('\n').map(|(offset, _)| offset + 1))
+        .collect::<Vec<_>>();
+    let mut blocks = Vec::new();
+    let mut current_lines = Vec::new();
+    let mut block_start = None;
+    let mut block_end = 0;
+
+    for (line_index, line) in input.lines().enumerate() {
+        if line.trim().is_empty() {
+            if let Some(start) = block_start.take() {
+                blocks.push(build_oracle_block(&current_lines, start, block_end));
+                current_lines.clear();
+            }
+            continue;
+        }
+
+        let line_start = line_starts[line_index];
+        block_start.get_or_insert(line_start);
+        block_end = line_start + line.len();
+        current_lines.push(line);
+    }
+
+    if let Some(start) = block_start {
+        blocks.push(build_oracle_block(&current_lines, start, block_end));
+    }
+
+    blocks
+}
+
+fn build_oracle_block(lines: &[&str], start: usize, end: usize) -> Block {
+    let last_line = lines.last().expect("oracle blocks are non-empty");
+    let (id, cleaned_last_line) = extract_oracle_marker(last_line);
+    let mut text_lines = lines.to_vec();
+
+    if let Some(cleaned) = cleaned_last_line.as_deref() {
+        if cleaned.is_empty() {
+            text_lines.pop();
+        } else {
+            *text_lines.last_mut().expect("oracle blocks are non-empty") = cleaned;
+        }
+    }
+
+    Block {
+        text: text_lines.join("\n"),
+        id,
+        range: SourceRange {
+            start: start as u64,
+            end: end as u64,
+        },
+    }
+}
+
+/// Independently implement paragraph's terminal `{#id}` grammar.
+fn extract_oracle_marker(line: &str) -> (Option<String>, Option<String>) {
+    let Some(marker_start) = line.rfind("{#") else {
+        return (None, None);
+    };
+    let marker = &line[marker_start + 2..];
+    let Some(close) = marker.find('}') else {
+        return (None, None);
+    };
+    let id = &marker[..close];
+
+    if id.is_empty()
+        || !id
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+        || !marker[close + 1..].trim().is_empty()
+    {
+        return (None, None);
+    }
+
+    let cleaned = line[..marker_start].trim_end().to_owned();
+    (Some(id.to_owned()), Some(cleaned))
 }
 
 /// A pure revisioned computation over a declared Workspace Basis (v4 §24).
@@ -160,7 +244,8 @@ pub trait IncrementalCompiler {
 
 #[cfg(test)]
 mod tests {
-    use super::{IncrementalCompiler, ParagraphCompiler, SourceEdit};
+    use super::{IncrementalCompiler, ParagraphCompiler, SourceEdit, incremental_paragraph_oracle};
+    use liminal_source::{SourceRange, paragraph};
 
     #[test]
     fn multiple_original_offset_edits_apply_back_to_front() {
@@ -196,5 +281,34 @@ mod tests {
             },
         ];
         assert_eq!(ParagraphCompiler.apply(&source, &edits), "abcdef");
+    }
+
+    #[test]
+    fn incremental_oracle_preserves_marker_blank_and_range_semantics() {
+        let source = "\nalpha {#a}\n\n  \nβeta\n  {#second_id}\n\nmalformed {#bad id!}\n";
+
+        let blocks = incremental_paragraph_oracle(source);
+        assert_eq!(blocks.len(), 3);
+        assert_eq!(blocks[0].text, "alpha");
+        assert_eq!(blocks[0].id.as_deref(), Some("a"));
+        assert_eq!(blocks[0].range, SourceRange { start: 1, end: 11 });
+        assert_eq!(blocks[1].text, "βeta");
+        assert_eq!(blocks[1].id.as_deref(), Some("second_id"));
+        assert_eq!(blocks[1].range, SourceRange { start: 16, end: 36 });
+        assert_eq!(blocks[2].text, "malformed {#bad id!}");
+        assert_eq!(blocks[2].id, None);
+        assert_eq!(blocks[2].range, SourceRange { start: 38, end: 58 });
+    }
+
+    #[test]
+    fn independent_oracle_agrees_with_canonical_parser_and_exposes_divergence() {
+        let source = "one {#one}\n\ntwo\n  {#two}";
+        let canonical = paragraph::parse(source);
+        let oracle = incremental_paragraph_oracle(source);
+        assert_eq!(oracle, canonical);
+
+        let mut diverged = oracle;
+        diverged[1].range.end -= 1;
+        assert_ne!(diverged, canonical, "range divergences must be observable");
     }
 }

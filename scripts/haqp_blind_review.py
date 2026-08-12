@@ -35,7 +35,7 @@ def run(*args: str) -> str:
     return subprocess.check_output(args, cwd=ROOT, text=True, stderr=subprocess.STDOUT)
 
 
-def base_context() -> tuple[str, bool, str]:
+def base_context() -> tuple[str, bool, dict[str, Any]]:
     commit = run("git", "rev-parse", "HEAD").strip()
     status = run("git", "status", "--porcelain=v1").strip()
     clean = not status
@@ -49,12 +49,13 @@ def base_context() -> tuple[str, bool, str]:
         "crates/liminal-format/src/lib.rs",
         "crates/liminal-query/src/lib.rs",
     ]
+    fixed_base = {"commit": commit, "tree": tree, "clean": clean}
     chunks = [f"fixed_commit={commit}\nfixed_tree={tree}\nclean={clean}\n"]
     for rel in files:
         path = ROOT / rel
         if path.exists():
             chunks.append(f"\n--- {rel} ---\n{path.read_text(encoding='utf-8')}")
-    return "".join(chunks), clean, commit
+    return "".join(chunks), clean, fixed_base
 
 
 def packet_state() -> dict[str, Any]:
@@ -338,29 +339,89 @@ def parse_json(text: str) -> dict[str, Any]:
         ids.add(identifier)
         if any(not str(attempt[field]).strip() for field in required - {"independently_reproduced"}):
             raise ValueError(f"attempt {identifier} contains an empty field")
+        if not isinstance(attempt["independently_reproduced"], bool):
+            raise ValueError(f"attempt {identifier} independently_reproduced must be boolean")
         if attempt["classification"] not in allowed:
             raise ValueError(f"attempt {identifier} has unknown classification")
         if attempt["classification"] == "caught_violation":
             caught += 1
     if caught == 0:
         raise ValueError("review must record at least one caught violation")
-    if not isinstance(value.get("findings", []), list):
+    findings = value.get("findings", [])
+    if not isinstance(findings, list):
         raise ValueError("findings must be an array")
+    finding_ids: set[str] = set()
+    verified_attempts = {
+        str(attempt["id"])
+        for attempt in value["attempts"]
+        if attempt["classification"] == "verified_defect"
+    }
+    for finding in findings:
+        if not isinstance(finding, dict):
+            raise ValueError("every finding must be an object linked to an attempt")
+        finding_id = finding.get("id")
+        attempt_id = finding.get("attempt_id")
+        if not isinstance(finding_id, str) or not finding_id.strip():
+            raise ValueError("every finding needs a non-empty id")
+        if finding_id in finding_ids:
+            raise ValueError("finding ids must be non-empty and unique")
+        finding_ids.add(finding_id)
+        if attempt_id not in verified_attempts:
+            raise ValueError(f"finding {finding_id} must link to a verified_defect attempt")
+    reproduced = value.get("independently_reproduced")
+    if not isinstance(reproduced, list) or any(not isinstance(item, str) or not item.strip() for item in reproduced):
+        raise ValueError("independently_reproduced must be an array of non-empty finding ids")
+    if len(set(reproduced)) != len(reproduced):
+        raise ValueError("independently_reproduced finding ids must be unique")
+    unknown_reproduced = set(reproduced) - finding_ids
+    if unknown_reproduced:
+        raise ValueError("independently_reproduced names findings absent from this record")
     if not isinstance(value.get("unresolved_verified_findings"), int):
         raise ValueError("unresolved_verified_findings must be an integer")
+    if value["unresolved_verified_findings"] < 0 or value["unresolved_verified_findings"] > len(reproduced):
+        raise ValueError("unresolved_verified_findings exceeds independently reproduced findings")
     if not isinstance(value.get("result"), str) or not value["result"].strip():
         raise ValueError("review result missing")
     return value
 
 
-def run_pass(name: str, model: str, context: str, *, pass_two: bool) -> dict[str, Any]:
+class ProviderFailure(RuntimeError):
+    """A reviewer backend did not return a review response."""
+
+
+class ReviewSchemaFailure(ValueError):
+    """A reviewer returned text that cannot serve as a complete review record."""
+
+
+def bound_record_hash(*, prompt_hash: str, fixed_base: dict[str, Any], parsed: dict[str, Any], raw: str) -> str:
+    """Hash every persisted review claim to the exact prompt and fixed checkout."""
+    bound = {
+        "fixed_base": fixed_base,
+        "prompt_sha256": prompt_hash,
+        # Bind the redacted values actually persisted, not the untrusted source
+        # values that are intentionally discarded after this function returns.
+        "attempts": redact_deep(parsed["attempts"]),
+        "findings": redact_deep(parsed["findings"]),
+        "independently_reproduced": redact_deep(parsed["independently_reproduced"]),
+        "unresolved_verified_findings": parsed["unresolved_verified_findings"],
+        "result": parsed["result"],
+        "raw_response_sha256": digest(raw.encode()),
+    }
+    return digest(json.dumps(bound, sort_keys=True, separators=(",", ":")).encode())
+
+
+def run_pass(
+    name: str, model: str, context: str, fixed_base: dict[str, Any], *, pass_two: bool
+) -> dict[str, Any]:
     session_id = f"haqp-blind-{name}-{int(time.time())}"
     prompt = (
         "Conduct one isolated HAQP-1 falsification pass. Do not infer passing evidence. "
         "Record exactly twelve concrete attempts. Each attempt object must contain id, "
         "attack_class, target, attempt, observed_result, independently_reproduced, "
         "classification (verified_defect|false_positive|caught_violation), and resolved. "
-        "Return JSON object with attempts array, findings array, unresolved_verified_findings integer, and result. "
+        "Each finding must be an object with unique id and attempt_id referencing a verified_defect attempt. "
+        "Return JSON object with attempts array, findings array, independently_reproduced array of finding ids, "
+        "unresolved_verified_findings integer, and result. "
         "No markdown, no credentials, no secrets.\n\n"
         + (
             "Start from original spec; prior-pass records are unavailable.\n"
@@ -371,8 +432,14 @@ def run_pass(name: str, model: str, context: str, *, pass_two: bool) -> dict[str
     )
     identity = digest(f"{name}:{model}:haqp-blind-review-v1".encode())
     prompt_hash = digest(prompt.encode())
-    raw = mcp_call(model, prompt, session_id)
-    parsed = parse_json(raw)
+    try:
+        raw = mcp_call(model, prompt, session_id)
+    except (RuntimeError, subprocess.SubprocessError, OSError) as exc:
+        raise ProviderFailure(f"pass {2 if pass_two else 1} provider failure for {model}: {exc}") from exc
+    try:
+        parsed = parse_json(raw)
+    except (ValueError, TypeError) as exc:
+        raise ReviewSchemaFailure(f"pass {2 if pass_two else 1} schema failure for {model}: {exc}") from exc
     record = {
         "schema_version": "haqp-blind-review-v1",
         "pass": 2 if pass_two else 1,
@@ -389,6 +456,7 @@ def run_pass(name: str, model: str, context: str, *, pass_two: bool) -> dict[str
         "sanitized_prompt_hash": prompt_hash,
         "attempts": redact_deep(parsed["attempts"]),
         "findings": redact_deep(parsed.get("findings", [])),
+        "independently_reproduced": redact_deep(parsed["independently_reproduced"]),
         "unresolved_verified_findings": parsed.get("unresolved_verified_findings"),
         "result": redact_deep(parsed.get("result")),
         "blindness_proof": {
@@ -405,9 +473,12 @@ def run_pass(name: str, model: str, context: str, *, pass_two: bool) -> dict[str
             "prior_pass_artifact_supplied": False,
             "pass_two_original_spec_only": pass_two,
         },
-        "fixed_base": {"commit": run("git", "rev-parse", "HEAD").strip()},
+        "fixed_base": fixed_base,
         "raw_response_sha256": digest(raw.encode()),
     }
+    record["integrity_binding_sha256"] = bound_record_hash(
+        prompt_hash=prompt_hash, fixed_base=fixed_base, parsed=parsed, raw=raw
+    )
     # Do not persist raw model output; it is untrusted and may contain secrets.
     (OUT / f"{name}.json").write_text(json.dumps(record, indent=2) + "\n")
     return record
@@ -497,6 +568,7 @@ def self_test() -> int:
             for i in range(12)
         ],
         "findings": [],
+        "independently_reproduced": [],
         "unresolved_verified_findings": 0,
         "result": "pass",
     }
@@ -512,6 +584,71 @@ def self_test() -> int:
         parse_json,
         json.dumps({**good, "attempts": [{**a, "classification": "false_positive"} for a in good["attempts"]]}),
     )
+    rejects(
+        "parse_json accepted a non-boolean attempt reproduction claim",
+        parse_json,
+        json.dumps({**good, "attempts": [{**good["attempts"][0], "independently_reproduced": "yes"}, *good["attempts"][1:]]}),
+    )
+    rejects(
+        "parse_json accepted an unlinked finding",
+        parse_json,
+        json.dumps({
+            **good,
+            "findings": [{"id": "F1", "attempt_id": "A0"}],
+        }),
+    )
+    linked = {
+        **good,
+        "attempts": [{**a, "classification": "verified_defect"} if a["id"] == "A0" else a for a in good["attempts"]],
+        "findings": [{"id": "F1", "attempt_id": "A0"}],
+        "independently_reproduced": ["F1"],
+        "unresolved_verified_findings": 1,
+    }
+    try:
+        parse_json(json.dumps(linked))
+    except ValueError as exc:
+        failures.append(f"a linked finding/reproduction record was rejected: {exc}")
+    rejects(
+        "parse_json accepted reproduction of an absent finding",
+        parse_json,
+        json.dumps({**linked, "independently_reproduced": ["F2"]}),
+    )
+    rejects(
+        "parse_json accepted more unresolved findings than reproductions",
+        parse_json,
+        json.dumps({**linked, "independently_reproduced": [], "unresolved_verified_findings": 1}),
+    )
+    fixed = {"commit": "a" * 40, "tree": "b" * 40, "clean": True}
+    bound = bound_record_hash(prompt_hash="c" * 64, fixed_base=fixed, parsed=linked, raw="review")
+    if bound == bound_record_hash(
+        prompt_hash="d" * 64, fixed_base=fixed, parsed=linked, raw="review"
+    ):
+        failures.append("record binding does not include the prompt hash")
+    if bound == bound_record_hash(
+        prompt_hash="c" * 64, fixed_base={**fixed, "tree": "e" * 40}, parsed=linked, raw="review"
+    ):
+        failures.append("record binding does not include the fixed base")
+    # Pass 2 failures must name the failing boundary. In particular, a provider
+    # error is not a malformed review, and a malformed review is not a vendor
+    # outage; both paths remain fail-closed rather than continuing to manifest.
+    original_mcp_call = mcp_call
+    try:
+        globals()["mcp_call"] = lambda *_args: (_ for _ in ()).throw(RuntimeError("vendor unavailable"))
+        try:
+            run_pass("pass2-self-test", "m", "context", fixed, pass_two=True)
+            failures.append("pass 2 provider failure was accepted")
+        except ProviderFailure as exc:
+            if "pass 2 provider failure" not in str(exc):
+                failures.append("pass 2 provider failure was not explicit")
+        globals()["mcp_call"] = lambda *_args: "{}"
+        try:
+            run_pass("pass2-self-test", "m", "context", fixed, pass_two=True)
+            failures.append("pass 2 schema failure was accepted")
+        except ReviewSchemaFailure as exc:
+            if "pass 2 schema failure" not in str(exc):
+                failures.append("pass 2 schema failure was not explicit")
+    finally:
+        globals()["mcp_call"] = original_mcp_call
     # Backend routing. A misroute is invisible in the recorded evidence: a
     # `codex:` name handed to lamu is looked up in the cloud registry and
     # reported as an unreachable vendor, while a lamu alias handed to Codex is
@@ -570,7 +707,7 @@ def self_test() -> int:
         print(f"SELF-TEST FAILED: {problem}", file=sys.stderr)
     if failures:
         return 1
-    print(json.dumps({"result": "self-test-ok", "checks": 15}))
+    print(json.dumps({"result": "self-test-ok", "checks": 24}))
     return 0
 
 
@@ -581,7 +718,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.self_test:
         return self_test()
-    context, clean, commit = base_context()
+    context, clean, fixed_base = base_context()
+    commit = fixed_base["commit"]
     packet = packet_state()
     if not clean:
         return blocked("fixed review base is dirty", commit=commit, clean=False)
@@ -617,10 +755,11 @@ def main() -> int:
         return blocked(dead, commit=commit, clean=True)
     try:
         records = [
-            run_pass(f"{name}-{model}", model, context, pass_two=pass_two) for name, model, pass_two in PASSES
+            run_pass(f"{name}-{model}", model, context, fixed_base, pass_two=pass_two)
+            for name, model, pass_two in PASSES
         ]
         first, second = records
-    except (RuntimeError, ValueError, subprocess.SubprocessError) as exc:
+    except (ProviderFailure, ReviewSchemaFailure, RuntimeError, ValueError, subprocess.SubprocessError, OSError) as exc:
         return blocked(f"review execution failed: {exc}", commit=commit, clean=True)
     manifest = {
         "schema_version": "haqp-blind-review-manifest-v1",
