@@ -3177,15 +3177,21 @@ fn case_invalidation(rng: &mut Rng) -> Result<Case> {
             "a recorded read did not invalidate: {key:?}"
         );
     }
-    let unrelated = liminal_id::JurisdictionKey::Path(liminal_id::PathId(
-        format!("unread/{}", rng.word()).into(),
-    ));
-    if !expected.contains(&unrelated) {
-        anyhow::ensure!(
-            !deps.invalidated_by(&unrelated),
-            "an unread key invalidated the computation: {unrelated:?}"
-        );
-    }
+    // Select a negative witness outside the generated read set. A random
+    // `unread/<word>` can collide with a legitimate read key, making the only
+    // negative assertion disappear exactly when the generator hits that case.
+    let unrelated = (0..u32::MAX)
+        .map(|index| {
+            liminal_id::JurisdictionKey::Path(liminal_id::PathId(
+                format!("unread/__haqp_negative_{index}").into(),
+            ))
+        })
+        .find(|candidate| !expected.contains(candidate))
+        .expect("finite generated read set leaves a negative witness");
+    anyhow::ensure!(
+        !deps.invalidated_by(&unrelated),
+        "an unread key invalidated the computation: {unrelated:?}"
+    );
     // Monotonicity: adding a read never un-invalidates an existing one.
     let extra = liminal_id::JurisdictionKey::Path(liminal_id::PathId(rng.word().into()));
     deps.record(extra.clone());
@@ -4927,7 +4933,7 @@ mod tests {
             ),
             (
                 "Basis/revision/query invalidation",
-                "c6f05f745d546e33df83a53d87d834dc122c049041a918cc616a31b280a2ed9d",
+                "ef34bf949971ba00bdcad83d9f49620bef137232f36873ecb6f7a8c9005c89dd",
             ),
         ];
         // 3,000 rather than 64: `case_repair` closes a genuine cycle on
