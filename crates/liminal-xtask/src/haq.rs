@@ -60,6 +60,7 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     verify_corpus_access_audit(root, &packet)?;
     verify_crash_evidence(root, &packet)?;
     verify_campaign_clock(root)?;
+    verify_residual_risks(&packet)?;
     verify_qualification_stage(&packet)?;
     if packet.qualification_stage == "1b" {
         verify_mutant_killing_tests(root, &packet)?;
@@ -680,6 +681,24 @@ fn verify_review_findings(review: &Review, record: &ReviewRecord, who: &str) -> 
                 "{who}: verified defect attempt {:?} lacks independent reproduction",
                 attempt.id
             );
+            if attempt.resolved {
+                let resolution = attempt.resolution.as_ref().with_context(|| {
+                    format!(
+                        "{who}: resolved finding attempt {:?} has no resolution proof",
+                        attempt.id
+                    )
+                })?;
+                require_git_object_id(&format!("{who} resolution commit"), &resolution.commit)?;
+                anyhow::ensure!(
+                    !resolution.coordinate.trim().is_empty(),
+                    "{who}: resolved finding attempt {:?} has empty fix coordinate",
+                    attempt.id
+                );
+                require_hex_digest(
+                    &format!("{who} resolution evidence_sha256"),
+                    &resolution.evidence_sha256,
+                )?;
+            }
         }
     }
     let verified_unresolved = record
@@ -1894,6 +1913,64 @@ fn verify_campaign_clock(root: &Utf8Path) -> Result<()> {
     Ok(())
 }
 
+/// Every limitation carried into qualification needs an owner, trigger,
+/// evidence coordinate, mitigation, and acceptance authority. Bare prose in a
+/// residual-risk table is not auditable (ADR-0020 §7).
+fn verify_residual_risks(packet: &Packet) -> Result<()> {
+    anyhow::ensure!(
+        !packet.residual_risks.is_empty(),
+        "qualified packet must record residual-risk coordinates"
+    );
+    let requirement_ids = packet
+        .requirements
+        .iter()
+        .map(|row| row.id.as_str())
+        .collect::<BTreeSet<_>>();
+    require_unique(
+        packet.residual_risks.iter().map(|row| row.id.as_str()),
+        "residual risk",
+    )?;
+    for risk in &packet.residual_risks {
+        for (label, value) in [
+            ("owner", &risk.owner),
+            ("severity", &risk.severity),
+            ("trigger", &risk.trigger),
+            ("requirement", &risk.requirement),
+            ("evidence", &risk.evidence),
+            ("planned_phase", &risk.planned_phase),
+            ("mitigation", &risk.mitigation),
+            ("authority", &risk.authority),
+            ("state", &risk.state),
+        ] {
+            anyhow::ensure!(
+                !value.trim().is_empty(),
+                "risk {} has empty {label}",
+                risk.id
+            );
+        }
+        anyhow::ensure!(
+            requirement_ids.contains(risk.requirement.as_str()),
+            "risk {} names unknown requirement {}",
+            risk.id,
+            risk.requirement
+        );
+        anyhow::ensure!(
+            risk.evidence.contains(':')
+                || (risk.evidence.len() == 64
+                    && risk.evidence.chars().all(|ch| ch.is_ascii_hexdigit())),
+            "risk {} evidence must be a file:coordinate or 64-hex digest",
+            risk.id
+        );
+        anyhow::ensure!(
+            matches!(risk.state.as_str(), "open" | "mitigated" | "accepted"),
+            "risk {} has unknown state {:?}",
+            risk.id,
+            risk.state
+        );
+    }
+    Ok(())
+}
+
 /// ADR-0020 §1: the qualification lane runs from ONE fixed clean commit and
 /// tree. The packet is committed one commit after that fixed evidence commit;
 /// requiring the packet's metadata commit to equal HEAD would be a
@@ -2041,6 +2118,12 @@ fn verify_packet_shape(packet: &Packet) -> Result<()> {
                 REQUIREMENT_KINDS
             );
         }
+        if STATEFUL_REQUIREMENT_IDS.contains(&requirement.id.as_str()) && !requirement.stateful {
+            anyhow::bail!(
+                "requirement {} is stateful and must set stateful=true",
+                requirement.id
+            );
+        }
         let (source_file, coordinate) = requirement
             .source
             .split_once(':')
@@ -2071,6 +2154,9 @@ const STATEFUL_EVIDENCE: [&str; 2] = ["fault", "recovery"];
 /// vocabulary lets a packet relabel a stateful requirement and evade its
 /// fault/recovery evidence obligations (M17.5 P1-A04).
 const REQUIREMENT_KINDS: [&str; 4] = ["law", "gate", "fault", "abuse"];
+/// Current packet's stateful law is M20 D20.3. Keep the semantic coordinate
+/// closed even if an attacker relabels its `kind` or drops its JSON marker.
+const STATEFUL_REQUIREMENT_IDS: [&str; 1] = ["P1-R015"];
 /// No single test may carry more than this share of the mutation denominator.
 const MAX_KILL_SHARE: f64 = 0.25;
 
@@ -2110,7 +2196,7 @@ fn verify_evidence_coverage(packet: &Packet) -> Result<()> {
             .cloned()
             .unwrap_or_default();
         let mut needed = CORE_EVIDENCE.to_vec();
-        if requirement.kind == "fault" {
+        if requirement.stateful || requirement.kind == "fault" {
             needed.extend_from_slice(&STATEFUL_EVIDENCE);
         }
         let missing = needed
@@ -2331,9 +2417,35 @@ fn verify_canary_inventory(packet: &Packet) -> Result<()> {
         if canary.expected_failure.trim().is_empty() {
             anyhow::bail!("{} has empty expected failure", canary.id);
         }
+        let expected_gate = CANARY_GATES
+            .iter()
+            .find_map(|(id, gate)| (*id == canary.id.as_str()).then_some(*gate))
+            .with_context(|| format!("{} has no closed gate mapping", canary.id))?;
+        require_eq("canary gate", &canary.gate, expected_gate)?;
     }
     Ok(())
 }
+
+/// Closed canary-to-gate map. The sixteen rows are not merely a count: each
+/// ratification gate has one named, executable violation (M17.5 P1-A04).
+const CANARY_GATES: [(&str, &str); 16] = [
+    ("C01", "status"),
+    ("C02", "ratification"),
+    ("C03", "locked corpus"),
+    ("C04", "requirements"),
+    ("C05", "tests"),
+    ("C06", "tests"),
+    ("C07", "mutants"),
+    ("C08", "mutants"),
+    ("C09", "mutants"),
+    ("C10", "canaries"),
+    ("C11", "generated"),
+    ("C12", "generated"),
+    ("C13", "fuzz"),
+    ("C14", "crash"),
+    ("C15", "reviews"),
+    ("C16", "markdown"),
+];
 
 fn verify_generated_inventory(packet: &Packet) -> Result<()> {
     if packet.generated.len() != 5 {
@@ -2446,9 +2558,9 @@ fn verify_fuzz_target_mapping(declared: &[Generated]) -> Result<()> {
 /// The packet says which targets belong to each family; the artifact supplies
 /// their seconds. Summing those rows is the sole family-budget calculation.
 fn verify_fuzz_budget(declared: &[Generated], recorded: &[FuzzEvidence]) -> Result<()> {
-    let seconds: BTreeMap<&str, u64> = recorded
+    let elapsed_seconds: BTreeMap<&str, u64> = recorded
         .iter()
-        .map(|row| (row.target.as_str(), row.seconds))
+        .map(|row| (row.target.as_str(), row.elapsed_s))
         .collect();
     let mut total_minutes = 0_u64;
     for family in declared {
@@ -2465,7 +2577,7 @@ fn verify_fuzz_budget(declared: &[Generated], recorded: &[FuzzEvidence]) -> Resu
         }
         let mut family_minutes = 0_u64;
         for target in &family.fuzz_targets {
-            let recorded_seconds = seconds.get(target.as_str()).with_context(|| {
+            let recorded_seconds = elapsed_seconds.get(target.as_str()).with_context(|| {
                 format!(
                     "{} names fuzz target {target:?}, which the committed campaign did not run",
                     family.family
@@ -2622,6 +2734,10 @@ struct Packet {
     generated: Vec<Generated>,
     crash_boundaries: Vec<CrashBoundary>,
     reviews: Vec<Review>,
+    /// Residual-risk coordinates are populated at qualification time; the
+    /// proposed inventory may leave this empty while no campaign has run.
+    #[serde(default)]
+    residual_risks: Vec<ResidualRisk>,
     /// ADR-0020 §1 fixed-base binding. Absent until the qualification lane
     /// runs from one clean tree.
     #[serde(default)]
@@ -2723,11 +2839,29 @@ struct CampaignRun {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+struct ResidualRisk {
+    id: String,
+    owner: String,
+    severity: String,
+    trigger: String,
+    requirement: String,
+    evidence: String,
+    planned_phase: String,
+    mitigation: String,
+    authority: String,
+    state: String,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct Requirement {
     id: String,
     kind: String,
     source: String,
     critical: bool,
+    /// Explicit stateful-law marker. The qualified layer requires fault and
+    /// recovery evidence for this marker, independently of `kind` spelling.
+    #[serde(default)]
+    stateful: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -2907,6 +3041,16 @@ struct ReviewRecordAttempt {
     independently_reproduced: bool,
     classification: String,
     resolved: bool,
+    #[serde(default)]
+    resolution: Option<ReviewResolution>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct ReviewResolution {
+    commit: String,
+    coordinate: String,
+    evidence_sha256: String,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -4448,6 +4592,7 @@ mod tests {
             independently_reproduced: false,
             classification: "caught_violation".to_owned(),
             resolved: false,
+            resolution: None,
         }
     }
 
@@ -5132,7 +5277,8 @@ mod tests {
             .map(|(i, row)| {
                 let mut row = row.clone();
                 if i == 0 {
-                    row.seconds = 1740; // 29 minutes: family floor AND total floor
+                    row.seconds = 1740; // requested 29 minutes
+                    row.elapsed_s = 1740; // measured 29 minutes: family and total floor
                 }
                 row
             })

@@ -6,6 +6,7 @@
  "qualification_stage": "1a",
  "concurrent_code": "not_applicable",
  "locked_acceptance_corpora_touched": false,
+ "residual_risks": [],
  "requirements": [
   {
    "id": "P1-R001",
@@ -95,7 +96,8 @@
    "id": "P1-R015",
    "kind": "fault",
    "source": "docs/execution/M20.md:D20.3",
-   "critical": true
+   "critical": true,
+   "stateful": true
   },
   {
    "id": "P1-R016",
