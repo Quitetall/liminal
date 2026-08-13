@@ -16,6 +16,7 @@ authorization, suite ratification, or access to locked acceptance inputs.
 | profile | HAQP-1 (ADR-0020) |
 | packet authoring state | predeclared inventory committed |
 | qualification state | NOT_RUN |
+| concurrent implementation | `not_applicable` — Phase 1 has no concurrent implementation; deterministic schedule lane is not applicable |
 | ratification decision | unratified — Brian T1 decision required |
 | Phase 1 execution authorization | NOT_RUN |
 | locked acceptance corpora touched | NOT_RUN — prohibited |
@@ -24,7 +25,7 @@ authorization, suite ratification, or access to locked acceptance inputs.
 | intended campaign ceiling | 8 hours |
 | complete post-fix qualification rerun | NOT_RUN |
 | machine inventory | `conformance/haqp/packet.json` (`cargo run -p liminal-xtask -- haq verify-inventory`) |
-| machine inventory BLAKE3 | `a169fae4ba60893559a04591340346055a971f120489dca5748e7e72e81695b1` |
+| machine inventory BLAKE3 | `dd4420851984067f3c5232c312b675141f4ac0e38f92a3d5d570a65e5a98b484` |
 
 ## Execution lanes
 
@@ -57,6 +58,8 @@ authorization, suite ratification, or access to locked acceptance inputs.
 | last verified defect and fix coordinate | NOT_RUN |
 | full rerun after last verified fix | NOT_RUN |
 | missing-evidence fail-closed check | NOT_RUN |
+| unlocked-corpus path audit | NOT_RUN — traced open-path manifests required; held-out paths are forbidden |
+| campaign clock artifact | NOT_RUN — `scripts/haqp_campaign_clock.sh`; two clean >8-hour runs block ratification |
 
 Partial reruns are diagnostic only. Any verified fix invalidates eligibility until
 this lane runs again in full from one fixed clean tree.

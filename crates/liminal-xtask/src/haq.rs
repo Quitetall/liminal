@@ -57,7 +57,9 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     // editing two files.
     verify_provenance(root, &packet)?;
     verify_fuzz_evidence(root, &packet)?;
+    verify_corpus_access_audit(root, &packet)?;
     verify_crash_evidence(root, &packet)?;
+    verify_campaign_clock(root)?;
     verify_qualification_stage(&packet)?;
     if packet.qualification_stage == "1b" {
         verify_mutant_killing_tests(root, &packet)?;
@@ -525,6 +527,11 @@ fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
 fn verify_review_record(review: &Review, record: &ReviewRecord) -> Result<()> {
     let who = &review.reviewer;
     require_eq(
+        "review record model_family",
+        &record.reviewer.model_family,
+        who,
+    )?;
+    require_eq(
         "review record schema_version",
         &record.schema_version,
         "haqp-blind-review-v1",
@@ -781,6 +788,7 @@ fn verify_reviewer_independence(records: &[(String, ReviewRecord)]) -> Result<()
     let mut families: BTreeSet<&str> = BTreeSet::new();
     let mut backends: BTreeSet<&str> = BTreeSet::new();
     let mut identities: BTreeSet<&str> = BTreeSet::new();
+    let mut prompts: BTreeSet<&str> = BTreeSet::new();
     for (who, record) in records {
         if record.reviewer.model_family.trim().is_empty() {
             anyhow::bail!("{who}: record names no model family");
@@ -792,14 +800,20 @@ fn verify_reviewer_independence(records: &[(String, ReviewRecord)]) -> Result<()
             &format!("{who} reviewer identity_hash"),
             &record.reviewer.identity_hash,
         )?;
+        require_hex_digest(
+            &format!("{who} sanitized_prompt_hash"),
+            &record.sanitized_prompt_hash,
+        )?;
         families.insert(record.reviewer.model_family.as_str());
         backends.insert(record.reviewer.backend.as_str());
         identities.insert(record.reviewer.identity_hash.as_str());
+        prompts.insert(record.sanitized_prompt_hash.as_str());
     }
     for (label, distinct) in [
         ("model families", families.len()),
         ("backends", backends.len()),
         ("reviewer identities", identities.len()),
+        ("sanitized prompts", prompts.len()),
     ] {
         if distinct != records.len() {
             anyhow::bail!(
@@ -1586,13 +1600,10 @@ fn collect_runnable_test_functions(text: &str, names: &mut BTreeMap<String, usiz
 /// The recorded fuzz campaign is too long to re-run per verification (150
 /// target-minutes), so its artifact is COMMITTED and the packet must agree
 /// with it exactly. Cheap lanes are re-run instead — see `haq verify-full`.
-/// The packet is deliberately NOT consulted here, and that is a recorded gap
-/// rather than an oversight (M17.5 pass-2 #17, remaining half). The packet
-/// declares `generated[*].fuzz_minutes` per FAMILY while this artifact records
-/// `seconds` per TARGET, and no mapping between the two is declared anywhere in
-/// ADR-0020 or the packet. Inventing one here would be improvising qualification
-/// semantics, so the two independent claims about one campaign stay
-/// unreconciled until that mapping is decided.
+/// Target identity is checked here; family budget reconciliation happens in
+/// `verify_fuzz_budget`, which derives each family's minutes from its declared
+/// target mapping. There is one source of campaign duration truth: this
+/// artifact's per-target seconds.
 fn verify_fuzz_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let path = root.join("conformance/haqp/evidence/fuzz.json");
     let bytes =
@@ -1702,9 +1713,7 @@ fn verify_fuzz_rows(recorded: &[FuzzEvidence], present: &BTreeSet<String>) -> Re
         // a contribution to the 150 target-minute total — without it one long
         // target could carry the sum while another ran for seconds.
         //
-        // 30 minutes, NOT the 31 that `verify_generated_inventory` demands of the
-        // packet. That discrepancy is real and is recorded as F-18; this check
-        // deliberately follows the ADR rather than the other verifier.
+        // The same 30-minute floor is used by family budget reconciliation.
         if row.seconds < 30 * 60 {
             anyhow::bail!(
                 "fuzz target {} was budgeted {}s, below the 30-minute per-target floor \
@@ -1766,6 +1775,122 @@ fn verify_fuzz_logs(root: &Utf8Path, recorded: &[FuzzEvidence]) -> Result<()> {
         let digest = blake3::hash(&bytes).to_hex().to_string();
         require_eq("fuzz log_blake3", &row.log_blake3, &digest)?;
     }
+    Ok(())
+}
+
+/// Bind the locked-corpus prohibition to an OS-level path audit rather than
+/// trusting `locked_acceptance_corpora_touched: false`. The audit records only
+/// normalized paths, never corpus bytes; forbidden held-out paths fail closed.
+fn verify_corpus_access_audit(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    let path = root.join("conformance/haqp/evidence/corpus-access.json");
+    let bytes = fs::read(&path).with_context(|| {
+        format!("{path}: committed corpus-access audit is required; run the traced fuzz lane")
+    })?;
+    let audit: CorpusAccessAudit =
+        serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))?;
+    require_eq(
+        "corpus access audit schema_version",
+        &audit.schema_version,
+        "haqp-corpus-access-v1",
+    )?;
+    require_eq(
+        "corpus access audit tracer",
+        &audit.tracer,
+        "strace-open-paths",
+    )?;
+
+    let expected = packet
+        .generated
+        .iter()
+        .flat_map(|family| family.fuzz_targets.iter().cloned())
+        .collect::<BTreeSet<_>>();
+    let actual = audit
+        .targets
+        .iter()
+        .map(|row| row.target.clone())
+        .collect::<BTreeSet<_>>();
+    anyhow::ensure!(
+        actual == expected,
+        "corpus access audit target set differs: recorded={actual:?}, expected={expected:?}"
+    );
+    require_unique(
+        audit.targets.iter().map(|row| row.target.as_str()),
+        "corpus access audit target",
+    )?;
+    for row in &audit.targets {
+        let expected_manifest = format!("conformance/haqp/evidence/access/{}.paths", row.target);
+        require_eq(
+            "corpus access manifest path",
+            &row.manifest,
+            &expected_manifest,
+        )?;
+        let manifest = root.join(&expected_manifest);
+        let metadata = fs::symlink_metadata(&manifest)
+            .with_context(|| format!("{manifest}: corpus access manifest is required"))?;
+        anyhow::ensure!(
+            metadata.file_type().is_file(),
+            "{manifest}: corpus access manifest must be a regular file"
+        );
+        let manifest_bytes = fs::read(&manifest).with_context(|| format!("read {manifest}"))?;
+        require_eq(
+            "corpus access manifest_blake3",
+            &row.manifest_blake3,
+            &blake3::hash(&manifest_bytes).to_hex().to_string(),
+        )?;
+        let manifest_text = String::from_utf8(manifest_bytes)
+            .with_context(|| format!("{manifest}: corpus access manifest is not UTF-8"))?;
+        anyhow::ensure!(
+            !manifest_text.trim().is_empty(),
+            "{manifest}: corpus access manifest is empty"
+        );
+        for forbidden in ["heldout", "conformance/corpora"] {
+            anyhow::ensure!(
+                !manifest_text.contains(forbidden),
+                "{manifest}: corpus access audit observed forbidden path fragment {forbidden:?}"
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Check the bounded-campaign clock artifact. One clean breach is retained as
+/// residual risk; two clean breaches block ratification per ADR-0020 §7.
+fn verify_campaign_clock(root: &Utf8Path) -> Result<()> {
+    let path = root.join("conformance/haqp/evidence/campaign.json");
+    let bytes = fs::read(&path)
+        .with_context(|| format!("{path}: committed campaign clock evidence is required"))?;
+    let clock: CampaignClock =
+        serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))?;
+    require_eq(
+        "campaign clock schema_version",
+        &clock.schema_version,
+        "haqp-campaign-clock-v1",
+    )?;
+    anyhow::ensure!(
+        !clock.reference_machine.trim().is_empty(),
+        "campaign clock has no reference machine"
+    );
+    require_unique(clock.runs.iter().map(|row| row.id.as_str()), "campaign run")?;
+    anyhow::ensure!(!clock.runs.is_empty(), "campaign clock records no runs");
+    for run in &clock.runs {
+        anyhow::ensure!(!run.id.trim().is_empty(), "campaign run has empty id");
+        anyhow::ensure!(
+            run.elapsed_s > 0,
+            "campaign run {} has zero elapsed seconds",
+            run.id
+        );
+        require_eq("campaign run result", &run.result, "pass")?;
+        anyhow::ensure!(run.clean, "campaign run {} was not clean", run.id);
+    }
+    let breaches = clock
+        .runs
+        .iter()
+        .filter(|run| run.elapsed_s > 8 * 60 * 60)
+        .count();
+    anyhow::ensure!(
+        breaches < 2,
+        "campaign exceeded the eight-hour ceiling on {breaches} clean runs; ratification is blocked"
+    );
     Ok(())
 }
 
@@ -1841,6 +1966,14 @@ fn verify_packet_shape(packet: &Packet) -> Result<()> {
     )?;
     require_eq("status", &packet.status, "proposed")?;
     require_eq("ratification", &packet.ratification, "unratified")?;
+    anyhow::ensure!(
+        matches!(
+            packet.concurrent_code.as_str(),
+            "not_applicable" | "deterministic_schedule_exploration"
+        ),
+        "concurrent_code must be not_applicable or deterministic_schedule_exploration, got {:?}",
+        packet.concurrent_code
+    );
     if packet.locked_acceptance_corpora_touched {
         anyhow::bail!("locked_acceptance_corpora_touched must be false");
     }
@@ -1900,6 +2033,14 @@ fn verify_packet_shape(packet: &Packet) -> Result<()> {
         if requirement.kind.trim().is_empty() || requirement.source.trim().is_empty() {
             anyhow::bail!("requirement {} has empty kind/source", requirement.id);
         }
+        if !REQUIREMENT_KINDS.contains(&requirement.kind.as_str()) {
+            anyhow::bail!(
+                "requirement {} has unknown kind {:?}; expected one of {:?}",
+                requirement.id,
+                requirement.kind,
+                REQUIREMENT_KINDS
+            );
+        }
         let (source_file, coordinate) = requirement
             .source
             .split_once(':')
@@ -1926,6 +2067,10 @@ fn verify_packet_shape(packet: &Packet) -> Result<()> {
 const CORE_EVIDENCE: [&str; 5] = ["positive", "negative", "malformed", "basis", "replay"];
 /// "Stateful laws also have injected-fault and idempotent-recovery evidence."
 const STATEFUL_EVIDENCE: [&str; 2] = ["fault", "recovery"];
+/// Requirement kinds are closed by the HAQP packet contract. An open kind
+/// vocabulary lets a packet relabel a stateful requirement and evade its
+/// fault/recovery evidence obligations (M17.5 P1-A04).
+const REQUIREMENT_KINDS: [&str; 4] = ["law", "gate", "fault", "abuse"];
 /// No single test may carry more than this share of the mutation denominator.
 const MAX_KILL_SHARE: f64 = 0.25;
 
@@ -2298,10 +2443,8 @@ fn verify_fuzz_target_mapping(declared: &[Generated]) -> Result<()> {
 /// Derive each family's fuzz minutes from the committed campaign and enforce
 /// ADR-0020 §4's floors against the DERIVED value (M17.5 F-17).
 ///
-/// The packet used to declare `fuzz_minutes` per family while the artifact
-/// recorded `seconds` per target, with no mapping between them — two
-/// independently-assertable claims about one campaign. Only the artifact
-/// asserts anything now; the packet says which targets belong to which family.
+/// The packet says which targets belong to each family; the artifact supplies
+/// their seconds. Summing those rows is the sole family-budget calculation.
 fn verify_fuzz_budget(declared: &[Generated], recorded: &[FuzzEvidence]) -> Result<()> {
     let seconds: BTreeMap<&str, u64> = recorded
         .iter()
@@ -2467,6 +2610,10 @@ struct Packet {
     /// witness a kill. Required, not defaulted: a packet that did not say which
     /// stage it completed would let a reader assume the stronger one.
     qualification_stage: String,
+    /// ADR-0020 §4 requires deterministic schedule evidence when concurrent
+    /// code exists, and an explicit N/A record otherwise. This is required
+    /// rather than defaulted so omission cannot masquerade as N/A.
+    concurrent_code: String,
     locked_acceptance_corpora_touched: bool,
     requirements: Vec<Requirement>,
     tests: Vec<Test>,
@@ -2540,6 +2687,39 @@ struct FuzzEvidence {
     /// output; `--keep-logs` commits them when someone actually wants them.
     #[serde(default)]
     log_blake3: String,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct CorpusAccessAudit {
+    schema_version: String,
+    tracer: String,
+    targets: Vec<CorpusAccessAuditTarget>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct CorpusAccessAuditTarget {
+    target: String,
+    manifest: String,
+    manifest_blake3: String,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct CampaignClock {
+    schema_version: String,
+    reference_machine: String,
+    runs: Vec<CampaignRun>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct CampaignRun {
+    id: String,
+    elapsed_s: u64,
+    clean: bool,
+    result: String,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -2636,12 +2816,9 @@ struct Generated {
     discards: u64,
     /// Fuzz targets that evidence THIS family (ADR-0020 §4; M17.5 F-29).
     ///
-    /// Replaces a per-family `fuzz_minutes` number. The packet declared minutes
-    /// per family while the artifact records seconds per target, with no mapping
-    /// between them — two independently-assertable claims about one campaign,
-    /// which is how drift enters. The mapping is a RELATION, never a second
-    /// number: minutes are derived by summing these targets' recorded seconds,
-    /// so nothing here can be asserted independently of a run.
+    /// Replaces a per-family `fuzz_minutes` number. Minutes are derived by
+    /// summing these targets' recorded seconds, so family budget is reconciled
+    /// to one committed campaign artifact rather than asserted independently.
     ///
     /// May be empty at the inventory layer, which describes a plan; the
     /// qualified layer refuses a family claiming `pass` with no target, the
@@ -4289,7 +4466,7 @@ mod tests {
             unresolved_verified_findings: 0,
             result: "pass".to_owned(),
             isolated_session_hash: "ef".repeat(32),
-            sanitized_prompt_hash: "ab".repeat(32),
+            sanitized_prompt_hash: hex_digest(format!("prompt:{family}").as_bytes()),
             fixed_base: ReviewFixedBase {
                 commit: "ab".repeat(32),
                 tree: "cd".repeat(32),
@@ -4310,7 +4487,7 @@ mod tests {
 
     fn review_row() -> Review {
         Review {
-            reviewer: "r".to_owned(),
+            reviewer: "openai".to_owned(),
             attempts: 12,
             findings: Vec::new(),
             independently_reproduced: Vec::new(),
@@ -4729,9 +4906,7 @@ mod tests {
     }
 
     // ── M17.5 F-17 / F-29: derived fuzz budget and the family→target mapping ──
-    // The packet declared minutes per FAMILY while the artifact recorded seconds
-    // per TARGET, with no mapping between them. Only the artifact asserts a
-    // number now; the packet says which targets belong to which family.
+    // The packet maps families to targets; the artifact supplies target seconds.
 
     fn fuzz_row(target: &str, seconds: u64) -> FuzzEvidence {
         FuzzEvidence {
@@ -5262,6 +5437,97 @@ mod tests {
             verify_packet_shape(&packet)
                 .expect_err("a requirement missing kind OR source is incomplete");
         }
+    }
+
+    #[test]
+    fn an_unknown_requirement_kind_is_refused() {
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        packet.requirements[0].kind = "stateful".to_owned();
+        let err = verify_packet_shape(&packet).expect_err("kind vocabulary must be closed");
+        assert!(err.to_string().contains("unknown kind"), "{err}");
+    }
+
+    #[test]
+    fn corpus_access_audit_rejects_forbidden_paths_and_accepts_unlocked_paths() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-corpus-audit").expect("scratch");
+        let root: &Utf8Path = &scratch;
+        let packet = packet_from_repo();
+        let targets = packet
+            .generated
+            .iter()
+            .flat_map(|family| family.fuzz_targets.iter().cloned())
+            .collect::<BTreeSet<_>>();
+        let mut rows = Vec::new();
+        for target in &targets {
+            let manifest = format!("conformance/haqp/evidence/access/{target}.paths");
+            let path = root.join(&manifest);
+            fs::create_dir_all(path.parent().expect("manifest parent")).expect("mkdir");
+            fs::write(&path, format!("/workspace/fuzz/corpus/{target}\n")).expect("write");
+            rows.push(CorpusAccessAuditTarget {
+                target: target.clone(),
+                manifest,
+                manifest_blake3: blake3::hash(&fs::read(&path).expect("read"))
+                    .to_hex()
+                    .to_string(),
+            });
+        }
+        let audit = CorpusAccessAudit {
+            schema_version: "haqp-corpus-access-v1".to_owned(),
+            tracer: "strace-open-paths".to_owned(),
+            targets: rows,
+        };
+        let audit_path = root.join("conformance/haqp/evidence/corpus-access.json");
+        fs::write(&audit_path, serde_json::to_vec(&audit).expect("serialize")).expect("write");
+        verify_corpus_access_audit(root, &packet).expect("unlocked corpus paths are accepted");
+
+        let first = audit.targets[0].clone();
+        let forbidden_path = root.join(&first.manifest);
+        fs::write(
+            &forbidden_path,
+            "/workspace/conformance/corpora/heldout/secret\n",
+        )
+        .expect("write forbidden path");
+        let mut doctored = audit;
+        doctored.targets[0].manifest_blake3 =
+            blake3::hash(&fs::read(&forbidden_path).expect("read"))
+                .to_hex()
+                .to_string();
+        fs::write(
+            &audit_path,
+            serde_json::to_vec(&doctored).expect("serialize"),
+        )
+        .expect("write doctored audit");
+        verify_corpus_access_audit(root, &packet)
+            .expect_err("held-out corpus access must fail closed");
+    }
+
+    #[test]
+    fn campaign_clock_allows_one_breach_but_blocks_two() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-campaign-clock").expect("scratch");
+        let root: &Utf8Path = &scratch;
+        let path = root.join("conformance/haqp/evidence/campaign.json");
+        fs::create_dir_all(path.parent().expect("clock parent")).expect("mkdir");
+        let clock = CampaignClock {
+            schema_version: "haqp-campaign-clock-v1".to_owned(),
+            reference_machine: "test-host".to_owned(),
+            runs: vec![CampaignRun {
+                id: "run-1".to_owned(),
+                elapsed_s: 8 * 60 * 60 + 1,
+                clean: true,
+                result: "pass".to_owned(),
+            }],
+        };
+        fs::write(&path, serde_json::to_vec(&clock).expect("serialize")).expect("write");
+        verify_campaign_clock(root).expect("one retained breach is residual risk");
+        let mut blocked = clock;
+        blocked.runs.push(CampaignRun {
+            id: "run-2".to_owned(),
+            elapsed_s: 8 * 60 * 60 + 1,
+            clean: true,
+            result: "pass".to_owned(),
+        });
+        fs::write(&path, serde_json::to_vec(&blocked).expect("serialize")).expect("write");
+        verify_campaign_clock(root).expect_err("two clean breaches block ratification");
     }
 
     /// `count > 16` — kills `>` -> `>=`: exactly 16 is the documented maximum.

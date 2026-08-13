@@ -11,6 +11,7 @@ set -uo pipefail
 
 SECS="${1:-1860}"
 OUT="${2:-target/haqp/fuzz.json}"
+AUDIT_OUT="${HAQP_CORPUS_AUDIT_OUT:-conformance/haqp/evidence/corpus-access.json}"
 TARGETS=(
   cst_parse
   format_idempotent
@@ -27,6 +28,11 @@ SANITIZER="${SANITIZER:-address}"
 # Opt-in: committing every libFuzzer log bloats the repo permanently, and the
 # digest is enough unless you actually want to read them.
 KEEP_LOGS="${KEEP_LOGS:-0}"
+AUDIT_ACCESS="${AUDIT_ACCESS:-1}"
+AUDIT_DIR="conformance/haqp/evidence/access"
+mkdir -p "$AUDIT_DIR"
+audit_entries=""
+audit_tracer="strace-open-paths"
 
 echo "[" > "$OUT"
 first=1
@@ -39,10 +45,21 @@ for t in "${TARGETS[@]}"; do
   # -s is explicit rather than relying on cargo-fuzz's default: ADR-0020 §4
   # requires a SANITIZER-ENABLED campaign, and a requirement satisfied by a
   # tool default is one a tool update can silently withdraw.
-  cargo +nightly fuzz run -s "$SANITIZER" "$t" -- \
+  audit_raw="target/haqp/access-$t.strace"
+  if [ "$AUDIT_ACCESS" = "1" ] && command -v strace >/dev/null 2>&1; then
+    strace -f -qq -e trace=openat,openat2 -o "$audit_raw" \
+      cargo +nightly fuzz run -s "$SANITIZER" "$t" -- \
+        -max_total_time="$SECS" -seed="$SEED" -rss_limit_mb=4096 -print_final_stats=1 \
+        >"$log" 2>&1
+    code=$?
+  else
+    echo "corpus access audit unavailable: AUDIT_ACCESS=$AUDIT_ACCESS strace=$(command -v strace || echo missing)" >"$audit_raw"
+    cargo +nightly fuzz run -s "$SANITIZER" "$t" -- \
       -max_total_time="$SECS" -seed="$SEED" -rss_limit_mb=4096 -print_final_stats=1 \
       >"$log" 2>&1
-  code=$?
+    code=$?
+    audit_tracer="unavailable"
+  fi
   elapsed=$(( $(date +%s) - started ))
   arts=$(ls "fuzz/artifacts/$t" 2>/dev/null | wc -l)
   execs=$(grep -oP 'stat::number_of_executed_units:\s*\K[0-9]+' "$log" | tail -1)
@@ -60,11 +77,22 @@ for t in "${TARGETS[@]}"; do
   else
     evidence_log="$log"
   fi
+  audit_manifest="$AUDIT_DIR/$t.paths"
+  if [ "$audit_tracer" = "strace-open-paths" ]; then
+    sed -n -E 's/.*openat2?\([^,]+, "(([^"\\]|\\.)*)".*/\1/p' "$audit_raw" | sort -u >"$audit_manifest"
+  else
+    cp "$audit_raw" "$audit_manifest"
+  fi
+  audit_hash=$(cargo run -q -p liminal-xtask -- haq hash "$audit_manifest" 2>/dev/null || echo "")
+  audit_row=$(printf '{"target":"%s","manifest":"%s","manifest_blake3":"%s"}' "$t" "conformance/haqp/evidence/access/$t.paths" "$audit_hash")
+  if [ -n "$audit_entries" ]; then audit_entries="$audit_entries,$audit_row"; else audit_entries="$audit_row"; fi
   printf '{"target":"%s","seconds":%s,"elapsed_s":%s,"exit_code":%s,"execs":%s,"artifacts":%s,"seed":%s,"sanitizer":"%s","log":"%s","log_blake3":"%s"}' \
     "$t" "$SECS" "$elapsed" "$code" "$execs" "$arts" "$SEED" "$SANITIZER" "$evidence_log" "$loghash" >> "$OUT"
   echo "--- $t: exit=$code execs=$execs artifacts=$arts elapsed=${elapsed}s"
 done
 
 echo "]" >> "$OUT"
+mkdir -p "$(dirname "$AUDIT_OUT")"
+printf '{"schema_version":"haqp-corpus-access-v1","tracer":"%s","targets":[%s]}\n' "$audit_tracer" "$audit_entries" >"$AUDIT_OUT"
 echo "campaign complete; overall_exit=$overall; evidence=$OUT"
 exit "$overall"

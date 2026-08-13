@@ -77,7 +77,8 @@ bench *ARGS:
     cargo bench -p liminal-benches {{ ARGS }}
 
 # Run each frozen target against its committed development corpus. Full HAQP
-# qualification requires seven separate 31-minute sanitizer runs.
+# qualification requires seven separate 30-minute sanitizer runs plus traced
+# corpus-access manifests.
 fuzz-smoke:
     cargo +nightly fuzz run cst_parse --sanitizer address -- -runs=1000
     cargo +nightly fuzz run format_idempotent --sanitizer address -- -runs=1000

@@ -569,7 +569,7 @@ def run_pass(
             # cloud-side guarantee that was never requested, so the field states
             # only what was actually asked for and `session_state` says how the
             # isolation is obtained.
-            "ephemeral_session_requested": backend_of(model) == "lamu",
+            "ephemeral_session_requested": backend_of(model) in {"lamu", "mimo-direct"},
             "session_state": (
                 "fresh-codex-session" if backend_of(model) == "codex" else "ephemeral-cloud-session"
             ),
@@ -587,7 +587,8 @@ def run_pass(
     return record
 
 
-# Pass 1 is OpenAI via the Codex CLI; pass 2 is MiMo via lamu. ADR-0020 §6 needs
+# Pass 1 is OpenAI via the Codex CLI; pass 2 is MiMo through direct token-plan
+# routing. ADR-0020 §6 needs
 # two distinct model families, and as of 2026-08-01 MiMo is the only vendor in
 # lamu's cloud roster that answers — DeepSeek's key is invalid and OpenRouter,
 # the route to every other family, can afford 72 tokens.
