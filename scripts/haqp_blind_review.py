@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 import re
+import select
 import subprocess
 import sys
 import tempfile
@@ -205,6 +206,17 @@ def mcp_call(model: str, prompt: str, session_id: str) -> str:
     result: dict[str, Any] | None = None
     deadline = time.monotonic() + 900
     while time.monotonic() < deadline:
+        # `readline()` blocks until the provider emits a newline, so checking
+        # the deadline only after calling it is ineffective when a cloud
+        # request stalls. Poll the pipe first; this keeps provider hangs on the
+        # explicit fail-closed timeout path instead of leaving the runner
+        # immortal.
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        ready, _, _ = select.select([proc.stdout], [], [], min(1.0, remaining))
+        if not ready:
+            continue
         line = proc.stdout.readline()
         if not line:
             break
@@ -221,7 +233,9 @@ def mcp_call(model: str, prompt: str, session_id: str) -> str:
         if isinstance(received, int) and 0 <= received < final_id:
             proc.stdin.write(json.dumps(requests[received], separators=(",", ":")) + "\n")
             proc.stdin.flush()
-    proc.kill()
+    if result is None and proc.poll() is None:
+        proc.kill()
+    proc.wait(timeout=5)
     if result is None:
         raise RuntimeError(f"lamu returned no {tool} result for {model}")
     if "error" in result:
