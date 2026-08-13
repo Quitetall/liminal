@@ -1582,8 +1582,9 @@ fn verify_fuzz_logs(root: &Utf8Path, recorded: &[FuzzEvidence]) -> Result<()> {
 }
 
 /// ADR-0020 §1: the qualification lane runs from ONE fixed clean commit and
-/// tree. Without this binding the packet describes no particular state of the
-/// repository (pass-2 finding #21).
+/// tree. The packet is committed one commit after that fixed evidence commit;
+/// requiring the packet's metadata commit to equal HEAD would be a
+/// self-referential hash claim and cannot be satisfied by Git.
 fn verify_provenance(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let Some(provenance) = &packet.provenance else {
         anyhow::bail!("packet has no provenance block; qualification is unbound to any tree");
@@ -1593,8 +1594,11 @@ fn verify_provenance(root: &Utf8Path, packet: &Packet) -> Result<()> {
         anyhow::ensure!(out.status.success(), "git {args:?} failed");
         Ok(String::from_utf8(out.stdout)?.trim().to_owned())
     };
-    let head = git(&["rev-parse", "HEAD"])?;
-    require_eq("provenance.commit", &provenance.commit, &head)?;
+    require_eq(
+        "provenance.commit/fixed_commit",
+        &provenance.commit,
+        &provenance.fixed_commit,
+    )?;
     let parent = git(&["rev-parse", "HEAD^"])?;
     require_eq(
         "provenance.evidence_parent",
@@ -1644,12 +1648,11 @@ fn verify_packet_shape(packet: &Packet) -> Result<()> {
     if packet.locked_acceptance_corpora_touched {
         anyhow::bail!("locked_acceptance_corpora_touched must be false");
     }
-    if packet.requirements.len() < 24 {
-        anyhow::bail!(
-            "requirements inventory too small: {}",
-            packet.requirements.len()
-        );
-    }
+    require_exact_ids(
+        packet.requirements.iter().map(|row| row.id.as_str()),
+        (1..=REQUIREMENT_COUNT).map(|idx| format!("P1-R{idx:03}")),
+        "requirement",
+    )?;
     require_unique(
         packet.requirements.iter().map(|row| row.id.as_str()),
         "requirement",
@@ -1867,6 +1870,11 @@ const MUTANT_FAMILIES: [&str; 5] = [
 
 const GENERATED_FAMILIES: [&str; 5] = MUTANT_FAMILIES;
 
+/// Phase 1's M18-M24 inventory is closed. A count-only check lets a doctored
+/// packet remove a law and replace it with an invented row while preserving
+/// the same cardinality.
+const REQUIREMENT_COUNT: usize = 36;
+
 /// The declared mutation operators. Closed by design (M17.5 pass-2 #13): an
 /// open vocabulary lets a fabricated inventory invent an operator per mutant
 /// and sail through the per-operator concentration ceiling, since a label used
@@ -1984,6 +1992,11 @@ fn verify_generated_inventory(packet: &Packet) -> Result<()> {
             packet.generated.len()
         );
     }
+    require_exact_ids(
+        packet.generated.iter().map(|row| row.family.as_str()),
+        GENERATED_FAMILIES.iter().map(|family| (*family).to_owned()),
+        "generated family",
+    )?;
     for family in &packet.generated {
         if family.accepted < 100_000 {
             anyhow::bail!("{} accepted cases below 100000", family.family);
@@ -2252,7 +2265,8 @@ struct Packet {
 /// The fixed base a qualification run was taken from.
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct Provenance {
-    /// Metadata commit that committed the qualification evidence.
+    /// Fixed clean source/evidence commit. The metadata packet is committed as
+    /// its child, avoiding impossible self-referential commit hashing.
     commit: String,
     lockfile_blake3: String,
     /// Clean source commit the evidence ran against; must be HEAD's parent.
@@ -3567,12 +3581,10 @@ mod tests {
     #[test]
     fn shape_check_rejects_a_requirement_mapped_to_no_test() {
         let mut packet = packet_from_repo();
-        packet.requirements.push(Requirement {
-            id: "P1-R900".to_owned(),
-            kind: "law".to_owned(),
-            source: "v4 §112".to_owned(),
-            critical: false,
-        });
+        let orphan = packet.requirements.last().expect("requirements").id.clone();
+        for test in &mut packet.tests {
+            test.requirements.retain(|id| id != &orphan);
+        }
         let err = verify_packet_shape(&packet)
             .expect_err("an unmapped requirement must be rejected even when non-critical");
         assert!(
@@ -3618,6 +3630,18 @@ mod tests {
             .expect_err("a family outside ADR-0020 §4's five must be rejected");
         assert!(
             err.to_string().contains("unknown mutation family"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn shape_check_rejects_an_invented_generated_family() {
+        let mut packet = packet_from_repo();
+        packet.generated[0].family = "invented/family".to_owned();
+        let err = verify_packet_shape(&packet)
+            .expect_err("generated evidence must name one of the five declared families");
+        assert!(
+            err.to_string().contains("generated family ids differ"),
             "unexpected error: {err}"
         );
     }
@@ -4757,14 +4781,15 @@ mod tests {
             .expect_err("a packet whose digest no longer matches the reviewed markdown");
     }
 
-    /// `verify_provenance` binds qualification to a specific commit and a clean
-    /// tree; replacing it with `Ok(())` unbinds the packet from any tree.
+    /// `verify_provenance` binds qualification to a specific fixed commit and
+    /// a clean tree; replacing it with `Ok(())` unbinds the packet from any
+    /// tree. The packet itself is expected to be that commit's child.
     #[test]
     fn provenance_rejects_a_packet_bound_to_another_commit() {
         let root = repo_root();
         let mut packet = read_packet(&root).expect("packet");
         if let Some(provenance) = packet.provenance.as_mut() {
-            provenance.commit = "0".repeat(40);
+            provenance.fixed_commit = "0".repeat(40);
             verify_provenance(&root, &packet)
                 .expect_err("a packet naming a commit that is not HEAD is bound to nothing");
         } else {
