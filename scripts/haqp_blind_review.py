@@ -151,27 +151,29 @@ def codex_call(model: str, prompt: str) -> str:
         return last.read_text()
 
 
-def call_arguments(model: str, prompt: str, session_id: str) -> tuple[str, dict[str, Any]]:
+def call_arguments(
+    model: str, prompt: str, session_id: str, *, liveness: bool = False
+) -> tuple[str, dict[str, Any]]:
     """Build the lamu `cloud_query` arguments for `model`."""
     return "cloud_query", {
         "model": model,
         "prompt": prompt,
         "system": SYSTEM,
-        "max_tokens": 32000,
-        "temperature": 0.1,
-        "thinking_enabled": True,
+        "max_tokens": 8 if liveness else 32000,
+        "temperature": 0.0 if liveness else 0.1,
+        "thinking_enabled": not liveness,
         "ephemeral": True,
         "conversation_id": session_id,
     }
 
 
-def mcp_call(model: str, prompt: str, session_id: str) -> str:
+def mcp_call(model: str, prompt: str, session_id: str, *, liveness: bool = False) -> str:
     """Send `prompt` to `model` on whichever backend can reach it."""
     if backend_of(model) == "codex":
         text = codex_call(model, prompt)
         provider_failure(model, text)
         return text
-    tool, arguments = call_arguments(model, prompt, session_id)
+    tool, arguments = call_arguments(model, prompt, session_id, liveness=liveness)
     calls = [(tool, arguments)]
     requests = [
         {
@@ -535,7 +537,12 @@ def vendor_liveness(models: list[str]) -> str | None:
     """
     for model in models:
         try:
-            mcp_call(model, "Reply with the single word OK.", f"haqp-liveness-{model}")
+            mcp_call(
+                model,
+                "Reply with the single word OK.",
+                f"haqp-liveness-{model}",
+                liveness=True,
+            )
         # OSError covers a missing `lamu` binary, which is FileNotFoundError and
         # therefore NOT a subprocess.SubprocessError. This runs outside main's
         # try, so letting it escape would crash before any blocked.json existed
