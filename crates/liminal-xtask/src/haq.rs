@@ -764,6 +764,12 @@ fn verify_review_resolution(
         )
     })?;
     require_git_object_id(&format!("{who} resolution commit"), &resolution.commit)?;
+    let fixed_oid = git_text(root, &["rev-parse", &fixed_base.commit])?;
+    let resolution_oid = git_text(root, &["rev-parse", &resolution.commit])?;
+    anyhow::ensure!(
+        fixed_oid != resolution_oid,
+        "{who}: resolution commit must be a strict descendant of fixed base"
+    );
     git_is_ancestor(root, &fixed_base.commit, &resolution.commit).with_context(|| {
         format!(
             "{who}: resolution commit {} is not a descendant of fixed base {}",
@@ -796,6 +802,31 @@ fn verify_review_resolution(
         &format!("{who} resolution evidence_sha256"),
         &resolution.evidence_sha256,
     )?;
+    let (coordinate_file, coordinate_line) = resolution
+        .coordinate
+        .rsplit_once(':')
+        .with_context(|| format!("{who}: resolution coordinate must be file:line"))?;
+    let line: usize = coordinate_line
+        .parse()
+        .with_context(|| format!("{who}: resolution coordinate line is not numeric"))?;
+    anyhow::ensure!(
+        line > 0,
+        "{who}: resolution coordinate line must be positive"
+    );
+    anyhow::ensure!(
+        !coordinate_file.trim().is_empty()
+            && !coordinate_file.starts_with('/')
+            && !coordinate_file.split('/').any(|part| part == ".."),
+        "{who}: resolution coordinate path must stay inside repository"
+    );
+    let source = git_text(
+        root,
+        &["show", &format!("{}:{coordinate_file}", resolution.commit)],
+    )?;
+    anyhow::ensure!(
+        line <= source.lines().count().max(1),
+        "{who}: resolution coordinate line {line} is outside {coordinate_file}"
+    );
     Ok(())
 }
 
@@ -1157,6 +1188,14 @@ fn verify_mutant_evidence_row(
         "{} baseline witness suite failed before mutation",
         row.id
     );
+    for witness in &mutant.killing_tests {
+        anyhow::ensure!(
+            row.runnable_tests.iter().any(|test| test == witness),
+            "{} evidence omits declared killing test {}",
+            row.id,
+            witness
+        );
+    }
     for digest in row.stdout_blake3.iter().chain(row.stderr_blake3.iter()) {
         anyhow::ensure!(
             digest.len() == 64 && digest.chars().all(|ch| ch.is_ascii_hexdigit()),
@@ -1973,9 +2012,10 @@ fn verify_corpus_access_audit(root: &Utf8Path, packet: &Packet) -> Result<()> {
             !manifest_text.trim().is_empty(),
             "{manifest}: corpus access manifest is empty"
         );
+        let manifest_lower = manifest_text.to_ascii_lowercase();
         for forbidden in ["heldout", "conformance/corpora"] {
             anyhow::ensure!(
-                !manifest_text.contains(forbidden),
+                !manifest_lower.contains(forbidden),
                 "{manifest}: corpus access audit observed forbidden path fragment {forbidden:?}"
             );
         }
