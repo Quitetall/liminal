@@ -1584,7 +1584,7 @@
    "id": "C06",
    "gate": "tests",
    "violation": "empty requirement mapping",
-   "expected_failure": "has no requirement mapping",
+   "expected_failure": "P1-T01 has no requirement mapping",
    "result": "predeclared"
   },
   {
@@ -1598,14 +1598,14 @@
    "id": "C08",
    "gate": "mutants",
    "violation": "operator supplies 17 mutants",
-   "expected_failure": "max 16",
+   "expected_failure": "operator predicate-deletion supplies 20 mutants; max 16",
    "result": "predeclared"
   },
   {
    "id": "C09",
    "gate": "mutants",
    "violation": "family supplies 12 mutants",
-   "expected_failure": "mutant count must be 13",
+   "expected_failure": "family graph/interchange codecs mutant count must be 13",
    "result": "predeclared"
   },
   {
@@ -1619,21 +1619,21 @@
    "id": "C11",
    "gate": "generated",
    "violation": "accepted below 100000",
-   "expected_failure": "accepted cases below 100000",
+   "expected_failure": "source/CST/formatting accepted cases below 100000",
    "result": "predeclared"
   },
   {
    "id": "C12",
    "gate": "generated",
    "violation": "discard rate above 1 percent",
-   "expected_failure": "discard rate exceeds 1%",
+   "expected_failure": "source/CST/formatting discard rate exceeds 1%",
    "result": "predeclared"
   },
   {
    "id": "C13",
    "gate": "fuzz",
    "violation": "claim another family's fuzz target",
-   "expected_failure": "is claimed by both",
+   "expected_failure": "fuzz target \"graph_interchange_codec\" is claimed by both",
    "result": "predeclared"
   },
   {
@@ -1647,7 +1647,7 @@
    "id": "C15",
    "gate": "reviews",
    "violation": "review attempts below 12",
-   "expected_failure": "has fewer than 12 attempts",
+   "expected_failure": "gpt-5.6-sol-blind-pass has fewer than 12 attempts",
    "result": "predeclared"
   },
   {

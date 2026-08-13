@@ -60,13 +60,11 @@ impl IncrementalCompiler for ParagraphCompiler {
         let mut ordered = edits
             .iter()
             .filter_map(|edit| {
-                let start = edit.start.min(source.len());
-                let end = edit.end.min(source.len()).max(start);
-                (source.is_char_boundary(start) && source.is_char_boundary(end)).then_some((
-                    start,
-                    end,
-                    edit.replacement.as_str(),
-                ))
+                (edit.start <= edit.end
+                    && edit.end <= source.len()
+                    && source.is_char_boundary(edit.start)
+                    && source.is_char_boundary(edit.end))
+                .then_some((edit.start, edit.end, edit.replacement.as_str()))
             })
             .collect::<Vec<_>>();
         ordered.sort_by(|left, right| right.0.cmp(&left.0).then(right.1.cmp(&left.1)));
@@ -281,6 +279,17 @@ mod tests {
             },
         ];
         assert_eq!(ParagraphCompiler.apply(&source, &edits), "abcdef");
+    }
+
+    #[test]
+    fn out_of_bounds_original_offset_edits_are_ignored() {
+        let source = "abcdef".to_owned();
+        let edits = [SourceEdit {
+            start: source.len() + 1,
+            end: source.len() + 2,
+            replacement: "!".to_owned(),
+        }];
+        assert_eq!(ParagraphCompiler.apply(&source, &edits), source);
     }
 
     #[test]

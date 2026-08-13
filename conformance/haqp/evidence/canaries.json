@@ -48,7 +48,7 @@
     "id": "C06",
     "gate": "tests",
     "violation": "empty requirement mapping",
-    "expected_failure": "has no requirement mapping",
+    "expected_failure": "P1-T01 has no requirement mapping",
     "observed_failure": "P1-T01 has no requirement mapping",
     "caught": true,
     "mutation_semantics": "clear tests[0].requirements"
@@ -66,7 +66,7 @@
     "id": "C08",
     "gate": "mutants",
     "violation": "operator supplies 17 mutants",
-    "expected_failure": "max 16",
+    "expected_failure": "operator predicate-deletion supplies 20 mutants; max 16",
     "observed_failure": "operator predicate-deletion supplies 20 mutants; max 16",
     "caught": true,
     "mutation_semantics": "set first 17 mutant operators to predicate-deletion"
@@ -75,7 +75,7 @@
     "id": "C09",
     "gate": "mutants",
     "violation": "family supplies 12 mutants",
-    "expected_failure": "mutant count must be 13",
+    "expected_failure": "family graph/interchange codecs mutant count must be 13",
     "observed_failure": "family graph/interchange codecs mutant count must be 13, got 14",
     "caught": true,
     "mutation_semantics": "move first mutant to another family"
@@ -93,7 +93,7 @@
     "id": "C11",
     "gate": "generated",
     "violation": "accepted below 100000",
-    "expected_failure": "accepted cases below 100000",
+    "expected_failure": "source/CST/formatting accepted cases below 100000",
     "observed_failure": "source/CST/formatting accepted cases below 100000",
     "caught": true,
     "mutation_semantics": "set generated[0].accepted := 0"
@@ -102,7 +102,7 @@
     "id": "C12",
     "gate": "generated",
     "violation": "discard rate above 1 percent",
-    "expected_failure": "discard rate exceeds 1%",
+    "expected_failure": "source/CST/formatting discard rate exceeds 1%",
     "observed_failure": "source/CST/formatting discard rate exceeds 1%",
     "caught": true,
     "mutation_semantics": "set generated[0].discards := attempts"
@@ -111,7 +111,7 @@
     "id": "C13",
     "gate": "fuzz",
     "violation": "claim another family's fuzz target",
-    "expected_failure": "is claimed by both",
+    "expected_failure": "fuzz target \"graph_interchange_codec\" is claimed by both",
     "observed_failure": "fuzz target \"graph_interchange_codec\" is claimed by both \"source/CST/formatting\" and \"graph/interchange codecs\"; one campaign cannot satisfy two families' budgets",
     "caught": true,
     "mutation_semantics": "duplicate one fuzz target across families"
@@ -129,7 +129,7 @@
     "id": "C15",
     "gate": "reviews",
     "violation": "review attempts below 12",
-    "expected_failure": "has fewer than 12 attempts",
+    "expected_failure": "gpt-5.6-sol-blind-pass has fewer than 12 attempts",
     "observed_failure": "gpt-5.6-sol-blind-pass has fewer than 12 attempts",
     "caught": true,
     "mutation_semantics": "set reviews[0].attempts := 0"
@@ -139,7 +139,7 @@
     "gate": "markdown",
     "violation": "remove packet digest",
     "expected_failure": "review packet markdown missing packet digest",
-    "observed_failure": "review packet markdown missing packet digest 778c3c712131706a412160c7d209b82c53f554fca4f137b16e0a9914225662b8",
+    "observed_failure": "review packet markdown missing packet digest a169fae4ba60893559a04591340346055a971f120489dca5748e7e72e81695b1",
     "caught": true,
     "mutation_semantics": "remove baseline packet digest from markdown"
   }

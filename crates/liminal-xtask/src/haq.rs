@@ -310,6 +310,11 @@ fn verify_crash_rows(recorded: &CrashEvidence, declared: &BTreeSet<String>) -> R
                 scenario.scenario
             );
         }
+        anyhow::ensure!(
+            !scenario.boundaries.is_empty(),
+            "crash scenario {} injected faults but names no boundaries",
+            scenario.scenario
+        );
         // A scenario's own boundary list must be a subset of the declared
         // registry, or it exercised a boundary nobody registered.
         for boundary in &scenario.boundaries {
@@ -563,7 +568,32 @@ fn verify_review_record(review: &Review, record: &ReviewRecord) -> Result<()> {
             record.unresolved_verified_findings
         );
     }
-    let record_findings = review_finding_ids(&record.findings, who)?;
+    verify_review_findings(review, record, who)?;
+    // P1-A07: blindness is a property of how the pass was RUN. The runner emits
+    // this proof; before F-27 nothing read it back.
+    if record.blindness_proof.prior_pass_artifact_supplied {
+        anyhow::bail!("{who} was shown a prior pass's artifacts; ADR-0020 §6 requires blindness");
+    }
+    if record.pass == 2 && !record.blindness_proof.pass_two_original_spec_only {
+        anyhow::bail!("{who} is pass 2 but did not start from the original spec alone");
+    }
+    anyhow::ensure!(
+        matches!(
+            record.blindness_proof.session_state.as_str(),
+            "fresh-codex-session" | "ephemeral-cloud-session"
+        ),
+        "{who} has unknown blindness session state {:?}",
+        record.blindness_proof.session_state
+    );
+    Ok(())
+}
+
+fn verify_review_findings(review: &Review, record: &ReviewRecord, who: &str) -> Result<()> {
+    require_hex_digest(
+        "review isolated_session_hash",
+        &record.isolated_session_hash,
+    )?;
+    let record_findings = review_finding_ids(&record.findings, &record.attempts, who)?;
     let packet_findings = review
         .findings
         .iter()
@@ -576,13 +606,42 @@ fn verify_review_record(review: &Review, record: &ReviewRecord) -> Result<()> {
             record.findings.len()
         );
     }
-    if record_findings != packet_findings {
+    if record_findings.keys().copied().collect::<BTreeSet<_>>() != packet_findings {
         anyhow::bail!("{who} packet findings do not match its committed record");
     }
-    let verified_unresolved = record
-        .attempts
+    let mut reproduced = BTreeSet::new();
+    for finding_id in &record.independently_reproduced {
+        anyhow::ensure!(
+            reproduced.insert(finding_id.as_str()),
+            "{who}: independently reproduced finding id {finding_id:?} appears twice"
+        );
+        anyhow::ensure!(
+            record_findings.contains_key(finding_id.as_str()),
+            "{who}: independently reproduced finding {finding_id:?} is absent from record"
+        );
+    }
+    let packet_reproduced = review
+        .independently_reproduced
         .iter()
-        .filter(|attempt| attempt.classification == "verified_defect" && !attempt.resolved)
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    anyhow::ensure!(
+        reproduced == packet_reproduced,
+        "{who} packet independent reproductions do not match its committed record"
+    );
+    let verified_unresolved = record
+        .independently_reproduced
+        .iter()
+        .filter(|finding_id| {
+            let Some(attempt_id) = record_findings.get(finding_id.as_str()) else {
+                return false;
+            };
+            record.attempts.iter().any(|attempt| {
+                attempt.id == *attempt_id
+                    && attempt.classification == "verified_defect"
+                    && !attempt.resolved
+            })
+        })
         .count() as u64;
     if record.unresolved_verified_findings != verified_unresolved {
         anyhow::bail!(
@@ -590,30 +649,39 @@ fn verify_review_record(review: &Review, record: &ReviewRecord) -> Result<()> {
             record.unresolved_verified_findings
         );
     }
-    // P1-A07: blindness is a property of how the pass was RUN. The runner emits
-    // this proof; before F-27 nothing read it back.
-    if record.blindness_proof.prior_pass_artifact_supplied {
-        anyhow::bail!("{who} was shown a prior pass's artifacts; ADR-0020 §6 requires blindness");
-    }
-    if record.pass == 2 && !record.blindness_proof.pass_two_original_spec_only {
-        anyhow::bail!("{who} is pass 2 but did not start from the original spec alone");
-    }
     Ok(())
 }
 
 fn review_finding_ids<'a>(
     findings: &'a [serde_json::Value],
+    attempts: &'a [ReviewRecordAttempt],
     who: &str,
-) -> Result<BTreeSet<&'a str>> {
-    let mut ids = BTreeSet::new();
+) -> Result<BTreeMap<&'a str, &'a str>> {
+    let attempts_by_id = attempts
+        .iter()
+        .map(|attempt| (attempt.id.as_str(), attempt))
+        .collect::<BTreeMap<_, _>>();
+    let mut ids = BTreeMap::new();
     for finding in findings {
         let id = finding
             .get("id")
             .and_then(serde_json::Value::as_str)
             .filter(|id| !id.trim().is_empty())
             .with_context(|| format!("{who}: record finding has no non-empty id"))?;
+        let attempt_id = finding
+            .get("attempt_id")
+            .and_then(serde_json::Value::as_str)
+            .filter(|id| !id.trim().is_empty())
+            .with_context(|| format!("{who}: finding {id:?} has no non-empty attempt_id"))?;
+        let attempt = attempts_by_id.get(attempt_id).with_context(|| {
+            format!("{who}: finding {id:?} names unknown attempt {attempt_id:?}")
+        })?;
         anyhow::ensure!(
-            ids.insert(id),
+            attempt.classification == "verified_defect",
+            "{who}: finding {id:?} must link to a verified_defect attempt"
+        );
+        anyhow::ensure!(
+            ids.insert(id, attempt_id).is_none(),
             "{who}: record finding id {id:?} appears twice"
         );
     }
@@ -641,9 +709,21 @@ fn verify_reviewer_independence(records: &[(String, ReviewRecord)]) -> Result<()
     // `records.len()`, and `distinct != records.len()` is then false, so the
     // function returns Ok either way. The early return states the intent —
     // independence is a claim about a PAIR — and costs nothing.
-    if records.len() < 2 {
+    if records.is_empty() {
         return Ok(());
     }
+    anyhow::ensure!(
+        records.len() == 2,
+        "blind review evidence must contain exactly two records"
+    );
+    let passes = records
+        .iter()
+        .map(|(_, record)| record.pass)
+        .collect::<BTreeSet<_>>();
+    anyhow::ensure!(
+        passes == BTreeSet::from([1, 2]),
+        "blind review records must have exactly pass ordinals 1 and 2"
+    );
     let mut families: BTreeSet<&str> = BTreeSet::new();
     let mut backends: BTreeSet<&str> = BTreeSet::new();
     let mut identities: BTreeSet<&str> = BTreeSet::new();
@@ -791,7 +871,11 @@ fn verify_mutant_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
     require_eq(
         "mutant evidence source_commit",
         &evidence.source_commit,
-        &git_text(root, &["rev-parse", "HEAD"])?,
+        &packet
+            .provenance
+            .as_ref()
+            .context("qualified mutant evidence requires packet provenance")?
+            .fixed_commit,
     )?;
     let lockfile_blake3 = hex_digest(&fs::read(root.join("Cargo.lock"))?);
     require_eq(
@@ -881,6 +965,31 @@ fn verify_mutant_evidence_row(
                 "{} claims killed with no failed test",
                 row.id
             );
+            let mut seen_failed = BTreeSet::new();
+            for failed in &row.failed_tests {
+                anyhow::ensure!(
+                    seen_failed.insert(failed),
+                    "{} lists failed test {:?} more than once",
+                    row.id,
+                    failed
+                );
+                let index = row
+                    .runnable_tests
+                    .iter()
+                    .position(|test| test == failed)
+                    .with_context(|| {
+                        format!(
+                            "{} lists failed test {:?} that was not runnable",
+                            row.id, failed
+                        )
+                    })?;
+                anyhow::ensure!(
+                    row.exit_codes[index] != 0,
+                    "{} lists failed test {:?} with zero exit code",
+                    row.id,
+                    failed
+                );
+            }
         }
         "equivalent" | "duplicate" => {
             require_eq(
@@ -2012,6 +2121,20 @@ fn verify_generated_inventory(packet: &Packet) -> Result<()> {
         if family.seed_categories.len() < 16 {
             anyhow::bail!("{} has fewer than 16 seed categories", family.family);
         }
+        let mut categories = BTreeSet::new();
+        for category in &family.seed_categories {
+            anyhow::ensure!(
+                !category.trim().is_empty(),
+                "{} has an empty seed category",
+                family.family
+            );
+            anyhow::ensure!(
+                categories.insert(category),
+                "{} repeats seed category {:?}",
+                family.family,
+                category
+            );
+        }
         // Internal consistency: the three counts must describe one run.
         if family.accepted + family.discards != family.attempts {
             anyhow::bail!(
@@ -2481,8 +2604,10 @@ struct ReviewRecord {
     attempts: Vec<ReviewRecordAttempt>,
     #[serde(default)]
     findings: Vec<serde_json::Value>,
+    independently_reproduced: Vec<String>,
     unresolved_verified_findings: u64,
     result: String,
+    isolated_session_hash: String,
     sanitized_prompt_hash: String,
     fixed_base: ReviewFixedBase,
     blindness_proof: ReviewRecordBlindness,
@@ -2504,6 +2629,7 @@ struct ReviewRecordAttempt {
     target: String,
     attempt: String,
     observed_result: String,
+    independently_reproduced: bool,
     classification: String,
     resolved: bool,
 }
@@ -2517,6 +2643,8 @@ struct ReviewFixedBase {
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct ReviewRecordBlindness {
+    ephemeral_session_requested: bool,
+    session_state: String,
     prior_pass_artifact_supplied: bool,
     #[serde(default)]
     pass_two_original_spec_only: bool,
@@ -2630,7 +2758,7 @@ fn run_canary_suite(baseline: &Packet, markdown: &str) -> Result<Vec<CanaryEvide
             .and_then(|()| verify_markdown_surface_text(&altered_markdown, &packet))
             .expect_err("mutated canary must fail closed")
             .to_string();
-        if !observed.replace('"', "").contains(&row.expected_failure) {
+        if !canary_failure_matches(&row.expected_failure, &observed) {
             anyhow::bail!(
                 "{}: expected failure {:?}, observed {observed:?}",
                 row.id,
@@ -2648,6 +2776,19 @@ fn run_canary_suite(baseline: &Packet, markdown: &str) -> Result<Vec<CanaryEvide
         });
     }
     Ok(records)
+}
+
+/// Match expected canary coordinates at the beginning of the verifier error.
+/// A substring search lets unrelated detail later in an error satisfy a row;
+/// exact equality or a delimited suffix preserves diagnostic detail without
+/// allowing that false positive.
+fn canary_failure_matches(expected: &str, observed: &str) -> bool {
+    let expected = expected.trim().replace('"', "");
+    let observed = observed.replace('"', "");
+    observed == expected
+        || observed.starts_with(&format!("{expected}:"))
+        || observed.starts_with(&format!("{expected},"))
+        || observed.starts_with(&format!("{expected} "))
 }
 
 fn inventory_statuses() -> PacketStatusExpectations {
@@ -4029,6 +4170,7 @@ mod tests {
             target: "laws.rs".to_owned(),
             attempt: "did a thing".to_owned(),
             observed_result: "saw a thing".to_owned(),
+            independently_reproduced: false,
             classification: "caught_violation".to_owned(),
             resolved: false,
         }
@@ -4045,8 +4187,10 @@ mod tests {
             },
             attempts: (0..12).map(|i| attempt(&format!("A{i}"))).collect(),
             findings: Vec::new(),
+            independently_reproduced: Vec::new(),
             unresolved_verified_findings: 0,
             result: "pass".to_owned(),
+            isolated_session_hash: "ef".repeat(32),
             sanitized_prompt_hash: "ab".repeat(32),
             fixed_base: ReviewFixedBase {
                 commit: "ab".repeat(32),
@@ -4054,6 +4198,12 @@ mod tests {
                 clean: true,
             },
             blindness_proof: ReviewRecordBlindness {
+                ephemeral_session_requested: backend == "lamu",
+                session_state: if backend == "lamu" {
+                    "ephemeral-cloud-session".to_owned()
+                } else {
+                    "fresh-codex-session".to_owned()
+                },
                 prior_pass_artifact_supplied: false,
                 pass_two_original_spec_only: pass == 2,
             },
