@@ -450,7 +450,9 @@ def run_pass(
         "classification (verified_defect|false_positive|caught_violation), and resolved. "
         "Each finding must be an object with unique id and attempt_id referencing a verified_defect attempt. "
         "Return JSON object with attempts array, findings array, independently_reproduced array of finding ids, "
-        "unresolved_verified_findings integer, and result. "
+        "unresolved_verified_findings integer, and result. Set unresolved_verified_findings to the count "
+        "of independently reproduced findings whose linked attempt has resolved=false; set it to 0 when "
+        "none remain unresolved. It must never exceed the length of independently_reproduced. "
         "No markdown, no credentials, no secrets.\n\n"
         + (
             "Start from original spec; prior-pass records are unavailable.\n"
