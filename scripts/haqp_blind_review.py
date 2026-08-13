@@ -16,6 +16,7 @@ import json
 import os
 import re
 import select
+import signal
 import subprocess
 import sys
 import tempfile
@@ -199,6 +200,7 @@ def mcp_call(model: str, prompt: str, session_id: str) -> str:
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         text=True,
+        start_new_session=True,
     )
     assert proc.stdin is not None and proc.stdout is not None
     proc.stdin.write(json.dumps(init, separators=(",", ":")) + "\n")
@@ -233,9 +235,20 @@ def mcp_call(model: str, prompt: str, session_id: str) -> str:
         if isinstance(received, int) and 0 <= received < final_id:
             proc.stdin.write(json.dumps(requests[received], separators=(",", ":")) + "\n")
             proc.stdin.flush()
-    if result is None and proc.poll() is None:
+    if proc.poll() is None:
+        # `lamu` is a launcher; killing only its parent can leave the MCP
+        # child alive and make `wait()` raise after a valid response. Kill the
+        # isolated process group so cleanup cannot rewrite success as provider
+        # failure or leak a server into later blind passes.
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
         proc.kill()
-    proc.wait(timeout=5)
+        proc.wait(timeout=5)
     if result is None:
         raise RuntimeError(f"lamu returned no {tool} result for {model}")
     if "error" in result:
