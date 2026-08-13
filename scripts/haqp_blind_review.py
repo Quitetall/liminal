@@ -444,6 +444,17 @@ def parse_json(text: str) -> dict[str, Any]:
             raise ValueError(f"attempt {identifier} independently_reproduced must be boolean")
         if not isinstance(attempt["resolved"], bool):
             raise ValueError(f"attempt {identifier} resolved must be boolean")
+        target = str(attempt["target"])
+        target_file, separator, target_line = target.rpartition(":")
+        if (
+            not separator
+            or not target_file.strip()
+            or not target_line.isdigit()
+            or int(target_line) < 1
+            or target_file.startswith("/")
+            or ".." in target_file.split("/")
+        ):
+            raise ValueError(f"attempt {identifier} target must be safe file:line")
         if attempt["classification"] not in allowed:
             raise ValueError(f"attempt {identifier} has unknown classification")
         if attempt["classification"] == "verified_defect" and attempt["resolved"]:
@@ -529,6 +540,7 @@ def run_pass(
         "Record exactly twelve concrete attempts. Each attempt object must contain id, "
         "attack_class, target, attempt, observed_result, independently_reproduced, "
         "classification (verified_defect|false_positive|caught_violation), and resolved. "
+        "Every target must be an exact safe repository file:line coordinate, never a symbol-only target. "
         "Each finding must be an object with unique id and attempt_id referencing a verified_defect attempt. "
         "A resolved verified_defect attempt must also carry resolution={commit,coordinate,evidence_path,evidence_sha256}; "
         "leave resolved=false when no fix proof exists. "
@@ -678,7 +690,7 @@ def self_test() -> int:
             {
                 "id": f"A{i}",
                 "attack_class": "c",
-                "target": "t",
+                "target": "haq.rs:1",
                 "attempt": "a",
                 "observed_result": "o",
                 "independently_reproduced": True,
@@ -699,6 +711,14 @@ def self_test() -> int:
     except (RuntimeError, ValueError) as exc:
         failures.append(f"a well-formed review was rejected: {exc}")
     rejects("parse_json accepted a short attempts array", parse_json, json.dumps({**good, "attempts": good["attempts"][:11]}))
+    rejects(
+        "parse_json accepted a symbol-only attempt target",
+        parse_json,
+        json.dumps({
+            **good,
+            "attempts": [{**good["attempts"][0], "target": "haq.rs:verify_packet_shape"}, *good["attempts"][1:]],
+        }),
+    )
     rejects(
         "parse_json accepted a review with no caught violation",
         parse_json,
@@ -827,7 +847,7 @@ def self_test() -> int:
         print(f"SELF-TEST FAILED: {problem}", file=sys.stderr)
     if failures:
         return 1
-    print(json.dumps({"result": "self-test-ok", "checks": 24}))
+    print(json.dumps({"result": "self-test-ok", "checks": 25}))
     return 0
 
 

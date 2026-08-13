@@ -16,6 +16,7 @@ use sha2::{Digest, Sha256};
 pub fn verify_inventory_repo(root: &Utf8Path) -> Result<()> {
     let packet = read_packet(root)?;
     verify_packet_shape(&packet)?;
+    verify_requirement_sources(root, &packet)?;
     verify_packet_statuses(&packet, inventory_statuses())?;
     verify_markdown_surface(root, &packet)?;
     Ok(())
@@ -26,6 +27,7 @@ pub fn verify_inventory_repo(root: &Utf8Path) -> Result<()> {
 pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     let packet = read_packet(root)?;
     verify_packet_shape(&packet)?;
+    verify_requirement_sources(root, &packet)?;
     verify_markdown_surface(root, &packet)?;
     require_eq(
         "qualification_state",
@@ -292,6 +294,24 @@ fn verify_crash_rows(recorded: &CrashEvidence, declared: &BTreeSet<String>) -> R
              packet={declared:?}, evidence={evidenced:?}"
         );
     }
+    let before = evidenced
+        .iter()
+        .filter(|boundary| boundary.contains("/before_"))
+        .count();
+    let after = evidenced
+        .iter()
+        .filter(|boundary| boundary.contains("/after_"))
+        .count();
+    anyhow::ensure!(
+        before > 0 && after > 0,
+        "crash evidence must identify both before-transition and after-transition boundaries"
+    );
+    for boundary in &evidenced {
+        anyhow::ensure!(
+            boundary.contains("/before_") || boundary.contains("/after_"),
+            "crash boundary {boundary:?} lacks an injection-side coordinate"
+        );
+    }
     // ADR-0020 §5: runtime discovery and declared inventory must match exactly,
     // and drift on EITHER side fails.
     if recorded.registered != recorded.exercised {
@@ -551,7 +571,7 @@ fn verify_review_record(root: &Utf8Path, review: &Review, record: &ReviewRecord)
             record.attempts.len()
         );
     }
-    verify_review_attempts(who, &record.attempts)?;
+    verify_review_attempts(root, &record.fixed_base.commit, who, &record.attempts)?;
     // P1-A06: the packet must not summarize the record more kindly than the
     // record summarizes itself. A row claiming `pass` over a record that says
     // `fail` is the whole failure mode.
@@ -690,7 +710,12 @@ fn verify_review_findings(
     Ok(())
 }
 
-fn verify_review_attempts(who: &str, attempts: &[ReviewRecordAttempt]) -> Result<()> {
+fn verify_review_attempts(
+    root: &Utf8Path,
+    fixed_commit: &str,
+    who: &str,
+    attempts: &[ReviewRecordAttempt],
+) -> Result<()> {
     // P1-A05: the attempts must be attempt RECORDS, not array padding.
     let mut seen: BTreeSet<&str> = BTreeSet::new();
     let mut seen_attempts = BTreeSet::new();
@@ -735,6 +760,12 @@ fn verify_review_attempts(who: &str, attempts: &[ReviewRecordAttempt]) -> Result
             "{who}: attempt {:?} target must be a safe file:coordinate",
             attempt.id
         );
+        let target_lower = target_file.to_ascii_lowercase();
+        anyhow::ensure!(
+            !target_lower.contains("heldout") && !target_lower.contains("conformance/corpora"),
+            "{who}: attempt {:?} target may not name locked acceptance corpus paths",
+            attempt.id
+        );
         let signature = format!(
             "{}\0{}\0{}\0{}",
             attempt.attack_class, attempt.target, attempt.attempt, attempt.observed_result
@@ -742,6 +773,27 @@ fn verify_review_attempts(who: &str, attempts: &[ReviewRecordAttempt]) -> Result
         anyhow::ensure!(
             seen_attempts.insert(signature),
             "{who}: attempt {:?} duplicates another substantive falsification attempt",
+            attempt.id
+        );
+        let target_source = git_text(
+            root,
+            &["show", &format!("{fixed_commit}:{target_file}")],
+        )
+        .with_context(|| {
+            format!(
+                "{who}: attempt {:?} target file {target_file:?} is absent at fixed review base",
+                attempt.id
+            )
+        })?;
+        let line: usize = target_coordinate.parse().with_context(|| {
+            format!(
+                "{who}: attempt {:?} target coordinate must be a positive line number",
+                attempt.id
+            )
+        })?;
+        anyhow::ensure!(
+            line > 0 && line <= target_source.lines().count().max(1),
+            "{who}: attempt {:?} target line {line} is outside {target_file}",
             attempt.id
         );
     }
@@ -2177,6 +2229,40 @@ fn verify_provenance(root: &Utf8Path, packet: &Packet) -> Result<()> {
         &provenance.lockfile_blake3,
         &digest,
     )?;
+    Ok(())
+}
+
+/// Requirement coordinates must resolve to committed source files. The
+/// coordinate suffix remains domain-specific (for example `D18.1`), but a
+/// nonexistent file cannot be an auditable normative source.
+fn verify_requirement_sources(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    for requirement in &packet.requirements {
+        let (source_file, _) = requirement
+            .source
+            .split_once(':')
+            .with_context(|| format!("requirement {} source lacks coordinate", requirement.id))?;
+        let lower = source_file.to_ascii_lowercase();
+        anyhow::ensure!(
+            !source_file.starts_with('/')
+                && !source_file.split('/').any(|part| part == "..")
+                && !lower.contains("heldout")
+                && !lower.contains("conformance/corpora"),
+            "requirement {} source path is unsafe or locked",
+            requirement.id
+        );
+        let path = root.join(source_file);
+        let metadata = fs::symlink_metadata(&path).with_context(|| {
+            format!(
+                "requirement {} source file is missing: {path}",
+                requirement.id
+            )
+        })?;
+        anyhow::ensure!(
+            metadata.file_type().is_file(),
+            "requirement {} source is not a regular file: {path}",
+            requirement.id
+        );
+    }
     Ok(())
 }
 
@@ -4738,7 +4824,7 @@ mod tests {
         ReviewRecordAttempt {
             id: id.to_owned(),
             attack_class: format!("vacuity:{id}"),
-            target: "laws.rs:law".to_owned(),
+            target: "crates/liminal-xtask/src/haq.rs:1".to_owned(),
             attempt: format!("did a thing {id}"),
             observed_result: format!("saw a thing {id}"),
             independently_reproduced: false,
@@ -4749,6 +4835,9 @@ mod tests {
     }
 
     fn review_record(pass: u8, family: &str, backend: &str) -> ReviewRecord {
+        let root = repo_root();
+        let commit = git_text(&root, &["rev-parse", "HEAD"]).expect("test HEAD");
+        let tree = git_text(&root, &["rev-parse", "HEAD^{tree}"]).expect("test tree");
         ReviewRecord {
             schema_version: "haqp-blind-review-v1".to_owned(),
             pass,
@@ -4765,8 +4854,8 @@ mod tests {
             isolated_session_hash: "ef".repeat(32),
             sanitized_prompt_hash: hex_digest(format!("prompt:{family}").as_bytes()),
             fixed_base: ReviewFixedBase {
-                commit: "ab".repeat(32),
-                tree: "cd".repeat(32),
+                commit,
+                tree,
                 clean: true,
             },
             blindness_proof: ReviewRecordBlindness {
@@ -5541,6 +5630,20 @@ mod tests {
             let dest = root.join(rel);
             fs::create_dir_all(dest.parent().expect("parent")).expect("mkdir");
             fs::copy(source.join(rel), &dest).expect("copy fixture");
+        }
+        let packet: Packet = serde_json::from_slice(
+            &fs::read(root.join("conformance/haqp/packet.json")).expect("read packet fixture"),
+        )
+        .expect("parse packet fixture");
+        for requirement in &packet.requirements {
+            let source_file = requirement
+                .source
+                .split_once(':')
+                .expect("requirement source coordinate")
+                .0;
+            let dest = root.join(source_file);
+            fs::create_dir_all(dest.parent().expect("source parent")).expect("mkdir");
+            fs::copy(source.join(source_file), &dest).expect("copy requirement source");
         }
         // Sanity: the COPY must pass, or the refusal below proves nothing about
         // the doctoring.
