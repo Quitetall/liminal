@@ -312,6 +312,10 @@ fn verify_crash_rows(recorded: &CrashEvidence, declared: &BTreeSet<String>) -> R
             "crash boundary {boundary:?} lacks an injection-side coordinate"
         );
     }
+    anyhow::ensure!(
+        recorded.registered == evidenced.len() && recorded.exercised == evidenced.len(),
+        "crash evidence registered/exercised counts do not match evidenced boundary count"
+    );
     // ADR-0020 §5: runtime discovery and declared inventory must match exactly,
     // and drift on EITHER side fails.
     if recorded.registered != recorded.exercised {
@@ -322,51 +326,7 @@ fn verify_crash_rows(recorded: &CrashEvidence, declared: &BTreeSet<String>) -> R
             recorded.exercised
         );
     }
-    // M17.5 F-31 / P1-A08: the scenarios block was written and never read.
-    anyhow::ensure!(
-        !recorded.scenarios.is_empty(),
-        "crash evidence records no scenarios; an empty fault matrix proves nothing"
-    );
-    for scenario in &recorded.scenarios {
-        if scenario.result != "pass" {
-            anyhow::bail!(
-                "crash scenario {} reports result {:?}",
-                scenario.scenario,
-                scenario.result
-            );
-        }
-        if scenario.faults_injected == 0 {
-            anyhow::bail!(
-                "crash scenario {} injected no faults, so it exercised nothing",
-                scenario.scenario
-            );
-        }
-        anyhow::ensure!(
-            !scenario.boundaries.is_empty(),
-            "crash scenario {} injected faults but names no boundaries",
-            scenario.scenario
-        );
-        // A scenario's own boundary list must be a subset of the declared
-        // registry, or it exercised a boundary nobody registered.
-        for boundary in &scenario.boundaries {
-            if !declared.contains(boundary) {
-                anyhow::bail!(
-                    "crash scenario {} exercised unregistered boundary {boundary}",
-                    scenario.scenario
-                );
-            }
-        }
-        // ...and `faults_injected` must be consistent with it: fewer faults
-        // than distinct boundaries is arithmetically impossible.
-        if scenario.faults_injected < scenario.boundaries.len() as u64 {
-            anyhow::bail!(
-                "crash scenario {} reports {} faults across {} distinct boundaries",
-                scenario.scenario,
-                scenario.faults_injected,
-                scenario.boundaries.len()
-            );
-        }
-    }
+    verify_crash_scenario_coverage(recorded, declared)?;
     for row in &recorded.boundaries {
         if row.occurrences_exercised == 0 {
             anyhow::bail!("crash boundary {} was never exercised", row.boundary);
@@ -384,6 +344,66 @@ fn verify_crash_rows(recorded: &CrashEvidence, declared: &BTreeSet<String>) -> R
                 "crash boundary {} left staged residue {:?}",
                 row.boundary,
                 row.staged_residue
+            );
+        }
+    }
+    Ok(())
+}
+
+fn verify_crash_scenario_coverage(
+    recorded: &CrashEvidence,
+    declared: &BTreeSet<String>,
+) -> Result<()> {
+    anyhow::ensure!(
+        !recorded.scenarios.is_empty(),
+        "crash evidence records no scenarios; an empty fault matrix proves nothing"
+    );
+    for scenario in &recorded.scenarios {
+        require_eq("crash scenario result", &scenario.result, "pass")?;
+        anyhow::ensure!(
+            scenario.faults_injected > 0,
+            "crash scenario {} injected no faults, so it exercised nothing",
+            scenario.scenario
+        );
+        anyhow::ensure!(
+            !scenario.boundaries.is_empty(),
+            "crash scenario {} injected faults but names no boundaries",
+            scenario.scenario
+        );
+        for boundary in &scenario.boundaries {
+            anyhow::ensure!(
+                declared.contains(boundary),
+                "crash scenario {} exercised unregistered boundary {boundary}",
+                scenario.scenario
+            );
+        }
+        anyhow::ensure!(
+            scenario.faults_injected >= scenario.boundaries.len() as u64,
+            "crash scenario {} reports {} faults across {} distinct boundaries",
+            scenario.scenario,
+            scenario.faults_injected,
+            scenario.boundaries.len()
+        );
+    }
+    let scenario_union = recorded
+        .scenarios
+        .iter()
+        .flat_map(|scenario| scenario.boundaries.iter().cloned())
+        .collect::<BTreeSet<_>>();
+    anyhow::ensure!(
+        scenario_union == *declared,
+        "crash scenario matrix does not cover every declared boundary"
+    );
+    for row in &recorded.boundaries {
+        for pair in &row.recovery_pairs {
+            anyhow::ensure!(
+                recorded.scenarios.iter().any(|scenario| {
+                    scenario.scenario == pair.scenario
+                        && scenario.boundaries.contains(&row.boundary)
+                }),
+                "crash recovery pair {}:{} is not covered by its scenario boundary matrix",
+                pair.scenario,
+                pair.occurrence
             );
         }
     }
@@ -878,6 +898,20 @@ fn verify_review_resolution(
     anyhow::ensure!(
         line <= source.lines().count().max(1),
         "{who}: resolution coordinate line {line} is outside {coordinate_file}"
+    );
+    let changed = git_text(
+        root,
+        &[
+            "diff",
+            "--name-only",
+            &format!("{}..{}", fixed_base.commit, resolution.commit),
+            "--",
+            coordinate_file,
+        ],
+    )?;
+    anyhow::ensure!(
+        changed.lines().any(|path| path == coordinate_file),
+        "{who}: resolution commit did not change coordinate file {coordinate_file}"
     );
     Ok(())
 }
@@ -2237,7 +2271,7 @@ fn verify_provenance(root: &Utf8Path, packet: &Packet) -> Result<()> {
 /// nonexistent file cannot be an auditable normative source.
 fn verify_requirement_sources(root: &Utf8Path, packet: &Packet) -> Result<()> {
     for requirement in &packet.requirements {
-        let (source_file, _) = requirement
+        let (source_file, coordinate) = requirement
             .source
             .split_once(':')
             .with_context(|| format!("requirement {} source lacks coordinate", requirement.id))?;
@@ -2261,6 +2295,14 @@ fn verify_requirement_sources(root: &Utf8Path, packet: &Packet) -> Result<()> {
             metadata.file_type().is_file(),
             "requirement {} source is not a regular file: {path}",
             requirement.id
+        );
+        let source = fs::read_to_string(&path)
+            .with_context(|| format!("read requirement {} source: {path}", requirement.id))?;
+        anyhow::ensure!(
+            source.contains(coordinate),
+            "requirement {} coordinate {:?} is absent from {path}",
+            requirement.id,
+            coordinate
         );
     }
     Ok(())
