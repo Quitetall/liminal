@@ -170,6 +170,7 @@ def mimo_direct_call(model: str, prompt: str, *, liveness: bool = False) -> str:
             "exec",
             "--sandbox",
             "read-only",
+            "--skip-git-repo-check",
             "--ignore-user-config",
             "--ephemeral",
             "--color",
