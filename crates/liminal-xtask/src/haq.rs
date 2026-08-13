@@ -586,6 +586,11 @@ fn verify_review_record(root: &Utf8Path, review: &Review, record: &ReviewRecord)
         "{who} has unknown blindness session state {:?}",
         record.blindness_proof.session_state
     );
+    let expected_ephemeral = record.blindness_proof.session_state == "ephemeral-cloud-session";
+    anyhow::ensure!(
+        record.blindness_proof.ephemeral_session_requested == expected_ephemeral,
+        "{who} blindness session state disagrees with ephemeral_session_requested"
+    );
     Ok(())
 }
 
