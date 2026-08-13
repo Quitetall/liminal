@@ -1833,8 +1833,9 @@ fn collect_runnable_test_functions(text: &str, names: &mut BTreeMap<String, usiz
         let trimmed = line.trim();
         if trimmed.starts_with("#[test]") {
             test_pending = true;
-            excluded = false;
-        } else if test_pending && (trimmed.starts_with("#[ignore") || trimmed.starts_with("#[cfg("))
+        } else if trimmed.starts_with("#[ignore")
+            || (trimmed.starts_with("#[cfg_attr(") && trimmed.contains("ignore"))
+            || trimmed.starts_with("#[cfg(")
         {
             excluded = true;
         } else if test_pending {
@@ -4578,7 +4579,7 @@ mod tests {
     fn runnable_test_scanner_rejects_comments_helpers_and_ignored_tests() {
         let mut names = BTreeMap::new();
         collect_runnable_test_functions(
-            "// fn commented() { }\nfn helper() {}\n#[test]\nfn live() {}\n#[test]\n#[ignore]\nfn dormant() {}",
+            "// fn commented() { }\nfn helper() {}\n#[test]\nfn live() {}\n#[test]\n#[ignore]\nfn dormant() {}\n#[ignore]\n#[test]\nfn reversed() {}",
             &mut names,
         );
         assert_eq!(names, BTreeMap::from([("live".to_owned(), 1)]));
