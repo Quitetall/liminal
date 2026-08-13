@@ -157,6 +157,13 @@ fn verify_canary_rows(declared: &[Canary], recorded: &[CanaryEvidence]) -> Resul
                 evidence.expected_failure
             );
         }
+        anyhow::ensure!(
+            canary_failure_matches(&evidence.expected_failure, &evidence.observed_failure),
+            "{}: observed failure {:?} does not match expected failure {:?}",
+            canary.id,
+            evidence.observed_failure,
+            evidence.expected_failure
+        );
         require_eq("canary evidence gate", &evidence.gate, &canary.gate)?;
         require_eq(
             "canary evidence mutation semantics",
@@ -463,6 +470,19 @@ fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
             );
         }
         let path = root.join(candidate);
+        let canonical_root = fs::canonicalize(root.as_std_path())
+            .context("canonicalize repository root for review evidence")?;
+        let canonical_path = fs::canonicalize(&path).with_context(|| {
+            format!(
+                "{path}: {} claims pass but its record is missing",
+                review.reviewer
+            )
+        })?;
+        anyhow::ensure!(
+            canonical_path.starts_with(&canonical_root),
+            "{} review record resolves outside repository via symlink",
+            review.reviewer
+        );
         let bytes = fs::read(&path).with_context(|| {
             format!(
                 "{path}: {} claims pass but its record is missing",
@@ -513,8 +533,8 @@ fn verify_review_record(review: &Review, record: &ReviewRecord) -> Result<()> {
         "review sanitized_prompt_hash",
         &record.sanitized_prompt_hash,
     )?;
-    require_hex_digest("review fixed_base.commit", &record.fixed_base.commit)?;
-    require_hex_digest("review fixed_base.tree", &record.fixed_base.tree)?;
+    require_git_object_id("review fixed_base.commit", &record.fixed_base.commit)?;
+    require_git_object_id("review fixed_base.tree", &record.fixed_base.tree)?;
     if record.attempts.len() as u64 != review.attempts {
         anyhow::bail!(
             "{who} declares {} attempts but its record contains {}",
@@ -619,6 +639,16 @@ fn verify_review_findings(review: &Review, record: &ReviewRecord, who: &str) -> 
             record_findings.contains_key(finding_id.as_str()),
             "{who}: independently reproduced finding {finding_id:?} is absent from record"
         );
+        let attempt_id = record_findings[finding_id.as_str()];
+        let attempt = record
+            .attempts
+            .iter()
+            .find(|attempt| attempt.id == attempt_id)
+            .expect("finding linkage validated above");
+        anyhow::ensure!(
+            attempt.independently_reproduced,
+            "{who}: finding {finding_id:?} is independently reproduced but its attempt says false"
+        );
     }
     let packet_reproduced = review
         .independently_reproduced
@@ -696,6 +726,14 @@ fn require_hex_digest(label: &str, digest: &str) -> Result<()> {
     Ok(())
 }
 
+fn require_git_object_id(label: &str, digest: &str) -> Result<()> {
+    anyhow::ensure!(
+        matches!(digest.len(), 40 | 64) && digest.chars().all(|ch| ch.is_ascii_hexdigit()),
+        "{label} must be a 40- or 64-hex Git object id"
+    );
+    Ok(())
+}
+
 /// ADR-0020 §6's independence, checked rather than assumed (M17.5 F-27 / P1-A07).
 ///
 /// The runner records `reviewer.model_family`, `reviewer.backend` and an
@@ -734,6 +772,10 @@ fn verify_reviewer_independence(records: &[(String, ReviewRecord)]) -> Result<()
         if record.reviewer.identity_hash.trim().is_empty() {
             anyhow::bail!("{who}: record carries no reviewer identity hash");
         }
+        require_hex_digest(
+            &format!("{who} reviewer identity_hash"),
+            &record.reviewer.identity_hash,
+        )?;
         families.insert(record.reviewer.model_family.as_str());
         backends.insert(record.reviewer.backend.as_str());
         identities.insert(record.reviewer.identity_hash.as_str());
@@ -945,9 +987,15 @@ fn verify_mutant_evidence_row(
     );
     anyhow::ensure!(
         row.runnable_tests.len() == row.exit_codes.len()
+            && row.runnable_tests.len() == row.baseline_exit_codes.len()
             && row.runnable_tests.len() == row.stdout_blake3.len()
             && row.runnable_tests.len() == row.stderr_blake3.len(),
         "{} evidence vectors have different lengths",
+        row.id
+    );
+    anyhow::ensure!(
+        row.baseline_exit_codes.iter().all(|code| *code == 0),
+        "{} baseline witness suite failed before mutation",
         row.id
     );
     for digest in row.stdout_blake3.iter().chain(row.stderr_blake3.iter()) {
@@ -1166,6 +1214,7 @@ fn run_mutant_row(
             status: "not-ready".to_owned(),
             patch: None,
             runnable_tests: Vec::new(),
+            baseline_exit_codes: Vec::new(),
             failed_tests: Vec::new(),
             exit_codes: Vec::new(),
             stdout_blake3: Vec::new(),
@@ -1187,6 +1236,7 @@ fn run_mutant_row(
             status: "not-runnable".to_owned(),
             patch: Some(patch),
             runnable_tests: Vec::new(),
+            baseline_exit_codes: Vec::new(),
             failed_tests: Vec::new(),
             exit_codes: Vec::new(),
             stdout_blake3: Vec::new(),
@@ -1194,6 +1244,12 @@ fn run_mutant_row(
             reason: Some("no runnable killing tests".to_owned()),
         });
     }
+    let baseline_exit_codes = runnable
+        .iter()
+        .map(|test_name| {
+            run_one_mutant_test(worktree, test_name, run_ignored).map(|(code, _, _)| code)
+        })
+        .collect::<Result<Vec<_>>>()?;
     if let Err(error) = apply_mutant_patch(worktree, &patch) {
         return Ok(MutantEvidenceRow {
             id: mutant.id.clone(),
@@ -1201,6 +1257,7 @@ fn run_mutant_row(
             status: "error".to_owned(),
             patch: Some(patch),
             runnable_tests: runnable,
+            baseline_exit_codes,
             failed_tests: Vec::new(),
             exit_codes: Vec::new(),
             stdout_blake3: Vec::new(),
@@ -1232,6 +1289,7 @@ fn run_mutant_row(
         status: status.to_owned(),
         patch: Some(patch),
         runnable_tests: runnable,
+        baseline_exit_codes,
         failed_tests,
         exit_codes,
         stdout_blake3,
@@ -1709,6 +1767,14 @@ fn verify_provenance(root: &Utf8Path, packet: &Packet) -> Result<()> {
         &provenance.fixed_commit,
     )?;
     let parent = git(&["rev-parse", "HEAD^"])?;
+    let parents = git(&["rev-list", "--parents", "-n1", "HEAD"])?
+        .split_whitespace()
+        .count()
+        .saturating_sub(1);
+    anyhow::ensure!(
+        parents == 1,
+        "qualification metadata commit must have exactly one parent, found {parents}"
+    );
     require_eq(
         "provenance.evidence_parent",
         &provenance.evidence_parent,
@@ -1813,6 +1879,15 @@ fn verify_packet_shape(packet: &Packet) -> Result<()> {
         if requirement.kind.trim().is_empty() || requirement.source.trim().is_empty() {
             anyhow::bail!("requirement {} has empty kind/source", requirement.id);
         }
+        let (source_file, coordinate) = requirement
+            .source
+            .split_once(':')
+            .with_context(|| format!("requirement {} source lacks coordinate", requirement.id))?;
+        anyhow::ensure!(
+            !source_file.trim().is_empty() && !coordinate.trim().is_empty(),
+            "requirement {} source must contain file and coordinate",
+            requirement.id
+        );
     }
     verify_evidence_coverage(packet)?;
     verify_mutant_inventory(packet)?;
@@ -2515,6 +2590,7 @@ struct MutantEvidenceRow {
     status: String,
     patch: Option<MutantPatch>,
     runnable_tests: Vec<String>,
+    baseline_exit_codes: Vec<i32>,
     failed_tests: Vec<String>,
     exit_codes: Vec<i32>,
     stdout_blake3: Vec<String>,
@@ -4182,7 +4258,7 @@ mod tests {
             pass,
             reviewer: ReviewRecordReviewer {
                 model_family: family.to_owned(),
-                identity_hash: format!("hash-of-{family}"),
+                identity_hash: hex_digest(family.as_bytes()),
                 backend: backend.to_owned(),
             },
             attempts: (0..12).map(|i| attempt(&format!("A{i}"))).collect(),
