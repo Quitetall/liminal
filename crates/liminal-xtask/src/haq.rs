@@ -659,6 +659,22 @@ fn verify_review_findings(review: &Review, record: &ReviewRecord, who: &str) -> 
         reproduced == packet_reproduced,
         "{who} packet independent reproductions do not match its committed record"
     );
+    for attempt in &record.attempts {
+        if attempt.classification == "verified_defect" {
+            let linked = record_findings
+                .iter()
+                .filter(|(_, attempt_id)| **attempt_id == attempt.id)
+                .map(|(finding_id, _)| *finding_id)
+                .collect::<BTreeSet<_>>();
+            anyhow::ensure!(
+                linked
+                    .iter()
+                    .any(|finding_id| reproduced.contains(finding_id)),
+                "{who}: verified defect attempt {:?} lacks independent reproduction",
+                attempt.id
+            );
+        }
+    }
     let verified_unresolved = record
         .independently_reproduced
         .iter()
@@ -1489,7 +1505,7 @@ fn collect_ignored(text: &str, names: &mut BTreeSet<String>) {
 }
 
 fn verify_test_names_exist(root: &Utf8Path, packet: &Packet) -> Result<()> {
-    let mut runnable = BTreeSet::new();
+    let mut runnable = BTreeMap::new();
     let mut stack = vec![root.join("conformance"), root.join("crates")];
     while let Some(dir) = stack.pop() {
         let Ok(entries) = fs::read_dir(&dir) else {
@@ -1519,8 +1535,13 @@ fn verify_test_names_exist(root: &Utf8Path, packet: &Packet) -> Result<()> {
         if leaf.trim().is_empty() {
             anyhow::bail!("{} declares an empty test name", test.id);
         }
-        if !runnable.contains(leaf) {
+        if !runnable.contains_key(leaf) {
             missing.push(format!("{} -> {}", test.id, test.name));
+        } else if runnable.get(leaf) != Some(&1) {
+            missing.push(format!(
+                "{} -> {} (leaf name is ambiguous; use a unique module-qualified test)",
+                test.id, test.name
+            ));
         }
     }
     if !missing.is_empty() {
@@ -1533,7 +1554,7 @@ fn verify_test_names_exist(root: &Utf8Path, packet: &Packet) -> Result<()> {
     Ok(())
 }
 
-fn collect_runnable_test_functions(text: &str, names: &mut BTreeSet<String>) {
+fn collect_runnable_test_functions(text: &str, names: &mut BTreeMap<String, usize>) {
     let mut test_pending = false;
     let mut excluded = false;
     for line in text.lines() {
@@ -1554,7 +1575,7 @@ fn collect_runnable_test_functions(text: &str, names: &mut BTreeSet<String>) {
                     .filter(|name| !name.trim().is_empty())
                     && !excluded
                 {
-                    names.insert(name.trim().to_owned());
+                    *names.entry(name.trim().to_owned()).or_default() += 1;
                 }
                 test_pending = false;
             }
@@ -2673,6 +2694,7 @@ struct Review {
 /// writes it. Typed rather than probed as a `serde_json::Value` so a field the
 /// verifier depends on cannot quietly go missing.
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 struct ReviewRecord {
     schema_version: String,
     pass: u8,
@@ -3885,12 +3907,12 @@ mod tests {
 
     #[test]
     fn runnable_test_scanner_rejects_comments_helpers_and_ignored_tests() {
-        let mut names = BTreeSet::new();
+        let mut names = BTreeMap::new();
         collect_runnable_test_functions(
             "// fn commented() { }\nfn helper() {}\n#[test]\nfn live() {}\n#[test]\n#[ignore]\nfn dormant() {}",
             &mut names,
         );
-        assert_eq!(names, BTreeSet::from(["live".to_owned()]));
+        assert_eq!(names, BTreeMap::from([("live".to_owned(), 1)]));
     }
 
     #[test]

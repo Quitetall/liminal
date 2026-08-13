@@ -176,7 +176,7 @@ restores fixed review base after each attempt.
 ## Generated, metamorphic, and fuzz evidence
 
 Each family target is at least **100,000 accepted deterministic generated cases**
-from recorded seeds and one **31-minute sanitizer-enabled fuzz campaign** with at
+from recorded seeds and one **30-minute sanitizer-enabled fuzz campaign** with at
 least 16 predeclared valid, boundary, truncated, malformed, and hostile seeds.
 Planned total fuzz budget: 150 target-minutes. Discard rate must be at most 1%;
 post-failure filtering or domain shrinking fails qualification.
