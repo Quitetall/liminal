@@ -1,0 +1,31 @@
+   Compiling liminal-fuzz v0.0.0 (/home/brianklam/Desktop/liminal/fuzz)
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.92s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.05s
+     Running `fuzz/target/x86_64-unknown-linux-gnu/release/ilrp_recovery -artifact_prefix=/home/brianklam/Desktop/liminal/fuzz/artifacts/ilrp_recovery/ -max_total_time=1860 -seed=20260725 -rss_limit_mb=4096 -print_final_stats=1 /home/brianklam/Desktop/liminal/fuzz/corpus/ilrp_recovery`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 20260725
+INFO: Loaded 1 modules   (416 inline 8-bit counters): 416 [0x55d0b18bdb30, 0x55d0b18bdcd0), 
+INFO: Loaded 1 PC tables (416 PCs): 416 [0x55d0b18bdcd0,0x55d0b18bf6d0), 
+INFO:      132 files found in /home/brianklam/Desktop/liminal/fuzz/corpus/ilrp_recovery
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
+INFO: seed corpus: files: 132 min: 1b max: 244b total: 10378b rss: 38Mb
+#133	INITED cov: 77 ft: 388 corp: 72/2897b exec/s: 0 rss: 38Mb
+#32768	pulse  cov: 77 ft: 388 corp: 72/2897b lim: 531 exec/s: 16384 rss: 316Mb
+#65536	pulse  cov: 77 ft: 388 corp: 72/2897b lim: 855 exec/s: 16384 rss: 609Mb
+#131072	pulse  cov: 77 ft: 388 corp: 72/2897b lim: 1506 exec/s: 18724 rss: 948Mb
+#262144	pulse  cov: 77 ft: 388 corp: 72/2897b lim: 2815 exec/s: 16384 rss: 949Mb
+#524288	pulse  cov: 77 ft: 388 corp: 72/2897b lim: 4096 exec/s: 15887 rss: 949Mb
+#554644	REDUCE cov: 77 ft: 388 corp: 72/2896b lim: 4096 exec/s: 15846 rss: 949Mb L: 207/207 MS: 1 EraseBytes-
+#559565	RELOAD cov: 77 ft: 389 corp: 73/2986b lim: 4096 exec/s: 15543 rss: 949Mb
+#1048576	pulse  cov: 77 ft: 389 corp: 73/2986b lim: 4096 exec/s: 17189 rss: 950Mb
+#2097152	pulse  cov: 77 ft: 389 corp: 73/2986b lim: 4096 exec/s: 16777 rss: 951Mb
+#4194304	pulse  cov: 77 ft: 389 corp: 73/2986b lim: 4096 exec/s: 15947 rss: 952Mb
+#8388608	pulse  cov: 77 ft: 389 corp: 73/2986b lim: 4096 exec/s: 15252 rss: 953Mb
+#16777216	pulse  cov: 77 ft: 389 corp: 73/2986b lim: 4096 exec/s: 14691 rss: 953Mb
+#26503120	DONE   cov: 77 ft: 389 corp: 73/2986b lim: 4096 exec/s: 14241 rss: 953Mb
+Done 26503120 runs in 1861 second(s)
+stat::number_of_executed_units: 26503120
+stat::average_exec_per_sec:     14241
+stat::new_units_added:          1
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              953
