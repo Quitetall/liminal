@@ -20,6 +20,7 @@ strat = "strat"
 extend-exclude = [
   "target/**",
   "conformance/fixtures/**",
+  "conformance/haqp/evidence/logs/**",
   "conformance/corpora/**",
   "conformance/golden/**",
   "**/snapshots/*.snap",
