@@ -82,10 +82,13 @@ def blocked(reason: str, *, commit: str, clean: bool) -> int:
 
 SYSTEM = "You are an isolated HAQP adversarial reviewer. Return JSON only."
 CODEX_PREFIX = "codex:"
+MIMO_DIRECT_PREFIX = "mimo-direct:"
 
 
 def backend_of(model: str) -> str:
-    """`codex` for the Codex CLI, `lamu` for anything lamu can route."""
+    """Classify provider route used by isolated review process."""
+    if model.startswith(MIMO_DIRECT_PREFIX):
+        return "mimo-direct"
     return "codex" if model.startswith(CODEX_PREFIX) else "lamu"
 
 
@@ -151,6 +154,70 @@ def codex_call(model: str, prompt: str) -> str:
         return last.read_text()
 
 
+def mimo_direct_call(model: str, prompt: str, *, liveness: bool = False) -> str:
+    """Run MiMo through Codex's direct token-plan provider profile.
+
+    LAMU's MCP transport can stall after liveness while the direct provider
+    remains healthy. Keep this route isolated, read-only, ephemeral, and
+    secret-silent; the API key is sourced inside the child shell and never
+    appears in captured output.
+    """
+    with tempfile.TemporaryDirectory(prefix="haqp-mimo-") as scratch:
+        last = Path(scratch) / "last-message.txt"
+        name = model[len(MIMO_DIRECT_PREFIX) :]
+        argv = [
+            "codex",
+            "exec",
+            "--sandbox",
+            "read-only",
+            "--ignore-user-config",
+            "--ephemeral",
+            "--color",
+            "never",
+            "--output-last-message",
+            str(last),
+            "--model",
+            name,
+            "-c",
+            "model_provider='mimo'",
+            "-c",
+            "model_providers.mimo.name='mimo'",
+            "-c",
+            "model_providers.mimo.base_url='https://token-plan-sgp.xiaomimimo.com/v1'",
+            "-c",
+            "model_providers.mimo.env_key='MIMO_API_KEY'",
+            "-c",
+            "model_providers.mimo.wire_api='responses'",
+            "-c",
+            "approval_policy='never'",
+            "-c",
+            "web_search='disabled'",
+            "-",
+        ]
+        command = [
+            "bash",
+            "-lc",
+            'source /home/brianklam/.config/lamu/api-keys.env; exec "$@"',
+            "--",
+            *argv,
+        ]
+        completed = subprocess.run(
+            command,
+            input=f"{SYSTEM}\n\n{prompt}",
+            capture_output=True,
+            text=True,
+            cwd=scratch,
+            timeout=60 if liveness else 900,
+            check=False,
+        )
+        if not last.exists():
+            tail = redact((completed.stderr or completed.stdout or "").strip()[-400:])
+            raise RuntimeError(
+                f"{model}: direct Mimo wrote no final message (exit {completed.returncode}): {tail}"
+            )
+        return last.read_text()
+
+
 def call_arguments(
     model: str, prompt: str, session_id: str, *, liveness: bool = False
 ) -> tuple[str, dict[str, Any]]:
@@ -171,6 +238,10 @@ def mcp_call(model: str, prompt: str, session_id: str, *, liveness: bool = False
     """Send `prompt` to `model` on whichever backend can reach it."""
     if backend_of(model) == "codex":
         text = codex_call(model, prompt)
+        provider_failure(model, text)
+        return text
+    if backend_of(model) == "mimo-direct":
+        text = mimo_direct_call(model, prompt, liveness=liveness)
         provider_failure(model, text)
         return text
     tool, arguments = call_arguments(model, prompt, session_id, liveness=liveness)
@@ -526,7 +597,7 @@ def run_pass(
 # every key in `api-keys.env` without adding a bill.
 PASSES = (
     ("pass1", os.environ.get("HAQP_BLIND_PASS1", "codex:gpt-5.6-sol"), False),
-    ("pass2", os.environ.get("HAQP_BLIND_PASS2", "mimo-v2.5-pro"), True),
+    ("pass2", os.environ.get("HAQP_BLIND_PASS2", "mimo-direct:mimo-v2.5-pro"), True),
 )
 
 
@@ -692,8 +763,8 @@ def self_test() -> int:
     # naming a reviewer that never ran.
     if backend_of("codex:gpt-5.6-sol") != "codex":
         failures.append("a codex: model did not route to the Codex backend")
-    if backend_of("mimo-v2.5-pro") != "lamu":
-        failures.append("a lamu alias did not route to the lamu backend")
+    if backend_of("mimo-direct:mimo-v2.5-pro") != "mimo-direct":
+        failures.append("the direct MiMo alias did not route to the direct provider backend")
     cloud_tool, cloud_args = call_arguments("mimo-v2.5-pro", "p", "s")
     if cloud_tool != "cloud_query" or cloud_args.get("model") != "mimo-v2.5-pro":
         failures.append(f"a lamu alias built {cloud_tool!r} arguments for {cloud_args.get('model')!r}")
