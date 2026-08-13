@@ -10,6 +10,7 @@ use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use liminal_format::Formatter;
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 
 /// Verify committed HAQP inventories, packet status, and crash-boundary registry.
 pub fn verify_inventory_repo(root: &Utf8Path) -> Result<()> {
@@ -494,7 +495,7 @@ fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         })?;
         let record: ReviewRecord =
             serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))?;
-        verify_review_record(review, &record)?;
+        verify_review_record(root, review, &record)?;
         let provenance = packet
             .provenance
             .as_ref()
@@ -525,7 +526,7 @@ fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
 /// record of twelve EMPTY objects satisfied it, and a record whose own `result`
 /// was `fail` satisfied a packet row claiming `pass`. Everything a reviewer
 /// actually concluded was unread.
-fn verify_review_record(review: &Review, record: &ReviewRecord) -> Result<()> {
+fn verify_review_record(root: &Utf8Path, review: &Review, record: &ReviewRecord) -> Result<()> {
     let who = &review.reviewer;
     require_eq(
         "review record model_family",
@@ -550,35 +551,7 @@ fn verify_review_record(review: &Review, record: &ReviewRecord) -> Result<()> {
             record.attempts.len()
         );
     }
-    // P1-A05: the attempts must be attempt RECORDS, not array padding.
-    let mut seen: BTreeSet<&str> = BTreeSet::new();
-    for attempt in &record.attempts {
-        for (field, value) in [
-            ("id", &attempt.id),
-            ("attack_class", &attempt.attack_class),
-            ("target", &attempt.target),
-            ("attempt", &attempt.attempt),
-            ("observed_result", &attempt.observed_result),
-            ("classification", &attempt.classification),
-        ] {
-            if value.trim().is_empty() {
-                anyhow::bail!("{who}: attempt {:?} has an empty {field}", attempt.id);
-            }
-        }
-        if !matches!(
-            attempt.classification.as_str(),
-            "verified_defect" | "false_positive" | "caught_violation"
-        ) {
-            anyhow::bail!(
-                "{who}: attempt {:?} has unknown classification {:?}",
-                attempt.id,
-                attempt.classification
-            );
-        }
-        if !seen.insert(attempt.id.as_str()) {
-            anyhow::bail!("{who}: attempt id {:?} appears twice", attempt.id);
-        }
-    }
+    verify_review_attempts(who, &record.attempts)?;
     // P1-A06: the packet must not summarize the record more kindly than the
     // record summarizes itself. A row claiming `pass` over a record that says
     // `fail` is the whole failure mode.
@@ -596,7 +569,7 @@ fn verify_review_record(review: &Review, record: &ReviewRecord) -> Result<()> {
             record.unresolved_verified_findings
         );
     }
-    verify_review_findings(review, record, who)?;
+    verify_review_findings(review, record, who, root)?;
     // P1-A07: blindness is a property of how the pass was RUN. The runner emits
     // this proof; before F-27 nothing read it back.
     if record.blindness_proof.prior_pass_artifact_supplied {
@@ -616,7 +589,12 @@ fn verify_review_record(review: &Review, record: &ReviewRecord) -> Result<()> {
     Ok(())
 }
 
-fn verify_review_findings(review: &Review, record: &ReviewRecord, who: &str) -> Result<()> {
+fn verify_review_findings(
+    review: &Review,
+    record: &ReviewRecord,
+    who: &str,
+    root: &Utf8Path,
+) -> Result<()> {
     require_hex_digest(
         "review isolated_session_hash",
         &record.isolated_session_hash,
@@ -681,24 +659,7 @@ fn verify_review_findings(review: &Review, record: &ReviewRecord, who: &str) -> 
                 "{who}: verified defect attempt {:?} lacks independent reproduction",
                 attempt.id
             );
-            if attempt.resolved {
-                let resolution = attempt.resolution.as_ref().with_context(|| {
-                    format!(
-                        "{who}: resolved finding attempt {:?} has no resolution proof",
-                        attempt.id
-                    )
-                })?;
-                require_git_object_id(&format!("{who} resolution commit"), &resolution.commit)?;
-                anyhow::ensure!(
-                    !resolution.coordinate.trim().is_empty(),
-                    "{who}: resolved finding attempt {:?} has empty fix coordinate",
-                    attempt.id
-                );
-                require_hex_digest(
-                    &format!("{who} resolution evidence_sha256"),
-                    &resolution.evidence_sha256,
-                )?;
-            }
+            verify_review_resolution(root, &record.fixed_base, who, attempt)?;
         }
     }
     let verified_unresolved = record
@@ -721,6 +682,115 @@ fn verify_review_findings(review: &Review, record: &ReviewRecord, who: &str) -> 
             record.unresolved_verified_findings
         );
     }
+    Ok(())
+}
+
+fn verify_review_attempts(who: &str, attempts: &[ReviewRecordAttempt]) -> Result<()> {
+    // P1-A05: the attempts must be attempt RECORDS, not array padding.
+    let mut seen: BTreeSet<&str> = BTreeSet::new();
+    let mut seen_attempts = BTreeSet::new();
+    for attempt in attempts {
+        for (field, value) in [
+            ("id", &attempt.id),
+            ("attack_class", &attempt.attack_class),
+            ("target", &attempt.target),
+            ("attempt", &attempt.attempt),
+            ("observed_result", &attempt.observed_result),
+            ("classification", &attempt.classification),
+        ] {
+            if value.trim().is_empty() {
+                anyhow::bail!("{who}: attempt {:?} has an empty {field}", attempt.id);
+            }
+        }
+        if !matches!(
+            attempt.classification.as_str(),
+            "verified_defect" | "false_positive" | "caught_violation"
+        ) {
+            anyhow::bail!(
+                "{who}: attempt {:?} has unknown classification {:?}",
+                attempt.id,
+                attempt.classification
+            );
+        }
+        if !seen.insert(attempt.id.as_str()) {
+            anyhow::bail!("{who}: attempt id {:?} appears twice", attempt.id);
+        }
+        let (target_file, target_coordinate) =
+            attempt.target.split_once(':').with_context(|| {
+                format!(
+                    "{who}: attempt {:?} target lacks file:coordinate",
+                    attempt.id
+                )
+            })?;
+        anyhow::ensure!(
+            !target_file.trim().is_empty()
+                && !target_coordinate.trim().is_empty()
+                && !target_file.starts_with('/')
+                && !target_file.split('/').any(|part| part == ".."),
+            "{who}: attempt {:?} target must be a safe file:coordinate",
+            attempt.id
+        );
+        let signature = format!(
+            "{}\0{}\0{}\0{}",
+            attempt.attack_class, attempt.target, attempt.attempt, attempt.observed_result
+        );
+        anyhow::ensure!(
+            seen_attempts.insert(signature),
+            "{who}: attempt {:?} duplicates another substantive falsification attempt",
+            attempt.id
+        );
+    }
+    Ok(())
+}
+
+fn verify_review_resolution(
+    root: &Utf8Path,
+    fixed_base: &ReviewFixedBase,
+    who: &str,
+    attempt: &ReviewRecordAttempt,
+) -> Result<()> {
+    if !attempt.resolved {
+        return Ok(());
+    }
+    let resolution = attempt.resolution.as_ref().with_context(|| {
+        format!(
+            "{who}: resolved finding attempt {:?} has no resolution proof",
+            attempt.id
+        )
+    })?;
+    require_git_object_id(&format!("{who} resolution commit"), &resolution.commit)?;
+    git_is_ancestor(root, &fixed_base.commit, &resolution.commit).with_context(|| {
+        format!(
+            "{who}: resolution commit {} is not a descendant of fixed base {}",
+            resolution.commit, fixed_base.commit
+        )
+    })?;
+    git_is_ancestor(root, &resolution.commit, "HEAD").with_context(|| {
+        format!(
+            "{who}: resolution commit {} is not reachable from current qualification HEAD",
+            resolution.commit
+        )
+    })?;
+    let evidence_path = safe_repo_path(root, &resolution.evidence_path, who)?;
+    let evidence_bytes = fs::read(&evidence_path)
+        .with_context(|| format!("{evidence_path}: resolution evidence is missing"))?;
+    let mut hasher = Sha256::new();
+    hasher.update(&evidence_bytes);
+    let digest = format!("{:x}", hasher.finalize());
+    require_eq(
+        "resolution evidence_sha256",
+        &resolution.evidence_sha256,
+        &digest,
+    )?;
+    anyhow::ensure!(
+        !resolution.coordinate.trim().is_empty(),
+        "{who}: resolved finding attempt {:?} has empty fix coordinate",
+        attempt.id
+    );
+    require_hex_digest(
+        &format!("{who} resolution evidence_sha256"),
+        &resolution.evidence_sha256,
+    )?;
     Ok(())
 }
 
@@ -774,6 +844,41 @@ fn require_git_object_id(label: &str, digest: &str) -> Result<()> {
         "{label} must be a 40- or 64-hex Git object id"
     );
     Ok(())
+}
+
+fn git_is_ancestor(root: &Utf8Path, ancestor: &str, descendant: &str) -> Result<()> {
+    let status = Command::new("git")
+        .current_dir(root)
+        .args(["merge-base", "--is-ancestor", ancestor, descendant])
+        .status()
+        .with_context(|| format!("check Git ancestry {ancestor} -> {descendant}"))?;
+    anyhow::ensure!(
+        status.success(),
+        "Git ancestry check failed for {ancestor} -> {descendant}"
+    );
+    Ok(())
+}
+
+fn safe_repo_path(root: &Utf8Path, value: &str, who: &str) -> Result<Utf8PathBuf> {
+    let candidate = Utf8Path::new(value);
+    anyhow::ensure!(
+        !candidate.is_absolute()
+            && !candidate
+                .components()
+                .any(|part| part == camino::Utf8Component::ParentDir),
+        "{who} resolution evidence path {value:?} escapes repository"
+    );
+    let path = root.join(candidate);
+    let canonical_root =
+        fs::canonicalize(root.as_std_path()).context("canonicalize repository root")?;
+    let canonical_path = fs::canonicalize(&path)
+        .with_context(|| format!("{path}: resolution evidence is missing"))?;
+    anyhow::ensure!(
+        canonical_path.starts_with(&canonical_root),
+        "{who} resolution evidence path resolves outside repository"
+    );
+    Utf8PathBuf::from_path_buf(canonical_path)
+        .map_err(|_| anyhow::anyhow!("{path}: resolution evidence path is not UTF-8"))
 }
 
 /// ADR-0020 §6's independence, checked rather than assumed (M17.5 F-27 / P1-A07).
@@ -1851,10 +1956,11 @@ fn verify_corpus_access_audit(root: &Utf8Path, packet: &Packet) -> Result<()> {
             "{manifest}: corpus access manifest must be a regular file"
         );
         let manifest_bytes = fs::read(&manifest).with_context(|| format!("read {manifest}"))?;
+        let manifest_digest = blake3::hash(&manifest_bytes).to_hex();
         require_eq(
             "corpus access manifest_blake3",
             &row.manifest_blake3,
-            &blake3::hash(&manifest_bytes).to_hex().to_string(),
+            manifest_digest.as_ref(),
         )?;
         let manifest_text = String::from_utf8(manifest_bytes)
             .with_context(|| format!("{manifest}: corpus access manifest is not UTF-8"))?;
@@ -3050,6 +3156,7 @@ struct ReviewRecordAttempt {
 struct ReviewResolution {
     commit: String,
     coordinate: String,
+    evidence_path: String,
     evidence_sha256: String,
 }
 
@@ -4585,10 +4692,10 @@ mod tests {
     fn attempt(id: &str) -> ReviewRecordAttempt {
         ReviewRecordAttempt {
             id: id.to_owned(),
-            attack_class: "vacuity".to_owned(),
-            target: "laws.rs".to_owned(),
-            attempt: "did a thing".to_owned(),
-            observed_result: "saw a thing".to_owned(),
+            attack_class: format!("vacuity:{id}"),
+            target: "laws.rs:law".to_owned(),
+            attempt: format!("did a thing {id}"),
+            observed_result: format!("saw a thing {id}"),
             independently_reproduced: false,
             classification: "caught_violation".to_owned(),
             resolved: false,
@@ -4644,8 +4751,12 @@ mod tests {
 
     #[test]
     fn a_well_formed_review_record_is_accepted() {
-        verify_review_record(&review_row(), &review_record(1, "openai", "codex"))
-            .expect("a complete record must pass, or every check below is vacuous");
+        verify_review_record(
+            &repo_root(),
+            &review_row(),
+            &review_record(1, "openai", "codex"),
+        )
+        .expect("a complete record must pass, or every check below is vacuous");
     }
 
     /// P1-A05: array padding is not a set of attempts.
@@ -4653,7 +4764,7 @@ mod tests {
     fn review_record_rejects_empty_attempt_records() {
         let mut record = review_record(1, "openai", "codex");
         record.attempts[3].observed_result = "   ".to_owned();
-        let err = verify_review_record(&review_row(), &record)
+        let err = verify_review_record(&repo_root(), &review_row(), &record)
             .expect_err("an attempt with no observed result is not an attempt");
         assert!(err.to_string().contains("empty observed_result"), "{err}");
     }
@@ -4662,11 +4773,11 @@ mod tests {
     fn review_record_rejects_unknown_classifications_and_duplicate_ids() {
         let mut unknown = review_record(1, "openai", "codex");
         unknown.attempts[0].classification = "inconclusive".to_owned();
-        verify_review_record(&review_row(), &unknown)
+        verify_review_record(&repo_root(), &review_row(), &unknown)
             .expect_err("a classification outside the declared set must be rejected");
         let mut duplicated = review_record(1, "openai", "codex");
         duplicated.attempts[1].id = duplicated.attempts[0].id.clone();
-        verify_review_record(&review_row(), &duplicated)
+        verify_review_record(&repo_root(), &review_row(), &duplicated)
             .expect_err("twelve attempts must be twelve DISTINCT attempts");
     }
 
@@ -4674,7 +4785,7 @@ mod tests {
     fn review_record_rejects_an_unbound_fixed_tree() {
         let mut record = review_record(1, "openai", "codex");
         record.fixed_base.tree = "not-a-digest".to_owned();
-        verify_review_record(&review_row(), &record)
+        verify_review_record(&repo_root(), &review_row(), &record)
             .expect_err("a review record without a fixed tree binding is untrusted");
     }
 
@@ -4684,13 +4795,13 @@ mod tests {
     fn review_record_rejects_a_packet_row_that_contradicts_it() {
         let mut failed = review_record(1, "openai", "codex");
         failed.result = "fail".to_owned();
-        let err = verify_review_record(&review_row(), &failed)
+        let err = verify_review_record(&repo_root(), &review_row(), &failed)
             .expect_err("a pass row over a failing record must be rejected");
         assert!(err.to_string().contains("record says"), "{err}");
 
         let mut unresolved = review_record(1, "openai", "codex");
         unresolved.unresolved_verified_findings = 9;
-        verify_review_record(&review_row(), &unresolved)
+        verify_review_record(&repo_root(), &review_row(), &unresolved)
             .expect_err("a row claiming zero unresolved findings over a record counting nine");
     }
 
@@ -4699,12 +4810,12 @@ mod tests {
     fn review_record_rejects_a_pass_that_saw_prior_artifacts() {
         let mut leaked = review_record(1, "openai", "codex");
         leaked.blindness_proof.prior_pass_artifact_supplied = true;
-        verify_review_record(&review_row(), &leaked)
+        verify_review_record(&repo_root(), &review_row(), &leaked)
             .expect_err("a reviewer shown the prior pass is not blind");
 
         let mut informed = review_record(2, "xiaomi", "lamu");
         informed.blindness_proof.pass_two_original_spec_only = false;
-        verify_review_record(&review_row(), &informed)
+        verify_review_record(&repo_root(), &review_row(), &informed)
             .expect_err("pass 2 must start from the original spec alone");
     }
 

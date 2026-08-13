@@ -450,7 +450,7 @@ def parse_json(text: str) -> dict[str, Any]:
             resolution = attempt.get("resolution")
             if not isinstance(resolution, dict) or any(
                 not isinstance(resolution.get(field), str) or not resolution[field].strip()
-                for field in ("commit", "coordinate", "evidence_sha256")
+                for field in ("commit", "coordinate", "evidence_path", "evidence_sha256")
             ):
                 raise ValueError(f"resolved verified attempt {identifier} needs resolution proof")
         if attempt["classification"] == "caught_violation":
@@ -530,7 +530,7 @@ def run_pass(
         "attack_class, target, attempt, observed_result, independently_reproduced, "
         "classification (verified_defect|false_positive|caught_violation), and resolved. "
         "Each finding must be an object with unique id and attempt_id referencing a verified_defect attempt. "
-        "A resolved verified_defect attempt must also carry resolution={commit,coordinate,evidence_sha256}; "
+        "A resolved verified_defect attempt must also carry resolution={commit,coordinate,evidence_path,evidence_sha256}; "
         "leave resolved=false when no fix proof exists. "
         "Return JSON object with attempts array, findings array, independently_reproduced array of finding ids, "
         "unresolved_verified_findings integer, and result. Set unresolved_verified_findings to the count "

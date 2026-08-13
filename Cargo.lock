@@ -814,6 +814,7 @@ dependencies = [
  "liminal-source",
  "serde",
  "serde_json",
+ "sha2",
  "uuid",
 ]
 
