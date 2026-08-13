@@ -62,7 +62,11 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     verify_fuzz_evidence(root, &packet)?;
     verify_corpus_access_audit(root, &packet)?;
     verify_crash_evidence(root, &packet)?;
-    verify_campaign_clock(root)?;
+    let provenance = packet
+        .provenance
+        .as_ref()
+        .context("qualified campaign clock requires packet provenance")?;
+    verify_campaign_clock(root, Some(provenance))?;
     verify_residual_risks(&packet)?;
     verify_qualification_stage(&packet)?;
     if packet.qualification_stage == "1b" {
@@ -2071,7 +2075,53 @@ fn verify_corpus_access_audit(root: &Utf8Path, packet: &Packet) -> Result<()> {
         audit.targets.iter().map(|row| row.target.as_str()),
         "corpus access audit target",
     )?;
+    verify_corpus_audit_campaign_binding(root, &audit)?;
+    Ok(())
+}
+
+fn verify_corpus_audit_campaign_binding(root: &Utf8Path, audit: &CorpusAccessAudit) -> Result<()> {
+    let fuzz_path = root.join("conformance/haqp/evidence/fuzz.json");
+    let fuzz: Vec<FuzzEvidence> =
+        serde_json::from_slice(&fs::read(&fuzz_path).with_context(|| {
+            format!("{fuzz_path}: fuzz evidence is required for trace binding")
+        })?)
+        .with_context(|| format!("parse {fuzz_path}"))?;
+    let fuzz_by_target = fuzz
+        .iter()
+        .map(|row| (row.target.as_str(), row))
+        .collect::<BTreeMap<_, _>>();
     for row in &audit.targets {
+        let fuzz_row = fuzz_by_target.get(row.target.as_str()).with_context(|| {
+            format!(
+                "{}: corpus audit target is absent from fuzz evidence",
+                row.target
+            )
+        })?;
+        anyhow::ensure!(
+            row.seed == fuzz_row.seed,
+            "{}: corpus audit seed differs from fuzz evidence",
+            row.target
+        );
+        require_eq(
+            "corpus audit sanitizer",
+            &row.sanitizer,
+            &fuzz_row.sanitizer,
+        )?;
+        anyhow::ensure!(
+            row.exit_code == fuzz_row.exit_code,
+            "{}: corpus audit exit code differs from fuzz evidence",
+            row.target
+        );
+        require_eq(
+            "corpus audit log_blake3",
+            &row.log_blake3,
+            &fuzz_row.log_blake3,
+        )?;
+        anyhow::ensure!(
+            !row.command.trim().is_empty(),
+            "{}: corpus audit has no traced command",
+            row.target
+        );
         let expected_manifest = format!("conformance/haqp/evidence/access/{}.paths", row.target);
         require_eq(
             "corpus access manifest path",
@@ -2111,7 +2161,7 @@ fn verify_corpus_access_audit(root: &Utf8Path, packet: &Packet) -> Result<()> {
 
 /// Check the bounded-campaign clock artifact. One clean breach is retained as
 /// residual risk; two clean breaches block ratification per ADR-0020 §7.
-fn verify_campaign_clock(root: &Utf8Path) -> Result<()> {
+fn verify_campaign_clock(root: &Utf8Path, expected: Option<&Provenance>) -> Result<()> {
     let path = root.join("conformance/haqp/evidence/campaign.json");
     let bytes = fs::read(&path)
         .with_context(|| format!("{path}: committed campaign clock evidence is required"))?;
@@ -2130,6 +2180,16 @@ fn verify_campaign_clock(root: &Utf8Path) -> Result<()> {
     anyhow::ensure!(!clock.runs.is_empty(), "campaign clock records no runs");
     for run in &clock.runs {
         anyhow::ensure!(!run.id.trim().is_empty(), "campaign run has empty id");
+        require_git_object_id("campaign run commit", &run.commit)?;
+        require_git_object_id("campaign run tree", &run.tree)?;
+        anyhow::ensure!(
+            !run.command.trim().is_empty(),
+            "campaign run has no command"
+        );
+        if let Some(provenance) = expected {
+            require_eq("campaign run commit", &run.commit, &provenance.fixed_commit)?;
+            require_eq("campaign run tree", &run.tree, &provenance.fixed_tree)?;
+        }
         anyhow::ensure!(
             run.elapsed_s > 0,
             "campaign run {} has zero elapsed seconds",
@@ -3098,6 +3158,11 @@ struct CorpusAccessAuditTarget {
     target: String,
     manifest: String,
     manifest_blake3: String,
+    seed: u64,
+    sanitizer: String,
+    exit_code: i32,
+    log_blake3: String,
+    command: String,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -3112,6 +3177,9 @@ struct CampaignClock {
 #[serde(deny_unknown_fields)]
 struct CampaignRun {
     id: String,
+    commit: String,
+    tree: String,
+    command: String,
     elapsed_s: u64,
     clean: bool,
     result: String,
@@ -5905,6 +5973,7 @@ mod tests {
             .flat_map(|family| family.fuzz_targets.iter().cloned())
             .collect::<BTreeSet<_>>();
         let mut rows = Vec::new();
+        let mut fuzz_rows = Vec::new();
         for target in &targets {
             let manifest = format!("conformance/haqp/evidence/access/{target}.paths");
             let path = root.join(&manifest);
@@ -5916,8 +5985,32 @@ mod tests {
                 manifest_blake3: blake3::hash(&fs::read(&path).expect("read"))
                     .to_hex()
                     .to_string(),
+                seed: 1,
+                sanitizer: "address".to_owned(),
+                exit_code: 0,
+                log_blake3: "a".repeat(64),
+                command: format!("cargo fuzz run {target}"),
+            });
+            fuzz_rows.push(FuzzEvidence {
+                target: target.clone(),
+                seconds: 1800,
+                elapsed_s: 1800,
+                exit_code: 0,
+                execs: 1,
+                artifacts: 0,
+                seed: 1,
+                sanitizer: "address".to_owned(),
+                log: format!("conformance/haqp/evidence/logs/{target}.log"),
+                log_blake3: "a".repeat(64),
             });
         }
+        let fuzz_path = root.join("conformance/haqp/evidence/fuzz.json");
+        fs::create_dir_all(fuzz_path.parent().expect("fuzz parent")).expect("mkdir");
+        fs::write(
+            &fuzz_path,
+            serde_json::to_vec(&fuzz_rows).expect("serialize fuzz"),
+        )
+        .expect("write fuzz");
         let audit = CorpusAccessAudit {
             schema_version: "haqp-corpus-access-v1".to_owned(),
             tracer: "strace-open-paths".to_owned(),
@@ -5959,22 +6052,28 @@ mod tests {
             reference_machine: "test-host".to_owned(),
             runs: vec![CampaignRun {
                 id: "run-1".to_owned(),
+                commit: "a".repeat(40),
+                tree: "b".repeat(40),
+                command: "just ci".to_owned(),
                 elapsed_s: 8 * 60 * 60 + 1,
                 clean: true,
                 result: "pass".to_owned(),
             }],
         };
         fs::write(&path, serde_json::to_vec(&clock).expect("serialize")).expect("write");
-        verify_campaign_clock(root).expect("one retained breach is residual risk");
+        verify_campaign_clock(root, None).expect("one retained breach is residual risk");
         let mut blocked = clock;
         blocked.runs.push(CampaignRun {
             id: "run-2".to_owned(),
+            commit: "a".repeat(40),
+            tree: "b".repeat(40),
+            command: "just ci".to_owned(),
             elapsed_s: 8 * 60 * 60 + 1,
             clean: true,
             result: "pass".to_owned(),
         });
         fs::write(&path, serde_json::to_vec(&blocked).expect("serialize")).expect("write");
-        verify_campaign_clock(root).expect_err("two clean breaches block ratification");
+        verify_campaign_clock(root, None).expect_err("two clean breaches block ratification");
     }
 
     /// `count > 16` — kills `>` -> `>=`: exactly 16 is the documented maximum.

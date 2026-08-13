@@ -54,6 +54,7 @@ for t in "${TARGETS[@]}"; do
     code=$?
   else
     echo "corpus access audit unavailable: AUDIT_ACCESS=$AUDIT_ACCESS strace=$(command -v strace || echo missing)" >"$audit_raw"
+    overall=1
     cargo +nightly fuzz run -s "$SANITIZER" "$t" -- \
       -max_total_time="$SECS" -seed="$SEED" -rss_limit_mb=4096 -print_final_stats=1 \
       >"$log" 2>&1
@@ -84,7 +85,9 @@ for t in "${TARGETS[@]}"; do
     cp "$audit_raw" "$audit_manifest"
   fi
   audit_hash=$(cargo run -q -p liminal-xtask -- haq hash "$audit_manifest" 2>/dev/null || echo "")
-  audit_row=$(printf '{"target":"%s","manifest":"%s","manifest_blake3":"%s"}' "$t" "conformance/haqp/evidence/access/$t.paths" "$audit_hash")
+  trace_command="cargo +nightly fuzz run -s $SANITIZER $t -- -max_total_time=$SECS -seed=$SEED -rss_limit_mb=4096 -print_final_stats=1"
+  audit_row=$(printf '{"target":"%s","manifest":"%s","manifest_blake3":"%s","seed":%s,"sanitizer":"%s","exit_code":%s,"log_blake3":"%s","command":"%s"}' \
+    "$t" "conformance/haqp/evidence/access/$t.paths" "$audit_hash" "$SEED" "$SANITIZER" "$code" "$loghash" "$trace_command")
   if [ -n "$audit_entries" ]; then audit_entries="$audit_entries,$audit_row"; else audit_entries="$audit_row"; fi
   printf '{"target":"%s","seconds":%s,"elapsed_s":%s,"exit_code":%s,"execs":%s,"artifacts":%s,"seed":%s,"sanitizer":"%s","log":"%s","log_blake3":"%s"}' \
     "$t" "$SECS" "$elapsed" "$code" "$execs" "$arts" "$SEED" "$SANITIZER" "$evidence_log" "$loghash" >> "$OUT"
