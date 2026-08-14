@@ -26,6 +26,18 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+ATTACK_CLASSES = {
+    "vacuity",
+    "shared-oracle coupling",
+    "missing negatives",
+    "weak mutants",
+    "fault omissions",
+    "nondeterminism",
+    "corpus leakage",
+    "exception broadening",
+    "evidence/report drift",
+}
 OUT = ROOT / "target" / "haqp" / "blind-review"
 
 
@@ -438,6 +450,8 @@ def parse_json(text: str) -> dict[str, Any]:
         if not identifier or identifier in ids:
             raise ValueError("attempt ids must be non-empty and unique")
         ids.add(identifier)
+        if attempt["attack_class"] not in ATTACK_CLASSES:
+            raise ValueError(f"attempt {identifier} has unknown attack class")
         if any(not str(attempt[field]).strip() for field in required - {"independently_reproduced"}):
             raise ValueError(f"attempt {identifier} contains an empty field")
         if not isinstance(attempt["independently_reproduced"], bool):
@@ -548,7 +562,9 @@ def run_pass(
     prompt = (
         "Conduct one isolated HAQP-1 falsification pass. Do not infer passing evidence. "
         "Record exactly twelve concrete attempts. Each attempt object must contain id, "
-        "attack_class, target, attempt, observed_result, independently_reproduced, "
+        "attack_class (one of vacuity, shared-oracle coupling, missing negatives, weak mutants, "
+        "fault omissions, nondeterminism, corpus leakage, exception broadening, evidence/report drift), "
+        "target, attempt, observed_result, independently_reproduced, "
         "classification (verified_defect|false_positive|caught_violation), and resolved. "
         "Every target must be an exact safe repository file:line coordinate, never a symbol-only target. "
         "A finding is exclusively a verified_defect report: each finding object must have a unique id "
@@ -579,6 +595,13 @@ def run_pass(
         parsed = parse_json(raw)
     except (ValueError, TypeError) as exc:
         raise ReviewSchemaFailure(f"pass {2 if pass_two else 1} schema failure for {model}: {exc}") from exc
+    if not pass_two:
+        seen_classes = {attempt["attack_class"] for attempt in parsed["attempts"]}
+        missing_classes = ATTACK_CLASSES - seen_classes
+        if missing_classes:
+            raise ReviewSchemaFailure(
+                f"pass 1 schema failure for {model}: missing attack classes {sorted(missing_classes)}"
+            )
     record = {
         "schema_version": "haqp-blind-review-v1",
         "pass": 2 if pass_two else 1,
@@ -702,7 +725,7 @@ def self_test() -> int:
         "attempts": [
             {
                 "id": f"A{i}",
-                "attack_class": "c",
+                "attack_class": "vacuity",
                 "target": "haq.rs:1",
                 "attempt": "a",
                 "observed_result": "o",

@@ -25,8 +25,8 @@ authorization, suite ratification, or access to locked acceptance inputs.
 | intended campaign ceiling | 8 hours |
 | complete post-fix qualification rerun | NOT_RUN |
 | machine inventory | `conformance/haqp/packet.json` (`cargo run -p liminal-xtask -- haq verify-inventory`) |
-| machine inventory BLAKE3 | `60da0110644b0c652dc4aab1564d4239e3db0b3fc0f9f11a470203987c3ee7bd` |
-| packet digest | `25745680033186a1dbb774e1b100e475c3b483afe66f7647114e5d39da05fcbf` |
+| machine inventory BLAKE3 | `aec2dea85361b1f9d87a8e8c4abe8fbf98cd0262d5baac189403e211de979975` |
+| packet digest | `d57cb9493d16850549c67f0c907b6ab71fcbc93ed440604a4340107a1250276a` |
 
 ## Execution lanes
 
@@ -79,7 +79,7 @@ Machine checks must reject duplicate IDs, orphan tests, unknown IDs, and missing
 critical rows. Exceptions require exact T1-amendment coordinates; wildcards,
 whole-file exclusions, and substring allowances are forbidden.
 
-## Eight future gate tests
+## Declared future gate tests
 
 | Test ID | Exact test | Activation | Requirement IDs | Positive | Negative | Malformed/adversarial | Basis/provenance | Deterministic replay | Fault injection | Idempotent recovery | Overall |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -280,6 +280,26 @@ and evidence/report drift. Findings are reproduced before fixes. False positives
 remain with reproduction evidence. Eligibility requires zero unresolved verified
 findings.
 
+## Approved pre-qualification hardening contracts
+
+The next qualification run must produce, not self-declare, these records:
+
+- qualification metadata child changes only packet/evidence/review documentation;
+  source and gate code remain at fixed evidence commit;
+- each sanitizer target retains build command, instrumented binary digest,
+  compiler sanitizer flag, and successful runtime probe;
+- each corpus audit retains raw recursive tracer output, trace digest, PID,
+  tracer exit, completeness marker, and command/process binding;
+- each crash recovery pair retains terminal-set, Basis, world, and duplicate-effect
+  digests, equal across both recovery passes;
+- each generated family retains closed relation rows and an independent oracle ID,
+  source, result, and relation-matrix digest;
+- mutant rows use exact `file:line` plus separate requirement ID; compilation,
+  timeout, and infrastructure errors are not semantic kills;
+- equivalent/duplicate dispositions bind concurrence to pass-1/pass-2 record and
+  finding IDs;
+- Pass 1 covers all nine closed attack classes at least once; exact class names only.
+
 ## Residual-risk coordinates
 
 Every known limitation needs all coordinates below. Bare “future work” is invalid.
@@ -305,7 +325,7 @@ hashed by this packet.
 | fixed clean review base | one commit/tree, full provenance | NOT_RUN | NOT_RUN |
 | bidirectional traceability | no duplicates, orphans, unknown IDs, or missing critical rows | NOT_RUN | NOT_RUN |
 | semantic mutation | 65 declared; 100% applicable kill; no survivor | NOT_RUN | NOT_RUN |
-| disposable canaries | 16 declared; exact expected gates fail | NOT_RUN | NOT_RUN |
+| disposable canaries | 25 declared; exact expected gates fail | NOT_RUN | NOT_RUN |
 | deterministic generation | five families × at least 100,000 accepted cases | NOT_RUN | NOT_RUN |
 | sanitizer fuzzing | five families × 30 minutes; at least 150 target-minutes | NOT_RUN | NOT_RUN |
 | oracle independence | no forbidden shared implementation paths | NOT_RUN | NOT_RUN |

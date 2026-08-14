@@ -69,6 +69,12 @@ fn main() -> anyhow::Result<()> {
                     "occurrence": case.occurrence,
                     "first_recovery_digest": case.first_recovery_digest.clone(),
                     "second_recovery_digest": case.second_recovery_digest.clone(),
+                    "first_terminal_digest": case.first_terminal_digest.clone(),
+                    "second_terminal_digest": case.second_terminal_digest.clone(),
+                    "first_basis_digest": case.first_basis_digest.clone(),
+                    "second_basis_digest": case.second_basis_digest.clone(),
+                    "first_effect_digest": case.first_effect_digest.clone(),
+                    "second_effect_digest": case.second_effect_digest.clone(),
                 }));
         }
         per_scenario.push(serde_json::json!({

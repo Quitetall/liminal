@@ -31,6 +31,7 @@ KEEP_LOGS="${KEEP_LOGS:-0}"
 AUDIT_ACCESS="${AUDIT_ACCESS:-1}"
 AUDIT_DIR="conformance/haqp/evidence/access"
 mkdir -p "$AUDIT_DIR"
+mkdir -p conformance/haqp/evidence/binaries conformance/haqp/evidence/probes
 audit_entries=""
 audit_tracer="strace-open-paths"
 
@@ -41,16 +42,36 @@ overall=0
 for t in "${TARGETS[@]}"; do
   echo "=== fuzzing $t for ${SECS}s (ASan, seed=$SEED) ==="
   started=$(date +%s)
+  fuzz_pid=0
   log="target/haqp/fuzz-$t.log"
+  build_log="target/haqp/build-$t.log"
+  build_command="cargo +nightly fuzz build -s $SANITIZER $t"
+  $build_command >"$build_log" 2>&1
+  build_code=$?
+  binary_candidate=$(find fuzz/target -type f -perm -111 -name "$t" -print -quit)
+  binary="conformance/haqp/evidence/binaries/$t"
+  probe="conformance/haqp/evidence/probes/$t.log"
+  probe_code=1
+  if [ "$build_code" -eq 0 ] && [ -n "$binary_candidate" ]; then
+    cp "$binary_candidate" "$binary"
+    "$binary_candidate" -help=1 >"$probe" 2>&1
+    probe_code=$?
+  else
+    echo "build failed: code=$build_code binary=${binary_candidate:-missing}" >"$probe"
+  fi
+  binary_hash=$(cargo run -q -p liminal-xtask -- haq hash "$binary" 2>/dev/null || echo "")
+  probe_hash=$(cargo run -q -p liminal-xtask -- haq hash "$probe" 2>/dev/null || echo "")
   # -s is explicit rather than relying on cargo-fuzz's default: ADR-0020 §4
   # requires a SANITIZER-ENABLED campaign, and a requirement satisfied by a
   # tool default is one a tool update can silently withdraw.
-  audit_raw="target/haqp/access-$t.strace"
+  audit_raw="$AUDIT_DIR/$t.trace"
   if [ "$AUDIT_ACCESS" = "1" ] && command -v strace >/dev/null 2>&1; then
     strace -f -qq -e trace=openat,openat2 -o "$audit_raw" \
       cargo +nightly fuzz run -s "$SANITIZER" "$t" -- \
         -max_total_time="$SECS" -seed="$SEED" -rss_limit_mb=4096 -print_final_stats=1 \
-        >"$log" 2>&1
+        >"$log" 2>&1 &
+    fuzz_pid=$!
+    wait "$fuzz_pid"
     code=$?
   else
     echo "corpus access audit unavailable: AUDIT_ACCESS=$AUDIT_ACCESS strace=$(command -v strace || echo missing)" >"$audit_raw"
@@ -61,6 +82,13 @@ for t in "${TARGETS[@]}"; do
     code=$?
     audit_tracer="unavailable"
   fi
+  trace_pid=${fuzz_pid:-0}
+  trace_exit_code=$code
+  trace_complete=false
+  if [ -s "$audit_raw" ] && grep -q '+++ exited with 0 +++' "$audit_raw"; then
+    trace_complete=true
+  fi
+  trace_hash=$(cargo run -q -p liminal-xtask -- haq hash "$audit_raw" 2>/dev/null || echo "")
   elapsed=$(( $(date +%s) - started ))
   arts=$(ls "fuzz/artifacts/$t" 2>/dev/null | wc -l)
   execs=$(grep -oP 'stat::number_of_executed_units:\s*\K[0-9]+' "$log" | tail -1)
@@ -94,12 +122,15 @@ for t in "${TARGETS[@]}"; do
     seed_count=$((seed_count + 1))
   done
   seed_manifest_blake3=$(cargo run -q -p liminal-xtask -- haq hash "$seed_manifest" 2>/dev/null || echo "")
-  trace_command="cargo +nightly fuzz run -s $SANITIZER $t -- -max_total_time=$SECS -seed=$SEED -rss_limit_mb=4096 -print_final_stats=1"
-  audit_row=$(printf '{"target":"%s","manifest":"%s","manifest_blake3":"%s","seed":%s,"sanitizer":"%s","exit_code":%s,"log_blake3":"%s","command":"%s"}' \
-    "$t" "conformance/haqp/evidence/access/$t.paths" "$audit_hash" "$SEED" "$SANITIZER" "$code" "$loghash" "$trace_command")
+  trace_command="strace -f -qq -e trace=openat,openat2 -o $audit_raw $build_command && cargo +nightly fuzz run -s $SANITIZER $t -- -max_total_time=$SECS -seed=$SEED -rss_limit_mb=4096 -print_final_stats=1"
+  binding_input="target/haqp/process-binding-$t.txt"
+  printf '%s\0%s\0%s\0%s' "$trace_command" "$trace_pid" "$trace_exit_code" "$trace_hash" >"$binding_input"
+  process_binding=$(cargo run -q -p liminal-xtask -- haq hash "$binding_input" 2>/dev/null || echo "")
+  audit_row=$(printf '{"target":"%s","manifest":"%s","manifest_blake3":"%s","seed":%s,"sanitizer":"%s","exit_code":%s,"log_blake3":"%s","command":"%s","trace":"%s","trace_blake3":"%s","trace_pid":%s,"trace_exit_code":%s,"trace_complete":%s,"process_binding":"%s"}' \
+    "$t" "conformance/haqp/evidence/access/$t.paths" "$audit_hash" "$SEED" "$SANITIZER" "$code" "$loghash" "$trace_command" "conformance/haqp/evidence/access/$t.trace" "$trace_hash" "$trace_pid" "$trace_exit_code" "$trace_complete" "$process_binding")
   if [ -n "$audit_entries" ]; then audit_entries="$audit_entries,$audit_row"; else audit_entries="$audit_row"; fi
-  printf '{"target":"%s","seconds":%s,"elapsed_s":%s,"exit_code":%s,"execs":%s,"artifacts":%s,"seed":%s,"seed_count":%s,"seed_manifest_blake3":"%s","sanitizer":"%s","log":"%s","log_blake3":"%s"}' \
-    "$t" "$SECS" "$elapsed" "$code" "$execs" "$arts" "$SEED" "$seed_count" "$seed_manifest_blake3" "$SANITIZER" "$evidence_log" "$loghash" >> "$OUT"
+  printf '{"target":"%s","seconds":%s,"elapsed_s":%s,"exit_code":%s,"execs":%s,"artifacts":%s,"seed":%s,"seed_count":%s,"seed_manifest_blake3":"%s","sanitizer":"%s","log":"%s","log_blake3":"%s","sanitizer_proof":{"build_command":"%s","binary":"%s","binary_blake3":"%s","runtime_probe":"%s","runtime_probe_blake3":"%s","runtime_probe_exit_code":%s,"instrumentation_flags":["-fsanitize=%s"]}}' \
+    "$t" "$SECS" "$elapsed" "$code" "$execs" "$arts" "$SEED" "$seed_count" "$seed_manifest_blake3" "$SANITIZER" "$evidence_log" "$loghash" "$build_command" "$binary" "$binary_hash" "$probe" "$probe_hash" "$probe_code" "$SANITIZER" >> "$OUT"
   echo "--- $t: exit=$code execs=$execs artifacts=$arts elapsed=${elapsed}s"
 done
 

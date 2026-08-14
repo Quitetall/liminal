@@ -34,6 +34,7 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
         &packet.qualification_state,
         "complete",
     )?;
+    verify_mutant_source_coordinates(root, &packet)?;
     verify_packet_statuses(
         &packet,
         PacketStatusExpectations {
@@ -137,7 +138,28 @@ fn verify_crash_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         .iter()
         .map(|row| row.boundary.clone())
         .collect::<BTreeSet<_>>();
+    verify_recovery_proof_presence(&recorded)?;
     verify_crash_rows(&recorded, &declared)
+}
+
+fn verify_recovery_proof_presence(recorded: &CrashEvidence) -> Result<()> {
+    for boundary in &recorded.boundaries {
+        for pair in &boundary.recovery_pairs {
+            anyhow::ensure!(
+                !pair.first_terminal_digest.is_empty()
+                    && !pair.second_terminal_digest.is_empty()
+                    && !pair.first_basis_digest.is_empty()
+                    && !pair.second_basis_digest.is_empty()
+                    && !pair.first_effect_digest.is_empty()
+                    && !pair.second_effect_digest.is_empty(),
+                "crash boundary {} recovery case {}:{} lacks terminal/Basis/effect duplicate proof",
+                boundary.boundary,
+                pair.scenario,
+                pair.occurrence
+            );
+        }
+    }
+    Ok(())
 }
 
 /// Bind the packet's canary claims to the run that produced them
@@ -318,8 +340,123 @@ fn verify_generated_rows(declared: &[Generated], recorded: &[GeneratedEvidence])
                 evidence.seed
             );
         }
+        verify_generated_contract(family, evidence)?;
     }
     Ok(())
+}
+
+fn verify_generated_contract(family: &Generated, evidence: &GeneratedEvidence) -> Result<()> {
+    let expected = generated_relations(family.family.as_str());
+    // Planned packet rows predate the relation contract. Qualification rows
+    // must populate it; retaining this inventory-only escape keeps old
+    // planning fixtures parseable without weakening a `pass` claim that names
+    // the new fields.
+    if expected.is_empty() || family.relations.is_empty() {
+        return Ok(());
+    }
+    let oracle = evidence
+        .oracle
+        .as_ref()
+        .with_context(|| format!("{}: generated evidence has no oracle", family.family))?;
+    let declared_oracle = family
+        .oracle
+        .as_ref()
+        .with_context(|| format!("{}: generated packet has no oracle", family.family))?;
+    require_eq(
+        &format!("{} generated oracle id", family.family),
+        &oracle.id,
+        &declared_oracle.id,
+    )?;
+    require_eq(
+        &format!("{} generated oracle source", family.family),
+        &oracle.source,
+        &declared_oracle.source,
+    )?;
+    require_exact_ids(
+        family.relations.iter().map(String::as_str),
+        expected.iter().copied().map(str::to_owned),
+        "generated packet relation",
+    )?;
+    require_exact_ids(
+        evidence.relations.iter().map(|row| row.relation.as_str()),
+        expected.iter().copied().map(str::to_owned),
+        "generated evidence relation",
+    )?;
+    require_unique(
+        evidence.relations.iter().map(|row| row.relation.as_str()),
+        "generated relation",
+    )?;
+    for relation in &evidence.relations {
+        require_eq("generated relation result", &relation.result, "pass")?;
+        require_hex_digest(
+            &format!("{} relation artifact", family.family),
+            &relation.artifact_blake3,
+        )?;
+        require_eq("generated relation oracle", &relation.oracle_id, &oracle.id)?;
+    }
+    anyhow::ensure!(
+        oracle.independent,
+        "{}: generated oracle is not marked independent",
+        family.family
+    );
+    anyhow::ensure!(
+        !oracle.source.trim().is_empty() && !oracle.source.contains("implementation equality"),
+        "{}: generated oracle source is missing or implementation-owned",
+        family.family
+    );
+    require_hex_digest(
+        &format!("{} relation_matrix_blake3", family.family),
+        &oracle.relation_matrix_blake3,
+    )?;
+    Ok(())
+}
+
+fn generated_relations(family: &str) -> &'static [&'static str] {
+    match family {
+        "source/CST/formatting" => &["lossless_emit", "format_idempotence"],
+        "graph/interchange codecs" => &["byte_canonical_stability", "field_fidelity"],
+        "transforms/projections" => &["identity_merge", "outcome_class_symmetry"],
+        "repair/ILRP/recovery" => &[
+            "dependency_order",
+            "permutation_invariance",
+            "independent_edge_check",
+        ],
+        "Basis/revision/query invalidation" => &[
+            "irrelevant_input_invariance",
+            "monotonicity",
+            "independent_read_set_oracle",
+        ],
+        _ => &[],
+    }
+}
+
+fn generated_category_class(category: &str) -> &'static str {
+    let category = category.to_ascii_lowercase();
+    if category.contains("hostile") {
+        "hostile"
+    } else if category.contains("truncated") || category.contains("unterminated") {
+        "truncated"
+    } else if category.contains("invalid")
+        || category.contains("malformed")
+        || category.contains("unknown")
+        || category.contains("missing")
+        || category.contains("duplicate")
+        || category.contains("cycle")
+        || category.contains("conflict")
+    {
+        "malformed"
+    } else if category.contains("boundary")
+        || category.contains("single")
+        || category.contains("empty")
+        || category.contains("large")
+        || category.contains("deep")
+        || category.contains("wide")
+        || category.contains("zero")
+    {
+        "boundary"
+    } else {
+        "valid"
+    }
 }
 
 fn verify_crash_rows(recorded: &CrashEvidence, declared: &BTreeSet<String>) -> Result<()> {
@@ -472,10 +609,27 @@ fn verify_recovery_pairs(row: &CrashEvidenceBoundary) -> Result<()> {
             pair.scenario,
             pair.occurrence
         );
-        for (label, digest) in [
+        let mut digests = vec![
             ("first_recovery_digest", &pair.first_recovery_digest),
             ("second_recovery_digest", &pair.second_recovery_digest),
-        ] {
+        ];
+        let enhanced = !pair.first_terminal_digest.is_empty()
+            || !pair.second_terminal_digest.is_empty()
+            || !pair.first_basis_digest.is_empty()
+            || !pair.second_basis_digest.is_empty()
+            || !pair.first_effect_digest.is_empty()
+            || !pair.second_effect_digest.is_empty();
+        if enhanced {
+            digests.extend([
+                ("first_terminal_digest", &pair.first_terminal_digest),
+                ("second_terminal_digest", &pair.second_terminal_digest),
+                ("first_basis_digest", &pair.first_basis_digest),
+                ("second_basis_digest", &pair.second_basis_digest),
+                ("first_effect_digest", &pair.first_effect_digest),
+                ("second_effect_digest", &pair.second_effect_digest),
+            ]);
+        }
+        for (label, digest) in digests {
             anyhow::ensure!(
                 digest.len() == 64 && digest.chars().all(|ch| ch.is_ascii_hexdigit()),
                 "crash boundary {} has invalid {label}",
@@ -489,6 +643,33 @@ fn verify_recovery_pairs(row: &CrashEvidenceBoundary) -> Result<()> {
             pair.scenario,
             pair.occurrence
         );
+        if enhanced {
+            for (label, first, second) in [
+                (
+                    "terminal digest",
+                    &pair.first_terminal_digest,
+                    &pair.second_terminal_digest,
+                ),
+                (
+                    "Basis digest",
+                    &pair.first_basis_digest,
+                    &pair.second_basis_digest,
+                ),
+                (
+                    "effect digest",
+                    &pair.first_effect_digest,
+                    &pair.second_effect_digest,
+                ),
+            ] {
+                anyhow::ensure!(
+                    first == second,
+                    "crash boundary {} recovery case {}:{} changed {label} on second recovery",
+                    row.boundary,
+                    pair.scenario,
+                    pair.occurrence
+                );
+            }
+        }
     }
     Ok(())
 }
@@ -632,6 +813,7 @@ fn verify_review_record(root: &Utf8Path, review: &Review, record: &ReviewRecord)
         );
     }
     verify_review_attempts(root, &record.fixed_base.commit, who, &record.attempts)?;
+    verify_review_attack_classes(record, who)?;
     // P1-A06: the packet must not summarize the record more kindly than the
     // record summarizes itself. A row claiming `pass` over a record that says
     // `fail` is the whole failure mode.
@@ -671,6 +853,43 @@ fn verify_review_record(root: &Utf8Path, review: &Review, record: &ReviewRecord)
         record.blindness_proof.ephemeral_session_requested == expected_ephemeral,
         "{who} blindness session state disagrees with ephemeral_session_requested"
     );
+    Ok(())
+}
+
+const REVIEW_ATTACK_CLASSES: [&str; 9] = [
+    "vacuity",
+    "shared-oracle coupling",
+    "missing negatives",
+    "weak mutants",
+    "fault omissions",
+    "nondeterminism",
+    "corpus leakage",
+    "exception broadening",
+    "evidence/report drift",
+];
+
+fn verify_review_attack_classes(record: &ReviewRecord, who: &str) -> Result<()> {
+    let mut seen = BTreeSet::new();
+    for attempt in &record.attempts {
+        anyhow::ensure!(
+            REVIEW_ATTACK_CLASSES.contains(&attempt.attack_class.as_str()),
+            "{who}: attempt {} uses unknown attack class {:?}",
+            attempt.id,
+            attempt.attack_class
+        );
+        seen.insert(attempt.attack_class.as_str());
+    }
+    if record.pass == 1 {
+        let missing = REVIEW_ATTACK_CLASSES
+            .iter()
+            .filter(|class| !seen.contains(**class))
+            .copied()
+            .collect::<Vec<_>>();
+        anyhow::ensure!(
+            missing.is_empty(),
+            "{who}: Pass 1 is missing attack classes {missing:?}"
+        );
+    }
     Ok(())
 }
 
@@ -1346,6 +1565,10 @@ fn verify_mutant_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
     Ok(())
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "mutation evidence gate keeps all row invariants together"
+)]
 fn verify_mutant_evidence_row(
     row: &MutantEvidenceRow,
     declared: &BTreeMap<&str, &Mutant>,
@@ -1391,6 +1614,23 @@ fn verify_mutant_evidence_row(
         "{} baseline witness suite failed before mutation",
         row.id
     );
+    if row.status == "error" {
+        anyhow::ensure!(
+            matches!(
+                row.failure_class.as_deref(),
+                Some("infrastructure" | "compilation" | "timeout")
+            ),
+            "{} error result must classify compilation, timeout, or infrastructure failure",
+            row.id
+        );
+        anyhow::ensure!(
+            row.reason
+                .as_deref()
+                .is_some_and(|reason| !reason.trim().is_empty()),
+            "{} error result has no reason",
+            row.id
+        );
+    }
     for witness in &mutant.killing_tests {
         anyhow::ensure!(
             row.runnable_tests.iter().any(|test| test == witness),
@@ -1515,17 +1755,27 @@ fn validate_disposition(mutant: &Mutant) -> Result<()> {
             mutant.disposition
         );
         let mut concurrence = BTreeSet::new();
-        for reviewer in &mutant.disposition_concurrence {
+        let mut records = BTreeSet::new();
+        for proof in &mutant.disposition_concurrence {
             anyhow::ensure!(
-                !reviewer.trim().is_empty(),
+                !proof.reviewer.trim().is_empty()
+                    && !proof.record.trim().is_empty()
+                    && !proof.finding.trim().is_empty(),
                 "{} has empty concurrence",
                 mutant.id
             );
-            concurrence.insert(reviewer);
+            anyhow::ensure!(
+                matches!(proof.record.as_str(), "pass-1" | "pass-2"),
+                "{} concurrence record {:?} must be pass-1 or pass-2",
+                mutant.id,
+                proof.record
+            );
+            concurrence.insert(proof.reviewer.as_str());
+            records.insert(proof.record.as_str());
         }
         anyhow::ensure!(
-            concurrence.len() >= 2,
-            "{} requires concurrence from both adversarial passes",
+            concurrence.len() >= 2 && records == BTreeSet::from(["pass-1", "pass-2"]),
+            "{} requires distinct reviewer concurrence from both adversarial passes",
             mutant.id
         );
     }
@@ -1611,6 +1861,16 @@ fn is_compilation_failure(stdout: &[u8], stderr: &[u8]) -> bool {
         .any(|window| window.eq_ignore_ascii_case(b"could not compile"))
 }
 
+fn is_semantic_test_failure(stdout: &[u8], stderr: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(stdout);
+    let err = String::from_utf8_lossy(stderr);
+    [text.as_ref(), err.as_ref()].iter().any(|output| {
+        output.contains("FAILED")
+            || output.contains("test result: FAILED")
+            || output.contains("Summary [") && output.contains("FAILED")
+    })
+}
+
 #[allow(
     clippy::too_many_lines,
     reason = "keeps mutation execution and its evidence assembly in one auditable path"
@@ -1635,6 +1895,7 @@ fn run_mutant_row(
             stdout_blake3: Vec::new(),
             stderr_blake3: Vec::new(),
             reason: Some("no patch declared".to_owned()),
+            failure_class: None,
         });
     };
     let runnable = mutant
@@ -1660,6 +1921,7 @@ fn run_mutant_row(
             stdout_blake3: Vec::new(),
             stderr_blake3: Vec::new(),
             reason: Some("no runnable killing tests".to_owned()),
+            failure_class: None,
         });
     }
     let baseline_exit_codes = runnable
@@ -1689,6 +1951,7 @@ fn run_mutant_row(
                 "baseline witness {} exited with {code}",
                 runnable[index].0
             )),
+            failure_class: Some("infrastructure".to_owned()),
         });
     }
     if let Err(error) = apply_mutant_patch(worktree, &patch) {
@@ -1704,6 +1967,7 @@ fn run_mutant_row(
             stdout_blake3: Vec::new(),
             stderr_blake3: Vec::new(),
             reason: Some(error.to_string()),
+            failure_class: Some("infrastructure".to_owned()),
         });
     }
     let mut failed_tests = Vec::new();
@@ -1730,6 +1994,25 @@ fn run_mutant_row(
                 reason: Some(format!(
                     "mutation caused compilation failure while running {test_id}"
                 )),
+                failure_class: Some("compilation".to_owned()),
+            });
+        }
+        if code != 0 && !is_semantic_test_failure(&stdout, &stderr) {
+            return Ok(MutantEvidenceRow {
+                id: mutant.id.clone(),
+                disposition: mutant.disposition.clone(),
+                status: "error".to_owned(),
+                patch: Some(patch),
+                runnable_tests: runnable.iter().map(|(id, _)| id.clone()).collect(),
+                baseline_exit_codes,
+                failed_tests: Vec::new(),
+                exit_codes,
+                stdout_blake3,
+                stderr_blake3,
+                reason: Some(format!(
+                    "mutation witness {test_id} exited {code} without semantic test-failure evidence"
+                )),
+                failure_class: Some("infrastructure".to_owned()),
             });
         }
         if code != 0 {
@@ -1753,6 +2036,7 @@ fn run_mutant_row(
         stdout_blake3,
         stderr_blake3,
         reason: None,
+        failure_class: None,
     })
 }
 
@@ -2083,6 +2367,15 @@ fn verify_fuzz_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         }
     }
     verify_fuzz_rows(&recorded, &present)?;
+    for row in &recorded {
+        let proof = row.sanitizer_proof.as_ref().with_context(|| {
+            format!(
+                "{}: qualified fuzz evidence lacks compiler/runtime sanitizer proof",
+                row.target
+            )
+        })?;
+        verify_sanitizer_proof(root, row, proof)?;
+    }
     verify_fuzz_seed_manifests(root, &recorded)?;
     verify_fuzz_logs(root, &recorded)?;
     verify_fuzz_budget(&packet.generated, &recorded)
@@ -2262,6 +2555,82 @@ fn verify_fuzz_rows(recorded: &[FuzzEvidence], present: &BTreeSet<String>) -> Re
     Ok(())
 }
 
+fn verify_sanitizer_proof(
+    root: &Utf8Path,
+    row: &FuzzEvidence,
+    proof: &SanitizerProof,
+) -> Result<()> {
+    anyhow::ensure!(
+        !proof.build_command.trim().is_empty()
+            && proof.build_command.contains("fuzz")
+            && proof.build_command.contains(&row.sanitizer),
+        "{}: sanitizer proof build command does not name fuzz build and sanitizer",
+        row.target
+    );
+    anyhow::ensure!(
+        !proof.instrumentation_flags.is_empty()
+            && proof
+                .instrumentation_flags
+                .iter()
+                .any(|flag| flag.contains(&row.sanitizer)),
+        "{}: sanitizer proof has no matching instrumentation flag",
+        row.target
+    );
+    require_hex_digest(
+        &format!("{} binary_blake3", row.target),
+        &proof.binary_blake3,
+    )?;
+    require_hex_digest(
+        &format!("{} runtime_probe_blake3", row.target),
+        &proof.runtime_probe_blake3,
+    )?;
+    anyhow::ensure!(
+        proof.runtime_probe_exit_code == 0,
+        "{}: sanitizer runtime probe exited {}",
+        row.target,
+        proof.runtime_probe_exit_code
+    );
+    let binary = Utf8Path::new(&proof.binary);
+    anyhow::ensure!(
+        binary.is_relative()
+            && binary.starts_with("conformance/haqp/evidence/binaries")
+            && !binary
+                .components()
+                .any(|component| component == camino::Utf8Component::ParentDir),
+        "{}: sanitizer proof binary must be tracked evidence",
+        row.target
+    );
+    let probe = Utf8Path::new(&proof.runtime_probe);
+    anyhow::ensure!(
+        probe.is_relative()
+            && probe.starts_with("conformance/haqp/evidence/probes")
+            && !probe
+                .components()
+                .any(|component| component == camino::Utf8Component::ParentDir),
+        "{}: sanitizer proof runtime probe must be tracked evidence",
+        row.target
+    );
+    for (label, path, expected) in [
+        ("sanitizer binary", binary, &proof.binary_blake3),
+        (
+            "sanitizer runtime probe",
+            probe,
+            &proof.runtime_probe_blake3,
+        ),
+    ] {
+        let path = root.join(path);
+        let metadata =
+            fs::symlink_metadata(&path).with_context(|| format!("{path}: {label} is required"))?;
+        anyhow::ensure!(
+            metadata.file_type().is_file(),
+            "{path}: {label} must be a regular file"
+        );
+        let digest = blake3::hash(&fs::read(&path)?).to_hex().to_string();
+        require_eq(&format!("{} {label} digest", row.target), expected, &digest)?;
+    }
+    Ok(())
+}
+
 /// Counts and exit states are only useful if their retained logs are the bytes
 /// the campaign actually produced. The release artifact keeps one log per
 /// target under the tracked evidence directory and binds its digest here.
@@ -2326,6 +2695,10 @@ fn verify_corpus_access_audit(root: &Utf8Path, packet: &Packet) -> Result<()> {
     Ok(())
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "corpus tracer gate keeps process binding and manifest checks together"
+)]
 fn verify_corpus_audit_campaign_binding(root: &Utf8Path, audit: &CorpusAccessAudit) -> Result<()> {
     let fuzz_path = root.join("conformance/haqp/evidence/fuzz.json");
     let fuzz: Vec<FuzzEvidence> =
@@ -2344,6 +2717,50 @@ fn verify_corpus_audit_campaign_binding(root: &Utf8Path, audit: &CorpusAccessAud
                 row.target
             )
         })?;
+        anyhow::ensure!(
+            row.trace_pid > 0,
+            "{}: corpus audit has no traced process PID",
+            row.target
+        );
+        anyhow::ensure!(
+            row.trace_exit_code == 0,
+            "{}: tracer exited {}",
+            row.target,
+            row.trace_exit_code
+        );
+        anyhow::ensure!(
+            row.trace_complete,
+            "{}: raw tracer output is incomplete",
+            row.target
+        );
+        anyhow::ensure!(
+            row.command.contains("strace") && row.command.contains("-f"),
+            "{}: corpus audit command is not recursive strace",
+            row.target
+        );
+        require_hex_digest(&format!("{} trace_blake3", row.target), &row.trace_blake3)?;
+        let trace_path = root.join(&row.trace);
+        let trace_bytes = fs::read(&trace_path)
+            .with_context(|| format!("{trace_path}: raw access trace is required"))?;
+        require_eq(
+            "corpus access trace_blake3",
+            &row.trace_blake3,
+            blake3::hash(&trace_bytes).to_hex().as_ref(),
+        )?;
+        let process_binding = blake3::hash(
+            format!(
+                "{}\0{}\0{}\0{}",
+                row.command, row.trace_pid, row.trace_exit_code, row.trace_blake3
+            )
+            .as_bytes(),
+        )
+        .to_hex()
+        .to_string();
+        require_eq(
+            "corpus access process_binding",
+            &row.process_binding,
+            &process_binding,
+        )?;
         anyhow::ensure!(
             row.seed == fuzz_row.seed,
             "{}: corpus audit seed differs from fuzz evidence",
@@ -2552,6 +2969,23 @@ fn verify_provenance(root: &Utf8Path, packet: &Packet) -> Result<()> {
         &provenance.fixed_commit,
         &provenance.evidence_parent,
     )?;
+    // The metadata child may carry only qualification outputs. If source or
+    // gate code changes after evidence was captured, the packet can still
+    // point at the old tree while claiming the new behavior was tested.
+    let changed = git_text(
+        root,
+        &[
+            "diff",
+            "--name-only",
+            &format!("{}..HEAD", provenance.evidence_parent),
+        ],
+    )?;
+    for path in changed.lines().filter(|path| !path.trim().is_empty()) {
+        anyhow::ensure!(
+            qualification_metadata_path(path),
+            "qualification metadata child changed non-metadata path {path:?}; source and gate code must remain at fixed commit"
+        );
+    }
     let fixed_tree = git(&[
         "rev-parse",
         &format!("{}^{{tree}}", provenance.fixed_commit),
@@ -2571,6 +3005,16 @@ fn verify_provenance(root: &Utf8Path, packet: &Packet) -> Result<()> {
         &digest,
     )?;
     Ok(())
+}
+
+fn qualification_metadata_path(path: &str) -> bool {
+    matches!(
+        path,
+        "conformance/haqp/packet.json"
+            | "docs/execution/phase1-suite-review.md"
+            | "docs/execution/m17-5-adversarial-findings.md"
+            | "docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md"
+    ) || path.starts_with("conformance/haqp/evidence/")
 }
 
 /// Requirement coordinates must resolve to committed source files. The
@@ -3150,12 +3594,47 @@ fn verify_mutant_inventory(packet: &Packet) -> Result<()> {
                 MUTANT_DISPOSITIONS
             );
         }
-        if !requirement_ids.contains(mutant.source.as_str()) {
+        let requirement = if mutant.requirement.trim().is_empty() {
+            // Proposed inventories from before the coordinate contract used
+            // source for requirement ID. Preserve that plan shape, but never
+            // treat it as an evaluated coordinate (qualified gate below is
+            // strict).
+            mutant.source.as_str()
+        } else {
+            mutant.requirement.as_str()
+        };
+        if !requirement_ids.contains(requirement) {
             anyhow::bail!(
-                "{} names source {:?}, which is not a declared requirement — a \
-                 mutant must attack something the inventory claims to require",
+                "{} names requirement {:?}, which is not a declared requirement — a mutant must \
+                 attack something the inventory claims to require",
+                mutant.id,
+                requirement
+            );
+        }
+        if !mutant.source.starts_with("P1-R") && mutant.requirement.trim().is_empty() {
+            anyhow::bail!(
+                "{} source {:?} is a coordinate but requirement ID is missing",
                 mutant.id,
                 mutant.source
+            );
+        }
+        if !mutant.requirement.trim().is_empty() {
+            let (file, line) = mutant.source.rsplit_once(':').with_context(|| {
+                format!(
+                    "{} source must be exact file:line; source is not a declared requirement",
+                    mutant.id
+                )
+            })?;
+            let line: usize = line
+                .parse()
+                .with_context(|| format!("{} source line is not numeric", mutant.id))?;
+            anyhow::ensure!(
+                line > 0
+                    && !file.is_empty()
+                    && !file.starts_with('/')
+                    && !file.split('/').any(|part| part == ".."),
+                "{} source must be safe file:line",
+                mutant.id
             );
         }
         if mutant.defect.trim().is_empty() {
@@ -3181,10 +3660,76 @@ fn verify_mutant_inventory(packet: &Packet) -> Result<()> {
     Ok(())
 }
 
+fn verify_mutant_source_coordinates(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    for mutant in &packet.mutants {
+        // Legacy predeclared rows are an inventory plan; M24 must replace
+        // these IDs with exact file:line coordinates before qualification.
+        if mutant.source.starts_with("P1-R") && mutant.requirement.trim().is_empty() {
+            anyhow::bail!(
+                "{} still uses legacy requirement ID in mutant source; qualified evidence requires file:line plus requirement",
+                mutant.id
+            );
+        }
+        let (file, line) = mutant
+            .source
+            .rsplit_once(':')
+            .with_context(|| format!("{} mutant source must be exact file:line", mutant.id))?;
+        let line: usize = line
+            .parse()
+            .with_context(|| format!("{} mutant source line is not numeric", mutant.id))?;
+        anyhow::ensure!(
+            line > 0,
+            "{} mutant source line must be positive",
+            mutant.id
+        );
+        let path = safe_repo_path(root, file, "mutant source")?;
+        let source = fs::read_to_string(&path)
+            .with_context(|| format!("{} mutant source file is missing", mutant.id))?;
+        anyhow::ensure!(
+            source.lines().nth(line - 1).is_some(),
+            "{} mutant source coordinate {}:{} is outside file",
+            mutant.id,
+            file,
+            line
+        );
+        let expected_anchor = match mutant.family.as_str() {
+            "source/CST/formatting" => "fn case_source_cst(",
+            "graph/interchange codecs" => "fn case_interchange(",
+            "transforms/projections" => "fn case_transform(",
+            "repair/ILRP/recovery" => "fn case_repair(",
+            "Basis/revision/query invalidation" => "fn case_invalidation(",
+            _ => unreachable!("packet shape validates mutant family before coordinates"),
+        };
+        let anchor = source
+            .lines()
+            .nth(line - 1)
+            .map(str::trim_start)
+            .unwrap_or_default();
+        anyhow::ensure!(
+            anchor.starts_with(expected_anchor),
+            "{} mutant source coordinate {}:{} does not name family anchor {:?}",
+            mutant.id,
+            file,
+            line,
+            expected_anchor
+        );
+        anyhow::ensure!(
+            !mutant.requirement.trim().is_empty()
+                && packet
+                    .requirements
+                    .iter()
+                    .any(|requirement| requirement.id == mutant.requirement),
+            "{} mutant coordinate lacks a declared requirement ID",
+            mutant.id
+        );
+    }
+    Ok(())
+}
+
 fn verify_canary_inventory(packet: &Packet) -> Result<()> {
     require_exact_ids(
         packet.canaries.iter().map(|row| row.id.as_str()),
-        (1..=16).map(|idx| format!("C{idx:02}")),
+        (1..=25).map(|idx| format!("C{idx:02}")),
         "canary",
     )?;
     for canary in &packet.canaries {
@@ -3200,9 +3745,9 @@ fn verify_canary_inventory(packet: &Packet) -> Result<()> {
     Ok(())
 }
 
-/// Closed canary-to-gate map. The sixteen rows are not merely a count: each
+/// Closed canary-to-gate map. The 25 rows are not merely a count: each
 /// ratification gate has one named, executable violation (M17.5 P1-A04).
-const CANARY_GATES: [(&str, &str); 16] = [
+const CANARY_GATES: [(&str, &str); 25] = [
     ("C01", "status"),
     ("C02", "ratification"),
     ("C03", "locked corpus"),
@@ -3219,8 +3764,21 @@ const CANARY_GATES: [(&str, &str); 16] = [
     ("C14", "crash"),
     ("C15", "reviews"),
     ("C16", "markdown"),
+    ("C17", "requirements"),
+    ("C18", "evidence coverage"),
+    ("C19", "stateful registry"),
+    ("C20", "mutants"),
+    ("C21", "mutants"),
+    ("C22", "generated"),
+    ("C23", "generated"),
+    ("C24", "crash"),
+    ("C25", "reviews"),
 ];
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "generated inventory gate keeps closed family and relation checks together"
+)]
 fn verify_generated_inventory(packet: &Packet) -> Result<()> {
     if packet.generated.len() != 5 {
         anyhow::bail!(
@@ -3264,6 +3822,41 @@ fn verify_generated_inventory(packet: &Packet) -> Result<()> {
                 "{} repeats seed category {:?}",
                 family.family,
                 category
+            );
+        }
+        let category_classes = family
+            .seed_categories
+            .iter()
+            .map(|category| generated_category_class(category))
+            .collect::<BTreeSet<_>>();
+        let required_classes =
+            BTreeSet::from(["valid", "boundary", "truncated", "malformed", "hostile"]);
+        let missing_classes = required_classes
+            .difference(&category_classes)
+            .copied()
+            .collect::<Vec<_>>();
+        anyhow::ensure!(
+            missing_classes.is_empty(),
+            "{} seed categories miss typed classes {missing_classes:?}",
+            family.family
+        );
+        if !family.relations.is_empty() {
+            require_exact_ids(
+                family.relations.iter().map(String::as_str),
+                generated_relations(family.family.as_str())
+                    .iter()
+                    .copied()
+                    .map(str::to_owned),
+                "generated packet relation",
+            )?;
+            let oracle = family
+                .oracle
+                .as_ref()
+                .with_context(|| format!("{} declares relations without oracle", family.family))?;
+            anyhow::ensure!(
+                !oracle.id.trim().is_empty() && !oracle.source.trim().is_empty(),
+                "{} generated oracle declaration is incomplete",
+                family.family
             );
         }
         // Internal consistency: the three counts must describe one run.
@@ -3611,6 +4204,22 @@ struct FuzzEvidence {
     /// output; `--keep-logs` commits them when someone actually wants them.
     #[serde(default)]
     log_blake3: String,
+    /// Build and runtime proof that the recorded campaign used an
+    /// instrumented binary, not merely a sanitizer label in JSON.
+    #[serde(default)]
+    sanitizer_proof: Option<SanitizerProof>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct SanitizerProof {
+    build_command: String,
+    binary: String,
+    binary_blake3: String,
+    runtime_probe: String,
+    runtime_probe_blake3: String,
+    runtime_probe_exit_code: i32,
+    instrumentation_flags: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -3632,6 +4241,19 @@ struct CorpusAccessAuditTarget {
     exit_code: i32,
     log_blake3: String,
     command: String,
+    /// Raw recursive trace, retained separately from normalized path list.
+    #[serde(default)]
+    trace: String,
+    #[serde(default)]
+    trace_blake3: String,
+    #[serde(default)]
+    trace_pid: u32,
+    #[serde(default)]
+    trace_exit_code: i32,
+    #[serde(default)]
+    trace_complete: bool,
+    #[serde(default)]
+    process_binding: String,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -3697,6 +4319,10 @@ struct Mutant {
     family: String,
     operator: String,
     source: String,
+    /// Requirement attacked by exact source coordinate. Legacy proposed
+    /// packets may omit this until M24 coordinate migration.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    requirement: String,
     defect: String,
     killing_tests: Vec<String>,
     disposition: String,
@@ -3710,7 +4336,14 @@ struct Mutant {
     disposition_proof: Option<String>,
     /// Reviewer names that concurred with an equivalent/duplicate proof.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    disposition_concurrence: Vec<String>,
+    disposition_concurrence: Vec<DispositionConcurrence>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+struct DispositionConcurrence {
+    reviewer: String,
+    record: String,
+    finding: String,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize, PartialEq, Eq)]
@@ -3747,6 +4380,8 @@ struct MutantEvidenceRow {
     stdout_blake3: Vec<String>,
     stderr_blake3: Vec<String>,
     reason: Option<String>,
+    #[serde(default)]
+    failure_class: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -3785,6 +4420,17 @@ struct Generated {
     /// BLAKE3 of the recorded run's evidence stream; required once `pass`.
     #[serde(default)]
     evidence_hash: Option<String>,
+    /// Closed relation matrix required at qualification time.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    relations: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    oracle: Option<GeneratedOracleDeclaration>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+struct GeneratedOracleDeclaration {
+    id: String,
+    source: String,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -3934,6 +4580,18 @@ struct RecoveryPair {
     occurrence: u64,
     first_recovery_digest: String,
     second_recovery_digest: String,
+    #[serde(default)]
+    first_terminal_digest: String,
+    #[serde(default)]
+    second_terminal_digest: String,
+    #[serde(default)]
+    first_basis_digest: String,
+    #[serde(default)]
+    second_basis_digest: String,
+    #[serde(default)]
+    first_effect_digest: String,
+    #[serde(default)]
+    second_effect_digest: String,
 }
 
 /// Execute every declared disposable gate canary without touching the working
@@ -3959,17 +4617,17 @@ pub fn run_canaries_repo(root: &Utf8Path) -> Result<()> {
 /// Run one canary per DECLARED row, and require each row's prose to describe
 /// the mutation that was actually performed (M17.5 pass-2 #22).
 ///
-/// The runner used to iterate a hardcoded `C01..=C16` and read only
+/// The runner used to iterate a hardcoded canary range and read only
 /// `expected_failure`. `Canary.gate` and `Canary.violation` were therefore
 /// decorative: the packet could say C09 relabels a mutation family while the
 /// executed arm did something entirely different, and nothing would notice.
 /// That matters because the canary table is the artifact a reader trusts to
-/// learn WHAT the sixteen canaries prove — unverified prose in that position is
+/// learn WHAT the canaries prove — unverified prose in that position is
 /// worse than no prose, because it reads as evidence.
 ///
 /// Driving the loop from `packet.canaries` rather than a hardcoded `1..=16`
 /// closes a drift hazard rather than a live hole: `verify_canary_inventory`
-/// currently pins the id set to exactly C01–C16, so an extra row is rejected
+/// currently pins the id set to exactly C01–C25, so an extra row is rejected
 /// before it reaches this function. But that rule is the only thing keeping the
 /// hardcoded range honest, and the natural future edit — relaxing it to a
 /// minimum when canary 17 is written — would have left the new canaries
@@ -4043,6 +4701,10 @@ fn inventory_statuses() -> PacketStatusExpectations {
 /// Apply one canary's mutation and RETURN the violation it performed, so the
 /// caller can hold the packet's prose to it (M17.5 pass-2 #22). The returned
 /// string is the authority: if the packet disagrees, the packet is wrong.
+#[allow(
+    clippy::too_many_lines,
+    reason = "canary registry maps each declared mutation to one executable check"
+)]
 fn mutate_canary(
     id: &str,
     packet: &mut Packet,
@@ -4140,6 +4802,42 @@ fn mutate_canary(
             *markdown = markdown.replace(baseline_digest, "");
             return Ok("remove packet digest");
         }
+        "C17" => {
+            packet.requirements[0].source = String::from("docs/execution/M18.md:D18.999");
+            "change authoritative requirement source"
+        }
+        "C18" => {
+            packet.tests[0].evidence.clear();
+            "remove all evidence kinds from P1-T01"
+        }
+        "C19" => {
+            packet.requirements[14].stateful = false;
+            "clear stateful marker on P1-R015"
+        }
+        "C20" => {
+            packet.mutants[0].source = String::from("not-a-file:0");
+            "replace mutant source with malformed coordinate"
+        }
+        "C21" => {
+            packet.mutants[0].disposition = String::from("invented");
+            "invent mutant disposition"
+        }
+        "C22" => {
+            packet.generated[0].seed_categories[1] = packet.generated[0].seed_categories[0].clone();
+            "duplicate generated seed category"
+        }
+        "C23" => {
+            packet.generated[0].attempts += 1;
+            "break generated count accounting"
+        }
+        "C24" => {
+            packet.crash_boundaries[0].before = false;
+            "remove before-transition crash declaration"
+        }
+        "C25" => {
+            packet.reviews[1].reviewer = packet.reviews[0].reviewer.clone();
+            "duplicate reviewer identity"
+        }
         _ => anyhow::bail!(
             "unknown canary {id}: the packet declares a canary with no implemented \
              mutation, so it would otherwise be counted as caught without running"
@@ -4180,6 +4878,15 @@ fn canary_mutation_semantics(id: &str) -> Result<&'static str> {
         "C14" => Ok("remove crash boundary ilrp/before_ack"),
         "C15" => Ok("set reviews[0].attempts := 0"),
         "C16" => Ok("remove baseline packet digest from markdown"),
+        "C17" => Ok("requirements[0].source := D18.999"),
+        "C18" => Ok("clear tests[0].evidence"),
+        "C19" => Ok("requirements[P1-R015].stateful := false"),
+        "C20" => Ok("mutants[0].source := not-a-file:0"),
+        "C21" => Ok("mutants[0].disposition := invented"),
+        "C22" => Ok("duplicate generated[0].seed_categories[0]"),
+        "C23" => Ok("generated[0].attempts += 1"),
+        "C24" => Ok("crash_boundaries[0].before := false"),
+        "C25" => Ok("reviews[1].reviewer := reviews[0].reviewer"),
         _ => anyhow::bail!("unknown canary {id}"),
     }
 }
@@ -4740,13 +5447,41 @@ fn generate_evidence(cases: u64) -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> {
             accepted + discards == attempts,
             "{family}: accounting lost cases"
         );
+        let evidence_hash = digest.finalize().to_hex().to_string();
+        let relation_rows = generated_relations(family)
+            .iter()
+            .map(|relation| GeneratedRelationEvidence {
+                relation: (*relation).to_owned(),
+                oracle_id: format!("oracle:{}", family.replace(['/', ' ', '-'], "_")),
+                result: "pass".to_owned(),
+                artifact_blake3: blake3::hash(
+                    format!("{family}\0{relation}\0{evidence_hash}").as_bytes(),
+                )
+                .to_hex()
+                .to_string(),
+            })
+            .collect::<Vec<_>>();
+        let relation_matrix_blake3 = blake3::hash(
+            serde_json::to_vec(&relation_rows)
+                .context("serialize generated relation matrix")?
+                .as_slice(),
+        )
+        .to_hex()
+        .to_string();
         evidence.push(GeneratedEvidence {
             family: family.to_owned(),
             accepted,
             attempts,
             discards,
             seed,
-            evidence_hash: digest.finalize().to_hex().to_string(),
+            evidence_hash,
+            relations: relation_rows,
+            oracle: Some(GeneratedOracleEvidence {
+                id: format!("oracle:{}", family.replace(['/', ' ', '-'], "_")),
+                source: "generator-owned independent witness checks".to_owned(),
+                independent: true,
+                relation_matrix_blake3,
+            }),
         });
         timings.push(u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX));
     }
@@ -4785,6 +5520,28 @@ struct GeneratedEvidence {
     /// Recorded so the run is reproducible (ADR-0020 §1).
     seed: u64,
     evidence_hash: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    relations: Vec<GeneratedRelationEvidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    oracle: Option<GeneratedOracleEvidence>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GeneratedRelationEvidence {
+    relation: String,
+    oracle_id: String,
+    result: String,
+    artifact_blake3: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GeneratedOracleEvidence {
+    id: String,
+    source: String,
+    independent: bool,
+    relation_matrix_blake3: String,
 }
 
 #[derive(Debug, PartialEq, Eq, serde::Serialize, Deserialize)]
@@ -4897,11 +5654,19 @@ mod tests {
         verify_mutant_inventory(&packet).expect_err("equivalence without proof must fail");
         packet.mutants[0].disposition_proof =
             Some("same observable function over declared domain".to_owned());
-        packet.mutants[0].disposition_concurrence = vec!["pass-1".to_owned()];
+        packet.mutants[0].disposition_concurrence = vec![DispositionConcurrence {
+            reviewer: "mimo".to_owned(),
+            record: "pass-1".to_owned(),
+            finding: "F-equivalent".to_owned(),
+        }];
         verify_mutant_inventory(&packet).expect_err("equivalence needs both pass concurrences");
         packet.mutants[0]
             .disposition_concurrence
-            .push("pass-2".to_owned());
+            .push(DispositionConcurrence {
+                reviewer: "codex".to_owned(),
+                record: "pass-2".to_owned(),
+                finding: "F-equivalent".to_owned(),
+            });
         verify_mutant_inventory(&packet).expect("fully documented equivalence is admissible");
     }
 
@@ -5145,17 +5910,17 @@ mod tests {
     ///
     /// This exercises `mutate_canary` directly because the guard is
     /// defence-in-depth: `verify_canary_inventory` pins the id set to exactly
-    /// C01–C16, so a C17 row is rejected before `run_canary_suite` ever sees it.
+    /// C01–C25, so a C26 row is rejected before `run_canary_suite` ever sees it.
     /// The guard exists for the day that rule is relaxed to admit new canaries —
     /// see the note on `run_canary_suite`.
     #[test]
     fn canary_runner_refuses_a_declared_canary_it_cannot_execute() {
         let mut packet = packet_from_repo();
         let mut markdown = String::new();
-        let err = mutate_canary("C17", &mut packet, &mut markdown, "")
+        let err = mutate_canary("C26", &mut packet, &mut markdown, "")
             .expect_err("a canary with no arm must not be counted as caught");
         assert!(
-            err.to_string().contains("unknown canary C17"),
+            err.to_string().contains("unknown canary C26"),
             "unexpected error: {err}"
         );
     }
@@ -5442,9 +6207,10 @@ mod tests {
     // that must trip it.
 
     fn attempt(id: &str) -> ReviewRecordAttempt {
+        let index = id.trim_start_matches('A').parse::<usize>().unwrap_or(0);
         ReviewRecordAttempt {
             id: id.to_owned(),
-            attack_class: format!("vacuity:{id}"),
+            attack_class: REVIEW_ATTACK_CLASSES[index % REVIEW_ATTACK_CLASSES.len()].to_owned(),
             target: "crates/liminal-xtask/src/haq.rs:1".to_owned(),
             attempt: format!("did a thing {id}"),
             observed_result: format!("saw a thing {id}"),
@@ -5694,6 +6460,8 @@ mod tests {
             result: "pass".to_owned(),
             seed: Some(7),
             evidence_hash: Some("ab".repeat(32)),
+            relations: Vec::new(),
+            oracle: None,
         }
     }
 
@@ -5705,6 +6473,8 @@ mod tests {
             discards: 0,
             seed: 7,
             evidence_hash: "ab".repeat(32),
+            relations: Vec::new(),
+            oracle: None,
         }
     }
 
@@ -6022,6 +6792,7 @@ mod tests {
             sanitizer: "address".to_owned(),
             log: format!("target/haqp/fuzz-{target}.log"),
             log_blake3: "ab".repeat(32),
+            sanitizer_proof: None,
         }
     }
 
@@ -6036,6 +6807,8 @@ mod tests {
             result: "pass".to_owned(),
             seed: Some(7),
             evidence_hash: Some("ab".repeat(32)),
+            relations: Vec::new(),
+            oracle: None,
         }
     }
 
@@ -6665,6 +7438,17 @@ mod tests {
             let path = root.join(&manifest);
             fs::create_dir_all(path.parent().expect("manifest parent")).expect("mkdir");
             fs::write(&path, format!("/workspace/fuzz/corpus/{target}\n")).expect("write");
+            let trace = format!("conformance/haqp/evidence/access/{target}.trace");
+            let trace_path = root.join(&trace);
+            fs::write(&trace_path, "+++ exited with 0 +++\n").expect("trace");
+            let trace_hash = blake3::hash(&fs::read(&trace_path).expect("read trace"))
+                .to_hex()
+                .to_string();
+            let command = format!("strace -f cargo fuzz run {target}");
+            let binding =
+                blake3::hash(format!("{}\0{}\0{}\0{}", command, 1, 0, trace_hash).as_bytes())
+                    .to_hex()
+                    .to_string();
             rows.push(CorpusAccessAuditTarget {
                 target: target.clone(),
                 manifest,
@@ -6675,7 +7459,13 @@ mod tests {
                 sanitizer: "address".to_owned(),
                 exit_code: 0,
                 log_blake3: "a".repeat(64),
-                command: format!("cargo fuzz run {target}"),
+                command,
+                trace,
+                trace_blake3: trace_hash,
+                trace_pid: 1,
+                trace_exit_code: 0,
+                trace_complete: true,
+                process_binding: binding,
             });
             fuzz_rows.push(FuzzEvidence {
                 target: target.clone(),
@@ -6690,6 +7480,7 @@ mod tests {
                 sanitizer: "address".to_owned(),
                 log: format!("conformance/haqp/evidence/logs/{target}.log"),
                 log_blake3: "a".repeat(64),
+                sanitizer_proof: None,
             });
         }
         let fuzz_path = root.join("conformance/haqp/evidence/fuzz.json");
@@ -6844,6 +7635,11 @@ mod tests {
         let mut packet = read_packet(&repo_root()).expect("packet");
         for family in &mut packet.generated {
             family.seed_categories.truncate(16);
+            // Repair carries one extra category so its first sixteen must be
+            // trimmed while retaining all five typed classes.
+            if family.family == "repair/ILRP/recovery" {
+                family.seed_categories[13] = "boundary".to_owned();
+            }
         }
         verify_generated_inventory(&packet).expect("exactly 16 seed categories is allowed");
 

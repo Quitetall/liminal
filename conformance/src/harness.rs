@@ -186,6 +186,10 @@ pub struct RecoveryReport {
     /// Digest of the observable world (store head + file hashes) used for the
     /// recovery-idempotence assertion: recovering twice must be a no-op.
     pub world_digest: String,
+    /// Digest of durable Basis captured during recovery.
+    pub basis_digest: String,
+    /// Independent duplicate-effect ledger digest.
+    pub effect_digest: String,
 }
 
 /// One derived crash case's measured recovery identity. Both digests are
@@ -201,6 +205,18 @@ pub struct CrashCaseEvidence {
     pub first_recovery_digest: String,
     /// World digest after second recovery.
     pub second_recovery_digest: String,
+    /// Terminal-state set after first recovery.
+    pub first_terminal_digest: String,
+    /// Terminal-state set after second recovery.
+    pub second_terminal_digest: String,
+    /// Durable Basis after first recovery.
+    pub first_basis_digest: String,
+    /// Durable Basis after second recovery.
+    pub second_basis_digest: String,
+    /// Duplicate-effect ledger after first recovery.
+    pub first_effect_digest: String,
+    /// Duplicate-effect ledger after second recovery.
+    pub second_effect_digest: String,
 }
 
 /// Measured output of one scenario's complete crash matrix.
@@ -370,6 +386,8 @@ impl ToyRun {
         Ok(RecoveryReport {
             terminals: outcome.terminals,
             world_digest: outcome.world_digest,
+            basis_digest: outcome.basis_digest,
+            effect_digest: outcome.effect_digest,
         })
     }
 
@@ -428,6 +446,12 @@ impl ToyRun {
                     occurrence,
                     first_recovery_digest: r1.world_digest,
                     second_recovery_digest: r2.world_digest,
+                    first_terminal_digest: terminal_digest(&r1.terminals)?,
+                    second_terminal_digest: terminal_digest(&r2.terminals)?,
+                    first_basis_digest: r1.basis_digest,
+                    second_basis_digest: r2.basis_digest,
+                    first_effect_digest: r1.effect_digest,
+                    second_effect_digest: r2.effect_digest,
                 });
                 continue;
             }
@@ -476,6 +500,12 @@ impl ToyRun {
                 occurrence,
                 first_recovery_digest: r1.world_digest,
                 second_recovery_digest: r2.world_digest,
+                first_terminal_digest: terminal_digest(&r1.terminals)?,
+                second_terminal_digest: terminal_digest(&r2.terminals)?,
+                first_basis_digest: r1.basis_digest,
+                second_basis_digest: r2.basis_digest,
+                first_effect_digest: r1.effect_digest,
+                second_effect_digest: r2.effect_digest,
             });
         }
 
@@ -493,6 +523,12 @@ impl ToyRun {
     pub fn trace_path(&self) -> Utf8PathBuf {
         self.root.join("crash-trace.log")
     }
+}
+
+fn terminal_digest(terminals: &[IntentState]) -> anyhow::Result<String> {
+    Ok(blake3::hash(&serde_json::to_vec(terminals)?)
+        .to_hex()
+        .to_string())
 }
 
 /// Assert the silence law (Law 3E; v4 §7.9): exit 0 AND byte-empty stdout AND

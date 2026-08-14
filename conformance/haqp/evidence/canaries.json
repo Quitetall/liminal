@@ -85,7 +85,7 @@
     "gate": "canaries",
     "violation": "remove C16",
     "expected_failure": "canary ids differ",
-    "observed_failure": "canary ids differ: actual={\"C01\", \"C02\", \"C03\", \"C04\", \"C05\", \"C06\", \"C07\", \"C08\", \"C09\", \"C10\", \"C11\", \"C12\", \"C13\", \"C14\", \"C15\"}, expected={\"C01\", \"C02\", \"C03\", \"C04\", \"C05\", \"C06\", \"C07\", \"C08\", \"C09\", \"C10\", \"C11\", \"C12\", \"C13\", \"C14\", \"C15\", \"C16\"}",
+    "observed_failure": "canary ids differ: actual={\"C01\", \"C02\", \"C03\", \"C04\", \"C05\", \"C06\", \"C07\", \"C08\", \"C09\", \"C10\", \"C11\", \"C12\", \"C13\", \"C14\", \"C15\", \"C17\", \"C18\", \"C19\", \"C20\", \"C21\", \"C22\", \"C23\", \"C24\", \"C25\"}, expected={\"C01\", \"C02\", \"C03\", \"C04\", \"C05\", \"C06\", \"C07\", \"C08\", \"C09\", \"C10\", \"C11\", \"C12\", \"C13\", \"C14\", \"C15\", \"C16\", \"C17\", \"C18\", \"C19\", \"C20\", \"C21\", \"C22\", \"C23\", \"C24\", \"C25\"}",
     "caught": true,
     "mutation_semantics": "remove canary C16"
   },
@@ -139,8 +139,89 @@
     "gate": "markdown",
     "violation": "remove packet digest",
     "expected_failure": "review packet markdown missing packet digest",
-    "observed_failure": "review packet markdown missing packet digest 25745680033186a1dbb774e1b100e475c3b483afe66f7647114e5d39da05fcbf",
+    "observed_failure": "review packet markdown missing packet digest d57cb9493d16850549c67f0c907b6ab71fcbc93ed440604a4340107a1250276a",
     "caught": true,
     "mutation_semantics": "remove baseline packet digest from markdown"
+  },
+  {
+    "id": "C17",
+    "gate": "requirements",
+    "violation": "change authoritative requirement source",
+    "expected_failure": "requirement P1-R001 differs from closed authoritative registry",
+    "observed_failure": "requirement P1-R001 differs from closed authoritative registry",
+    "caught": true,
+    "mutation_semantics": "requirements[0].source := D18.999"
+  },
+  {
+    "id": "C18",
+    "gate": "evidence coverage",
+    "violation": "remove all evidence kinds from P1-T01",
+    "expected_failure": "P1-T01 declares no evidence kind",
+    "observed_failure": "P1-T01 declares no evidence kind",
+    "caught": true,
+    "mutation_semantics": "clear tests[0].evidence"
+  },
+  {
+    "id": "C19",
+    "gate": "stateful registry",
+    "violation": "clear stateful marker on P1-R015",
+    "expected_failure": "requirement P1-R015 is stateful and must set stateful=true",
+    "observed_failure": "requirement P1-R015 is stateful and must set stateful=true",
+    "caught": true,
+    "mutation_semantics": "requirements[P1-R015].stateful := false"
+  },
+  {
+    "id": "C20",
+    "gate": "mutants",
+    "violation": "replace mutant source with malformed coordinate",
+    "expected_failure": "P1-M001 source must be safe file:line",
+    "observed_failure": "P1-M001 source must be safe file:line",
+    "caught": true,
+    "mutation_semantics": "mutants[0].source := not-a-file:0"
+  },
+  {
+    "id": "C21",
+    "gate": "mutants",
+    "violation": "invent mutant disposition",
+    "expected_failure": "P1-M001 declares unknown disposition",
+    "observed_failure": "P1-M001 declares unknown disposition \"invented\"; expected one of [\"predeclared\", \"killed\", \"equivalent\", \"duplicate\"]",
+    "caught": true,
+    "mutation_semantics": "mutants[0].disposition := invented"
+  },
+  {
+    "id": "C22",
+    "gate": "generated",
+    "violation": "duplicate generated seed category",
+    "expected_failure": "source/CST/formatting repeats seed category",
+    "observed_failure": "source/CST/formatting repeats seed category \"empty\"",
+    "caught": true,
+    "mutation_semantics": "duplicate generated[0].seed_categories[0]"
+  },
+  {
+    "id": "C23",
+    "gate": "generated",
+    "violation": "break generated count accounting",
+    "expected_failure": "source/CST/formatting: accepted 100000 + discards 204 != attempts 100205",
+    "observed_failure": "source/CST/formatting: accepted 100000 + discards 204 != attempts 100205 — the counts do not describe a single run",
+    "caught": true,
+    "mutation_semantics": "generated[0].attempts += 1"
+  },
+  {
+    "id": "C24",
+    "gate": "crash",
+    "violation": "remove before-transition crash declaration",
+    "expected_failure": "ilrp/before_intent_commit missing before/after injection declaration",
+    "observed_failure": "ilrp/before_intent_commit missing before/after injection declaration",
+    "caught": true,
+    "mutation_semantics": "crash_boundaries[0].before := false"
+  },
+  {
+    "id": "C25",
+    "gate": "reviews",
+    "violation": "duplicate reviewer identity",
+    "expected_failure": "duplicate reviewer id gpt-5.6-sol-blind-pass",
+    "observed_failure": "duplicate reviewer id gpt-5.6-sol-blind-pass",
+    "caught": true,
+    "mutation_semantics": "reviews[1].reviewer := reviews[0].reviewer"
   }
 ]

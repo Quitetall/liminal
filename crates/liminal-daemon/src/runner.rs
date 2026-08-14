@@ -1871,6 +1871,12 @@ pub struct RecoverOutcome {
     pub terminals: Vec<IntentState>,
     /// World digest for idempotence assertion.
     pub world_digest: String,
+    /// Canonical digest of the durable Basis observed at recovery.
+    pub basis_digest: String,
+    /// Independent duplicate-effect ledger digest: terminal intents, Basis,
+    /// and world digest are hashed together rather than relying on one world
+    /// projection to prove idempotence.
+    pub effect_digest: String,
 }
 
 /// Open the workspace (which runs ILRP recovery), then collect all intent
@@ -1897,10 +1903,32 @@ pub fn recover(root: &Utf8Path) -> anyhow::Result<RecoverOutcome> {
 
     let world_digest =
         crate::digest::world_digest(root, store).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let basis = ws
+        .basis(BasisPerspective::DurableOnly)
+        .map_err(|e| anyhow::anyhow!("basis capture during recovery failed: {e}"))?;
+    // TransactionId is an allocation identity, not Basis content; it changes
+    // on every open. Exclude it so duplicate recovery compares semantic Basis
+    // components and perspective rather than a fresh UUID.
+    let basis_bytes = serde_json::to_vec(&(&basis.perspective, &basis.components))?;
+    let basis_digest = blake3::hash(&basis_bytes).to_hex().to_string();
+    let terminals_bytes = serde_json::to_vec(&terminals)?;
+    let effect_digest = blake3::hash(
+        [
+            terminals_bytes.as_slice(),
+            basis_bytes.as_slice(),
+            world_digest.as_bytes(),
+        ]
+        .concat()
+        .as_slice(),
+    )
+    .to_hex()
+    .to_string();
 
     Ok(RecoverOutcome {
         terminals,
         world_digest,
+        basis_digest,
+        effect_digest,
     })
 }
 
