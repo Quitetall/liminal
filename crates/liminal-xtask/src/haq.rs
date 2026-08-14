@@ -955,15 +955,29 @@ fn verify_review_resolution(
         line <= source.lines().count().max(1),
         "{who}: resolution coordinate line {line} is outside {coordinate_file}"
     );
+    verify_resolution_coordinate_changed(
+        root,
+        &fixed_base.commit,
+        &resolution.commit,
+        who,
+        coordinate_file,
+        line,
+    )?;
+    Ok(())
+}
+
+fn verify_resolution_coordinate_changed(
+    root: &Utf8Path,
+    fixed_commit: &str,
+    resolution_commit: &str,
+    who: &str,
+    coordinate_file: &str,
+    line: usize,
+) -> Result<()> {
+    let range = format!("{fixed_commit}..{resolution_commit}");
     let changed = git_text(
         root,
-        &[
-            "diff",
-            "--name-only",
-            &format!("{}..{}", fixed_base.commit, resolution.commit),
-            "--",
-            coordinate_file,
-        ],
+        &["diff", "--name-only", &range, "--", coordinate_file],
     )?;
     anyhow::ensure!(
         changed.lines().any(|path| path == coordinate_file),
@@ -971,13 +985,7 @@ fn verify_review_resolution(
     );
     let diff = git_text(
         root,
-        &[
-            "diff",
-            "--unified=0",
-            &format!("{}..{}", fixed_base.commit, resolution.commit),
-            "--",
-            coordinate_file,
-        ],
+        &["diff", "--unified=0", &range, "--", coordinate_file],
     )?;
     anyhow::ensure!(
         diff_contains_added_line(&diff, line),
@@ -1080,7 +1088,7 @@ fn safe_repo_path(root: &Utf8Path, value: &str, who: &str) -> Result<Utf8PathBuf
 fn is_locked_acceptance_path(value: &str) -> bool {
     let components = value
         .split(['/', '\\'])
-        .map(|component| component.to_ascii_lowercase())
+        .map(str::to_ascii_lowercase)
         .collect::<Vec<_>>();
     components.iter().any(|component| component == "heldout")
         || components
