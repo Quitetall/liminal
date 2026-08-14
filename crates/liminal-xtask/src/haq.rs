@@ -834,7 +834,7 @@ fn verify_review_attempts(
         );
         let target_lower = target_file.to_ascii_lowercase();
         anyhow::ensure!(
-            !target_lower.contains("heldout") && !target_lower.contains("conformance/corpora"),
+            !is_locked_acceptance_path(&target_lower),
             "{who}: attempt {:?} target may not name locked acceptance corpus paths",
             attempt.id
         );
@@ -943,6 +943,10 @@ fn verify_review_resolution(
             && !coordinate_file.split('/').any(|part| part == ".."),
         "{who}: resolution coordinate path must stay inside repository"
     );
+    anyhow::ensure!(
+        !is_locked_acceptance_path(coordinate_file),
+        "{who}: resolution coordinate may not name locked acceptance corpus"
+    );
     let source = git_text(
         root,
         &["show", &format!("{}:{coordinate_file}", resolution.commit)],
@@ -964,6 +968,20 @@ fn verify_review_resolution(
     anyhow::ensure!(
         changed.lines().any(|path| path == coordinate_file),
         "{who}: resolution commit did not change coordinate file {coordinate_file}"
+    );
+    let diff = git_text(
+        root,
+        &[
+            "diff",
+            "--unified=0",
+            &format!("{}..{}", fixed_base.commit, resolution.commit),
+            "--",
+            coordinate_file,
+        ],
+    )?;
+    anyhow::ensure!(
+        diff_contains_added_line(&diff, line),
+        "{who}: resolution coordinate {coordinate_file}:{line} is outside changed hunks"
     );
     Ok(())
 }
@@ -1042,6 +1060,10 @@ fn safe_repo_path(root: &Utf8Path, value: &str, who: &str) -> Result<Utf8PathBuf
                 .any(|part| part == camino::Utf8Component::ParentDir),
         "{who} resolution evidence path {value:?} escapes repository"
     );
+    anyhow::ensure!(
+        !is_locked_acceptance_path(value),
+        "{who} resolution evidence path {value:?} names locked acceptance corpus"
+    );
     let path = root.join(candidate);
     let canonical_root =
         fs::canonicalize(root.as_std_path()).context("canonicalize repository root")?;
@@ -1053,6 +1075,41 @@ fn safe_repo_path(root: &Utf8Path, value: &str, who: &str) -> Result<Utf8PathBuf
     );
     Utf8PathBuf::from_path_buf(canonical_path)
         .map_err(|_| anyhow::anyhow!("{path}: resolution evidence path is not UTF-8"))
+}
+
+fn is_locked_acceptance_path(value: &str) -> bool {
+    let components = value
+        .split(['/', '\\'])
+        .map(|component| component.to_ascii_lowercase())
+        .collect::<Vec<_>>();
+    components.iter().any(|component| component == "heldout")
+        || components
+            .windows(2)
+            .any(|pair| pair == ["conformance", "corpora"])
+}
+
+fn diff_contains_added_line(diff: &str, target_line: usize) -> bool {
+    diff.lines()
+        .filter(|line| line.starts_with("@@ "))
+        .any(|header| {
+            let Some(range) = header
+                .split_whitespace()
+                .find(|token| token.starts_with('+'))
+                .and_then(|token| token.strip_prefix('+'))
+            else {
+                return false;
+            };
+            let (start, count) = range
+                .split_once(',')
+                .map_or((range, "1"), |(start, count)| (start, count));
+            let Ok(start) = start.parse::<usize>() else {
+                return false;
+            };
+            let Ok(count) = count.parse::<usize>() else {
+                return false;
+            };
+            count > 0 && target_line >= start && target_line.saturating_sub(start) < count
+        })
 }
 
 /// ADR-0020 §6's independence, checked rather than assumed (M17.5 F-27 / P1-A07).
@@ -4900,6 +4957,19 @@ mod tests {
         );
     }
 
+    #[test]
+    fn kill_concentration_accepts_exactly_twenty_five_percent() {
+        let mut packet = packet_from_repo();
+        packet.mutants.truncate(4);
+        let witness = packet.tests[0].id.clone();
+        for mutant in &mut packet.mutants {
+            mutant.killing_tests.clear();
+        }
+        packet.mutants[0].killing_tests = vec![witness];
+        verify_kill_concentration(&packet)
+            .expect("the 25% ceiling is inclusive; 1 of 4 mutants must be accepted");
+    }
+
     // ── M17.5 pass-2 #11/#12/#13: the fabricated-inventory cluster ──────────
     // An independent reviewer built packets whose rows named nothing real and
     // watched the verifier accept them. One canary per hole.
@@ -6017,6 +6087,25 @@ mod tests {
             err.to_string().contains("record is missing"),
             "a plain relative path must reach the read, not be refused as an escape: {err}"
         );
+    }
+
+    #[test]
+    fn resolution_coordinates_must_land_on_added_diff_lines() {
+        let diff = "@@ -10,2 +10,3 @@\n-old\n+new\n+anchor\n";
+        assert!(diff_contains_added_line(diff, 10));
+        assert!(diff_contains_added_line(diff, 11));
+        assert!(diff_contains_added_line(diff, 12));
+        assert!(!diff_contains_added_line(diff, 9));
+        assert!(!diff_contains_added_line(diff, 13));
+        assert!(!diff_contains_added_line("@@ -3,1 +3,0 @@\n-old\n", 3));
+    }
+
+    #[test]
+    fn locked_acceptance_paths_are_rejected_by_component() {
+        assert!(is_locked_acceptance_path("conformance/corpora/dev/input"));
+        assert!(is_locked_acceptance_path("ConFoRmAnCe\\CoRpOrA\\heldout"));
+        assert!(is_locked_acceptance_path("fixtures/heldout/input"));
+        assert!(!is_locked_acceptance_path("conformance/fixtures/input"));
     }
 
     /// Kills the `1b if !claims_kills` guard -> `true`: a 1b packet that DOES

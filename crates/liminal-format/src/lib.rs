@@ -319,10 +319,49 @@ fn is_compact_id(id: &str) -> bool {
 /// or CR-containing literals would be split, dropped, or normalized by the
 /// compact parser, so they must use explicit emission.
 fn is_compact_literal(value: &str) -> bool {
-    !value.trim().is_empty()
-        && !value.contains('\r')
-        && !value.ends_with('\n')
-        && value.lines().all(|line| !line.trim().is_empty())
+    if value.trim().is_empty()
+        || value.contains('\r')
+        || value.ends_with('\n')
+        || value.lines().any(|line| line.trim().is_empty())
+    {
+        return false;
+    }
+
+    // The compact parser has a second projection layer beyond paragraph
+    // splitting: durable markers, headings, fences, quotes, and lists all
+    // change the resulting HIR. A literal carrying any of those spellings
+    // must use explicit emission or the formatter silently changes meaning.
+    let blocks = paragraph::parse(value);
+    if blocks.len() != 1 || blocks[0].id.is_some() || blocks[0].text != value {
+        return false;
+    }
+    let lines = value.lines().collect::<Vec<_>>();
+    let first = lines[0];
+    let first_trimmed = first.trim_start();
+    let heading = first_trimmed.chars().take_while(|ch| *ch == '#').count();
+    let heading_end = first_trimmed
+        .char_indices()
+        .nth(heading)
+        .map_or(first_trimmed.len(), |(index, _)| index);
+    if (heading > 0
+        && first_trimmed
+            .get(heading_end..)
+            .is_some_and(|rest| rest.starts_with(' ')))
+        || first.starts_with("```")
+        || lines.iter().all(|line| line.trim_start().starts_with('>'))
+        || lines
+            .iter()
+            .all(|line| line.trim_start().starts_with("- ") || line.trim_start().starts_with("* "))
+        || (lines.iter().all(|line| {
+            line.trim_start()
+                .chars()
+                .next()
+                .is_some_and(|ch| ch.is_ascii_digit())
+        }) && lines.iter().all(|line| line.contains(". ")))
+    {
+        return false;
+    }
+    true
 }
 
 fn emit_item(
@@ -842,7 +881,19 @@ mod tests {
     #[test]
     fn compact_surface_is_refused_for_literals_that_do_not_round_trip() {
         let formatter = MarkdownFormatter::default();
-        for value in ["", "  ", "a\n\nb", "a\n", "a\r\nb"] {
+        for value in [
+            "",
+            "  ",
+            "a\n\nb",
+            "a\n",
+            "a\r\nb",
+            "value {#forged}",
+            "# heading",
+            "```rust\nbody",
+            "> quoted",
+            "- item",
+            "1. item",
+        ] {
             let source = format!(
                 "#!liminal-explicit-v1\nnode paragraph {{\n  literal {};\n}}\n",
                 json_string(value)
