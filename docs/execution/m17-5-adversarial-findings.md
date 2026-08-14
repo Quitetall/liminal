@@ -2049,3 +2049,37 @@ provenance/campaign/oracle/residual-risk and M17.3 conjunct (A07); generated
 case category binding (A08); mutant `source` schema changing from requirement
 ID to exact file:line plus a separate requirement link (A09); and the packet
 schema/evidence contract for oracle independence (A10).
+
+## Post-mechanical rerun — 2026-08-14
+
+Base `c315c6f7305c7b1be555e47fa3fe9de038320970`, tree
+`6704a5f01b62c93138b0d09f4107efdd8125f4e7`, clean. The runner recorded two
+isolated passes, 24 attempts total, and made no qualification claim. Pass 1
+(`codex:gpt-5.6-sol`) recorded six independently reproduced verified findings;
+Pass 2 (`mimo-direct:mimo-v2.5-pro`, Xiaomi Token Plan) recorded twelve
+attempts, zero findings, and passed.
+
+Mechanical closures in this rerun's predecessor were exercised again:
+
+- Compact emission now refuses terminal durable-marker literals and every
+  compact heading/fence/quote/list projection; formatter regression coverage
+  proves explicit fallback preserves HIR.
+- Resolution coordinates must land on an added line in a zero-context diff;
+  locked acceptance corpus components are rejected for targets, coordinates,
+  and evidence paths.
+- The 25% kill-concentration boundary has an accepting-side test.
+- Blind review negative coverage now pins locked-target rejection, exact status
+  tokens, and strict-descendant resolution ancestry.
+
+Remaining T1 decisions from this rerun, not silently changed: restrict the
+qualification child commit to packet-only metadata changes (P1-A01); replace
+self-declared sanitizer labels with verifiable instrumentation/build/runtime
+evidence (P1-A02); bind corpus manifests to raw tracer output, traced process,
+and completeness (P1-A03); add independent duplicate-effect and mixed-Basis
+crash evidence (P1-A04); represent and gate each generated metamorphic relation
+and independent oracle (P1-A05); and close the canary registry over every M17
+Level-3 conjunct with exact bidirectional mappings (P1-A06). Existing T1 items
+from the prior rerun remain open: mutation infrastructure-failure semantics,
+Pass-1 attack-class coverage, mutant concurrence identity binding, generated
+category policy, mutant source-coordinate schema, and the oracle-independence
+packet contract.
