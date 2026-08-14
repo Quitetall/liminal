@@ -2019,3 +2019,33 @@ One of pass 1's nine (A01, recorded as DG21.1) and two of pass 2's four remain
 open. A08 is downgraded to "the verifier ignores the scenarios block", which is
 fixed here; the rest need the crash lane to record more than a verdict, which is
 why they were not folded into Stage 3.
+
+## Fresh blind rerun — 2026-08-14
+
+Base `984fdc64a4ec666f5502ce884f1b1dd9f3bb2704`, tree
+`d03e92444c8b81f5c442189e90556c217523039c`, clean. The runner recorded two
+isolated passes, 24 attempts total, and made no qualification claim. Pass 1
+(`codex:gpt-5.6-sol`) recorded ten independently reproduced verified findings;
+Pass 2 (`mimo-direct:mimo-v2.5-pro`, Xiaomi Token Plan) recorded twelve
+attempts, zero findings, and passed.
+
+Mechanical closures in this follow-up:
+
+- A01: runnable-test scanning now scopes `#[cfg]`/ignore exclusion to the
+  immediately following test and resets state; regression test added.
+- A04: false-positive attempts now require independent reproduction evidence;
+  regression test added.
+- A06: fuzz evidence now records seed count and a BLAKE3-bound manifest of
+  sorted committed seed names plus SHA-256 input digests; all seven current
+  corpora bind and exceed the 16-seed floor.
+- Earlier F01: crash evidence now binds source commit, source tree, and
+  lockfile digest to packet provenance or the current review base.
+
+Remaining T1 decisions, not silently changed here: semantic mutation-failure
+versus infrastructure-failure classification (A02); mandatory Pass-1 attack
+class coverage (A03); resolution evidence binding to the cited commit and
+changed hunk (A05); expanding the frozen 16-canary inventory to every
+provenance/campaign/oracle/residual-risk and M17.3 conjunct (A07); generated
+case category binding (A08); mutant `source` schema changing from requirement
+ID to exact file:line plus a separate requirement link (A09); and the packet
+schema/evidence contract for oracle independence (A10).

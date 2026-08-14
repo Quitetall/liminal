@@ -811,6 +811,12 @@ fn verify_review_attempts(
         if !seen.insert(attempt.id.as_str()) {
             anyhow::bail!("{who}: attempt id {:?} appears twice", attempt.id);
         }
+        if attempt.classification == "false_positive" && !attempt.independently_reproduced {
+            anyhow::bail!(
+                "{who}: false-positive attempt {:?} lacks independent reproduction evidence",
+                attempt.id
+            );
+        }
         let (target_file, target_coordinate) =
             attempt.target.split_once(':').with_context(|| {
                 format!(
@@ -1951,6 +1957,9 @@ fn collect_runnable_test_functions(text: &str, names: &mut BTreeMap<String, usiz
             || (trimmed.starts_with("#[cfg_attr(") && trimmed.contains("ignore"))
             || trimmed.starts_with("#[cfg(")
         {
+            // Keep an exclusion only across the attribute list immediately
+            // preceding one test. A module-level cfg or one ignored function
+            // must not poison every later runnable test in the file.
             excluded = true;
         } else if test_pending {
             let declaration = trimmed.strip_prefix("pub ").unwrap_or(trimmed);
@@ -1965,7 +1974,12 @@ fn collect_runnable_test_functions(text: &str, names: &mut BTreeMap<String, usiz
                     *names.entry(name.trim().to_owned()).or_default() += 1;
                 }
                 test_pending = false;
+                excluded = false;
             }
+        } else if !test_pending {
+            // An attribute that did not lead directly to a test belongs to a
+            // module/helper declaration, not to the next test function.
+            excluded = false;
         }
     }
 }
@@ -2004,8 +2018,61 @@ fn verify_fuzz_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         }
     }
     verify_fuzz_rows(&recorded, &present)?;
+    verify_fuzz_seed_manifests(root, &recorded)?;
     verify_fuzz_logs(root, &recorded)?;
     verify_fuzz_budget(&packet.generated, &recorded)
+}
+
+fn verify_fuzz_seed_manifests(root: &Utf8Path, recorded: &[FuzzEvidence]) -> Result<()> {
+    for row in recorded {
+        let seed_dir = root.join("fuzz/corpus").join(&row.target);
+        let (count, digest) = seed_manifest_digest(&seed_dir)?;
+        anyhow::ensure!(
+            count >= 16,
+            "{}: committed seed set has {count} inputs; D23.2 requires at least 16",
+            row.target
+        );
+        anyhow::ensure!(
+            row.seed_count == count,
+            "{}: evidence records {} seeds but committed corpus has {count}",
+            row.target,
+            row.seed_count
+        );
+        require_eq(
+            &format!("{} seed_manifest_blake3", row.target),
+            &row.seed_manifest_blake3,
+            &digest,
+        )?;
+    }
+    Ok(())
+}
+
+fn seed_manifest_digest(seed_dir: &Utf8Path) -> Result<(u64, String)> {
+    let mut files = fs::read_dir(seed_dir)
+        .with_context(|| format!("{seed_dir}: committed fuzz seed directory is required"))?
+        .flatten()
+        .filter_map(|entry| Utf8PathBuf::from_path_buf(entry.path()).ok())
+        .filter(|path| path.is_file())
+        .collect::<Vec<_>>();
+    files.sort();
+    let mut hasher = blake3::Hasher::new();
+    for path in &files {
+        let name = path
+            .file_name()
+            .with_context(|| format!("{path}: seed has no file name"))?;
+        let bytes = fs::read(path).with_context(|| format!("read fuzz seed {path}"))?;
+        let mut seed_hash = Sha256::new();
+        seed_hash.update(bytes);
+        let seed_hash = format!("{:x}", seed_hash.finalize());
+        hasher.update(name.as_bytes());
+        hasher.update(&[0]);
+        hasher.update(seed_hash.as_bytes());
+        hasher.update(&[0]);
+    }
+    Ok((
+        u64::try_from(files.len()).context("fuzz seed count exceeds u64")?,
+        hasher.finalize().to_hex().to_string(),
+    ))
 }
 
 fn verify_fuzz_rows(recorded: &[FuzzEvidence], present: &BTreeSet<String>) -> Result<()> {
@@ -3446,6 +3513,15 @@ struct FuzzEvidence {
     artifacts: u64,
     /// Fixed so the campaign is reproducible (ADR-0020 §1).
     seed: u64,
+    /// Number of committed, non-locked seed inputs supplied to this target.
+    /// A scalar libFuzzer seed does not prove D23.2's declared seed set.
+    #[serde(default)]
+    seed_count: u64,
+    /// BLAKE3 over sorted seed names and per-input SHA-256 digests, binding
+    /// the campaign row to the exact committed input set rather than only to
+    /// one RNG seed.
+    #[serde(default)]
+    seed_manifest_blake3: String,
     /// Sanitizer the campaign was built with (ADR-0020 §4 requires a
     /// sanitizer-enabled campaign; M17.5 F-27 / P1-A09).
     ///
@@ -4929,6 +5005,19 @@ mod tests {
     }
 
     #[test]
+    fn runnable_test_scanner_does_not_let_one_cfg_poison_later_tests() {
+        let mut names = BTreeMap::new();
+        collect_runnable_test_functions(
+            "#[cfg(any())]\nfn compiled_out() {}\n#[test]\nfn live() {}\n#[cfg(unix)]\nfn helper() {}\n#[test]\nfn later_live() {}",
+            &mut names,
+        );
+        assert_eq!(
+            names,
+            BTreeMap::from([("later_live".to_owned(), 1), ("live".to_owned(), 1)])
+        );
+    }
+
+    #[test]
     fn inventory_status_layer_still_rejects_completed_rows() {
         let mut packet = packet_from_repo();
         mark_complete(&mut packet);
@@ -5370,6 +5459,19 @@ mod tests {
     }
 
     #[test]
+    fn review_record_requires_reproduction_for_false_positives() {
+        let mut record = review_record(1, "openai", "codex");
+        record.attempts[0].classification = "false_positive".to_owned();
+        record.attempts[0].independently_reproduced = false;
+        let err = verify_review_record(&repo_root(), &review_row(), &record)
+            .expect_err("false positives must retain reproduction evidence");
+        assert!(err.to_string().contains("false-positive"), "{err}");
+        record.attempts[0].independently_reproduced = true;
+        verify_review_record(&repo_root(), &review_row(), &record)
+            .expect("a reproduced false positive is admissible");
+    }
+
+    #[test]
     fn review_record_rejects_an_unbound_fixed_tree() {
         let mut record = review_record(1, "openai", "codex");
         record.fixed_base.tree = "not-a-digest".to_owned();
@@ -5793,6 +5895,8 @@ mod tests {
             execs: 1,
             artifacts: 0,
             seed: 1,
+            seed_count: 16,
+            seed_manifest_blake3: "ab".repeat(32),
             sanitizer: "address".to_owned(),
             log: format!("target/haqp/fuzz-{target}.log"),
             log_blake3: "ab".repeat(32),
@@ -5881,6 +5985,16 @@ mod tests {
         let mut garbage = good;
         garbage[0].log_blake3 = " ".repeat(64);
         verify_fuzz_rows(&garbage, &present).expect_err("64 spaces is not a digest");
+    }
+
+    #[test]
+    fn committed_fuzz_rows_bind_the_declared_seed_sets() {
+        let root = repo_root();
+        let bytes = fs::read(root.join("conformance/haqp/evidence/fuzz.json"))
+            .expect("committed fuzz evidence");
+        let rows: Vec<FuzzEvidence> = serde_json::from_slice(&bytes).expect("parse fuzz evidence");
+        verify_fuzz_seed_manifests(&root, &rows)
+            .expect("fuzz evidence must bind every committed seed corpus");
     }
 
     // ── M17.5 Stage 3, tier 1: the verifier's own survivors ────────────────
@@ -6430,6 +6544,8 @@ mod tests {
                 execs: 1,
                 artifacts: 0,
                 seed: 1,
+                seed_count: 16,
+                seed_manifest_blake3: "a".repeat(64),
                 sanitizer: "address".to_owned(),
                 log: format!("conformance/haqp/evidence/logs/{target}.log"),
                 log_blake3: "a".repeat(64),
