@@ -88,8 +88,8 @@ for t in "${TARGETS[@]}"; do
   seed_manifest="target/haqp/seed-manifest-$t.txt"
   : > "$seed_manifest"
   seed_count=0
-  for seed in "fuzz/corpus/$t"/*; do
-    [ -f "$seed" ] || continue
+  mapfile -t seed_paths < <(find "fuzz/corpus/$t" -maxdepth 1 -type f -print | LC_ALL=C sort)
+  for seed in "${seed_paths[@]}"; do
     printf '%s %s\n' "${seed#fuzz/corpus/$t/}" "$(sha256sum "$seed" | cut -d' ' -f1)" >> "$seed_manifest"
     seed_count=$((seed_count + 1))
   done
