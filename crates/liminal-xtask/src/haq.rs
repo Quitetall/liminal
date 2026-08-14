@@ -100,6 +100,38 @@ fn verify_crash_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let recorded: CrashEvidence =
         serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))?;
 
+    let git = |args: &[&str]| -> Result<String> {
+        let out = Command::new("git").current_dir(root).args(args).output()?;
+        anyhow::ensure!(out.status.success(), "git {args:?} failed");
+        Ok(String::from_utf8(out.stdout)?.trim().to_owned())
+    };
+    let (expected_commit, expected_tree) = if let Some(provenance) = &packet.provenance {
+        (
+            provenance.fixed_commit.clone(),
+            provenance.fixed_tree.clone(),
+        )
+    } else {
+        let commit = git(&["rev-parse", "HEAD"])?;
+        let tree = git(&["rev-parse", &format!("{commit}^{{tree}}")])?;
+        (commit, tree)
+    };
+    require_eq(
+        "crash evidence source_commit",
+        &recorded.source_commit,
+        &expected_commit,
+    )?;
+    require_eq(
+        "crash evidence source_tree",
+        &recorded.source_tree,
+        &expected_tree,
+    )?;
+    let lockfile_blake3 = hex_digest(&fs::read(root.join("Cargo.lock"))?);
+    require_eq(
+        "crash evidence lockfile_blake3",
+        &recorded.lockfile_blake3,
+        &lockfile_blake3,
+    )?;
+
     let declared = packet
         .crash_boundaries
         .iter()
@@ -2795,7 +2827,7 @@ const GENERATED_FAMILIES: [&str; 5] = MUTANT_FAMILIES;
 /// lets a doctored packet remove a law and replace it with an invented row
 /// while preserving the same cardinality, and a packet-controlled `critical`
 /// bit can demote evidence obligations.
-const AUTHORITATIVE_REQUIREMENTS: [(&str, &str, &str, bool, bool); 36] = [
+const AUTHORITATIVE_REQUIREMENTS: [(&str, &str, &str, bool, bool); 55] = [
     ("P1-R001", "law", "docs/execution/M18.md:D18.1", true, false),
     ("P1-R002", "law", "docs/execution/M18.md:D18.2", true, false),
     ("P1-R003", "law", "docs/execution/M18.md:D18.3", true, false),
@@ -2862,6 +2894,61 @@ const AUTHORITATIVE_REQUIREMENTS: [(&str, &str, &str, bool, bool); 36] = [
     ("P1-R034", "law", "docs/execution/M22.md:D22.5", true, false),
     ("P1-R035", "law", "docs/execution/M22.md:D22.6", true, false),
     ("P1-R036", "law", "docs/execution/M22.md:D22.7", true, false),
+    ("P1-R037", "law", "docs/execution/M19.md:D19.0", true, false),
+    ("P1-R038", "law", "docs/execution/M19.md:D19.5", true, false),
+    ("P1-R039", "law", "docs/execution/M19.md:D19.6", true, false),
+    ("P1-R040", "law", "docs/execution/M19.md:D19.7", true, false),
+    ("P1-R041", "law", "docs/execution/M19.md:D19.8", true, false),
+    ("P1-R042", "law", "docs/execution/M20.md:D20.0", true, false),
+    (
+        "P1-R043",
+        "gate",
+        "docs/execution/M20.md:## Exit gate",
+        true,
+        false,
+    ),
+    (
+        "P1-R044",
+        "gate",
+        "docs/execution/M21.md:## Exit gate",
+        true,
+        false,
+    ),
+    (
+        "P1-R045",
+        "gate",
+        "docs/execution/M22.md:## Exit gate",
+        true,
+        false,
+    ),
+    ("P1-R046", "law", "docs/execution/M23.md:D23.2", true, false),
+    ("P1-R047", "law", "docs/execution/M23.md:D23.3", true, false),
+    ("P1-R048", "law", "docs/execution/M23.md:D23.4", true, false),
+    ("P1-R049", "law", "docs/execution/M23.md:D23.5", true, false),
+    (
+        "P1-R050",
+        "gate",
+        "docs/execution/M23.md:## Exit gate",
+        true,
+        false,
+    ),
+    ("P1-R051", "law", "docs/execution/M24.md:D24.2", true, false),
+    ("P1-R052", "law", "docs/execution/M24.md:D24.3", true, false),
+    ("P1-R053", "law", "docs/execution/M24.md:D24.4", true, false),
+    (
+        "P1-R054",
+        "gate",
+        "docs/execution/M24.md:D24.5",
+        true,
+        false,
+    ),
+    (
+        "P1-R055",
+        "gate",
+        "docs/execution/M24.md:## Exit gate",
+        true,
+        false,
+    ),
 ];
 
 const REQUIREMENT_COUNT: usize = AUTHORITATIVE_REQUIREMENTS.len();
@@ -3677,6 +3764,9 @@ struct CrashScenario {
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 struct CrashEvidence {
+    source_commit: String,
+    source_tree: String,
+    lockfile_blake3: String,
     registered: usize,
     exercised: usize,
     /// Per-scenario rows; carried so `deny_unknown_fields` cannot be defeated

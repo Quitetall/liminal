@@ -17,10 +17,16 @@
 //! gap to note: an unexercised boundary is indistinguishable from a dead one.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::process::Command;
 
 use liminal_conformance::harness::{ToyRun, runnable_crash_scenarios};
 
 fn main() -> anyhow::Result<()> {
+    let source_commit = git_rev_parse("HEAD")?;
+    let source_tree = git_rev_parse("HEAD^{tree}")?;
+    let lockfile_blake3 = blake3::hash(&std::fs::read("Cargo.lock")?)
+        .to_hex()
+        .to_string();
     let registered: BTreeSet<String> = liminal_jurisdiction::CrashPoint::all()
         .iter()
         .map(|point| point.name().to_owned())
@@ -105,6 +111,9 @@ fn main() -> anyhow::Result<()> {
         .collect();
 
     let evidence = serde_json::json!({
+        "source_commit": source_commit,
+        "source_tree": source_tree,
+        "lockfile_blake3": lockfile_blake3,
         "registered": registered.len(),
         "exercised": exercised_names.len(),
         "scenarios": per_scenario,
@@ -124,4 +133,10 @@ fn main() -> anyhow::Result<()> {
         registered.len()
     );
     Ok(())
+}
+
+fn git_rev_parse(spec: &str) -> anyhow::Result<String> {
+    let output = Command::new("git").args(["rev-parse", spec]).output()?;
+    anyhow::ensure!(output.status.success(), "git rev-parse {spec:?} failed");
+    Ok(String::from_utf8(output.stdout)?.trim().to_owned())
 }

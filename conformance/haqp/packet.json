@@ -224,6 +224,120 @@
    "kind": "law",
    "source": "docs/execution/M22.md:D22.7",
    "critical": true
+  },
+  {
+   "id": "P1-R037",
+   "kind": "law",
+   "source": "docs/execution/M19.md:D19.0",
+   "critical": true
+  },
+  {
+   "id": "P1-R038",
+   "kind": "law",
+   "source": "docs/execution/M19.md:D19.5",
+   "critical": true
+  },
+  {
+   "id": "P1-R039",
+   "kind": "law",
+   "source": "docs/execution/M19.md:D19.6",
+   "critical": true
+  },
+  {
+   "id": "P1-R040",
+   "kind": "law",
+   "source": "docs/execution/M19.md:D19.7",
+   "critical": true
+  },
+  {
+   "id": "P1-R041",
+   "kind": "law",
+   "source": "docs/execution/M19.md:D19.8",
+   "critical": true
+  },
+  {
+   "id": "P1-R042",
+   "kind": "law",
+   "source": "docs/execution/M20.md:D20.0",
+   "critical": true
+  },
+  {
+   "id": "P1-R043",
+   "kind": "gate",
+   "source": "docs/execution/M20.md:## Exit gate",
+   "critical": true
+  },
+  {
+   "id": "P1-R044",
+   "kind": "gate",
+   "source": "docs/execution/M21.md:## Exit gate",
+   "critical": true
+  },
+  {
+   "id": "P1-R045",
+   "kind": "gate",
+   "source": "docs/execution/M22.md:## Exit gate",
+   "critical": true
+  },
+  {
+   "id": "P1-R046",
+   "kind": "law",
+   "source": "docs/execution/M23.md:D23.2",
+   "critical": true
+  },
+  {
+   "id": "P1-R047",
+   "kind": "law",
+   "source": "docs/execution/M23.md:D23.3",
+   "critical": true
+  },
+  {
+   "id": "P1-R048",
+   "kind": "law",
+   "source": "docs/execution/M23.md:D23.4",
+   "critical": true
+  },
+  {
+   "id": "P1-R049",
+   "kind": "law",
+   "source": "docs/execution/M23.md:D23.5",
+   "critical": true
+  },
+  {
+   "id": "P1-R050",
+   "kind": "gate",
+   "source": "docs/execution/M23.md:## Exit gate",
+   "critical": true
+  },
+  {
+   "id": "P1-R051",
+   "kind": "law",
+   "source": "docs/execution/M24.md:D24.2",
+   "critical": true
+  },
+  {
+   "id": "P1-R052",
+   "kind": "law",
+   "source": "docs/execution/M24.md:D24.3",
+   "critical": true
+  },
+  {
+   "id": "P1-R053",
+   "kind": "law",
+   "source": "docs/execution/M24.md:D24.4",
+   "critical": true
+  },
+  {
+   "id": "P1-R054",
+   "kind": "gate",
+   "source": "docs/execution/M24.md:D24.5",
+   "critical": true
+  },
+  {
+   "id": "P1-R055",
+   "kind": "gate",
+   "source": "docs/execution/M24.md:## Exit gate",
+   "critical": true
   }
  ],
  "tests": [
@@ -261,6 +375,11 @@
     "P1-R008",
     "P1-R009",
     "P1-R010",
+    "P1-R037",
+    "P1-R038",
+    "P1-R039",
+    "P1-R040",
+    "P1-R041",
     "P1-R028",
     "P1-R029",
     "P1-R030",
@@ -288,7 +407,12 @@
    "name": "classes::malformed_source::fuzz_regressions_stay_fixed",
    "requirements": [
     "P1-R022",
-    "P1-R023"
+    "P1-R023",
+    "P1-R046",
+    "P1-R047",
+    "P1-R048",
+    "P1-R049",
+    "P1-R050"
    ],
    "evidence": [
     "positive"
@@ -302,7 +426,10 @@
     "P1-R014",
     "P1-R025",
     "P1-R033",
-    "P1-R036"
+    "P1-R036",
+    "P1-R042",
+    "P1-R043",
+    "P1-R045"
    ],
    "evidence": [
     "positive"
@@ -318,7 +445,8 @@
     "P1-R018",
     "P1-R019",
     "P1-R034",
-    "P1-R035"
+    "P1-R035",
+    "P1-R044"
    ],
    "evidence": [
     "positive"
@@ -330,7 +458,12 @@
    "requirements": [
     "P1-R020",
     "P1-R021",
-    "P1-R024"
+    "P1-R024",
+    "P1-R051",
+    "P1-R052",
+    "P1-R053",
+    "P1-R054",
+    "P1-R055"
    ],
    "evidence": [
     "positive"
@@ -408,7 +541,12 @@
     "P1-R009",
     "P1-R010",
     "P1-R011",
-    "P1-R012"
+    "P1-R012",
+    "P1-R037",
+    "P1-R038",
+    "P1-R039",
+    "P1-R040",
+    "P1-R041"
    ],
    "evidence": [
     "negative"
@@ -422,7 +560,12 @@
     "P1-R009",
     "P1-R010",
     "P1-R011",
-    "P1-R012"
+    "P1-R012",
+    "P1-R037",
+    "P1-R038",
+    "P1-R039",
+    "P1-R040",
+    "P1-R041"
    ],
    "evidence": [
     "malformed"
@@ -436,7 +579,12 @@
     "P1-R009",
     "P1-R010",
     "P1-R011",
-    "P1-R012"
+    "P1-R012",
+    "P1-R037",
+    "P1-R038",
+    "P1-R039",
+    "P1-R040",
+    "P1-R041"
    ],
    "evidence": [
     "basis"
@@ -450,7 +598,12 @@
     "P1-R009",
     "P1-R010",
     "P1-R011",
-    "P1-R012"
+    "P1-R012",
+    "P1-R037",
+    "P1-R038",
+    "P1-R039",
+    "P1-R040",
+    "P1-R041"
    ],
    "evidence": [
     "replay"
@@ -466,7 +619,9 @@
     "P1-R016",
     "P1-R025",
     "P1-R026",
-    "P1-R027"
+    "P1-R027",
+    "P1-R042",
+    "P1-R043"
    ],
    "evidence": [
     "negative"
@@ -482,7 +637,9 @@
     "P1-R016",
     "P1-R025",
     "P1-R026",
-    "P1-R027"
+    "P1-R027",
+    "P1-R042",
+    "P1-R043"
    ],
    "evidence": [
     "malformed"
@@ -498,7 +655,9 @@
     "P1-R016",
     "P1-R025",
     "P1-R026",
-    "P1-R027"
+    "P1-R027",
+    "P1-R042",
+    "P1-R043"
    ],
    "evidence": [
     "basis"
@@ -514,7 +673,9 @@
     "P1-R016",
     "P1-R025",
     "P1-R026",
-    "P1-R027"
+    "P1-R027",
+    "P1-R042",
+    "P1-R043"
    ],
    "evidence": [
     "replay"
@@ -562,7 +723,8 @@
     "P1-R028",
     "P1-R029",
     "P1-R030",
-    "P1-R031"
+    "P1-R031",
+    "P1-R044"
    ],
    "evidence": [
     "negative"
@@ -578,7 +740,8 @@
     "P1-R028",
     "P1-R029",
     "P1-R030",
-    "P1-R031"
+    "P1-R031",
+    "P1-R044"
    ],
    "evidence": [
     "malformed"
@@ -594,7 +757,8 @@
     "P1-R028",
     "P1-R029",
     "P1-R030",
-    "P1-R031"
+    "P1-R031",
+    "P1-R044"
    ],
    "evidence": [
     "basis"
@@ -610,7 +774,8 @@
     "P1-R028",
     "P1-R029",
     "P1-R030",
-    "P1-R031"
+    "P1-R031",
+    "P1-R044"
    ],
    "evidence": [
     "replay"
@@ -626,7 +791,8 @@
     "P1-R033",
     "P1-R034",
     "P1-R035",
-    "P1-R036"
+    "P1-R036",
+    "P1-R045"
    ],
    "evidence": [
     "negative"
@@ -642,7 +808,8 @@
     "P1-R033",
     "P1-R034",
     "P1-R035",
-    "P1-R036"
+    "P1-R036",
+    "P1-R045"
    ],
    "evidence": [
     "malformed"
@@ -658,7 +825,8 @@
     "P1-R033",
     "P1-R034",
     "P1-R035",
-    "P1-R036"
+    "P1-R036",
+    "P1-R045"
    ],
    "evidence": [
     "basis"
@@ -674,7 +842,8 @@
     "P1-R033",
     "P1-R034",
     "P1-R035",
-    "P1-R036"
+    "P1-R036",
+    "P1-R045"
    ],
    "evidence": [
     "replay"
@@ -685,7 +854,12 @@
    "name": "milestones::m23::benchmark_gate_fails_on_regression_beyond_threshold",
    "requirements": [
     "P1-R022",
-    "P1-R023"
+    "P1-R023",
+    "P1-R046",
+    "P1-R047",
+    "P1-R048",
+    "P1-R049",
+    "P1-R050"
    ],
    "evidence": [
     "negative"
@@ -696,7 +870,12 @@
    "name": "milestones::m23::fuzz_corpus_replays_every_minimized_artifact_without_panic",
    "requirements": [
     "P1-R022",
-    "P1-R023"
+    "P1-R023",
+    "P1-R046",
+    "P1-R047",
+    "P1-R048",
+    "P1-R049",
+    "P1-R050"
    ],
    "evidence": [
     "malformed"
@@ -707,7 +886,12 @@
    "name": "milestones::m23::fuzz_regressions_record_the_basis_that_produced_them",
    "requirements": [
     "P1-R022",
-    "P1-R023"
+    "P1-R023",
+    "P1-R046",
+    "P1-R047",
+    "P1-R048",
+    "P1-R049",
+    "P1-R050"
    ],
    "evidence": [
     "basis"
@@ -718,7 +902,12 @@
    "name": "milestones::m23::fuzz_replay_is_deterministic_from_recorded_seeds",
    "requirements": [
     "P1-R022",
-    "P1-R023"
+    "P1-R023",
+    "P1-R046",
+    "P1-R047",
+    "P1-R048",
+    "P1-R049",
+    "P1-R050"
    ],
    "evidence": [
     "replay"
@@ -728,7 +917,12 @@
    "id": "P1-T35",
    "name": "milestones::m24::aggregate_gate_fails_when_any_phase1_gate_is_red",
    "requirements": [
-    "P1-R024"
+    "P1-R024",
+    "P1-R051",
+    "P1-R052",
+    "P1-R053",
+    "P1-R054",
+    "P1-R055"
    ],
    "evidence": [
     "negative"
@@ -738,7 +932,12 @@
    "id": "P1-T36",
    "name": "milestones::m24::aggregate_gate_rejects_incomplete_evidence",
    "requirements": [
-    "P1-R024"
+    "P1-R024",
+    "P1-R051",
+    "P1-R052",
+    "P1-R053",
+    "P1-R054",
+    "P1-R055"
    ],
    "evidence": [
     "malformed"
@@ -748,7 +947,12 @@
    "id": "P1-T37",
    "name": "milestones::m24::aggregate_gate_records_the_basis_of_every_input",
    "requirements": [
-    "P1-R024"
+    "P1-R024",
+    "P1-R051",
+    "P1-R052",
+    "P1-R053",
+    "P1-R054",
+    "P1-R055"
    ],
    "evidence": [
     "basis"
@@ -758,7 +962,12 @@
    "id": "P1-T38",
    "name": "milestones::m24::aggregate_gate_result_is_reproducible",
    "requirements": [
-    "P1-R024"
+    "P1-R024",
+    "P1-R051",
+    "P1-R052",
+    "P1-R053",
+    "P1-R054",
+    "P1-R055"
    ],
    "evidence": [
     "replay"

@@ -5,22 +5,22 @@
       "occurrences_exercised": 3,
       "recovery_pairs": [
         {
-          "first_recovery_digest": "3175ca4020bc5124d629a75397894d1930ffff5d2658fe7f87cc4dd81f7fa3f0",
+          "first_recovery_digest": "3f0202874ebffa1b35b24d45f0fde3443f6048d748a42ab3c52697bb2a424dc4",
           "occurrence": 1,
           "scenario": "promote_single_step",
-          "second_recovery_digest": "3175ca4020bc5124d629a75397894d1930ffff5d2658fe7f87cc4dd81f7fa3f0"
+          "second_recovery_digest": "3f0202874ebffa1b35b24d45f0fde3443f6048d748a42ab3c52697bb2a424dc4"
         },
         {
-          "first_recovery_digest": "6ed23c64539aaf16e7f7ead3642a246196dae07c0e01e5aafc3e34d3cdb6c1ee",
+          "first_recovery_digest": "92aaf5f41119f2250739c8ab5180d999234482adea9f257f2cd8b3e89699feff",
           "occurrence": 1,
           "scenario": "dag_accept",
-          "second_recovery_digest": "6ed23c64539aaf16e7f7ead3642a246196dae07c0e01e5aafc3e34d3cdb6c1ee"
+          "second_recovery_digest": "92aaf5f41119f2250739c8ab5180d999234482adea9f257f2cd8b3e89699feff"
         },
         {
-          "first_recovery_digest": "7dfdbe6017ff21d7814d07b455a8924882a5cb613827b780ff579f55a2530406",
+          "first_recovery_digest": "f74af7d847b0d7e52cd9e11538653863b4415a701d1a2eb4ed5e50e0f57df4a4",
           "occurrence": 2,
           "scenario": "dag_accept",
-          "second_recovery_digest": "7dfdbe6017ff21d7814d07b455a8924882a5cb613827b780ff579f55a2530406"
+          "second_recovery_digest": "f74af7d847b0d7e52cd9e11538653863b4415a701d1a2eb4ed5e50e0f57df4a4"
         }
       ],
       "result": "pass",
@@ -31,16 +31,16 @@
       "occurrences_exercised": 2,
       "recovery_pairs": [
         {
-          "first_recovery_digest": "427500a9587a959bfa77a0572886e5fbb6add02bc0a84819f6e932c260ea1217",
+          "first_recovery_digest": "08614ed6cf2a99f59c045251d6099dd612dc131ede2890934266a432e259ad9d",
           "occurrence": 1,
           "scenario": "promote_single_step",
-          "second_recovery_digest": "427500a9587a959bfa77a0572886e5fbb6add02bc0a84819f6e932c260ea1217"
+          "second_recovery_digest": "08614ed6cf2a99f59c045251d6099dd612dc131ede2890934266a432e259ad9d"
         },
         {
-          "first_recovery_digest": "030ab1a9c29b524244c76846367678b643f080d1bf6ae676aedaaf9179584223",
+          "first_recovery_digest": "4df1821b174bae947ae5fe26691b00af130bb556f3b3f25b6b27ff8281f5b016",
           "occurrence": 1,
           "scenario": "dag_accept",
-          "second_recovery_digest": "030ab1a9c29b524244c76846367678b643f080d1bf6ae676aedaaf9179584223"
+          "second_recovery_digest": "4df1821b174bae947ae5fe26691b00af130bb556f3b3f25b6b27ff8281f5b016"
         }
       ],
       "result": "pass",
@@ -51,16 +51,16 @@
       "occurrences_exercised": 2,
       "recovery_pairs": [
         {
-          "first_recovery_digest": "ee7d46e101f8b37c228b72b2fc818aed3113eb4fa9fc838b9b70a286b27216fe",
+          "first_recovery_digest": "0d8de96e4405ed517fe44d8790a9865880769bd3a8424fff57ee008aa7774339",
           "occurrence": 1,
           "scenario": "promote_single_step",
-          "second_recovery_digest": "ee7d46e101f8b37c228b72b2fc818aed3113eb4fa9fc838b9b70a286b27216fe"
+          "second_recovery_digest": "0d8de96e4405ed517fe44d8790a9865880769bd3a8424fff57ee008aa7774339"
         },
         {
-          "first_recovery_digest": "ace3593f6d8bf55f8a5d049d37ace5086ddb8b05cdb1107d8cc63de35acedbbd",
+          "first_recovery_digest": "d6d752e98c5296307f5a5eb56ead16a4b02765a1a11b478b30bc6123fd065181",
           "occurrence": 1,
           "scenario": "dag_accept",
-          "second_recovery_digest": "ace3593f6d8bf55f8a5d049d37ace5086ddb8b05cdb1107d8cc63de35acedbbd"
+          "second_recovery_digest": "d6d752e98c5296307f5a5eb56ead16a4b02765a1a11b478b30bc6123fd065181"
         }
       ],
       "result": "pass",
@@ -71,16 +71,16 @@
       "occurrences_exercised": 2,
       "recovery_pairs": [
         {
-          "first_recovery_digest": "3070787be5e5810ad50770bbcc42e681783c9d3b563adbc9930aa3b9bdf05ed1",
+          "first_recovery_digest": "95c46cfc6ad3f909e255fe1938d3acfe550d8c93f1f02012a2224ca4eb62b2e2",
           "occurrence": 1,
           "scenario": "promote_single_step",
-          "second_recovery_digest": "3070787be5e5810ad50770bbcc42e681783c9d3b563adbc9930aa3b9bdf05ed1"
+          "second_recovery_digest": "95c46cfc6ad3f909e255fe1938d3acfe550d8c93f1f02012a2224ca4eb62b2e2"
         },
         {
-          "first_recovery_digest": "28d722d8bd22aadadb12e4f088f558d9782ee6fc7d9fbf751838eda36daad787",
+          "first_recovery_digest": "fc4ae731b42890fc5ca18f1ee306430823d8ea4b88c50ee04ed2543c71e48b1b",
           "occurrence": 1,
           "scenario": "dag_accept",
-          "second_recovery_digest": "28d722d8bd22aadadb12e4f088f558d9782ee6fc7d9fbf751838eda36daad787"
+          "second_recovery_digest": "fc4ae731b42890fc5ca18f1ee306430823d8ea4b88c50ee04ed2543c71e48b1b"
         }
       ],
       "result": "pass",
@@ -91,22 +91,22 @@
       "occurrences_exercised": 3,
       "recovery_pairs": [
         {
-          "first_recovery_digest": "f26a43d508bdce320f5d3df469607eab3a363b56ce106cf4f64cb0e217bb9aeb",
+          "first_recovery_digest": "77debd753ff06f1d77fb4c270216bfa10c3c50afe6aa52bf9c819ba847dc2abc",
           "occurrence": 1,
           "scenario": "promote_single_step",
-          "second_recovery_digest": "f26a43d508bdce320f5d3df469607eab3a363b56ce106cf4f64cb0e217bb9aeb"
+          "second_recovery_digest": "77debd753ff06f1d77fb4c270216bfa10c3c50afe6aa52bf9c819ba847dc2abc"
         },
         {
-          "first_recovery_digest": "4412ef61955949fd9e2b41dd9efe4e7a706b64423626131c860a24ea4a64c286",
+          "first_recovery_digest": "7db87f88ef831b281644cc8c8ab1b252a652a0c8ce0fc89ece07d05402a1af6f",
           "occurrence": 1,
           "scenario": "dag_accept",
-          "second_recovery_digest": "4412ef61955949fd9e2b41dd9efe4e7a706b64423626131c860a24ea4a64c286"
+          "second_recovery_digest": "7db87f88ef831b281644cc8c8ab1b252a652a0c8ce0fc89ece07d05402a1af6f"
         },
         {
-          "first_recovery_digest": "81a8a7f91f05a76a39e1d1c7680a842adb5a8dfc3092c45f28cc714e29544481",
+          "first_recovery_digest": "0ba0739b1928b1f0be52c26e5951ac710b243b361ea150a258a611e3d7728e25",
           "occurrence": 2,
           "scenario": "dag_accept",
-          "second_recovery_digest": "81a8a7f91f05a76a39e1d1c7680a842adb5a8dfc3092c45f28cc714e29544481"
+          "second_recovery_digest": "0ba0739b1928b1f0be52c26e5951ac710b243b361ea150a258a611e3d7728e25"
         }
       ],
       "result": "pass",
@@ -117,16 +117,16 @@
       "occurrences_exercised": 2,
       "recovery_pairs": [
         {
-          "first_recovery_digest": "60fb8d765d45f465dbb433b02eeb94ddfbbbd367346c709b27c1daabf323ea9c",
+          "first_recovery_digest": "d70582ba2606b06c106848549a8acb974a142c6c40d617ddea3bcb4593719dae",
           "occurrence": 1,
           "scenario": "promote_single_step",
-          "second_recovery_digest": "60fb8d765d45f465dbb433b02eeb94ddfbbbd367346c709b27c1daabf323ea9c"
+          "second_recovery_digest": "d70582ba2606b06c106848549a8acb974a142c6c40d617ddea3bcb4593719dae"
         },
         {
-          "first_recovery_digest": "72c713527770afc07ddfbe0332bdcc57db12c1b3d7a8763f9820d2b30d0c48c8",
+          "first_recovery_digest": "53b8189b173aa6a4e739337b259edfd7c4a6a81dfe0431686f44a2dc7ae50f85",
           "occurrence": 1,
           "scenario": "dag_accept",
-          "second_recovery_digest": "72c713527770afc07ddfbe0332bdcc57db12c1b3d7a8763f9820d2b30d0c48c8"
+          "second_recovery_digest": "53b8189b173aa6a4e739337b259edfd7c4a6a81dfe0431686f44a2dc7ae50f85"
         }
       ],
       "result": "pass",
@@ -137,16 +137,16 @@
       "occurrences_exercised": 2,
       "recovery_pairs": [
         {
-          "first_recovery_digest": "fa63ab66bfe874763d263ac742b0f18ce793f6fed015a19272a53b9d6920a042",
+          "first_recovery_digest": "4b478d218a41f05bf847ae9981ee78fa2d0e3b7def5e86718891f2702176fb03",
           "occurrence": 1,
           "scenario": "promote_single_step",
-          "second_recovery_digest": "fa63ab66bfe874763d263ac742b0f18ce793f6fed015a19272a53b9d6920a042"
+          "second_recovery_digest": "4b478d218a41f05bf847ae9981ee78fa2d0e3b7def5e86718891f2702176fb03"
         },
         {
-          "first_recovery_digest": "cbb134075fb14a31bde1461f28128949cad1124d8710a28c1e9cef841bfa6dba",
+          "first_recovery_digest": "f47d70053517799bd07bbd7181fb204c63c6d06f212b225e31e8c1751da169c1",
           "occurrence": 1,
           "scenario": "dag_accept",
-          "second_recovery_digest": "cbb134075fb14a31bde1461f28128949cad1124d8710a28c1e9cef841bfa6dba"
+          "second_recovery_digest": "f47d70053517799bd07bbd7181fb204c63c6d06f212b225e31e8c1751da169c1"
         }
       ],
       "result": "pass",
@@ -163,10 +163,10 @@
           "second_recovery_digest": "c7da35b812f626fcf6ad5268a6ba6356203fd1806d1d8e62a763538fec76c4f1"
         },
         {
-          "first_recovery_digest": "f73682e439de03d0eb7da154e5674feb99a86dd3f8d10f9a229b5a3b87a3c7c8",
+          "first_recovery_digest": "590fe835244024b94ca1709825700b1a7e4b230ffb8b79958bb6957a5ce6d312",
           "occurrence": 1,
           "scenario": "dag_accept",
-          "second_recovery_digest": "f73682e439de03d0eb7da154e5674feb99a86dd3f8d10f9a229b5a3b87a3c7c8"
+          "second_recovery_digest": "590fe835244024b94ca1709825700b1a7e4b230ffb8b79958bb6957a5ce6d312"
         }
       ],
       "result": "pass",
@@ -174,6 +174,7 @@
     }
   ],
   "exercised": 8,
+  "lockfile_blake3": "a73bf11d046474c99a99d3d2583b9e48b3d0a5b7cb7b8312c3dd8ef8d1f150dc",
   "registered": 8,
   "scenarios": [
     {
@@ -206,5 +207,7 @@
       "result": "pass",
       "scenario": "dag_accept"
     }
-  ]
+  ],
+  "source_commit": "607ce2088277f63dec7bf1bf9beb523f69e99dd9",
+  "source_tree": "8f4e7de63121ea5fab62e0fab29cad4d41ec7eb7"
 }
