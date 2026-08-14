@@ -280,6 +280,9 @@ fn emit_compact(hir: &HirDocument) -> Option<String> {
         let HirItemKind::Literal { value } = &child.kind else {
             return None;
         };
+        if !is_compact_literal(value) {
+            return None;
+        }
         if !child.attributes.is_empty() || !child.children.is_empty() {
             return None;
         }
@@ -310,6 +313,16 @@ fn is_compact_id(id: &str) -> bool {
         && id
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+}
+
+/// Compact paragraphs are maximal runs of non-blank lines. Empty, blank-line,
+/// or CR-containing literals would be split, dropped, or normalized by the
+/// compact parser, so they must use explicit emission.
+fn is_compact_literal(value: &str) -> bool {
+    !value.trim().is_empty()
+        && !value.contains('\r')
+        && !value.ends_with('\n')
+        && value.lines().all(|line| !line.trim().is_empty())
 }
 
 fn emit_item(
@@ -824,6 +837,22 @@ mod tests {
             .expect("emits explicit fallback");
         assert!(emitted.starts_with("#!liminal-explicit-v1\n"));
         assert!(emitted.contains("id = \"bad id\""));
+    }
+
+    #[test]
+    fn compact_surface_is_refused_for_literals_that_do_not_round_trip() {
+        let formatter = MarkdownFormatter::default();
+        for value in ["", "  ", "a\n\nb", "a\n", "a\r\nb"] {
+            let source = format!(
+                "#!liminal-explicit-v1\nnode paragraph {{\n  literal {};\n}}\n",
+                json_string(value)
+            );
+            let document = formatter.parse(&source).expect("explicit source parses");
+            assert!(
+                emit_compact(&document.hir).is_none(),
+                "literal {value:?} must use explicit fallback"
+            );
+        }
     }
 
     /// Kills both mutants at lib.rs:503 — `Formatter::emit_in_dialect`'s

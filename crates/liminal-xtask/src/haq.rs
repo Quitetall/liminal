@@ -130,6 +130,10 @@ fn verify_canary_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
 }
 
 fn verify_canary_rows(declared: &[Canary], recorded: &[CanaryEvidence]) -> Result<()> {
+    require_unique(
+        recorded.iter().map(|row| row.id.as_str()),
+        "canary evidence",
+    )?;
     let by_id: BTreeMap<&str, &CanaryEvidence> =
         recorded.iter().map(|row| (row.id.as_str(), row)).collect();
     for canary in declared {
@@ -693,6 +697,12 @@ fn verify_review_findings(
     anyhow::ensure!(
         reproduced == packet_reproduced,
         "{who} packet independent reproductions do not match its committed record"
+    );
+    anyhow::ensure!(
+        reproduced.len() == record_findings.len(),
+        "{who}: every finding must have independent reproduction; reproduced {} of {}",
+        reproduced.len(),
+        record_findings.len()
     );
     for attempt in &record.attempts {
         if attempt.classification == "verified_defect" {
@@ -3191,6 +3201,23 @@ fn verify_markdown_surface_text(text: &str, packet: &Packet) -> Result<()> {
     if !text.contains("ratification decision | unratified") {
         anyhow::bail!("review packet markdown must record unratified status");
     }
+    let expected_state = packet
+        .qualification_state
+        .replace('-', "_")
+        .to_ascii_uppercase();
+    let state_marker = format!("| qualification state | {expected_state} |");
+    if !text.contains(&state_marker) {
+        anyhow::bail!(
+            "review packet markdown qualification state disagrees with packet {:?}",
+            packet.qualification_state
+        );
+    }
+    if packet.qualification_state != "not-run" && text.contains("| NOT_RUN |") {
+        anyhow::bail!(
+            "review packet markdown retains NOT_RUN placeholders for qualification state {:?}",
+            packet.qualification_state
+        );
+    }
     let digest = blake3::hash(
         serde_json::to_vec(packet)
             .context("serialize packet for markdown digest")?
@@ -5276,6 +5303,27 @@ mod tests {
             .expect_err("a row claiming zero unresolved findings over a record counting nine");
     }
 
+    #[test]
+    fn review_record_rejects_a_finding_without_independent_reproduction() {
+        let mut record = review_record(1, "openai", "codex");
+        record.attempts[0].classification = "verified_defect".to_owned();
+        record.attempts[0].independently_reproduced = true;
+        record.findings = vec![
+            serde_json::json!({"id": "F1", "attempt_id": "A0"}),
+            serde_json::json!({"id": "F2", "attempt_id": "A0"}),
+        ];
+        record.independently_reproduced = vec!["F1".to_owned()];
+        record.unresolved_verified_findings = 1;
+
+        let mut row = review_row();
+        row.findings = vec!["F1".to_owned(), "F2".to_owned()];
+        row.independently_reproduced = vec!["F1".to_owned()];
+        row.unresolved_verified_findings = 1;
+        let err = verify_review_record(&repo_root(), &row, &record)
+            .expect_err("every emitted finding must be independently reproduced");
+        assert!(err.to_string().contains("every finding"), "{err}");
+    }
+
     /// P1-A07: blindness is a property of the run, and it is recorded.
     #[test]
     fn review_record_rejects_a_pass_that_saw_prior_artifacts() {
@@ -5516,6 +5564,17 @@ mod tests {
             &[canary_evidence_row("C01"), canary_evidence_row("C99")],
         )
         .expect_err("a packet that is a subset of the experiment hides rows from the reader");
+    }
+
+    #[test]
+    fn canary_rows_reject_duplicate_evidence_ids() {
+        let duplicate = vec![canary_evidence_row("C01"), canary_evidence_row("C01")];
+        let err = verify_canary_rows(&[canary_row("C01")], &duplicate)
+            .expect_err("contradictory duplicate evidence must not be silently overwritten");
+        assert!(
+            err.to_string().contains("duplicate canary evidence id"),
+            "{err}"
+        );
     }
 
     /// M17.5 F-27 / P1-A09: the requirement was unrepresentable, so it was
@@ -5891,6 +5950,29 @@ mod tests {
             err.to_string().contains("qualification_state"),
             "it must refuse for the stated reason: {err}"
         );
+    }
+
+    #[test]
+    fn markdown_surface_rejects_a_stale_qualification_state() {
+        let root = repo_root();
+        let mut packet = packet_from_repo();
+        let markdown = fs::read_to_string(root.join("docs/execution/phase1-suite-review.md"))
+            .expect("review markdown");
+        let old_digest = blake3::hash(serde_json::to_vec(&packet).expect("packet json").as_slice())
+            .to_hex()
+            .to_string();
+        packet.qualification_state = "complete".to_owned();
+        let new_digest = blake3::hash(
+            serde_json::to_vec(&packet)
+                .expect("complete packet json")
+                .as_slice(),
+        )
+        .to_hex()
+        .to_string();
+        let doctored = markdown.replace(&old_digest, &new_digest);
+        let err = verify_markdown_surface_text(&doctored, &packet)
+            .expect_err("completed packet may not retain NOT_RUN markdown");
+        assert!(err.to_string().contains("qualification state"), "{err}");
     }
 
     /// Each evidence binder must actually READ its artifact. Replacing any of
