@@ -5549,6 +5549,16 @@ mod tests {
             .expect_err("a review record without a fixed tree binding is untrusted");
     }
 
+    #[test]
+    fn review_attempts_reject_locked_corpus_targets() {
+        let root = repo_root();
+        let fixed = git_text(&root, &["rev-parse", "HEAD"]).expect("test HEAD");
+        let mut locked = attempt("locked");
+        locked.target = "conformance/corpora/dev/input:1".to_owned();
+        verify_review_attempts(&root, &fixed, "test", &[locked])
+            .expect_err("review targets may not name locked corpus paths");
+    }
+
     /// P1-A06: the packet may not summarize the record more kindly than the
     /// record summarizes itself.
     #[test]
@@ -5563,6 +5573,14 @@ mod tests {
         unresolved.unresolved_verified_findings = 9;
         verify_review_record(&repo_root(), &review_row(), &unresolved)
             .expect_err("a row claiming zero unresolved findings over a record counting nine");
+    }
+
+    #[test]
+    fn packet_statuses_require_exact_result_tokens() {
+        let mut packet = packet_from_repo();
+        packet.reviews[0].result = "planned_extra".to_owned();
+        verify_packet_statuses(&packet, inventory_statuses())
+            .expect_err("status suffixes must not pass exact packet status checks");
     }
 
     #[test]
@@ -5598,6 +5616,32 @@ mod tests {
         informed.blindness_proof.pass_two_original_spec_only = false;
         verify_review_record(&repo_root(), &review_row(), &informed)
             .expect_err("pass 2 must start from the original spec alone");
+    }
+
+    #[test]
+    fn review_resolution_must_descend_from_fixed_base() {
+        let root = repo_root();
+        let fixed = git_text(&root, &["rev-parse", "HEAD"]).expect("test HEAD");
+        let evidence_path = "conformance/haqp/evidence/fuzz.json";
+        let bytes = fs::read(root.join(evidence_path)).expect("fuzz evidence");
+        let mut hasher = Sha256::new();
+        hasher.update(&bytes);
+        let mut resolved = attempt("resolved");
+        resolved.resolved = true;
+        resolved.resolution = Some(ReviewResolution {
+            commit: fixed.clone(),
+            coordinate: "crates/liminal-xtask/src/haq.rs:1".to_owned(),
+            evidence_path: evidence_path.to_owned(),
+            evidence_sha256: format!("{:x}", hasher.finalize()),
+        });
+        let base = ReviewFixedBase {
+            commit: fixed,
+            tree: git_text(&root, &["rev-parse", "HEAD^{tree}"]).expect("test tree"),
+            clean: true,
+        };
+        let err = verify_review_resolution(&root, &base, "test", &resolved)
+            .expect_err("a resolution at fixed base is not a descendant");
+        assert!(err.to_string().contains("strict descendant"), "{err}");
     }
 
     /// P1-A07: two reviews from one family satisfy every other check here.
