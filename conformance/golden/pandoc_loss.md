@@ -1,6 +1,6 @@
 # Pandoc adapter loss report (Phase -1.4)
 
-pandoc: 3.6.1 (pinned) | pipeline: graph -> pandoc-json -> markdown-smart(--wrap=none) -> pandoc-json -> graph
+pandoc: 3.10.2 (pinned) | pipeline: graph -> pandoc-json -> markdown-smart(--wrap=none) -> pandoc-json -> graph
 corpus: conformance/fixtures/conversion-loss/pandoc/
 
 | dimension          | in | out | survived | verdict       |

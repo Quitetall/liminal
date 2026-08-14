@@ -2360,7 +2360,7 @@ fn verify_requirement_sources(root: &Utf8Path, packet: &Packet) -> Result<()> {
         let source = fs::read_to_string(&path)
             .with_context(|| format!("read requirement {} source: {path}", requirement.id))?;
         anyhow::ensure!(
-            source.contains(coordinate),
+            has_exact_coordinate_anchor(&source, coordinate),
             "requirement {} coordinate {:?} is absent from {path}",
             requirement.id,
             coordinate
@@ -2369,12 +2369,43 @@ fn verify_requirement_sources(root: &Utf8Path, packet: &Packet) -> Result<()> {
     Ok(())
 }
 
+/// A requirement coordinate is an exact anchor, not a substring assertion.
+///
+/// Semantic anchors such as `D18.1` must not match `D18.10`; heading anchors
+/// use their complete trimmed Markdown heading (`## Exit gate`) so a generic
+/// word such as `exit` cannot accidentally satisfy a gate row.
+fn has_exact_coordinate_anchor(source: &str, coordinate: &str) -> bool {
+    let coordinate = coordinate.trim();
+    if coordinate.is_empty() {
+        return false;
+    }
+    if coordinate.starts_with("## ") {
+        return source.lines().any(|line| line.trim() == coordinate);
+    }
+    source.lines().any(|line| {
+        line.match_indices(coordinate).any(|(offset, _)| {
+            let before = line[..offset].chars().next_back();
+            let after = line[offset + coordinate.len()..].chars().next();
+            before.is_none_or(|ch| !coordinate_anchor_char(ch))
+                && after.is_none_or(|ch| !coordinate_anchor_char(ch))
+        })
+    })
+}
+
+fn coordinate_anchor_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.' | '-')
+}
+
 fn read_packet(root: &Utf8Path) -> Result<Packet> {
     let path = root.join("conformance/haqp/packet.json");
     let bytes = fs::read(&path).with_context(|| format!("read {path}"))?;
     serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "packet shape gate keeps closed inventory and evidence checks together"
+)]
 fn verify_packet_shape(packet: &Packet) -> Result<()> {
     require_eq(
         "suite_version",
@@ -2403,6 +2434,13 @@ fn verify_packet_shape(packet: &Packet) -> Result<()> {
         packet.requirements.iter().map(|row| row.id.as_str()),
         "requirement",
     )?;
+    let authoritative = authoritative_requirement_map();
+    anyhow::ensure!(
+        packet.requirements.len() == authoritative.len(),
+        "requirement inventory cardinality is not authoritative: got {}, expected {}",
+        packet.requirements.len(),
+        authoritative.len()
+    );
     let requirement_ids = packet
         .requirements
         .iter()
@@ -2473,6 +2511,22 @@ fn verify_packet_shape(packet: &Packet) -> Result<()> {
             "requirement {} source must contain file and coordinate",
             requirement.id
         );
+        let expected = authoritative
+            .get(requirement.id.as_str())
+            .with_context(|| {
+                format!(
+                    "requirement {} is not in the closed authoritative registry",
+                    requirement.id
+                )
+            })?;
+        anyhow::ensure!(
+            requirement.kind == expected.0
+                && requirement.source == expected.1
+                && requirement.critical == expected.2
+                && requirement.stateful == expected.3,
+            "requirement {} differs from closed authoritative registry",
+            requirement.id
+        );
     }
     verify_evidence_coverage(packet)?;
     verify_mutant_inventory(packet)?;
@@ -2482,6 +2536,14 @@ fn verify_packet_shape(packet: &Packet) -> Result<()> {
     verify_reviews_inventory(packet)?;
     verify_crash_boundary_inventory(packet)?;
     Ok(())
+}
+
+fn authoritative_requirement_map()
+-> BTreeMap<&'static str, (&'static str, &'static str, bool, bool)> {
+    AUTHORITATIVE_REQUIREMENTS
+        .iter()
+        .map(|(id, kind, source, critical, stateful)| (*id, (*kind, *source, *critical, *stateful)))
+        .collect()
 }
 
 /// Evidence kinds every applicable critical requirement must carry
@@ -2646,10 +2708,81 @@ const MUTANT_FAMILIES: [&str; 5] = [
 
 const GENERATED_FAMILIES: [&str; 5] = MUTANT_FAMILIES;
 
-/// Phase 1's M18-M24 inventory is closed. A count-only check lets a doctored
-/// packet remove a law and replace it with an invented row while preserving
-/// the same cardinality.
-const REQUIREMENT_COUNT: usize = 36;
+/// Phase 1's M18-M24 inventory is closed. Packet fields are claims; this
+/// registry is the authority they must match byte-for-byte. A count-only check
+/// lets a doctored packet remove a law and replace it with an invented row
+/// while preserving the same cardinality, and a packet-controlled `critical`
+/// bit can demote evidence obligations.
+const AUTHORITATIVE_REQUIREMENTS: [(&str, &str, &str, bool, bool); 36] = [
+    ("P1-R001", "law", "docs/execution/M18.md:D18.1", true, false),
+    ("P1-R002", "law", "docs/execution/M18.md:D18.2", true, false),
+    ("P1-R003", "law", "docs/execution/M18.md:D18.3", true, false),
+    ("P1-R004", "law", "docs/execution/M18.md:D18.4", true, false),
+    ("P1-R005", "law", "docs/execution/M18.md:D18.5", true, false),
+    ("P1-R006", "law", "docs/execution/M18.md:D18.6", true, false),
+    (
+        "P1-R007",
+        "gate",
+        "docs/execution/M18.md:## Exit gate",
+        true,
+        false,
+    ),
+    ("P1-R008", "law", "docs/execution/M19.md:D19.1", true, false),
+    ("P1-R009", "law", "docs/execution/M19.md:D19.2", true, false),
+    ("P1-R010", "law", "docs/execution/M19.md:D19.3", true, false),
+    ("P1-R011", "law", "docs/execution/M19.md:D19.4", true, false),
+    (
+        "P1-R012",
+        "gate",
+        "docs/execution/M19.md:## Exit gate",
+        true,
+        false,
+    ),
+    ("P1-R013", "law", "docs/execution/M20.md:D20.1", true, false),
+    ("P1-R014", "law", "docs/execution/M20.md:D20.2", true, false),
+    (
+        "P1-R015",
+        "fault",
+        "docs/execution/M20.md:D20.3",
+        true,
+        true,
+    ),
+    (
+        "P1-R016",
+        "abuse",
+        "docs/execution/M20.md:D20.4",
+        true,
+        false,
+    ),
+    ("P1-R017", "law", "docs/execution/M21.md:D21.1", true, false),
+    ("P1-R018", "law", "docs/execution/M21.md:D21.2", true, false),
+    ("P1-R019", "law", "docs/execution/M21.md:D21.3", true, false),
+    ("P1-R020", "law", "docs/execution/M22.md:D22.1", true, false),
+    ("P1-R021", "law", "docs/execution/M22.md:D22.2", true, false),
+    ("P1-R022", "law", "docs/execution/M23.md:D23.1", true, false),
+    ("P1-R023", "law", "docs/execution/M23.md:D23.6", true, false),
+    (
+        "P1-R024",
+        "gate",
+        "docs/execution/M24.md:D24.1",
+        true,
+        false,
+    ),
+    ("P1-R025", "law", "docs/execution/M20.md:D20.5", true, false),
+    ("P1-R026", "law", "docs/execution/M20.md:D20.6", true, false),
+    ("P1-R027", "law", "docs/execution/M20.md:D20.7", true, false),
+    ("P1-R028", "law", "docs/execution/M21.md:D21.4", true, false),
+    ("P1-R029", "law", "docs/execution/M21.md:D21.5", true, false),
+    ("P1-R030", "law", "docs/execution/M21.md:D21.6", true, false),
+    ("P1-R031", "law", "docs/execution/M21.md:D21.7", true, false),
+    ("P1-R032", "law", "docs/execution/M22.md:D22.3", true, false),
+    ("P1-R033", "law", "docs/execution/M22.md:D22.4", true, false),
+    ("P1-R034", "law", "docs/execution/M22.md:D22.5", true, false),
+    ("P1-R035", "law", "docs/execution/M22.md:D22.6", true, false),
+    ("P1-R036", "law", "docs/execution/M22.md:D22.7", true, false),
+];
+
+const REQUIREMENT_COUNT: usize = AUTHORITATIVE_REQUIREMENTS.len();
 
 /// The declared mutation operators. Closed by design (M17.5 pass-2 #13): an
 /// open vocabulary lets a fabricated inventory invent an operator per mutant
@@ -5961,6 +6094,38 @@ mod tests {
         packet.requirements[0].kind = "stateful".to_owned();
         let err = verify_packet_shape(&packet).expect_err("kind vocabulary must be closed");
         assert!(err.to_string().contains("unknown kind"), "{err}");
+    }
+
+    #[test]
+    fn requirement_coordinate_anchor_is_not_a_substring() {
+        assert!(has_exact_coordinate_anchor(
+            "- **D18.1 —** exact source\n",
+            "D18.1"
+        ));
+        assert!(!has_exact_coordinate_anchor(
+            "- **D18.10 —** another source\n",
+            "D18.1"
+        ));
+        assert!(has_exact_coordinate_anchor(
+            "## Exit gate\n",
+            "## Exit gate"
+        ));
+        assert!(!has_exact_coordinate_anchor(
+            "## Exit criteria\n",
+            "## Exit gate"
+        ));
+    }
+
+    #[test]
+    fn packet_cannot_demote_authoritative_criticality() {
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        packet.requirements[0].critical = false;
+        let err = verify_packet_shape(&packet)
+            .expect_err("criticality is closed authority, not packet-controlled metadata");
+        assert!(
+            err.to_string().contains("closed authoritative registry"),
+            "{err}"
+        );
     }
 
     #[test]

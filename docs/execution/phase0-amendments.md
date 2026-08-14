@@ -61,3 +61,12 @@ Also reconciles M17.8's predicted counts, which were authored before the suite
 grew: it predicted 237 active / 21 backlog; the meter reads 356 active / 43
 backlog (Phase 1 deferred rose to 27 as M18–M23's 20 milestone tests were
 written and quarantined). The prediction is corrected rather than the meter.
+
+AM-17.5 (user-approved 2026-08-14): HAQP requirement coordinates are exact
+anchors, not substring checks; gate rows use complete `## Exit gate` heading
+anchors, semantic `Dnn.n` anchors require identifier boundaries, and packet
+`kind`, `source`, `critical`, and `stateful` fields must match the closed
+authoritative M18–M24 registry in `liminal-xtask`. Blind-review findings may
+link only to `verified_defect` attempts; false-positive and caught-violation
+attempts remain attempt records without emitted findings, and malformed linkage
+blocks the pass. M10's Pandoc pin and golden move to installed 3.10.2.

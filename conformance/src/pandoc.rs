@@ -213,7 +213,7 @@ mod tests {
     }
 
     /// The wire shape matches REAL Pandoc JSON exactly (empirically captured
-    /// from `pandoc 3.6.1 -f markdown -t json` on an equivalent document),
+    /// from `pandoc 3.10.2 -f markdown -t json` on an equivalent document),
     /// not just self-consistent serde round-tripping.
     #[test]
     fn pandoc_model_matches_real_wire_shape() {
@@ -287,7 +287,7 @@ mod tests {
 }
 
 /// The pinned `pandoc --version` first line (D10.3).
-pub const PANDOC_PINNED: &str = "pandoc 3.6.1";
+pub const PANDOC_PINNED: &str = "pandoc 3.10.2";
 
 /// D10.3: the version pin. The first line of `pandoc --version` must equal
 /// [`PANDOC_PINNED`]; a missing binary or a version mismatch PANICS — no
@@ -311,8 +311,8 @@ pub fn assert_pandoc_pinned() {
     };
     assert!(
         found == PANDOC_PINNED,
-        "M10 requires pandoc 3.6.1 (pacman -S pandoc); found {found}. \
-         Update the pin + regenerate the golden if intentionally upgrading."
+        "M10 requires pandoc 3.10.2; found {found}. Update the pin + regenerate \
+         the golden if intentionally upgrading."
     );
 }
 
@@ -499,7 +499,7 @@ pub fn loss_report(m: &LossMeasurement) -> String {
     let mut out = String::new();
     out.push_str("# Pandoc adapter loss report (Phase -1.4)\n\n");
     out.push_str(
-        "pandoc: 3.6.1 (pinned) | pipeline: graph -> pandoc-json -> \
+        "pandoc: 3.10.2 (pinned) | pipeline: graph -> pandoc-json -> \
          markdown-smart(--wrap=none) -> pandoc-json -> graph\n",
     );
     out.push_str("corpus: conformance/fixtures/conversion-loss/pandoc/\n\n");

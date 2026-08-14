@@ -487,8 +487,18 @@ def parse_json(text: str) -> dict[str, Any]:
         if finding_id in finding_ids:
             raise ValueError("finding ids must be non-empty and unique")
         finding_ids.add(finding_id)
+        if not isinstance(attempt_id, str) or not attempt_id.strip():
+            raise ValueError(f"finding {finding_id} must name a string attempt_id")
         if attempt_id not in verified_attempts:
-            raise ValueError(f"finding {finding_id} must link to a verified_defect attempt")
+            classifications = {
+                str(attempt["id"]): str(attempt["classification"])
+                for attempt in value["attempts"]
+            }
+            classification = classifications.get(attempt_id, "unknown attempt")
+            raise ValueError(
+                f"finding {finding_id} must link to a verified_defect attempt; "
+                f"attempt {attempt_id} is classified {classification}"
+            )
     reproduced = value.get("independently_reproduced")
     if not isinstance(reproduced, list) or any(not isinstance(item, str) or not item.strip() for item in reproduced):
         raise ValueError("independently_reproduced must be an array of non-empty finding ids")
@@ -541,7 +551,10 @@ def run_pass(
         "attack_class, target, attempt, observed_result, independently_reproduced, "
         "classification (verified_defect|false_positive|caught_violation), and resolved. "
         "Every target must be an exact safe repository file:line coordinate, never a symbol-only target. "
-        "Each finding must be an object with unique id and attempt_id referencing a verified_defect attempt. "
+        "A finding is exclusively a verified_defect report: each finding object must have a unique id "
+        "and attempt_id referencing an attempt whose classification is verified_defect. "
+        "For false_positive or caught_violation attempts, record the attempt only and emit NO finding object. "
+        "Do not link findings to false_positive, caught_violation, or unknown attempts. "
         "A resolved verified_defect attempt must also carry resolution={commit,coordinate,evidence_path,evidence_sha256}; "
         "leave resolved=false when no fix proof exists. "
         "Return JSON object with attempts array, findings array, independently_reproduced array of finding ids, "

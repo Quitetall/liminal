@@ -47,7 +47,7 @@
   {
    "id": "P1-R007",
    "kind": "gate",
-   "source": "docs/execution/M18.md:exit",
+   "source": "docs/execution/M18.md:## Exit gate",
    "critical": true
   },
   {
@@ -77,7 +77,7 @@
   {
    "id": "P1-R012",
    "kind": "gate",
-   "source": "docs/execution/M19.md:exit",
+   "source": "docs/execution/M19.md:## Exit gate",
    "critical": true
   },
   {
