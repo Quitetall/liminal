@@ -183,10 +183,12 @@ def mimo_direct_call(model: str, prompt: str, *, liveness: bool = False) -> str:
         "bash",
         "-lc",
         "source /home/brianklam/.config/lamu/api-keys.env; "
+        "config=$(mktemp); "
+        "trap 'rm -f \"$config\"' EXIT; "
+        "umask 077; printf 'header = \"Authorization: Bearer %s\"\\n' \"$MIMO_API_KEY\" > \"$config\"; "
         "exec curl -fsS --connect-timeout 10 --max-time 900 "
         "'https://token-plan-sgp.xiaomimimo.com/v1/chat/completions' "
-        "-H 'Content-Type: application/json' "
-        "-H \"Authorization: Bearer $MIMO_API_KEY\" --data-binary @-",
+        "--config \"$config\" -H 'Content-Type: application/json' --data-binary @-",
     ]
     completed = subprocess.run(
         command,
