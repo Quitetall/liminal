@@ -155,68 +155,63 @@ def codex_call(model: str, prompt: str) -> str:
 
 
 def mimo_direct_call(model: str, prompt: str, *, liveness: bool = False) -> str:
-    """Run MiMo through Codex's direct token-plan provider profile.
+    """Call Xiaomi MiMo directly through its Token Plan OpenAI endpoint.
 
-    LAMU's MCP transport can stall after liveness while the direct provider
-    remains healthy. Keep this route isolated, read-only, ephemeral, and
-    secret-silent; the API key is sourced inside the child shell and never
-    appears in captured output.
+    The LAMU MCP transport and Codex Responses adapter can fail independently
+    of the provider. This lane therefore uses the provider's documented
+    `/v1/chat/completions` surface directly, with the key sourced inside a
+    child shell and never included in prompts, artifacts, or error text.
     """
-    with tempfile.TemporaryDirectory(prefix="haqp-mimo-") as scratch:
-        last = Path(scratch) / "last-message.txt"
-        name = model[len(MIMO_DIRECT_PREFIX) :]
-        argv = [
-            "codex",
-            "exec",
-            "--sandbox",
-            "read-only",
-            "--skip-git-repo-check",
-            "--ignore-user-config",
-            "--ephemeral",
-            "--color",
-            "never",
-            "--output-last-message",
-            str(last),
-            "--model",
-            name,
-            "-c",
-            "model_provider='mimo'",
-            "-c",
-            "model_providers.mimo.name='mimo'",
-            "-c",
-            "model_providers.mimo.base_url='https://token-plan-sgp.xiaomimimo.com/v1'",
-            "-c",
-            "model_providers.mimo.env_key='MIMO_API_KEY'",
-            "-c",
-            "model_providers.mimo.wire_api='responses'",
-            "-c",
-            "approval_policy='never'",
-            "-c",
-            "web_search='disabled'",
-            "-",
-        ]
-        command = [
-            "bash",
-            "-lc",
-            'source /home/brianklam/.config/lamu/api-keys.env; exec "$@"',
-            "--",
-            *argv,
-        ]
-        completed = subprocess.run(
-            command,
-            input=f"{SYSTEM}\n\n{prompt}",
-            capture_output=True,
-            text=True,
-            cwd=scratch,
-            timeout=60 if liveness else 900,
-            check=False,
-        )
-        if not last.exists():
-            tail = redact((completed.stderr or completed.stdout or "").strip()[-400:])
-            raise RuntimeError(
-                f"{model}: direct Mimo wrote no final message (exit {completed.returncode}): {tail}"
-            )
-        return last.read_text()
+    name = model[len(MIMO_DIRECT_PREFIX) :]
+    if not name:
+        raise RuntimeError(f"{model}: direct MiMo alias names no model")
+    payload = json.dumps(
+        {
+            "model": name,
+            "messages": [
+                {"role": "system", "content": SYSTEM},
+                {"role": "user", "content": prompt},
+            ],
+            "max_tokens": 8 if liveness else 32000,
+            "temperature": 0.0 if liveness else 0.1,
+            "stream": False,
+            **({} if liveness else {"thinking": {"type": "enabled"}}),
+        },
+        separators=(",", ":"),
+    )
+    command = [
+        "bash",
+        "-lc",
+        "source /home/brianklam/.config/lamu/api-keys.env; "
+        "exec curl -fsS --connect-timeout 10 --max-time 900 "
+        "'https://token-plan-sgp.xiaomimimo.com/v1/chat/completions' "
+        "-H 'Content-Type: application/json' "
+        "-H \"Authorization: Bearer $MIMO_API_KEY\" --data-binary @-",
+    ]
+    completed = subprocess.run(
+        command,
+        input=payload,
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        timeout=60 if liveness else 900,
+        check=False,
+    )
+    if completed.returncode != 0:
+        tail = redact((completed.stderr or completed.stdout or "").strip()[-400:])
+        raise RuntimeError(f"{model}: direct Token Plan request failed: {tail}")
+    try:
+        response = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"{model}: direct Token Plan returned invalid JSON") from exc
+    if isinstance(response, dict) and response.get("error"):
+        detail = redact(json.dumps(response["error"], separators=(",", ":"))[:400])
+        raise RuntimeError(f"{model}: direct Token Plan provider error: {detail}")
+    message = response.get("choices", [{}])[0].get("message", {})
+    content = message.get("content", "") or message.get("reasoning_content", "")
+    if not isinstance(content, str) or not content.strip():
+        raise RuntimeError(f"{model}: direct Token Plan returned no review content")
+    return content
 
 
 def call_arguments(
