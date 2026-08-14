@@ -1488,6 +1488,20 @@ fn run_one_mutant_test(
     Ok((code, output.stdout, output.stderr))
 }
 
+fn is_compilation_failure(stdout: &[u8], stderr: &[u8]) -> bool {
+    stdout
+        .iter()
+        .chain(stderr)
+        .copied()
+        .collect::<Vec<_>>()
+        .windows(b"could not compile".len())
+        .any(|window| window.eq_ignore_ascii_case(b"could not compile"))
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "keeps mutation execution and its evidence assembly in one auditable path"
+)]
 fn run_mutant_row(
     worktree: &Utf8Path,
     packet: &Packet,
@@ -1514,8 +1528,11 @@ fn run_mutant_row(
         .killing_tests
         .iter()
         .filter_map(|test_id| packet.tests.iter().find(|test| &test.id == test_id))
-        .map(|test| test.name.clone())
-        .filter(|name| run_ignored || !ignored.contains(name.rsplit("::").next().unwrap_or(name)))
+        .filter(|test| {
+            run_ignored
+                || !ignored.contains(test.name.rsplit("::").next().unwrap_or(test.name.as_str()))
+        })
+        .map(|test| (test.id.clone(), test.name.clone()))
         .collect::<Vec<_>>();
     if runnable.is_empty() {
         return Ok(MutantEvidenceRow {
@@ -1534,17 +1551,40 @@ fn run_mutant_row(
     }
     let baseline_exit_codes = runnable
         .iter()
-        .map(|test_name| {
+        .map(|(_, test_name)| {
             run_one_mutant_test(worktree, test_name, run_ignored).map(|(code, _, _)| code)
         })
         .collect::<Result<Vec<_>>>()?;
+    if let Some((index, code)) = baseline_exit_codes
+        .iter()
+        .enumerate()
+        .find(|(_, code)| **code != 0)
+        .map(|(index, code)| (index, *code))
+    {
+        return Ok(MutantEvidenceRow {
+            id: mutant.id.clone(),
+            disposition: mutant.disposition.clone(),
+            status: "error".to_owned(),
+            patch: Some(patch),
+            runnable_tests: runnable.iter().map(|(id, _)| id.clone()).collect(),
+            baseline_exit_codes,
+            failed_tests: Vec::new(),
+            exit_codes: Vec::new(),
+            stdout_blake3: Vec::new(),
+            stderr_blake3: Vec::new(),
+            reason: Some(format!(
+                "baseline witness {} exited with {code}",
+                runnable[index].0
+            )),
+        });
+    }
     if let Err(error) = apply_mutant_patch(worktree, &patch) {
         return Ok(MutantEvidenceRow {
             id: mutant.id.clone(),
             disposition: mutant.disposition.clone(),
             status: "error".to_owned(),
             patch: Some(patch),
-            runnable_tests: runnable,
+            runnable_tests: runnable.iter().map(|(id, _)| id.clone()).collect(),
             baseline_exit_codes,
             failed_tests: Vec::new(),
             exit_codes: Vec::new(),
@@ -1557,14 +1597,31 @@ fn run_mutant_row(
     let mut exit_codes = Vec::new();
     let mut stdout_blake3 = Vec::new();
     let mut stderr_blake3 = Vec::new();
-    for test_name in &runnable {
+    for (test_id, test_name) in &runnable {
         let (code, stdout, stderr) = run_one_mutant_test(worktree, test_name, run_ignored)?;
-        if code != 0 {
-            failed_tests.push(test_name.clone());
-        }
         exit_codes.push(code);
         stdout_blake3.push(hex_digest(&stdout));
         stderr_blake3.push(hex_digest(&stderr));
+        if code != 0 && is_compilation_failure(&stdout, &stderr) {
+            return Ok(MutantEvidenceRow {
+                id: mutant.id.clone(),
+                disposition: mutant.disposition.clone(),
+                status: "error".to_owned(),
+                patch: Some(patch),
+                runnable_tests: runnable.iter().map(|(id, _)| id.clone()).collect(),
+                baseline_exit_codes,
+                failed_tests: Vec::new(),
+                exit_codes,
+                stdout_blake3,
+                stderr_blake3,
+                reason: Some(format!(
+                    "mutation caused compilation failure while running {test_id}"
+                )),
+            });
+        }
+        if code != 0 {
+            failed_tests.push(test_id.clone());
+        }
     }
     let status = if failed_tests.is_empty() {
         "survived"
@@ -1576,7 +1633,7 @@ fn run_mutant_row(
         disposition: mutant.disposition.clone(),
         status: status.to_owned(),
         patch: Some(patch),
-        runnable_tests: runnable,
+        runnable_tests: runnable.iter().map(|(id, _)| id.clone()).collect(),
         baseline_exit_codes,
         failed_tests,
         exit_codes,
@@ -1703,6 +1760,21 @@ pub fn run_mutants_repo(root: &Utf8Path, ids: &[String], run_ignored: bool) -> R
             &ignored,
             run_ignored,
         )?);
+        let error = rows.last().and_then(|row| {
+            (row.status == "error").then(|| {
+                (
+                    row.id.clone(),
+                    row.reason
+                        .clone()
+                        .unwrap_or_else(|| "unknown mutation error".to_owned()),
+                )
+            })
+        });
+        if let Some((id, reason)) = error {
+            reset_mutant_worktree(&worktree, &source_commit)?;
+            worktree_guard.remove()?;
+            anyhow::bail!("{id}: {reason}");
+        }
         reset_mutant_worktree(&worktree, &source_commit)?;
     }
     worktree_guard.remove()?;
@@ -2941,7 +3013,11 @@ fn verify_generated_inventory(packet: &Packet) -> Result<()> {
         // with the >=100,000 accepted floor the nearest such point is not
         // expressible alongside the packet's own declared counts. The ceiling
         // is checked from both sides at the nearest reachable pair.
-        if family.discards * 100 > family.attempts {
+        let discard_percent = family
+            .discards
+            .checked_mul(100)
+            .with_context(|| format!("{} discard rate arithmetic overflow", family.family))?;
+        if discard_percent > family.attempts {
             anyhow::bail!("{} discard rate exceeds 1%", family.family);
         }
         if family.seed_categories.len() < 16 {
@@ -2962,7 +3038,11 @@ fn verify_generated_inventory(packet: &Packet) -> Result<()> {
             );
         }
         // Internal consistency: the three counts must describe one run.
-        if family.accepted + family.discards != family.attempts {
+        let total = family
+            .accepted
+            .checked_add(family.discards)
+            .with_context(|| format!("{} count arithmetic overflow", family.family))?;
+        if total != family.attempts {
             anyhow::bail!(
                 "{}: accepted {} + discards {} != attempts {} — the counts do not \
                  describe a single run",
@@ -4472,6 +4552,19 @@ mod tests {
 
     fn packet_from_repo() -> Packet {
         read_packet(&repo_root()).expect("read HAQP packet")
+    }
+
+    #[test]
+    fn mutation_compilation_failure_is_not_a_semantic_kill() {
+        assert!(is_compilation_failure(
+            b"error: could not compile `liminal-format` due to 1 previous error",
+            b""
+        ));
+        assert!(is_compilation_failure(
+            b"",
+            b"error: Could Not Compile `crate`"
+        ));
+        assert!(!is_compilation_failure(b"test failed", b"assertion failed"));
     }
 
     fn mark_complete(packet: &mut Packet) {
@@ -6301,6 +6394,19 @@ mod tests {
             family.attempts = 101_011;
         }
         verify_generated_inventory(&packet).expect_err("1,011 discards is above the ceiling");
+    }
+
+    #[test]
+    fn generated_discard_arithmetic_fails_closed_on_u64_overflow() {
+        let mut packet = read_packet(&repo_root()).expect("read packet");
+        let discards = u64::MAX / 100 + 1;
+        for family in &mut packet.generated {
+            family.accepted = 100_000;
+            family.discards = discards;
+            family.attempts = family.accepted + family.discards;
+        }
+        let error = verify_generated_inventory(&packet).expect_err("overflow must be rejected");
+        assert!(error.to_string().contains("arithmetic overflow"));
     }
 
     /// `seed_categories.len() < 16` — kills `<` -> `>`.

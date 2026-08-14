@@ -287,7 +287,7 @@ fn emit_compact(hir: &HirDocument) -> Option<String> {
         let id = match item.attributes.len() {
             0 => None,
             1 => match item.attributes.get("id") {
-                Some(HirValue::String(id)) => Some(id.clone()),
+                Some(HirValue::String(id)) if is_compact_id(id) => Some(id.clone()),
                 _ => return None,
             },
             _ => return None,
@@ -300,6 +300,16 @@ fn emit_compact(hir: &HirDocument) -> Option<String> {
     }
 
     Some(format!("{}\n", blocks.join("\n\n")))
+}
+
+/// Compact markers use the same closed identifier grammar as the source
+/// parser. Invalid ids must force explicit emission; interpolating one into a
+/// marker would make a format/parse round trip lossy.
+fn is_compact_id(id: &str) -> bool {
+    !id.is_empty()
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
 fn emit_item(
@@ -796,6 +806,24 @@ mod tests {
             None,
             "a literal with children has no compact spelling; emitting one drops them"
         );
+    }
+
+    #[test]
+    fn compact_surface_is_refused_for_invalid_ids() {
+        let formatter = MarkdownFormatter::default();
+        let source =
+            "#!liminal-explicit-v1\nnode paragraph (id = \"bad id\") {\n  literal \"value\";\n}\n";
+        let document = formatter.parse(source).expect("explicit source parses");
+
+        assert!(
+            emit_compact(&document.hir).is_none(),
+            "ids outside compact grammar must not be interpolated into markers"
+        );
+        let emitted = formatter
+            .emit_in_dialect(&document, SourceDialect::CompactOrExplicitV1)
+            .expect("emits explicit fallback");
+        assert!(emitted.starts_with("#!liminal-explicit-v1\n"));
+        assert!(emitted.contains("id = \"bad id\""));
     }
 
     /// Kills both mutants at lib.rs:503 — `Formatter::emit_in_dialect`'s
