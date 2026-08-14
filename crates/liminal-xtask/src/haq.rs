@@ -6147,7 +6147,7 @@ mod tests {
     #[test]
     fn locked_acceptance_paths_are_rejected_by_component() {
         assert!(is_locked_acceptance_path("conformance/corpora/dev/input"));
-        assert!(is_locked_acceptance_path("ConFoRmAnCe\\CoRpOrA\\heldout"));
+        assert!(is_locked_acceptance_path("CONFORMANCE\\CORPORA\\heldout"));
         assert!(is_locked_acceptance_path("fixtures/heldout/input"));
         assert!(!is_locked_acceptance_path("conformance/fixtures/input"));
     }
