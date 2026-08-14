@@ -172,10 +172,13 @@ def mimo_direct_call(model: str, prompt: str, *, liveness: bool = False) -> str:
                 {"role": "system", "content": SYSTEM},
                 {"role": "user", "content": prompt},
             ],
-            "max_tokens": 8 if liveness else 32000,
+            # Twelve complete attempts plus bounded findings fit below 12k;
+            # hidden reasoning is disabled because this lane audits JSON
+            # evidence, not a provider's private chain of thought.
+            "max_tokens": 8 if liveness else 12000,
             "temperature": 0.0 if liveness else 0.1,
             "stream": False,
-            **({} if liveness else {"thinking": {"type": "enabled"}}),
+            **({} if liveness else {"thinking": {"type": "disabled"}}),
         },
         separators=(",", ":"),
     )
