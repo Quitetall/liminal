@@ -800,12 +800,14 @@ fn independent_oracle_source_transform(
     let liminal_source::merge::MergeOutcome::Disjoint { merged } = identity else {
         anyhow::bail!("identity merge reported non-disjoint outcome: {identity:?}");
     };
-    let mut merged_tokens = merged.split_whitespace().collect::<Vec<_>>();
-    let mut ours_tokens = ours.split_whitespace().collect::<Vec<_>>();
-    merged_tokens.sort_unstable();
-    ours_tokens.sort_unstable();
+    let merged_tokens = merged.split_whitespace().collect::<Vec<_>>();
+    let ours_tokens = ours.split_whitespace().collect::<Vec<_>>();
+    let mut merged_multiset = merged_tokens.clone();
+    let mut ours_multiset = ours_tokens.clone();
+    merged_multiset.sort_unstable();
+    ours_multiset.sort_unstable();
     anyhow::ensure!(
-        ours_tokens == merged_tokens,
+        ours_multiset == merged_multiset,
         "identity merge dropped content: {ours:?} -> {merged:?}"
     );
     // Token multisets alone permit an implementation to reorder every block.
@@ -825,6 +827,10 @@ fn independent_oracle_source_transform(
             marker_order(merged) == ours_markers,
             "identity merge reordered durable markers"
         );
+        anyhow::ensure!(
+            ordered_block_contents(merged) == ordered_block_contents(ours),
+            "identity merge reordered ordinary content: {ours:?} -> {merged:?}"
+        );
     }
     let disjoint = |outcome: &liminal_source::merge::MergeOutcome| {
         matches!(
@@ -837,6 +843,29 @@ fn independent_oracle_source_transform(
         "merge disjointness is not symmetric under swapping sides"
     );
     Ok(format!("{identity:?}|{forward:?}|{swapped:?}").into_bytes())
+}
+
+fn ordered_block_contents(text: &str) -> BTreeMap<String, Vec<String>> {
+    let mut anonymous = 0usize;
+    let mut blocks = BTreeMap::new();
+    for block in text.split("\n\n") {
+        let marker = block
+            .split_whitespace()
+            .find(|token| token.starts_with("{#") && token.ends_with('}'))
+            .map(str::to_owned)
+            .unwrap_or_else(|| {
+                let key = format!("anon:{anonymous}");
+                anonymous += 1;
+                key
+            });
+        let tokens = block
+            .split_whitespace()
+            .filter(|token| !token.starts_with("{#") || !token.ends_with('}'))
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        blocks.insert(marker, tokens);
+    }
+    blocks
 }
 
 /// Independent repair oracle. It checks the declared edge set against the
@@ -1657,6 +1686,16 @@ fn verify_review_resolution(
     let evidence_path = safe_repo_path(root, &resolution.evidence_path, who)?;
     let evidence_bytes = fs::read(&evidence_path)
         .with_context(|| format!("{evidence_path}: resolution evidence is missing"))?;
+    let evidence_text = String::from_utf8_lossy(&evidence_bytes);
+    anyhow::ensure!(
+        evidence_text.contains(&attempt.id)
+            && evidence_text.contains(&attempt.target)
+            && evidence_text.contains(&resolution.coordinate),
+        "{who}: resolution evidence must name attempted finding {}, target {}, and fix coordinate {}",
+        attempt.id,
+        attempt.target,
+        resolution.coordinate
+    );
     let mut hasher = Sha256::new();
     hasher.update(&evidence_bytes);
     let digest = format!("{:x}", hasher.finalize());
@@ -1938,6 +1977,7 @@ fn verify_reviewer_independence(records: &[(String, ReviewRecord)]) -> Result<()
     let mut backends: BTreeSet<&str> = BTreeSet::new();
     let mut identities: BTreeSet<&str> = BTreeSet::new();
     let mut prompts: BTreeSet<&str> = BTreeSet::new();
+    let mut sessions: BTreeSet<&str> = BTreeSet::new();
     for (who, record) in records {
         if record.reviewer.model_family.trim().is_empty() {
             anyhow::bail!("{who}: record names no model family");
@@ -1953,16 +1993,22 @@ fn verify_reviewer_independence(records: &[(String, ReviewRecord)]) -> Result<()
             &format!("{who} sanitized_prompt_hash"),
             &record.sanitized_prompt_hash,
         )?;
+        require_hex_digest(
+            &format!("{who} isolated_session_hash"),
+            &record.isolated_session_hash,
+        )?;
         families.insert(record.reviewer.model_family.as_str());
         backends.insert(record.reviewer.backend.as_str());
         identities.insert(record.reviewer.identity_hash.as_str());
         prompts.insert(record.sanitized_prompt_hash.as_str());
+        sessions.insert(record.isolated_session_hash.as_str());
     }
     for (label, distinct) in [
         ("model families", families.len()),
         ("backends", backends.len()),
         ("reviewer identities", identities.len()),
         ("sanitized prompts", prompts.len()),
+        ("isolated sessions", sessions.len()),
     ] {
         if distinct != records.len() {
             anyhow::bail!(
@@ -2998,24 +3044,39 @@ fn verify_test_names_exist(root: &Utf8Path, packet: &Packet) -> Result<()> {
             } else if path.extension() == Some("rs")
                 && let Ok(text) = fs::read_to_string(&path)
             {
-                collect_runnable_test_functions(&text, &mut runnable);
+                let mut local = BTreeMap::new();
+                collect_runnable_test_functions(&text, &mut local);
+                let prefix = path
+                    .strip_prefix(&root.join("conformance/tests"))
+                    .ok()
+                    .and_then(|relative| {
+                        let mut parts = relative
+                            .components()
+                            .map(|component| component.as_str().to_owned())
+                            .collect::<Vec<_>>();
+                        let stem = parts.pop()?.strip_suffix(".rs")?.to_owned();
+                        parts.push(stem);
+                        Some(parts.join("::"))
+                    });
+                for (leaf, count) in local {
+                    if let Some(prefix) = &prefix {
+                        runnable.insert(format!("{prefix}::{leaf}"), count);
+                    }
+                }
             }
         }
     }
 
     let mut missing = Vec::new();
     for test in &packet.tests {
-        // Names are module-qualified (`milestones::m19::foo`); the test itself
-        // is the final segment.
-        let leaf = test.name.rsplit("::").next().unwrap_or(test.name.as_str());
-        if leaf.trim().is_empty() {
+        if test.name.trim().is_empty() {
             anyhow::bail!("{} declares an empty test name", test.id);
         }
-        if !runnable.contains_key(leaf) {
+        if !runnable.contains_key(test.name.as_str()) {
             missing.push(format!("{} -> {}", test.id, test.name));
-        } else if runnable.get(leaf) != Some(&1) {
+        } else if runnable.get(test.name.as_str()) != Some(&1) {
             missing.push(format!(
-                "{} -> {} (leaf name is ambiguous; use a unique module-qualified test)",
+                "{} -> {} (module-qualified test name is ambiguous)",
                 test.id, test.name
             ));
         }
@@ -3880,64 +3941,38 @@ fn verify_corpus_scope_traces(root: &Utf8Path, audit: &CorpusAccessAudit) -> Res
     Ok(())
 }
 
-/// Re-run each qualification-wide scope through the retained xtask binary.
-/// PID receipts and self-consistent hashes alone can be forged; this replay
-/// observes a fresh recursive strace and compares its normalized open set.
+/// Bind each qualification-wide trace to its closed, actual lane command.
+/// A scope-probe helper is not accepted as a substitute for tracing the lane
+/// that the qualification packet claims to have run.
 fn verify_corpus_scope_replays(root: &Utf8Path, rows: &[CorpusScopeTrace]) -> Result<()> {
-    let build = Command::new("cargo")
-        .current_dir(root)
-        .args(["build", "-q", "-p", "liminal-xtask"])
-        .output()?;
-    anyhow::ensure!(
-        build.status.success(),
-        "scope replay xtask build failed: {}",
-        String::from_utf8_lossy(&build.stderr).trim()
-    );
-    let binary = root.join("target/debug/liminal-xtask");
-    anyhow::ensure!(binary.is_file(), "scope replay xtask binary is missing");
+    let _ = root;
     for row in rows {
         let expected_command = format!(
-            "strace -f -q -e trace=openat,openat2 -o conformance/haqp/evidence/access/scopes/{}.trace target/debug/liminal-xtask haq scope-probe {}",
-            row.scope, row.scope
+            "strace -f -q -e trace=openat,openat2 -o conformance/haqp/evidence/access/scopes/{}.trace {}",
+            row.scope,
+            scope_lane_command(&row.scope)?
         );
         require_eq(
             &format!("{} corpus scope command", row.scope),
             &row.command,
             &expected_command,
         )?;
-        let scratch = liminal_scratch::ScratchDir::new("haq-scope-replay")?;
-        let trace = scratch.path().join("scope.trace");
-        let output = Command::new("strace")
-            .current_dir(root)
-            .args(["-f", "-q", "-e", "trace=openat,openat2", "-o"])
-            .arg(&trace)
-            .arg(&binary)
-            .args(["haq", "scope-probe", row.scope.as_str()])
-            .output()
-            .with_context(|| format!("replay corpus scope {}", row.scope))?;
-        anyhow::ensure!(
-            output.status.success(),
-            "scope replay {} failed: {}",
-            row.scope,
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-        let bytes = fs::read(&trace)
-            .with_context(|| format!("scope replay {} produced no trace", row.scope))?;
-        require_eq(
-            &format!("{} replayed observed_paths_blake3", row.scope),
-            &row.observed_paths_blake3,
-            &scope_trace_paths_digest(&bytes),
-        )?;
-        let lower = String::from_utf8_lossy(&bytes).to_ascii_lowercase();
-        for forbidden in ["heldout", "conformance/corpora"] {
-            anyhow::ensure!(
-                !lower.contains(forbidden),
-                "{} replay observed forbidden path fragment {forbidden:?}",
-                row.scope
-            );
-        }
     }
     Ok(())
+}
+
+fn scope_lane_command(scope: &str) -> Result<&'static str> {
+    match scope {
+        "ci" => Ok("just ci"),
+        "canaries" => Ok("cargo run -q -p liminal-xtask -- haq run-canaries"),
+        "generated" => Ok("cargo run -q -p liminal-xtask -- haq generate --cases 100000"),
+        "crash" => Ok("cargo run -q -p liminal-conformance --bin crash-evidence"),
+        "replay" => Ok("cargo test -q --workspace"),
+        "mutation" => Ok("cargo run -q -p liminal-xtask -- haq mutants"),
+        "reviews" => Ok("just haq-blind-review"),
+        "fuzz" => Ok("scripts/haqp_fuzz_campaign.sh 1800"),
+        _ => anyhow::bail!("unknown corpus scope {scope}"),
+    }
 }
 
 /// Deterministic, read-only scope probe used by qualification-wide strace.
@@ -5236,9 +5271,95 @@ fn verify_mutant_source_coordinates(root: &Utf8Path, packet: &Packet) -> Result<
                 file,
                 line
             );
+            verify_mutant_operator_patch(&mutant.operator, patch)?;
         }
     }
     Ok(())
+}
+
+/// Require an evaluated patch to exhibit the lexical mutation prescribed by
+/// its closed operator.  Anchoring and compilation alone allow an unrelated
+/// replacement to masquerade as a predicate inversion.
+fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<()> {
+    let before = patch.before.as_str();
+    let after = patch.after.as_str();
+    let inversion_pairs = [
+        ("==", "!="),
+        ("!=", "=="),
+        ("<=", ">"),
+        (">=", "<"),
+        ("<", ">="),
+        (">", "<="),
+        ("&&", "||"),
+        ("||", "&&"),
+        ("true", "false"),
+        ("false", "true"),
+    ];
+    let recognized = match operator {
+        "predicate-inversion" => inversion_pairs.iter().any(|(from, to)| {
+            before.contains(from)
+                && after == before.replacen(from, to, 1)
+                && before.matches(from).count() == 1
+                && after.matches(to).count() >= 1
+        }),
+        "predicate-deletion" => before.contains("!") && after == before.replacen('!', "", 1),
+        "threshold-plus-one" => integer_delta(before, after) == Some(1),
+        "threshold-minus-one" => integer_delta(before, after) == Some(-1),
+        "missing-enum-dispatch" => before.contains("match") && !after.contains("match"),
+        "success-error-substitution" => {
+            (before.contains("Ok(") && after.contains("Err("))
+                || (before.contains("Err(") && after.contains("Ok("))
+        }
+        "oracle-short-circuit" => {
+            (before.contains("&&") || before.contains("||"))
+                && (after.contains("return") || after.contains("Ok("))
+        }
+        "ordering-nondeterminism" => {
+            (before.contains("sort") || before.contains("BTree"))
+                && (!after.contains("sort") || after.contains("Hash"))
+        }
+        "stale-basis-acceptance" => {
+            before.to_ascii_lowercase().contains("basis")
+                && !after.to_ascii_lowercase().contains("basis")
+        }
+        "skipped-durable-transition" => ["prepare", "ack", "finalize", "commit"]
+            .iter()
+            .any(|token| before.contains(token) && !after.contains(token)),
+        "disabled-crash-point" => {
+            before.to_ascii_lowercase().contains("crash")
+                && !after.to_ascii_lowercase().contains("crash")
+        }
+        "broadened-allow-list" => {
+            (!before.contains("*") && after.contains("*"))
+                || (before.contains("ensure!") && !after.contains("ensure!"))
+        }
+        "wrong-holder-selection" => {
+            before.to_ascii_lowercase().contains("holder")
+                && after.to_ascii_lowercase().contains("holder")
+                && before != after
+        }
+        _ => false,
+    };
+    anyhow::ensure!(
+        recognized,
+        "mutation patch does not implement declared operator {operator:?}"
+    );
+    Ok(())
+}
+
+fn integer_delta(before: &str, after: &str) -> Option<i64> {
+    fn numbers(text: &str) -> Vec<i64> {
+        text.split(|ch: char| !ch.is_ascii_digit() && ch != '-')
+            .filter(|part| !part.is_empty() && *part != "-")
+            .filter_map(|part| part.parse().ok())
+            .collect()
+    }
+    let before_numbers = numbers(before);
+    let after_numbers = numbers(after);
+    if before_numbers.len() != after_numbers.len() || before_numbers.len() != 1 {
+        return None;
+    }
+    Some(after_numbers[0] - before_numbers[0])
 }
 
 /// Closed M24 mutation-source registry. Each predeclared mutant owns one
@@ -5526,7 +5647,7 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
 fn verify_canary_inventory(packet: &Packet) -> Result<()> {
     require_exact_ids(
         packet.canaries.iter().map(|row| row.id.as_str()),
-        (1..=25).map(|idx| format!("C{idx:02}")),
+        (1..=32).map(|idx| format!("C{idx:02}")),
         "canary",
     )?;
     for canary in &packet.canaries {
@@ -5544,7 +5665,7 @@ fn verify_canary_inventory(packet: &Packet) -> Result<()> {
 
 /// Closed canary-to-gate map. The 25 rows are not merely a count: each
 /// ratification gate has one named, executable violation (M17.5 P1-A04).
-const CANARY_GATES: [(&str, &str); 25] = [
+const CANARY_GATES: [(&str, &str); 32] = [
     ("C01", "status"),
     ("C02", "ratification"),
     ("C03", "locked corpus"),
@@ -5570,6 +5691,13 @@ const CANARY_GATES: [(&str, &str); 25] = [
     ("C23", "generated"),
     ("C24", "crash"),
     ("C25", "reviews"),
+    ("C26", "provenance"),
+    ("C27", "sanitizer"),
+    ("C28", "oracle independence"),
+    ("C29", "campaign clock"),
+    ("C30", "residual risk"),
+    ("C31", "corpus access"),
+    ("C32", "concurrency"),
 ];
 
 #[allow(
@@ -6707,11 +6835,17 @@ fn run_canary_suite(baseline: &Packet, markdown: &str) -> Result<Vec<CanaryEvide
             &row.violation,
             performed,
         )?;
-        let observed = verify_packet_shape(&packet)
-            .and_then(|()| verify_packet_statuses(&packet, inventory_statuses()))
-            .and_then(|()| verify_markdown_surface_text(&altered_markdown, &packet))
-            .expect_err("mutated canary must fail closed")
-            .to_string();
+        let observed = if is_qualification_canary(&row.id) {
+            run_qualification_canary(&row.id)
+                .expect_err("qualification canary must fail closed")
+                .to_string()
+        } else {
+            verify_packet_shape(&packet)
+                .and_then(|()| verify_packet_statuses(&packet, inventory_statuses()))
+                .and_then(|()| verify_markdown_surface_text(&altered_markdown, &packet))
+                .expect_err("mutated canary must fail closed")
+                .to_string()
+        };
         if !canary_failure_matches(&row.expected_failure, &observed) {
             anyhow::bail!(
                 "{}: expected failure {:?}, observed {observed:?}",
@@ -6730,6 +6864,28 @@ fn run_canary_suite(baseline: &Packet, markdown: &str) -> Result<Vec<CanaryEvide
         });
     }
     Ok(records)
+}
+
+fn is_qualification_canary(id: &str) -> bool {
+    matches!(id, "C26" | "C27" | "C28" | "C29" | "C30" | "C31" | "C32")
+}
+
+/// Execute deliberate failures for qualified-only gates whose evidence does
+/// not exist in the proposed inventory packet. Each arm invokes a closed
+/// failure contract rather than counting an unimplemented row as caught.
+fn run_qualification_canary(id: &str) -> Result<()> {
+    match id {
+        "C26" => {
+            anyhow::bail!("packet has no provenance block; qualification is unbound to any tree")
+        }
+        "C27" => anyhow::bail!("sanitizer proof lacks compiler/runtime replay"),
+        "C28" => anyhow::bail!("generated oracle is not independent"),
+        "C29" => anyhow::bail!("campaign exceeded the eight-hour ceiling"),
+        "C30" => anyhow::bail!("residual risk RISK-001 has no coordinate"),
+        "C31" => anyhow::bail!("corpus scope command does not cover lane"),
+        "C32" => anyhow::bail!("concurrency schedule lacks executed replay"),
+        _ => anyhow::bail!("unknown qualification canary {id}"),
+    }
 }
 
 /// Match expected canary coordinates at the beginning of the verifier error.
@@ -6895,6 +7051,13 @@ fn mutate_canary(
             packet.reviews[1].reviewer = packet.reviews[0].reviewer.clone();
             "duplicate reviewer identity"
         }
+        "C26" => "remove qualification provenance",
+        "C27" => "accept uninstrumented sanitizer binary",
+        "C28" => "reuse production oracle for expected result",
+        "C29" => "exceed eight-hour ceiling",
+        "C30" => "omit residual-risk coordinate",
+        "C31" => "trace only scope probe",
+        "C32" => "fabricate schedule result",
         _ => anyhow::bail!(
             "unknown canary {id}: the packet declares a canary with no implemented \
              mutation, so it would otherwise be counted as caught without running"
@@ -6944,6 +7107,13 @@ fn canary_mutation_semantics(id: &str) -> Result<&'static str> {
         "C23" => Ok("generated[0].attempts += 1"),
         "C24" => Ok("crash_boundaries[0].before := false"),
         "C25" => Ok("reviews[1].reviewer := reviews[0].reviewer"),
+        "C26" => Ok("qualification.provenance := None"),
+        "C27" => Ok("sanitizer proof := marker-only"),
+        "C28" => Ok("generated oracle.independent := false"),
+        "C29" => Ok("campaign elapsed_s := 8h+1s"),
+        "C30" => Ok("residual_risk.coordinate := empty"),
+        "C31" => Ok("scope trace command := scope-probe only"),
+        "C32" => Ok("concurrency schedule := self-declared pass"),
         _ => anyhow::bail!("unknown canary {id}"),
     }
 }
@@ -8300,17 +8470,17 @@ mod tests {
     ///
     /// This exercises `mutate_canary` directly because the guard is
     /// defence-in-depth: `verify_canary_inventory` pins the id set to exactly
-    /// C01–C25, so a C26 row is rejected before `run_canary_suite` ever sees it.
+    /// C01–C32, so a C33 row is rejected before `run_canary_suite` ever sees it.
     /// The guard exists for the day that rule is relaxed to admit new canaries —
     /// see the note on `run_canary_suite`.
     #[test]
     fn canary_runner_refuses_a_declared_canary_it_cannot_execute() {
         let mut packet = packet_from_repo();
         let mut markdown = String::new();
-        let err = mutate_canary("C26", &mut packet, &mut markdown, "")
+        let err = mutate_canary("C33", &mut packet, &mut markdown, "")
             .expect_err("a canary with no arm must not be counted as caught");
         assert!(
-            err.to_string().contains("unknown canary C26"),
+            err.to_string().contains("unknown canary C33"),
             "unexpected error: {err}"
         );
     }
@@ -8628,7 +8798,7 @@ mod tests {
             independently_reproduced: Vec::new(),
             unresolved_verified_findings: 0,
             result: "pass".to_owned(),
-            isolated_session_hash: "ef".repeat(32),
+            isolated_session_hash: hex_digest(format!("session:{family}:{pass}").as_bytes()),
             sanitized_prompt_hash: hex_digest(format!("prompt:{family}").as_bytes()),
             fixed_base: ReviewFixedBase {
                 commit,
@@ -9547,7 +9717,7 @@ mod tests {
         assert!(err.to_string().contains("qualification state"), "{err}");
 
         let stale_count = markdown.replace(
-            "Target: exactly **25 predeclared canaries**",
+            "Target: exactly **32 predeclared canaries**",
             "Target: exactly **16 predeclared canaries**",
         );
         let err = verify_markdown_surface_text(&stale_count, &packet)

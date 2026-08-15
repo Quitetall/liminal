@@ -26,8 +26,8 @@ authorization, suite ratification, or access to locked acceptance inputs.
 | complete post-fix qualification rerun | NOT_RUN |
 | machine inventory | `conformance/haqp/packet.json` (`cargo run -p liminal-xtask -- haq verify-inventory`) |
 | machine inventory BLAKE3 | `aec2dea85361b1f9d87a8e8c4abe8fbf98cd0262d5baac189403e211de979975` |
-| packet digest | `c59ba90a16f4c08929a306ec7029e2778866df77ee63d50d6dc87db65a100d3f` |
-| machine status tuple | qualification_state=not-run; qualification_stage=1a; requirements=55; tests=38; mutants=65; canaries=25; generated=5; crash_boundaries=8; reviews=2 |
+| packet digest | `4d08d881f7f33d5bc23f775fef78d79de49be586b130de2889cd3961d7171a54` |
+| machine status tuple | qualification_state=not-run; qualification_stage=1a; requirements=55; tests=38; mutants=65; canaries=32; generated=5; crash_boundaries=8; reviews=2 |
 
 ## Execution lanes
 
@@ -155,7 +155,7 @@ require proof plus concurrence in both independent review records.
 
 ## Disposable gate-canary campaign
 
-Target: exactly **25 predeclared canaries** covering every ratification gate and
+Target: exactly **32 predeclared canaries** covering every ratification gate and
 every M17 Level-3 measurement conjunct. Execution occurs outside working tree and
 restores fixed review base after each attempt.
 
@@ -186,6 +186,13 @@ restores fixed review base after each attempt.
 | C23 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
 | C24 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
 | C25 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+| C26 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+| C27 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+| C28 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+| C29 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+| C30 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+| C31 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+| C32 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
 
 ## Generated, metamorphic, and fuzz evidence
 
@@ -335,7 +342,7 @@ hashed by this packet.
 | fixed clean review base | one commit/tree, full provenance | NOT_RUN | NOT_RUN |
 | bidirectional traceability | no duplicates, orphans, unknown IDs, or missing critical rows | NOT_RUN | NOT_RUN |
 | semantic mutation | 65 declared; 100% applicable kill; no survivor | NOT_RUN | NOT_RUN |
-| disposable canaries | 25 declared; exact expected gates fail | NOT_RUN | NOT_RUN |
+| disposable canaries | 32 declared; exact expected gates fail | NOT_RUN | NOT_RUN |
 | deterministic generation | five families × at least 100,000 accepted cases | NOT_RUN | NOT_RUN |
 | sanitizer fuzzing | five families × 30 minutes; at least 150 target-minutes | NOT_RUN | NOT_RUN |
 | oracle independence | no forbidden shared implementation paths | NOT_RUN | NOT_RUN |

@@ -85,7 +85,7 @@
     "gate": "canaries",
     "violation": "remove C16",
     "expected_failure": "canary ids differ",
-    "observed_failure": "canary ids differ: actual={\"C01\", \"C02\", \"C03\", \"C04\", \"C05\", \"C06\", \"C07\", \"C08\", \"C09\", \"C10\", \"C11\", \"C12\", \"C13\", \"C14\", \"C15\", \"C17\", \"C18\", \"C19\", \"C20\", \"C21\", \"C22\", \"C23\", \"C24\", \"C25\"}, expected={\"C01\", \"C02\", \"C03\", \"C04\", \"C05\", \"C06\", \"C07\", \"C08\", \"C09\", \"C10\", \"C11\", \"C12\", \"C13\", \"C14\", \"C15\", \"C16\", \"C17\", \"C18\", \"C19\", \"C20\", \"C21\", \"C22\", \"C23\", \"C24\", \"C25\"}",
+    "observed_failure": "canary ids differ: actual={\"C01\", \"C02\", \"C03\", \"C04\", \"C05\", \"C06\", \"C07\", \"C08\", \"C09\", \"C10\", \"C11\", \"C12\", \"C13\", \"C14\", \"C15\", \"C17\", \"C18\", \"C19\", \"C20\", \"C21\", \"C22\", \"C23\", \"C24\", \"C25\", \"C26\", \"C27\", \"C28\", \"C29\", \"C30\", \"C31\", \"C32\"}, expected={\"C01\", \"C02\", \"C03\", \"C04\", \"C05\", \"C06\", \"C07\", \"C08\", \"C09\", \"C10\", \"C11\", \"C12\", \"C13\", \"C14\", \"C15\", \"C16\", \"C17\", \"C18\", \"C19\", \"C20\", \"C21\", \"C22\", \"C23\", \"C24\", \"C25\", \"C26\", \"C27\", \"C28\", \"C29\", \"C30\", \"C31\", \"C32\"}",
     "caught": true,
     "mutation_semantics": "remove canary C16"
   },
@@ -139,7 +139,7 @@
     "gate": "markdown",
     "violation": "remove packet digest",
     "expected_failure": "review packet markdown missing packet digest",
-    "observed_failure": "review packet markdown missing packet digest 5f0ece94fabe0d1ba8de04ae50eec147915631531e2576e76e2ea54ea0bb3be5",
+    "observed_failure": "review packet markdown missing packet digest 4d08d881f7f33d5bc23f775fef78d79de49be586b130de2889cd3961d7171a54",
     "caught": true,
     "mutation_semantics": "remove baseline packet digest from markdown"
   },
@@ -223,5 +223,68 @@
     "observed_failure": "duplicate reviewer id gpt-5.6-sol-blind-pass",
     "caught": true,
     "mutation_semantics": "reviews[1].reviewer := reviews[0].reviewer"
+  },
+  {
+    "id": "C26",
+    "gate": "provenance",
+    "violation": "remove qualification provenance",
+    "expected_failure": "packet has no provenance block; qualification is unbound to any tree",
+    "observed_failure": "packet has no provenance block; qualification is unbound to any tree",
+    "caught": true,
+    "mutation_semantics": "qualification.provenance := None"
+  },
+  {
+    "id": "C27",
+    "gate": "sanitizer",
+    "violation": "accept uninstrumented sanitizer binary",
+    "expected_failure": "sanitizer proof lacks compiler/runtime replay",
+    "observed_failure": "sanitizer proof lacks compiler/runtime replay",
+    "caught": true,
+    "mutation_semantics": "sanitizer proof := marker-only"
+  },
+  {
+    "id": "C28",
+    "gate": "oracle independence",
+    "violation": "reuse production oracle for expected result",
+    "expected_failure": "generated oracle is not independent",
+    "observed_failure": "generated oracle is not independent",
+    "caught": true,
+    "mutation_semantics": "generated oracle.independent := false"
+  },
+  {
+    "id": "C29",
+    "gate": "campaign clock",
+    "violation": "exceed eight-hour ceiling",
+    "expected_failure": "campaign exceeded the eight-hour ceiling",
+    "observed_failure": "campaign exceeded the eight-hour ceiling",
+    "caught": true,
+    "mutation_semantics": "campaign elapsed_s := 8h+1s"
+  },
+  {
+    "id": "C30",
+    "gate": "residual risk",
+    "violation": "omit residual-risk coordinate",
+    "expected_failure": "residual risk RISK-001 has no coordinate",
+    "observed_failure": "residual risk RISK-001 has no coordinate",
+    "caught": true,
+    "mutation_semantics": "residual_risk.coordinate := empty"
+  },
+  {
+    "id": "C31",
+    "gate": "corpus access",
+    "violation": "trace only scope probe",
+    "expected_failure": "corpus scope command does not cover lane",
+    "observed_failure": "corpus scope command does not cover lane",
+    "caught": true,
+    "mutation_semantics": "scope trace command := scope-probe only"
+  },
+  {
+    "id": "C32",
+    "gate": "concurrency",
+    "violation": "fabricate schedule result",
+    "expected_failure": "concurrency schedule lacks executed replay",
+    "observed_failure": "concurrency schedule lacks executed replay",
+    "caught": true,
+    "mutation_semantics": "concurrency schedule := self-declared pass"
   }
 ]

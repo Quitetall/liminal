@@ -1996,6 +1996,55 @@
    "violation": "duplicate reviewer identity",
    "expected_failure": "duplicate reviewer id gpt-5.6-sol-blind-pass",
    "result": "predeclared"
+  },
+  {
+   "id": "C26",
+   "gate": "provenance",
+   "violation": "remove qualification provenance",
+   "expected_failure": "packet has no provenance block; qualification is unbound to any tree",
+   "result": "predeclared"
+  },
+  {
+   "id": "C27",
+   "gate": "sanitizer",
+   "violation": "accept uninstrumented sanitizer binary",
+   "expected_failure": "sanitizer proof lacks compiler/runtime replay",
+   "result": "predeclared"
+  },
+  {
+   "id": "C28",
+   "gate": "oracle independence",
+   "violation": "reuse production oracle for expected result",
+   "expected_failure": "generated oracle is not independent",
+   "result": "predeclared"
+  },
+  {
+   "id": "C29",
+   "gate": "campaign clock",
+   "violation": "exceed eight-hour ceiling",
+   "expected_failure": "campaign exceeded the eight-hour ceiling",
+   "result": "predeclared"
+  },
+  {
+   "id": "C30",
+   "gate": "residual risk",
+   "violation": "omit residual-risk coordinate",
+   "expected_failure": "residual risk RISK-001 has no coordinate",
+   "result": "predeclared"
+  },
+  {
+   "id": "C31",
+   "gate": "corpus access",
+   "violation": "trace only scope probe",
+   "expected_failure": "corpus scope command does not cover lane",
+   "result": "predeclared"
+  },
+  {
+   "id": "C32",
+   "gate": "concurrency",
+   "violation": "fabricate schedule result",
+   "expected_failure": "concurrency schedule lacks executed replay",
+   "result": "predeclared"
   }
  ],
  "generated": [
