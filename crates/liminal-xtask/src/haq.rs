@@ -269,7 +269,7 @@ fn verify_generated_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
     require_eq(
         "generated evidence schema_version",
         &recorded.schema_version,
-        "haqp-generated-v1",
+        "haqp-generated-v2-category-coverage",
     )?;
     require_eq(
         "generated evidence artifact_blake3",
@@ -281,10 +281,14 @@ fn verify_generated_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         GENERATED_FAMILIES.iter().map(|family| (*family).to_owned()),
         "generated evidence family",
     )?;
-    verify_generated_rows(&packet.generated, &recorded.rows)
+    verify_generated_rows(root, &packet.generated, &recorded.rows)
 }
 
-fn verify_generated_rows(declared: &[Generated], recorded: &[GeneratedEvidence]) -> Result<()> {
+fn verify_generated_rows(
+    root: &Utf8Path,
+    declared: &[Generated],
+    recorded: &[GeneratedEvidence],
+) -> Result<()> {
     let mut by_family = BTreeMap::new();
     for row in recorded {
         if by_family.insert(row.family.as_str(), row).is_some() {
@@ -340,20 +344,25 @@ fn verify_generated_rows(declared: &[Generated], recorded: &[GeneratedEvidence])
                 evidence.seed
             );
         }
-        verify_generated_contract(family, evidence)?;
+        verify_generated_contract(root, family, evidence)?;
     }
     Ok(())
 }
 
-fn verify_generated_contract(family: &Generated, evidence: &GeneratedEvidence) -> Result<()> {
+fn verify_generated_contract(
+    root: &Utf8Path,
+    family: &Generated,
+    evidence: &GeneratedEvidence,
+) -> Result<()> {
     let expected = generated_relations(family.family.as_str());
-    // Planned packet rows predate the relation contract. Qualification rows
-    // must populate it; retaining this inventory-only escape keeps old
-    // planning fixtures parseable without weakening a `pass` claim that names
-    // the new fields.
-    if expected.is_empty() || family.relations.is_empty() {
+    if expected.is_empty() {
         return Ok(());
     }
+    anyhow::ensure!(
+        !family.relations.is_empty(),
+        "{}: a passing generated family must declare every relation",
+        family.family
+    );
     let oracle = evidence
         .oracle
         .as_ref()
@@ -371,6 +380,11 @@ fn verify_generated_contract(family: &Generated, evidence: &GeneratedEvidence) -
         &format!("{} generated oracle source", family.family),
         &oracle.source,
         &declared_oracle.source,
+    )?;
+    require_eq(
+        &format!("{} generated oracle source registry", family.family),
+        &oracle.source,
+        generated_oracle_source(family.family.as_str()),
     )?;
     require_exact_ids(
         family.relations.iter().map(String::as_str),
@@ -394,16 +408,37 @@ fn verify_generated_contract(family: &Generated, evidence: &GeneratedEvidence) -
         )?;
         require_eq("generated relation oracle", &relation.oracle_id, &oracle.id)?;
     }
+    require_exact_ids(
+        evidence.category_counts.keys().map(String::as_str),
+        generated_seed_categories(family.family.as_str())
+            .iter()
+            .copied()
+            .map(str::to_owned),
+        &format!("{} generated seed category", family.family),
+    )?;
+    let category_total = evidence
+        .category_counts
+        .values()
+        .try_fold(0_u64, |total, count| total.checked_add(*count))
+        .with_context(|| format!("{} generated category count overflow", family.family))?;
+    anyhow::ensure!(
+        category_total == evidence.attempts,
+        "{} generated category total {} != attempts {}",
+        family.family,
+        category_total,
+        evidence.attempts
+    );
+    anyhow::ensure!(
+        evidence.category_counts.values().all(|count| *count > 0),
+        "{} generated seed category has zero measured cases",
+        family.family
+    );
     anyhow::ensure!(
         oracle.independent,
         "{}: generated oracle is not marked independent",
         family.family
     );
-    anyhow::ensure!(
-        !oracle.source.trim().is_empty() && !oracle.source.contains("implementation equality"),
-        "{}: generated oracle source is missing or implementation-owned",
-        family.family
-    );
+    verify_oracle_source_coordinate(root, &oracle.source, &family.family)?;
     require_hex_digest(
         &format!("{} relation_matrix_blake3", family.family),
         &oracle.relation_matrix_blake3,
@@ -428,6 +463,295 @@ fn generated_relations(family: &str) -> &'static [&'static str] {
         ],
         _ => &[],
     }
+}
+
+const GENERATED_SEED_CATEGORIES: [(&str, &[&str]); 5] = [
+    (
+        "source/CST/formatting",
+        &[
+            "empty",
+            "single-token",
+            "whitespace",
+            "unicode",
+            "long-line",
+            "truncated",
+            "unterminated",
+            "nested",
+            "deep",
+            "wide",
+            "control-byte",
+            "invalid-utf8",
+            "comment",
+            "escape",
+            "boundary-offset",
+            "hostile",
+        ],
+    ),
+    (
+        "graph/interchange codecs",
+        &[
+            "empty",
+            "single-node",
+            "single-edge",
+            "duplicate-id",
+            "missing-node",
+            "cycle",
+            "dag",
+            "wide",
+            "deep",
+            "unknown-kind",
+            "external-value",
+            "comment",
+            "large-payload",
+            "truncated-json",
+            "invalid-json",
+            "hostile",
+        ],
+    ),
+    (
+        "transforms/projections",
+        &[
+            "identity",
+            "insert",
+            "delete",
+            "replace",
+            "move",
+            "overlap",
+            "commute",
+            "conflict",
+            "empty",
+            "deep",
+            "wide",
+            "invalid-span",
+            "boundary-span",
+            "large-patch",
+            "truncated",
+            "hostile",
+        ],
+    ),
+    (
+        "repair/ILRP/recovery",
+        &[
+            "prepared",
+            "applying",
+            "external-applied",
+            "finalizing",
+            "committed",
+            "needs-review",
+            "graph-step",
+            "file-step",
+            "two-step",
+            "contested",
+            "poststate",
+            "cycle",
+            "missing-step",
+            "duplicate-ack",
+            "truncated-intent",
+            "hostile",
+            "boundary",
+        ],
+    ),
+    (
+        "Basis/revision/query invalidation",
+        &[
+            "empty-basis",
+            "single-revision",
+            "branch",
+            "merge",
+            "client-scoped",
+            "durable-only",
+            "published",
+            "federated",
+            "stale",
+            "fresh",
+            "invalid-token",
+            "large-frontier",
+            "unknown-perspective",
+            "truncated",
+            "reordered",
+            "hostile",
+        ],
+    ),
+];
+
+fn generated_seed_categories(family: &str) -> &'static [&'static str] {
+    GENERATED_SEED_CATEGORIES
+        .iter()
+        .find_map(|(name, categories)| (*name == family).then_some(*categories))
+        .unwrap_or(&[])
+}
+
+/// Closed oracle-source registry. Packet prose cannot choose what counts as
+/// independent evidence; each family names one exact committed source anchor.
+fn generated_oracle_source(family: &str) -> &'static str {
+    match family {
+        "source/CST/formatting" => "crates/liminal-xtask/src/haq.rs:independent_oracle_source_cst",
+        "graph/interchange codecs" => {
+            "crates/liminal-xtask/src/haq.rs:independent_oracle_source_graph"
+        }
+        "transforms/projections" => {
+            "crates/liminal-xtask/src/haq.rs:independent_oracle_source_transform"
+        }
+        "repair/ILRP/recovery" => {
+            "crates/liminal-xtask/src/haq.rs:independent_oracle_source_repair"
+        }
+        "Basis/revision/query invalidation" => {
+            "crates/liminal-xtask/src/haq.rs:independent_oracle_source_invalidation"
+        }
+        _ => "",
+    }
+}
+
+fn verify_oracle_source_coordinate(root: &Utf8Path, source: &str, family: &str) -> Result<()> {
+    let expected = generated_oracle_source(family);
+    anyhow::ensure!(!expected.is_empty(), "{family}: unknown oracle family");
+    require_eq(
+        &format!("{family} oracle source registry"),
+        source,
+        expected,
+    )?;
+    let (file, anchor) = source
+        .split_once(':')
+        .with_context(|| format!("{family}: oracle source lacks exact coordinate"))?;
+    let path = safe_repo_path(root, file, "oracle source")?;
+    let text = fs::read_to_string(&path)
+        .with_context(|| format!("{family}: read oracle source {path}"))?;
+    anyhow::ensure!(
+        has_exact_coordinate_anchor(&text, anchor),
+        "{family}: oracle source anchor {anchor:?} is absent from {path}"
+    );
+    Ok(())
+}
+
+/// Independent source/CST oracle. It compares raw observed bytes, not parser
+/// equality or a formatter-owned snapshot.
+fn independent_oracle_source_cst(
+    source: &str,
+    emitted: &str,
+    once: &str,
+    twice: &str,
+) -> Result<Vec<u8>> {
+    anyhow::ensure!(emitted == source, "CST emit is not lossless for {source:?}");
+    anyhow::ensure!(once == twice, "formatting is not idempotent");
+    let mut witness = emitted.as_bytes().to_vec();
+    witness.extend_from_slice(once.as_bytes());
+    Ok(witness)
+}
+
+/// Independent graph oracle. Field-by-field checks avoid the implementation's
+/// own `PartialEq` becoming its proof of fidelity.
+fn independent_oracle_source_graph(
+    node: &liminal_graph::Node,
+    decoded: &liminal_graph::Node,
+    once: &[u8],
+    twice: &[u8],
+) -> Result<Vec<u8>> {
+    anyhow::ensure!(once == twice, "interchange codec is not byte-canonical");
+    anyhow::ensure!(decoded.id == node.id, "codec lost the node id");
+    anyhow::ensure!(decoded.kind == node.kind, "codec lost the node kind");
+    anyhow::ensure!(decoded.revision == node.revision, "codec lost the revision");
+    anyhow::ensure!(decoded.flags == node.flags, "codec lost the node flags");
+    anyhow::ensure!(
+        decoded.payload == node.payload,
+        "codec lost the payload: {:?} -> {:?}",
+        node.payload,
+        decoded.payload
+    );
+    Ok(once.to_vec())
+}
+
+/// Independent merge oracle. It checks raw content and outcome classes, not
+/// merge-result equality.
+fn independent_oracle_source_transform(
+    ours: &str,
+    identity: &liminal_source::merge::MergeOutcome,
+    forward: &liminal_source::merge::MergeOutcome,
+    swapped: &liminal_source::merge::MergeOutcome,
+) -> Result<Vec<u8>> {
+    let liminal_source::merge::MergeOutcome::Disjoint { merged } = identity else {
+        anyhow::bail!("identity merge reported non-disjoint outcome: {identity:?}");
+    };
+    anyhow::ensure!(
+        merged.split_whitespace().eq(ours.split_whitespace()),
+        "identity merge dropped content: {ours:?} -> {merged:?}"
+    );
+    let disjoint = |outcome: &liminal_source::merge::MergeOutcome| {
+        matches!(
+            outcome,
+            liminal_source::merge::MergeOutcome::Disjoint { .. }
+        )
+    };
+    anyhow::ensure!(
+        disjoint(forward) == disjoint(swapped),
+        "merge disjointness is not symmetric under swapping sides"
+    );
+    Ok(format!("{identity:?}|{forward:?}|{swapped:?}").into_bytes())
+}
+
+/// Independent repair oracle. It checks the declared edge set against the
+/// returned order and records that permutation of input edges is stable.
+fn independent_oracle_source_repair(
+    order: &[liminal_id::RepairStepId],
+    ids: &[liminal_id::RepairStepId],
+    edges: &[(usize, usize)],
+    permuted_order: &[liminal_id::RepairStepId],
+) -> Result<Vec<u8>> {
+    let position: BTreeMap<liminal_id::RepairStepId, usize> = order
+        .iter()
+        .enumerate()
+        .map(|(index, id)| (*id, index))
+        .collect();
+    anyhow::ensure!(
+        order.len() == ids.len(),
+        "ordering dropped or duplicated steps"
+    );
+    for (before, after) in edges {
+        anyhow::ensure!(
+            position[&ids[*before]] < position[&ids[*after]],
+            "ordering violated a declared dependency"
+        );
+    }
+    anyhow::ensure!(
+        permuted_order == order,
+        "topological order changed under permutation of dependency edges"
+    );
+    Ok(order
+        .iter()
+        .flat_map(|id| id.as_uuid().into_bytes())
+        .collect())
+}
+
+/// Independent invalidation oracle. It compares expected read membership to
+/// observed invalidation answers, including a negative witness.
+fn independent_oracle_source_invalidation(
+    deps: &liminal_revision::ComponentDeps,
+    expected: &BTreeSet<liminal_id::JurisdictionKey>,
+    unrelated: &liminal_id::JurisdictionKey,
+    extra: &liminal_id::JurisdictionKey,
+) -> Result<Vec<u8>> {
+    for key in expected {
+        anyhow::ensure!(
+            deps.invalidated_by(key),
+            "a recorded read did not invalidate: {key:?}"
+        );
+    }
+    anyhow::ensure!(
+        !deps.invalidated_by(unrelated),
+        "an unread key invalidated the computation: {unrelated:?}"
+    );
+    for key in expected {
+        // Re-check after recording `extra`: this is the monotonicity relation,
+        // not a duplicate of the pre-record assertion.
+        anyhow::ensure!(
+            deps.invalidated_by(key),
+            "recording another read un-invalidated {key:?}"
+        );
+    }
+    let mut witness = Vec::new();
+    for key in expected.iter().chain([unrelated, extra]) {
+        witness.push(u8::from(deps.invalidated_by(key)));
+    }
+    Ok(witness)
 }
 
 fn generated_category_class(category: &str) -> &'static str {
@@ -1715,6 +2039,11 @@ fn validate_mutant_patch(patch: &MutantPatch) -> Result<()> {
         "mutant patch {:?} has empty before text",
         patch.file
     );
+    anyhow::ensure!(
+        patch.before != patch.after,
+        "mutant patch {:?} is a no-op replacement",
+        patch.file
+    );
     Ok(())
 }
 
@@ -1861,13 +2190,18 @@ fn is_compilation_failure(stdout: &[u8], stderr: &[u8]) -> bool {
         .any(|window| window.eq_ignore_ascii_case(b"could not compile"))
 }
 
-fn is_semantic_test_failure(stdout: &[u8], stderr: &[u8]) -> bool {
+fn is_semantic_test_failure(test_name: &str, stdout: &[u8], stderr: &[u8]) -> bool {
+    let leaf = test_name.rsplit("::").next().unwrap_or(test_name);
     let text = String::from_utf8_lossy(stdout);
     let err = String::from_utf8_lossy(stderr);
+    // Require named-test and failure token on one line. This rejects launcher
+    // infrastructure prose such as "launcher FAILED before tests" instead of
+    // counting it as a semantic mutant kill.
     [text.as_ref(), err.as_ref()].iter().any(|output| {
-        output.contains("FAILED")
-            || output.contains("test result: FAILED")
-            || output.contains("Summary [") && output.contains("FAILED")
+        output.lines().any(|line| {
+            let upper = line.to_ascii_uppercase();
+            line.contains(leaf) && (upper.contains("FAILED") || upper.contains("FAIL ["))
+        })
     })
 }
 
@@ -1997,7 +2331,7 @@ fn run_mutant_row(
                 failure_class: Some("compilation".to_owned()),
             });
         }
-        if code != 0 && !is_semantic_test_failure(&stdout, &stderr) {
+        if code != 0 && !is_semantic_test_failure(test_name, &stdout, &stderr) {
             return Ok(MutantEvidenceRow {
                 id: mutant.id.clone(),
                 disposition: mutant.disposition.clone(),
@@ -2817,6 +3151,13 @@ fn verify_corpus_audit_campaign_binding(root: &Utf8Path, audit: &CorpusAccessAud
             anyhow::ensure!(
                 !manifest_lower.contains(forbidden),
                 "{manifest}: corpus access audit observed forbidden path fragment {forbidden:?}"
+            );
+        }
+        let trace_lower = String::from_utf8_lossy(&trace_bytes).to_ascii_lowercase();
+        for forbidden in ["heldout", "conformance/corpora"] {
+            anyhow::ensure!(
+                !trace_lower.contains(forbidden),
+                "{trace_path}: raw access trace observed forbidden path fragment {forbidden:?}"
             );
         }
     }
@@ -3722,6 +4063,29 @@ fn verify_mutant_source_coordinates(root: &Utf8Path, packet: &Packet) -> Result<
             "{} mutant coordinate lacks a declared requirement ID",
             mutant.id
         );
+        if let Some(patch) = &mutant.patch {
+            anyhow::ensure!(
+                patch.file == file,
+                "{} patch file {:?} does not match mutant source file {:?}",
+                mutant.id,
+                patch.file,
+                file
+            );
+            let source_line = source.lines().nth(line - 1).unwrap_or_default();
+            let patch_anchor = patch
+                .before
+                .lines()
+                .map(str::trim)
+                .find(|line| !line.is_empty())
+                .unwrap_or_default();
+            anyhow::ensure!(
+                !patch_anchor.is_empty() && source_line.trim().contains(patch_anchor),
+                "{} patch before text is not anchored at declared source {}:{}",
+                mutant.id,
+                file,
+                line
+            );
+        }
     }
     Ok(())
 }
@@ -3840,6 +4204,14 @@ fn verify_generated_inventory(packet: &Packet) -> Result<()> {
             "{} seed categories miss typed classes {missing_classes:?}",
             family.family
         );
+        require_exact_ids(
+            family.seed_categories.iter().map(String::as_str),
+            generated_seed_categories(family.family.as_str())
+                .iter()
+                .copied()
+                .map(str::to_owned),
+            "generated seed category registry",
+        )?;
         if !family.relations.is_empty() {
             require_exact_ids(
                 family.relations.iter().map(String::as_str),
@@ -4013,6 +4385,15 @@ fn verify_markdown_surface_text(text: &str, packet: &Packet) -> Result<()> {
     if !text.contains("ratification decision | unratified") {
         anyhow::bail!("review packet markdown must record unratified status");
     }
+    let canary_claim = format!(
+        "Target: exactly **{} predeclared canaries**",
+        packet.canaries.len()
+    );
+    anyhow::ensure!(
+        text.contains(&canary_claim),
+        "review packet markdown canary target disagrees with packet count {}",
+        packet.canaries.len()
+    );
     let expected_state = packet
         .qualification_state
         .replace('-', "_")
@@ -4939,6 +5320,12 @@ impl Rng {
             })
             .collect()
     }
+
+    fn category(&mut self, family: &str) -> &'static str {
+        let categories = generated_seed_categories(family);
+        let index = usize::try_from(self.below(categories.len() as u64)).expect("category index");
+        categories[index]
+    }
 }
 
 /// Outcome of one generated case: the generator decides acceptance from the
@@ -4958,7 +5345,10 @@ enum Case {
     ///
     /// So each family now returns bytes derived from the output it observed, and
     /// the runner folds those into the digest. An empty witness is refused.
-    Accepted(Vec<u8>),
+    Accepted {
+        category: &'static str,
+        witness: Vec<u8>,
+    },
     /// Out of the declared domain; not evidence either way.
     /// Out of domain, or a relation that legitimately does not apply. Carries
     /// a WITNESS of WHY, for the same reason `Accepted` does (M17.5 F-30).
@@ -4969,19 +5359,48 @@ enum Case {
     /// that: each kept the plan cyclic, so each still discarded, and the
     /// evidence could not tell the shapes apart. ADR-0020 §4 says attempts and
     /// discards are RECORDED; counting is not recording.
-    Discarded(Vec<u8>),
+    Discarded {
+        category: &'static str,
+        witness: Vec<u8>,
+    },
 }
 
 /// Family 0 — source/CST/formatting. Metamorphic relations: **lossless
 /// emit** (the CST must reproduce its input byte-for-byte) and **format
 /// idempotence**, both compared over bytes rather than parsed values.
 fn case_source_cst(rng: &mut Rng) -> Result<Case> {
-    let source = rng.word();
+    let category = rng.category("source/CST/formatting");
+    let bytes = match category {
+        "empty" => Vec::new(),
+        "single-token" => b"alpha".to_vec(),
+        "whitespace" => b" \t\n".to_vec(),
+        "unicode" => "alpha βeta".as_bytes().to_vec(),
+        "long-line" => vec![b'a'; 256],
+        "truncated" => b"alpha {#".to_vec(),
+        "unterminated" => b"alpha {#id".to_vec(),
+        "nested" => b"alpha {#outer {#inner}}".to_vec(),
+        "deep" => (0..24).map(|_| b'a').collect(),
+        "wide" => (0..32).flat_map(|_| b"alpha ".iter().copied()).collect(),
+        "control-byte" => b"alpha\x01beta".to_vec(),
+        "invalid-utf8" => vec![0xff, 0xfe],
+        "comment" => b"alpha <!-- comment -->".to_vec(),
+        "escape" => br"alpha \\ beta".to_vec(),
+        "boundary-offset" => b"a\nb".to_vec(),
+        "hostile" => b"alpha\0\x7f".to_vec(),
+        other => unreachable!("unknown source category {other}"),
+    };
+    let Ok(source) = String::from_utf8(bytes.clone()) else {
+        return Ok(Case::Discarded {
+            category,
+            witness: bytes,
+        });
+    };
     // Out of domain: the compact surface has no all-whitespace document.
     if source.trim().is_empty() {
-        return Ok(Case::Discarded(
-            format!("whitespace-source:{source:?}").into_bytes(),
-        ));
+        return Ok(Case::Discarded {
+            category,
+            witness: format!("whitespace-source:{source:?}").into_bytes(),
+        });
     }
     let basis = liminal_source::SourceBasis {
         source: liminal_id::SourceId::from_name("haqp-generated"),
@@ -4990,10 +5409,7 @@ fn case_source_cst(rng: &mut Rng) -> Result<Case> {
     let view = liminal_source::Utf8HolderView::from_bytes(basis, source.as_bytes())
         .context("generated source must load")?;
     let cst = liminal_cst::parse(&view);
-    anyhow::ensure!(
-        cst.emit_lossless() == source,
-        "CST emit is not lossless for {source:?}"
-    );
+    let emitted = cst.emit_lossless();
     let fmt = liminal_format::MarkdownFormatter::default();
     let once = fmt
         .format(&source)
@@ -5001,12 +5417,8 @@ fn case_source_cst(rng: &mut Rng) -> Result<Case> {
     let twice = fmt
         .format(&once)
         .map_err(|e| anyhow::anyhow!("reformat failed: {e}"))?;
-    anyhow::ensure!(once == twice, "formatting is not idempotent");
-    // Witness: what the CST emitted and what the formatter produced. A changed
-    // formatter changes the digest.
-    let mut witness = cst.emit_lossless().into_bytes();
-    witness.extend_from_slice(once.as_bytes());
-    Ok(Case::Accepted(witness))
+    let witness = independent_oracle_source_cst(&source, &emitted, &once, &twice)?;
+    Ok(Case::Accepted { category, witness })
 }
 
 /// Family 1 — graph/interchange codecs.
@@ -5018,14 +5430,20 @@ fn case_source_cst(rng: &mut Rng) -> Result<Case> {
 fn case_interchange(rng: &mut Rng) -> Result<Case> {
     use liminal_graph::{Node, NodeFlags, PayloadRef};
 
-    let text = rng.word();
+    let category = rng.category("graph/interchange codecs");
+    let text = if category == "empty" {
+        String::new()
+    } else {
+        format!("{category}:{}", rng.word())
+    };
     let durable = rng.below(2) == 1;
     // Domain rule: a node claiming a durable id must carry payload text.
     // Candidates violating it are out of domain and discarded, not "fixed".
     if durable && text.trim().is_empty() {
-        return Ok(Case::Discarded(
-            format!("durable-without-payload:{text:?}").into_bytes(),
-        ));
+        return Ok(Case::Discarded {
+            category,
+            witness: format!("durable-without-payload:{text:?}").into_bytes(),
+        });
     }
     let node = Node {
         id: liminal_id::NodeId::from_uuid(rng.uuid()),
@@ -5046,30 +5464,9 @@ fn case_interchange(rng: &mut Rng) -> Result<Case> {
     let once = serde_json::to_vec(&node)?;
     let decoded: Node = serde_json::from_slice(&once)?;
     let twice = serde_json::to_vec(&decoded)?;
-    anyhow::ensure!(
-        once == twice,
-        "interchange codec is not byte-canonical for {node:?}"
-    );
 
-    // M17.5 pass-2 #10: `once == twice` alone is satisfied by a codec that
-    // ignores its input entirely — encode anything to one fixed valid document
-    // and the round trip is stable forever. Stability is not fidelity. So check
-    // that the DECODED value carries the fields we actually put in, field by
-    // field rather than through `Node`'s own `PartialEq` (ADR-0020 §5 forbids
-    // proving a relation with the implementation's equality on both sides).
-    anyhow::ensure!(decoded.id == node.id, "codec lost the node id");
-    anyhow::ensure!(decoded.kind == node.kind, "codec lost the node kind");
-    anyhow::ensure!(decoded.revision == node.revision, "codec lost the revision");
-    anyhow::ensure!(decoded.flags == node.flags, "codec lost the node flags");
-    anyhow::ensure!(
-        decoded.payload == node.payload,
-        "codec lost the payload: {:?} -> {:?}",
-        node.payload,
-        decoded.payload
-    );
-
-    // Witness: the canonical encoding itself.
-    Ok(Case::Accepted(once))
+    let witness = independent_oracle_source_graph(&node, &decoded, &once, &twice)?;
+    Ok(Case::Accepted { category, witness })
 }
 
 /// Family 2 — transforms/projections.
@@ -5079,18 +5476,24 @@ fn case_interchange(rng: &mut Rng) -> Result<Case> {
 /// side's content) and **outcome-class symmetry** (swapping `ours`/`theirs`
 /// cannot change whether the merge was structurally disjoint).
 fn case_transform(rng: &mut Rng) -> Result<Case> {
-    use liminal_source::merge::{MergeOutcome, three_way};
+    use liminal_source::merge::three_way;
 
-    let blocks = 1 + rng.below(4);
+    let category = rng.category("transforms/projections");
+    let blocks = if category == "empty" {
+        0
+    } else {
+        1 + rng.below(4)
+    };
     let base = (0..blocks)
         .map(|i| format!("{} {{#b{i}}}", rng.word()))
         .collect::<Vec<_>>()
         .join("\n\n");
     // Out of domain: a degenerate base has no slots to align.
     if base.trim().is_empty() {
-        return Ok(Case::Discarded(
-            format!("degenerate-base:{base:?}").into_bytes(),
-        ));
+        return Ok(Case::Discarded {
+            category,
+            witness: format!("degenerate-base:{base:?}").into_bytes(),
+        });
     }
     let mutate = |rng: &mut Rng, text: &str| -> String {
         text.lines()
@@ -5115,30 +5518,10 @@ fn case_transform(rng: &mut Rng) -> Result<Case> {
     // nothing at all. A side that changed nothing cannot conflict with anything,
     // so `Disjoint` is a REQUIREMENT here, not a case to handle.
     let identity = three_way(&base, &ours, &base);
-    let MergeOutcome::Disjoint { merged } = &identity else {
-        anyhow::bail!(
-            "merging ours against an UNCHANGED theirs reported {identity:?}; a side that \
-             changed nothing cannot conflict"
-        );
-    };
-    anyhow::ensure!(
-        merged.split_whitespace().eq(ours.split_whitespace()),
-        "identity merge dropped content: {ours:?} -> {merged:?}"
-    );
-
     let forward = three_way(&base, &ours, &theirs);
     let swapped = three_way(&base, &theirs, &ours);
-    let disjoint = |o: &MergeOutcome| matches!(o, MergeOutcome::Disjoint { .. });
-    anyhow::ensure!(
-        disjoint(&forward) == disjoint(&swapped),
-        "merge disjointness is not symmetric under swapping sides"
-    );
-    // Witness: all three merge results, so a changed merge changes the digest.
-    // `Debug` is used deliberately — it distinguishes the outcome VARIANT as
-    // well as the merged text, and the identity of the variant is exactly what
-    // the symmetry relation above is about.
-    let witness = format!("{identity:?}|{forward:?}|{swapped:?}").into_bytes();
-    Ok(Case::Accepted(witness))
+    let witness = independent_oracle_source_transform(&ours, &identity, &forward, &swapped)?;
+    Ok(Case::Accepted { category, witness })
 }
 
 /// Family 3 — repair/ILRP/recovery.
@@ -5154,6 +5537,7 @@ fn case_repair(rng: &mut Rng) -> Result<Case> {
         ProposedMutation, RepairDependency, RepairOperation, RepairPlan, StatePredicate, topo_order,
     };
 
+    let category = rng.category("repair/ILRP/recovery");
     let count = usize::try_from(2 + rng.below(5)).expect("step count fits");
     let ids: Vec<liminal_id::RepairStepId> = (0..count)
         .map(|_| liminal_id::RepairStepId::from_uuid(rng.uuid()))
@@ -5170,7 +5554,7 @@ fn case_repair(rng: &mut Rng) -> Result<Case> {
                     )),
                     operation: RepairOperation::WriteFile {
                         path: liminal_id::PathId("generated.md".into()),
-                        contents: rng.word().into_bytes(),
+                        contents: format!("{category}:{}", rng.word()).into_bytes(),
                     },
                     expected_prestate: StatePredicate::Any,
                     expected_poststate: StatePredicate::Any,
@@ -5190,7 +5574,7 @@ fn case_repair(rng: &mut Rng) -> Result<Case> {
     }
     // Rarely close a genuine cycle. A lone back edge is NOT a cycle unless a
     // forward path exists, so add both directions to guarantee one.
-    let cyclic = count >= 2 && rng.below(384) == 0;
+    let cyclic = count >= 2 && (category == "cycle" || rng.below(384) == 0);
     if cyclic {
         edges.retain(|(before, after)| !(*before == 0 && *after == count - 1));
         edges.push((0, count - 1));
@@ -5220,41 +5604,22 @@ fn case_repair(rng: &mut Rng) -> Result<Case> {
         // witness carries the EDGES, so the shape of the refused cycle reaches
         // the digest — without it, every cycle looks alike and the
         // construction that built it is unobservable (M17.5 F-30).
-        return Ok(Case::Discarded(format!("cyclic:{edges:?}").into_bytes()));
+        return Ok(Case::Discarded {
+            category,
+            witness: format!("cyclic:{edges:?}").into_bytes(),
+        });
     };
     anyhow::ensure!(
         !cyclic,
         "a cyclic plan was ordered instead of refused: {dependencies:?}"
     );
 
-    // Independent verification against the generator's own edges.
-    let position: BTreeMap<liminal_id::RepairStepId, usize> = order
-        .iter()
-        .enumerate()
-        .map(|(index, id)| (*id, index))
-        .collect();
-    anyhow::ensure!(order.len() == count, "ordering dropped or duplicated steps");
-    for (before, after) in &edges {
-        anyhow::ensure!(
-            position[&ids[*before]] < position[&ids[*after]],
-            "ordering violated a declared dependency"
-        );
-    }
-
     // Deterministic permutation: reversing the edge list must not change it.
     let mut permuted = plan.clone();
     permuted.dependencies.reverse();
-    anyhow::ensure!(
-        topo_order(&permuted).map_err(|e| anyhow::anyhow!("{e}"))? == order,
-        "topological order changed under permutation of the dependency list"
-    );
-    // Witness: the order the implementation chose. A different ordering
-    // algorithm changes the digest even when both orders are valid.
-    let witness = order
-        .iter()
-        .flat_map(|id| id.as_uuid().into_bytes())
-        .collect::<Vec<u8>>();
-    Ok(Case::Accepted(witness))
+    let permuted_order = topo_order(&permuted).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let witness = independent_oracle_source_repair(&order, &ids, &edges, &permuted_order)?;
+    Ok(Case::Accepted { category, witness })
 }
 
 /// Family 4 — Basis/revision/query invalidation.
@@ -5266,9 +5631,10 @@ fn case_repair(rng: &mut Rng) -> Result<Case> {
 fn case_invalidation(rng: &mut Rng) -> Result<Case> {
     use liminal_revision::ComponentDeps;
 
+    let category = rng.category("Basis/revision/query invalidation");
     // Target the declared domain (computations that read >=1 component) and
     // keep a rare out-of-domain probe so the discard path stays exercised.
-    let read_count = if rng.below(384) == 0 {
+    let read_count = if category == "empty-basis" || rng.below(384) == 0 {
         0
     } else {
         1 + rng.below(5)
@@ -5276,21 +5642,20 @@ fn case_invalidation(rng: &mut Rng) -> Result<Case> {
     let mut deps = ComponentDeps::default();
     let mut expected = BTreeSet::new();
     for _ in 0..read_count {
-        let key = liminal_id::JurisdictionKey::Path(liminal_id::PathId(rng.word().into()));
+        let key = liminal_id::JurisdictionKey::Path(liminal_id::PathId(
+            format!("{category}/{}", rng.word()).into(),
+        ));
         deps.record(key.clone());
         expected.insert(key);
     }
     // Out of domain: nothing was read, so invalidation is vacuous.
     if expected.is_empty() {
-        return Ok(Case::Discarded(b"vacuous-invalidation".to_vec()));
+        return Ok(Case::Discarded {
+            category,
+            witness: b"vacuous-invalidation".to_vec(),
+        });
     }
 
-    for key in &expected {
-        anyhow::ensure!(
-            deps.invalidated_by(key),
-            "a recorded read did not invalidate: {key:?}"
-        );
-    }
     // Select a negative witness outside the generated read set. A random
     // `unread/<word>` can collide with a legitimate read key, making the only
     // negative assertion disappear exactly when the generator hits that case.
@@ -5302,28 +5667,12 @@ fn case_invalidation(rng: &mut Rng) -> Result<Case> {
         })
         .find(|candidate| !expected.contains(candidate))
         .expect("finite generated read set leaves a negative witness");
-    anyhow::ensure!(
-        !deps.invalidated_by(&unrelated),
-        "an unread key invalidated the computation: {unrelated:?}"
-    );
-    // Monotonicity: adding a read never un-invalidates an existing one.
-    let extra = liminal_id::JurisdictionKey::Path(liminal_id::PathId(rng.word().into()));
+    let extra = liminal_id::JurisdictionKey::Path(liminal_id::PathId(
+        format!("{category}/{}", rng.word()).into(),
+    ));
     deps.record(extra.clone());
-    for key in &expected {
-        anyhow::ensure!(
-            deps.invalidated_by(key),
-            "recording another read un-invalidated {key:?}"
-        );
-    }
-    // Witness: the implementation's answer for every key probed, including the
-    // two negative probes. A `invalidated_by` that always returned `true` would
-    // still satisfy the assertions above for recorded keys, but it changes these
-    // bytes.
-    let mut witness = Vec::new();
-    for key in expected.iter().chain([&unrelated, &extra]) {
-        witness.push(u8::from(deps.invalidated_by(key)));
-    }
-    Ok(Case::Accepted(witness))
+    let witness = independent_oracle_source_invalidation(&deps, &expected, &unrelated, &extra)?;
+    Ok(Case::Accepted { category, witness })
 }
 
 /// One generated-evidence family: its name and its case runner.
@@ -5339,7 +5688,7 @@ type Family = (&'static str, fn(&mut Rng) -> Result<Case>);
 pub fn run_generated_repo(root: &Utf8Path, cases: u64) -> Result<()> {
     let (evidence, timings) = generate_evidence(cases)?;
     let artifact = GeneratedEvidenceArtifact {
-        schema_version: "haqp-generated-v1".to_owned(),
+        schema_version: "haqp-generated-v2-category-coverage".to_owned(),
         artifact_blake3: generated_artifact_digest(&evidence)?,
         rows: evidence.clone(),
     };
@@ -5408,6 +5757,7 @@ fn generate_evidence(cases: u64) -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> {
         // attempt cap keeps a badly-targeted generator from running forever
         // instead of silently reporting a short campaign.
         let (mut accepted, mut discards, mut attempts) = (0u64, 0u64, 0u64);
+        let mut category_counts = BTreeMap::<String, u64>::new();
         let attempt_cap = cases.saturating_mul(2);
         while accepted < cases {
             anyhow::ensure!(
@@ -5417,7 +5767,7 @@ fn generate_evidence(cases: u64) -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> {
             );
             attempts += 1;
             match run(&mut rng).with_context(|| format!("{family} attempt {attempts}"))? {
-                Case::Accepted(witness) => {
+                Case::Accepted { category, witness } => {
                     // A family that witnesses nothing would restore exactly the
                     // #16 defect: a digest independent of the code under test.
                     anyhow::ensure!(
@@ -5426,17 +5776,21 @@ fn generate_evidence(cases: u64) -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> {
                          the evidence hash would not depend on what the code produced"
                     );
                     accepted += 1;
+                    *category_counts.entry(category.to_owned()).or_default() += 1;
                     digest.update(b"A");
+                    digest.update(category.as_bytes());
                     digest.update(&witness);
                 }
-                Case::Discarded(witness) => {
+                Case::Discarded { category, witness } => {
                     anyhow::ensure!(
                         !witness.is_empty(),
                         "{family}: discarded attempt {attempts} with an empty witness, so \
                          the evidence records that something was discarded and not what"
                     );
                     discards += 1;
+                    *category_counts.entry(category.to_owned()).or_default() += 1;
                     digest.update(b"D");
+                    digest.update(category.as_bytes());
                     digest.update(&witness);
                 }
             }
@@ -5475,6 +5829,7 @@ fn generate_evidence(cases: u64) -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> {
             discards,
             seed,
             evidence_hash,
+            category_counts,
             relations: relation_rows,
             oracle: Some(GeneratedOracleEvidence {
                 id: format!("oracle:{}", family.replace(['/', ' ', '-'], "_")),
@@ -5520,6 +5875,12 @@ struct GeneratedEvidence {
     /// Recorded so the run is reproducible (ADR-0020 §1).
     seed: u64,
     evidence_hash: String,
+    /// Measured input-category coverage. Counts are emitted by the same run,
+    /// not inferred from packet prose, so declared negative families cannot
+    /// hide behind an ASCII-only generator. Default keeps old artifacts
+    /// parseable long enough for the v2 schema check to report a clear error.
+    #[serde(default)]
+    category_counts: BTreeMap<String, u64>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     relations: Vec<GeneratedRelationEvidence>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -5589,7 +5950,7 @@ mod tests {
             mutant.patch = Some(MutantPatch {
                 file: "Cargo.toml".to_owned(),
                 before: "[workspace]".to_owned(),
-                after: "[workspace]".to_owned(),
+                after: "[workspace]\n".to_owned(),
             });
         }
         for canary in &mut packet.canaries {
@@ -5633,6 +5994,9 @@ mod tests {
             after: "new".to_owned(),
         };
         validate_mutant_patch(&good).expect("ordinary relative patch is valid");
+        let mut noop = good.clone();
+        noop.after = noop.before.clone();
+        validate_mutant_patch(&noop).expect_err("a no-op mutant cannot be evaluated");
         for file in ["/tmp/example.rs", "../example.rs"] {
             let bad = MutantPatch {
                 file: file.to_owned(),
@@ -5649,7 +6013,7 @@ mod tests {
         packet.mutants[0].patch = Some(MutantPatch {
             file: "Cargo.toml".to_owned(),
             before: "[workspace]".to_owned(),
-            after: "[workspace]".to_owned(),
+            after: "[workspace]\n".to_owned(),
         });
         verify_mutant_inventory(&packet).expect_err("equivalence without proof must fail");
         packet.mutants[0].disposition_proof =
@@ -5668,6 +6032,23 @@ mod tests {
                 finding: "F-equivalent".to_owned(),
             });
         verify_mutant_inventory(&packet).expect("fully documented equivalence is admissible");
+    }
+
+    #[test]
+    fn evaluated_mutant_patch_must_bind_to_declared_source_coordinate() {
+        let mut packet = packet_from_repo();
+        packet.mutants[0].patch = Some(MutantPatch {
+            file: "Cargo.toml".to_owned(),
+            before: "[workspace]".to_owned(),
+            after: "[workspace]\n".to_owned(),
+        });
+        let err = verify_mutant_source_coordinates(&repo_root(), &packet)
+            .expect_err("patch targeting another file must not satisfy source coordinate");
+        assert!(
+            err.to_string()
+                .contains("does not match mutant source file"),
+            "{err}"
+        );
     }
 
     #[test]
@@ -6473,6 +6854,7 @@ mod tests {
             discards: 0,
             seed: 7,
             evidence_hash: "ab".repeat(32),
+            category_counts: BTreeMap::new(),
             relations: Vec::new(),
             oracle: None,
         }
@@ -6480,15 +6862,19 @@ mod tests {
 
     #[test]
     fn generated_rows_accept_a_packet_that_matches_its_run() {
-        verify_generated_rows(&[generated_row("f")], &[generated_evidence_row("f")])
-            .expect("a matching packet must pass, or every check below is vacuous");
+        verify_generated_rows(
+            &repo_root(),
+            &[generated_row("f")],
+            &[generated_evidence_row("f")],
+        )
+        .expect("a matching packet must pass, or every check below is vacuous");
     }
 
     #[test]
     fn generated_rows_reject_a_hash_no_run_produced() {
         let mut doctored = generated_row("f");
         doctored.evidence_hash = Some("cd".repeat(32));
-        let err = verify_generated_rows(&[doctored], &[generated_evidence_row("f")])
+        let err = verify_generated_rows(&repo_root(), &[doctored], &[generated_evidence_row("f")])
             .expect_err("a packet may not cite a digest the run never recorded");
         assert!(err.to_string().contains("evidence hash"), "{err}");
     }
@@ -6498,19 +6884,71 @@ mod tests {
         let mut counts = generated_row("f");
         counts.accepted = 99_999;
         counts.discards = 1;
-        verify_generated_rows(&[counts], &[generated_evidence_row("f")])
+        verify_generated_rows(&repo_root(), &[counts], &[generated_evidence_row("f")])
             .expect_err("packet counts must match the committed run");
 
         let mut seed = generated_row("f");
         seed.seed = Some(8);
-        verify_generated_rows(&[seed], &[generated_evidence_row("f")])
+        verify_generated_rows(&repo_root(), &[seed], &[generated_evidence_row("f")])
             .expect_err("packet seed must match the committed run");
     }
 
     #[test]
     fn generated_rows_reject_a_family_with_no_committed_run() {
-        verify_generated_rows(&[generated_row("ghost")], &[generated_evidence_row("f")])
-            .expect_err("a family claiming pass with no run in the artifact");
+        verify_generated_rows(
+            &repo_root(),
+            &[generated_row("ghost")],
+            &[generated_evidence_row("f")],
+        )
+        .expect_err("a family claiming pass with no run in the artifact");
+    }
+
+    #[test]
+    fn passing_generated_family_must_name_closed_relations() {
+        let root = repo_root();
+        let mut packet = packet_from_repo();
+        let artifact: GeneratedEvidenceArtifact = serde_json::from_slice(
+            &fs::read(root.join("conformance/haqp/evidence/generated.json")).expect("evidence"),
+        )
+        .expect("generated artifact");
+        let row = &artifact.rows[0];
+        let family = &mut packet.generated[0];
+        family.result = "pass".to_owned();
+        family.accepted = row.accepted;
+        family.attempts = row.attempts;
+        family.discards = row.discards;
+        family.seed = Some(row.seed);
+        family.evidence_hash = Some(row.evidence_hash.clone());
+        family.relations.clear();
+        family.oracle = None;
+        let err = verify_generated_evidence(&root, &packet)
+            .expect_err("a pass with no relation rows is vacuous");
+        assert!(
+            err.to_string().contains("must declare every relation"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn generated_oracle_source_must_match_closed_registry() {
+        let root = repo_root();
+        let mut packet = packet_from_repo();
+        let artifact: GeneratedEvidenceArtifact = serde_json::from_slice(
+            &fs::read(root.join("conformance/haqp/evidence/generated.json")).expect("evidence"),
+        )
+        .expect("generated artifact");
+        let row = &artifact.rows[0];
+        let family = &mut packet.generated[0];
+        family.result = "pass".to_owned();
+        family.accepted = row.accepted;
+        family.attempts = row.attempts;
+        family.discards = row.discards;
+        family.seed = Some(row.seed);
+        family.evidence_hash = Some(row.evidence_hash.clone());
+        family.oracle.as_mut().expect("oracle").source = "claimed independent prose".to_owned();
+        let err = verify_generated_evidence(&root, &packet)
+            .expect_err("self-declared oracle prose must not establish independence");
+        assert!(err.to_string().contains("oracle source"), "{err}");
     }
 
     #[test]
@@ -6522,7 +6960,7 @@ mod tests {
             .map(|family| generated_evidence_row(family))
             .collect::<Vec<_>>();
         let artifact = GeneratedEvidenceArtifact {
-            schema_version: "haqp-generated-v1".to_owned(),
+            schema_version: "haqp-generated-v2-category-coverage".to_owned(),
             artifact_blake3: generated_artifact_digest(&rows).expect("digest"),
             rows: rows.clone(),
         };
@@ -6531,7 +6969,11 @@ mod tests {
         fs::write(&path, serde_json::to_vec(&artifact).expect("json")).expect("write");
         let packet_rows = GENERATED_FAMILIES
             .iter()
-            .map(|family| generated_row(family))
+            .map(|family| {
+                let mut row = generated_row(family);
+                row.result = "planned".to_owned();
+                row
+            })
             .collect::<Vec<_>>();
         let packet = Packet {
             generated: packet_rows,
@@ -6542,7 +6984,7 @@ mod tests {
         let mut duplicate = rows;
         duplicate[0].family = duplicate[1].family.clone();
         let tampered = GeneratedEvidenceArtifact {
-            schema_version: "haqp-generated-v1".to_owned(),
+            schema_version: "haqp-generated-v2-category-coverage".to_owned(),
             artifact_blake3: generated_artifact_digest(&duplicate).expect("digest"),
             rows: duplicate,
         };
@@ -7091,6 +7533,14 @@ mod tests {
         let err = verify_markdown_surface_text(&doctored, &packet)
             .expect_err("completed packet may not retain NOT_RUN markdown");
         assert!(err.to_string().contains("qualification state"), "{err}");
+
+        let stale_count = markdown.replace(
+            "Target: exactly **25 predeclared canaries**",
+            "Target: exactly **16 predeclared canaries**",
+        );
+        let err = verify_markdown_surface_text(&stale_count, &packet)
+            .expect_err("markdown cannot report a stale canary inventory count");
+        assert!(err.to_string().contains("canary target"), "{err}");
     }
 
     /// Each evidence binder must actually READ its artifact. Replacing any of
@@ -7330,23 +7780,23 @@ mod tests {
         const GOLDENS: [(&str, &str); 5] = [
             (
                 "source/CST/formatting",
-                "9e670f70ef7ff2a755a399a1b12b686d3e050a654af046240499f0747c66d581",
+                "a3d63ed0e6a999f6a49119a02d6b2ebdb3223b220a52583f054cab1bbb06e0cb",
             ),
             (
                 "graph/interchange codecs",
-                "9c051ab379bb0a31f2f5af36a0ed014137e226688fec4647daa47643ce6cde39",
+                "a2b6222670928ae472e71e8d6f96970b4ab7783fffb26822c89d03c3449eff3e",
             ),
             (
                 "transforms/projections",
-                "8228d2bea8348dee308675e43cb80a0f9a421cbca1a101e3355803de2839ef9d",
+                "927b10a5b0fb332be15f532fda20b65b3afba759a8d081092abb578c26a48b9f",
             ),
             (
                 "repair/ILRP/recovery",
-                "47b7ad5ee6e85b43ae80cbca33fa01303cac5bb01f8dcebe75c2bfcd515c6fec",
+                "31f24ec7c7fc57900cdbc0ac480ee5292aaf6c56bf80b951c301b85e2347d355",
             ),
             (
                 "Basis/revision/query invalidation",
-                "ef34bf949971ba00bdcad83d9f49620bef137232f36873ecb6f7a8c9005c89dd",
+                "a63d41f8d8c99afa540c8a49c4d47d6875056e5b404fba86bb92117a3dfb71f3",
             ),
         ];
         // 3,000 rather than 64: `case_repair` closes a genuine cycle on
@@ -7410,6 +7860,25 @@ mod tests {
     }
 
     #[test]
+    fn mutation_failure_classifier_requires_named_test_failure() {
+        assert!(is_semantic_test_failure(
+            "tests::target",
+            b"FAIL [0.01s] tests::target\n",
+            b""
+        ));
+        assert!(is_semantic_test_failure(
+            "tests::target",
+            b"",
+            b"test tests::target ... FAILED\n"
+        ));
+        assert!(!is_semantic_test_failure(
+            "tests::target",
+            b"launcher FAILED before tests\n",
+            b""
+        ));
+    }
+
+    #[test]
     fn packet_cannot_demote_authoritative_criticality() {
         let mut packet = read_packet(&repo_root()).expect("packet");
         packet.requirements[0].critical = false;
@@ -7421,6 +7890,10 @@ mod tests {
         );
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the corpus trace regression covers manifest and raw-trace attacks together"
+    )]
     #[test]
     fn corpus_access_audit_rejects_forbidden_paths_and_accepts_unlocked_paths() {
         let scratch = liminal_scratch::ScratchDir::new("haq-corpus-audit").expect("scratch");
@@ -7506,7 +7979,7 @@ mod tests {
             "/workspace/conformance/corpora/heldout/secret\n",
         )
         .expect("write forbidden path");
-        let mut doctored = audit;
+        let mut doctored = audit.clone();
         doctored.targets[0].manifest_blake3 =
             blake3::hash(&fs::read(&forbidden_path).expect("read"))
                 .to_hex()
@@ -7518,6 +7991,34 @@ mod tests {
         .expect("write doctored audit");
         verify_corpus_access_audit(root, &packet)
             .expect_err("held-out corpus access must fail closed");
+
+        // The normalized manifest is not authoritative by itself. A trace
+        // naming locked data must fail even when manifest is clean.
+        let mut traced = audit;
+        let first_trace = root.join(&traced.targets[0].trace);
+        fs::write(
+            &first_trace,
+            "/workspace/conformance/corpora/heldout/secret\n",
+        )
+        .expect("write forbidden trace");
+        traced.targets[0].trace_blake3 = blake3::hash(&fs::read(&first_trace).expect("read trace"))
+            .to_hex()
+            .to_string();
+        traced.targets[0].process_binding = blake3::hash(
+            format!(
+                "{}\0{}\0{}\0{}",
+                traced.targets[0].command,
+                traced.targets[0].trace_pid,
+                traced.targets[0].trace_exit_code,
+                traced.targets[0].trace_blake3
+            )
+            .as_bytes(),
+        )
+        .to_hex()
+        .to_string();
+        fs::write(&audit_path, serde_json::to_vec(&traced).expect("serialize")).expect("write");
+        verify_corpus_access_audit(root, &packet)
+            .expect_err("held-out path in raw trace must fail closed");
     }
 
     #[test]
@@ -7634,11 +8135,8 @@ mod tests {
     fn the_seed_category_floor_is_inclusive_at_16() {
         let mut packet = read_packet(&repo_root()).expect("packet");
         for family in &mut packet.generated {
-            family.seed_categories.truncate(16);
-            // Repair carries one extra category so its first sixteen must be
-            // trimmed while retaining all five typed classes.
-            if family.family == "repair/ILRP/recovery" {
-                family.seed_categories[13] = "boundary".to_owned();
+            if generated_seed_categories(family.family.as_str()).len() == 16 {
+                family.seed_categories.truncate(16);
             }
         }
         verify_generated_inventory(&packet).expect("exactly 16 seed categories is allowed");

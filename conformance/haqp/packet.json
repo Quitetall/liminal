@@ -979,7 +979,7 @@
    "id": "P1-M001",
    "family": "source/CST/formatting",
    "operator": "predicate-deletion",
-   "source": "crates/liminal-xtask/src/haq.rs:4978",
+    "source": "crates/liminal-xtask/src/haq.rs:5371",
    "requirement": "P1-R001",
    "defect": "accept empty formatted tree",
    "killing_tests": [
@@ -992,7 +992,7 @@
    "id": "P1-M002",
    "family": "source/CST/formatting",
    "operator": "predicate-inversion",
-   "source": "crates/liminal-xtask/src/haq.rs:4978",
+    "source": "crates/liminal-xtask/src/haq.rs:5371",
    "requirement": "P1-R001",
    "defect": "invert formatter fixed-point predicate",
    "killing_tests": [
@@ -1005,7 +1005,7 @@
    "id": "P1-M003",
    "family": "source/CST/formatting",
    "operator": "threshold-plus-one",
-   "source": "crates/liminal-xtask/src/haq.rs:4978",
+    "source": "crates/liminal-xtask/src/haq.rs:5371",
    "requirement": "P1-R002",
    "defect": "shift span end forward",
    "killing_tests": [
@@ -1018,7 +1018,7 @@
    "id": "P1-M004",
    "family": "source/CST/formatting",
    "operator": "threshold-minus-one",
-   "source": "crates/liminal-xtask/src/haq.rs:4978",
+    "source": "crates/liminal-xtask/src/haq.rs:5371",
    "requirement": "P1-R002",
    "defect": "shift span end backward",
    "killing_tests": [
@@ -1031,7 +1031,7 @@
    "id": "P1-M005",
    "family": "source/CST/formatting",
    "operator": "missing-enum-dispatch",
-   "source": "crates/liminal-xtask/src/haq.rs:4978",
+    "source": "crates/liminal-xtask/src/haq.rs:5371",
    "requirement": "P1-R003",
    "defect": "drop trivia token kind",
    "killing_tests": [
@@ -1044,7 +1044,7 @@
    "id": "P1-M006",
    "family": "source/CST/formatting",
    "operator": "success-error-substitution",
-   "source": "crates/liminal-xtask/src/haq.rs:4978",
+    "source": "crates/liminal-xtask/src/haq.rs:5371",
    "requirement": "P1-R004",
    "defect": "treat malformed parse as clean success",
    "killing_tests": [
@@ -1057,7 +1057,7 @@
    "id": "P1-M007",
    "family": "source/CST/formatting",
    "operator": "stale-basis-acceptance",
-   "source": "crates/liminal-xtask/src/haq.rs:4978",
+    "source": "crates/liminal-xtask/src/haq.rs:5371",
    "requirement": "P1-R005",
    "defect": "reuse source basis after edit",
    "killing_tests": [
@@ -1070,7 +1070,7 @@
    "id": "P1-M008",
    "family": "source/CST/formatting",
    "operator": "wrong-holder-selection",
-   "source": "crates/liminal-xtask/src/haq.rs:4978",
+    "source": "crates/liminal-xtask/src/haq.rs:5371",
    "requirement": "P1-R006",
    "defect": "classify source node as graph-native",
    "killing_tests": [
@@ -1083,7 +1083,7 @@
    "id": "P1-M009",
    "family": "source/CST/formatting",
    "operator": "skipped-durable-transition",
-   "source": "crates/liminal-xtask/src/haq.rs:4978",
+    "source": "crates/liminal-xtask/src/haq.rs:5371",
    "requirement": "P1-R007",
    "defect": "skip regression fixture write",
    "killing_tests": [
@@ -1096,7 +1096,7 @@
    "id": "P1-M010",
    "family": "source/CST/formatting",
    "operator": "disabled-crash-point",
-   "source": "crates/liminal-xtask/src/haq.rs:4978",
+    "source": "crates/liminal-xtask/src/haq.rs:5371",
    "requirement": "P1-R015",
    "defect": "remove source fault occurrence",
    "killing_tests": [
@@ -1109,7 +1109,7 @@
    "id": "P1-M011",
    "family": "source/CST/formatting",
    "operator": "ordering-nondeterminism",
-   "source": "crates/liminal-xtask/src/haq.rs:4978",
+    "source": "crates/liminal-xtask/src/haq.rs:5371",
    "requirement": "P1-R003",
    "defect": "emit unordered attributes",
    "killing_tests": [
@@ -1122,7 +1122,7 @@
    "id": "P1-M012",
    "family": "source/CST/formatting",
    "operator": "oracle-short-circuit",
-   "source": "crates/liminal-xtask/src/haq.rs:4978",
+    "source": "crates/liminal-xtask/src/haq.rs:5371",
    "requirement": "P1-R004",
    "defect": "compare output to itself",
    "killing_tests": [
@@ -1135,7 +1135,7 @@
    "id": "P1-M013",
    "family": "source/CST/formatting",
    "operator": "broadened-allow-list",
-   "source": "crates/liminal-xtask/src/haq.rs:4978",
+    "source": "crates/liminal-xtask/src/haq.rs:5371",
    "requirement": "P1-R016",
    "defect": "allow any malformed fixture label",
    "killing_tests": [
@@ -1148,7 +1148,7 @@
    "id": "P1-M014",
    "family": "graph/interchange codecs",
    "operator": "predicate-deletion",
-   "source": "crates/liminal-xtask/src/haq.rs:5018",
+    "source": "crates/liminal-xtask/src/haq.rs:5430",
    "requirement": "P1-R008",
    "defect": "drop graph round-trip equality",
    "killing_tests": [
@@ -1161,7 +1161,7 @@
    "id": "P1-M015",
    "family": "graph/interchange codecs",
    "operator": "predicate-inversion",
-   "source": "crates/liminal-xtask/src/haq.rs:5018",
+    "source": "crates/liminal-xtask/src/haq.rs:5430",
    "requirement": "P1-R008",
    "defect": "invert node-presence check",
    "killing_tests": [
@@ -1174,7 +1174,7 @@
    "id": "P1-M016",
    "family": "graph/interchange codecs",
    "operator": "threshold-plus-one",
-   "source": "crates/liminal-xtask/src/haq.rs:5018",
+    "source": "crates/liminal-xtask/src/haq.rs:5430",
    "requirement": "P1-R009",
    "defect": "advance relation count",
    "killing_tests": [
@@ -1187,7 +1187,7 @@
    "id": "P1-M017",
    "family": "graph/interchange codecs",
    "operator": "threshold-minus-one",
-   "source": "crates/liminal-xtask/src/haq.rs:5018",
+    "source": "crates/liminal-xtask/src/haq.rs:5430",
    "requirement": "P1-R009",
    "defect": "drop relation count",
    "killing_tests": [
@@ -1200,7 +1200,7 @@
    "id": "P1-M018",
    "family": "graph/interchange codecs",
    "operator": "missing-enum-dispatch",
-   "source": "crates/liminal-xtask/src/haq.rs:5018",
+    "source": "crates/liminal-xtask/src/haq.rs:5430",
    "requirement": "P1-R010",
    "defect": "drop edge kind dispatch",
    "killing_tests": [
@@ -1213,7 +1213,7 @@
    "id": "P1-M019",
    "family": "graph/interchange codecs",
    "operator": "success-error-substitution",
-   "source": "crates/liminal-xtask/src/haq.rs:5018",
+    "source": "crates/liminal-xtask/src/haq.rs:5430",
    "requirement": "P1-R011",
    "defect": "accept invalid interchange payload",
    "killing_tests": [
@@ -1226,7 +1226,7 @@
    "id": "P1-M020",
    "family": "graph/interchange codecs",
    "operator": "stale-basis-acceptance",
-   "source": "crates/liminal-xtask/src/haq.rs:5018",
+    "source": "crates/liminal-xtask/src/haq.rs:5430",
    "requirement": "P1-R010",
    "defect": "decode against stale schema basis",
    "killing_tests": [
@@ -1239,7 +1239,7 @@
    "id": "P1-M021",
    "family": "graph/interchange codecs",
    "operator": "wrong-holder-selection",
-   "source": "crates/liminal-xtask/src/haq.rs:5018",
+    "source": "crates/liminal-xtask/src/haq.rs:5430",
    "requirement": "P1-R012",
    "defect": "resolve EXTERNAL_VALUE ungoverned",
    "killing_tests": [
@@ -1252,7 +1252,7 @@
    "id": "P1-M022",
    "family": "graph/interchange codecs",
    "operator": "skipped-durable-transition",
-   "source": "crates/liminal-xtask/src/haq.rs:5018",
+    "source": "crates/liminal-xtask/src/haq.rs:5430",
    "requirement": "P1-R015",
    "defect": "omit codec checkpoint record",
    "killing_tests": [
@@ -1265,7 +1265,7 @@
    "id": "P1-M023",
    "family": "graph/interchange codecs",
    "operator": "disabled-crash-point",
-   "source": "crates/liminal-xtask/src/haq.rs:5018",
+    "source": "crates/liminal-xtask/src/haq.rs:5430",
    "requirement": "P1-R015",
    "defect": "disable graph codec boundary",
    "killing_tests": [
@@ -1278,7 +1278,7 @@
    "id": "P1-M024",
    "family": "graph/interchange codecs",
    "operator": "ordering-nondeterminism",
-   "source": "crates/liminal-xtask/src/haq.rs:5018",
+    "source": "crates/liminal-xtask/src/haq.rs:5430",
    "requirement": "P1-R009",
    "defect": "serialize node map unordered",
    "killing_tests": [
@@ -1291,7 +1291,7 @@
    "id": "P1-M025",
    "family": "graph/interchange codecs",
    "operator": "oracle-short-circuit",
-   "source": "crates/liminal-xtask/src/haq.rs:5018",
+    "source": "crates/liminal-xtask/src/haq.rs:5430",
    "requirement": "P1-R008",
    "defect": "self-compare encoded bytes",
    "killing_tests": [
@@ -1304,7 +1304,7 @@
    "id": "P1-M026",
    "family": "graph/interchange codecs",
    "operator": "broadened-allow-list",
-   "source": "crates/liminal-xtask/src/haq.rs:5018",
+    "source": "crates/liminal-xtask/src/haq.rs:5430",
    "requirement": "P1-R011",
    "defect": "allow unknown graph fields",
    "killing_tests": [
@@ -1317,7 +1317,7 @@
    "id": "P1-M027",
    "family": "transforms/projections",
    "operator": "predicate-deletion",
-   "source": "crates/liminal-xtask/src/haq.rs:5081",
+    "source": "crates/liminal-xtask/src/haq.rs:5478",
    "requirement": "P1-R013",
    "defect": "skip transform equality law",
    "killing_tests": [
@@ -1330,7 +1330,7 @@
    "id": "P1-M028",
    "family": "transforms/projections",
    "operator": "predicate-inversion",
-   "source": "crates/liminal-xtask/src/haq.rs:5081",
+    "source": "crates/liminal-xtask/src/haq.rs:5478",
    "requirement": "P1-R013",
    "defect": "invert projection inclusion",
    "killing_tests": [
@@ -1343,7 +1343,7 @@
    "id": "P1-M029",
    "family": "transforms/projections",
    "operator": "threshold-plus-one",
-   "source": "crates/liminal-xtask/src/haq.rs:5081",
+    "source": "crates/liminal-xtask/src/haq.rs:5478",
    "requirement": "P1-R014",
    "defect": "advance patch offset",
    "killing_tests": [
@@ -1356,7 +1356,7 @@
    "id": "P1-M030",
    "family": "transforms/projections",
    "operator": "threshold-minus-one",
-   "source": "crates/liminal-xtask/src/haq.rs:5081",
+    "source": "crates/liminal-xtask/src/haq.rs:5478",
    "requirement": "P1-R014",
    "defect": "retreat patch offset",
    "killing_tests": [
@@ -1369,7 +1369,7 @@
    "id": "P1-M031",
    "family": "transforms/projections",
    "operator": "missing-enum-dispatch",
-   "source": "crates/liminal-xtask/src/haq.rs:5081",
+    "source": "crates/liminal-xtask/src/haq.rs:5478",
    "requirement": "P1-R013",
    "defect": "drop transform variant",
    "killing_tests": [
@@ -1382,7 +1382,7 @@
    "id": "P1-M032",
    "family": "transforms/projections",
    "operator": "success-error-substitution",
-   "source": "crates/liminal-xtask/src/haq.rs:5081",
+    "source": "crates/liminal-xtask/src/haq.rs:5478",
    "requirement": "P1-R016",
    "defect": "treat rejected transform as success",
    "killing_tests": [
@@ -1395,7 +1395,7 @@
    "id": "P1-M033",
    "family": "transforms/projections",
    "operator": "stale-basis-acceptance",
-   "source": "crates/liminal-xtask/src/haq.rs:5081",
+    "source": "crates/liminal-xtask/src/haq.rs:5478",
    "requirement": "P1-R017",
    "defect": "apply transform to stale revision",
    "killing_tests": [
@@ -1408,7 +1408,7 @@
    "id": "P1-M034",
    "family": "transforms/projections",
    "operator": "wrong-holder-selection",
-   "source": "crates/liminal-xtask/src/haq.rs:5081",
+    "source": "crates/liminal-xtask/src/haq.rs:5478",
    "requirement": "P1-R014",
    "defect": "choose external holder for projection",
    "killing_tests": [
@@ -1421,7 +1421,7 @@
    "id": "P1-M035",
    "family": "transforms/projections",
    "operator": "skipped-durable-transition",
-   "source": "crates/liminal-xtask/src/haq.rs:5081",
+    "source": "crates/liminal-xtask/src/haq.rs:5478",
    "requirement": "P1-R015",
    "defect": "skip projection journal record",
    "killing_tests": [
@@ -1434,7 +1434,7 @@
    "id": "P1-M036",
    "family": "transforms/projections",
    "operator": "disabled-crash-point",
-   "source": "crates/liminal-xtask/src/haq.rs:5081",
+    "source": "crates/liminal-xtask/src/haq.rs:5478",
    "requirement": "P1-R015",
    "defect": "disable transform recovery point",
    "killing_tests": [
@@ -1447,7 +1447,7 @@
    "id": "P1-M037",
    "family": "transforms/projections",
    "operator": "ordering-nondeterminism",
-   "source": "crates/liminal-xtask/src/haq.rs:5081",
+    "source": "crates/liminal-xtask/src/haq.rs:5478",
    "requirement": "P1-R013",
    "defect": "permute independent transform order",
    "killing_tests": [
@@ -1460,7 +1460,7 @@
    "id": "P1-M038",
    "family": "transforms/projections",
    "operator": "oracle-short-circuit",
-   "source": "crates/liminal-xtask/src/haq.rs:5081",
+    "source": "crates/liminal-xtask/src/haq.rs:5478",
    "requirement": "P1-R014",
    "defect": "compare incremental render to itself",
    "killing_tests": [
@@ -1473,7 +1473,7 @@
    "id": "P1-M039",
    "family": "transforms/projections",
    "operator": "broadened-allow-list",
-   "source": "crates/liminal-xtask/src/haq.rs:5081",
+    "source": "crates/liminal-xtask/src/haq.rs:5478",
    "requirement": "P1-R016",
    "defect": "allow unsupported projection payload",
    "killing_tests": [
@@ -1486,7 +1486,7 @@
    "id": "P1-M040",
    "family": "repair/ILRP/recovery",
    "operator": "predicate-deletion",
-   "source": "crates/liminal-xtask/src/haq.rs:5152",
+    "source": "crates/liminal-xtask/src/haq.rs:5535",
    "requirement": "P1-R015",
    "defect": "delete recovery terminal check",
    "killing_tests": [
@@ -1499,7 +1499,7 @@
    "id": "P1-M041",
    "family": "repair/ILRP/recovery",
    "operator": "predicate-inversion",
-   "source": "crates/liminal-xtask/src/haq.rs:5152",
+    "source": "crates/liminal-xtask/src/haq.rs:5535",
    "requirement": "P1-R015",
    "defect": "invert idempotent recovery equality",
    "killing_tests": [
@@ -1512,7 +1512,7 @@
    "id": "P1-M042",
    "family": "repair/ILRP/recovery",
    "operator": "threshold-plus-one",
-   "source": "crates/liminal-xtask/src/haq.rs:5152",
+    "source": "crates/liminal-xtask/src/haq.rs:5535",
    "requirement": "P1-R015",
    "defect": "advance occurrence counter",
    "killing_tests": [
@@ -1525,7 +1525,7 @@
    "id": "P1-M043",
    "family": "repair/ILRP/recovery",
    "operator": "threshold-minus-one",
-   "source": "crates/liminal-xtask/src/haq.rs:5152",
+    "source": "crates/liminal-xtask/src/haq.rs:5535",
    "requirement": "P1-R015",
    "defect": "retreat occurrence counter",
    "killing_tests": [
@@ -1538,7 +1538,7 @@
    "id": "P1-M044",
    "family": "repair/ILRP/recovery",
    "operator": "missing-enum-dispatch",
-   "source": "crates/liminal-xtask/src/haq.rs:5152",
+    "source": "crates/liminal-xtask/src/haq.rs:5535",
    "requirement": "P1-R015",
    "defect": "drop Finalizing recovery branch",
    "killing_tests": [
@@ -1551,7 +1551,7 @@
    "id": "P1-M045",
    "family": "repair/ILRP/recovery",
    "operator": "success-error-substitution",
-   "source": "crates/liminal-xtask/src/haq.rs:5152",
+    "source": "crates/liminal-xtask/src/haq.rs:5535",
    "requirement": "P1-R016",
    "defect": "commit contested repair",
    "killing_tests": [
@@ -1564,7 +1564,7 @@
    "id": "P1-M046",
    "family": "repair/ILRP/recovery",
    "operator": "stale-basis-acceptance",
-   "source": "crates/liminal-xtask/src/haq.rs:5152",
+    "source": "crates/liminal-xtask/src/haq.rs:5535",
    "requirement": "P1-R017",
    "defect": "recover with stale Basis",
    "killing_tests": [
@@ -1577,7 +1577,7 @@
    "id": "P1-M047",
    "family": "repair/ILRP/recovery",
    "operator": "wrong-holder-selection",
-   "source": "crates/liminal-xtask/src/haq.rs:5152",
+    "source": "crates/liminal-xtask/src/haq.rs:5535",
    "requirement": "P1-R015",
    "defect": "apply graph step as file step",
    "killing_tests": [
@@ -1590,7 +1590,7 @@
    "id": "P1-M048",
    "family": "repair/ILRP/recovery",
    "operator": "skipped-durable-transition",
-   "source": "crates/liminal-xtask/src/haq.rs:5152",
+    "source": "crates/liminal-xtask/src/haq.rs:5535",
    "requirement": "P1-R015",
    "defect": "skip ack persistence",
    "killing_tests": [
@@ -1603,7 +1603,7 @@
    "id": "P1-M049",
    "family": "repair/ILRP/recovery",
    "operator": "disabled-crash-point",
-   "source": "crates/liminal-xtask/src/haq.rs:5152",
+    "source": "crates/liminal-xtask/src/haq.rs:5535",
    "requirement": "P1-R015",
    "defect": "disable before_ack point",
    "killing_tests": [
@@ -1616,7 +1616,7 @@
    "id": "P1-M050",
    "family": "repair/ILRP/recovery",
    "operator": "ordering-nondeterminism",
-   "source": "crates/liminal-xtask/src/haq.rs:5152",
+    "source": "crates/liminal-xtask/src/haq.rs:5535",
    "requirement": "P1-R015",
    "defect": "recover steps unordered",
    "killing_tests": [
@@ -1629,7 +1629,7 @@
    "id": "P1-M051",
    "family": "repair/ILRP/recovery",
    "operator": "oracle-short-circuit",
-   "source": "crates/liminal-xtask/src/haq.rs:5152",
+    "source": "crates/liminal-xtask/src/haq.rs:5535",
    "requirement": "P1-R015",
    "defect": "compare recovery digest to itself",
    "killing_tests": [
@@ -1642,7 +1642,7 @@
    "id": "P1-M052",
    "family": "repair/ILRP/recovery",
    "operator": "broadened-allow-list",
-   "source": "crates/liminal-xtask/src/haq.rs:5152",
+    "source": "crates/liminal-xtask/src/haq.rs:5535",
    "requirement": "P1-R016",
    "defect": "allow mixed Basis recovery",
    "killing_tests": [
@@ -1655,7 +1655,7 @@
    "id": "P1-M053",
    "family": "Basis/revision/query invalidation",
    "operator": "predicate-deletion",
-   "source": "crates/liminal-xtask/src/haq.rs:5266",
+    "source": "crates/liminal-xtask/src/haq.rs:5631",
    "requirement": "P1-R017",
    "defect": "delete invalidation predicate",
    "killing_tests": [
@@ -1668,7 +1668,7 @@
    "id": "P1-M054",
    "family": "Basis/revision/query invalidation",
    "operator": "predicate-inversion",
-   "source": "crates/liminal-xtask/src/haq.rs:5266",
+    "source": "crates/liminal-xtask/src/haq.rs:5631",
    "requirement": "P1-R017",
    "defect": "invert revision freshness check",
    "killing_tests": [
@@ -1681,7 +1681,7 @@
    "id": "P1-M055",
    "family": "Basis/revision/query invalidation",
    "operator": "threshold-plus-one",
-   "source": "crates/liminal-xtask/src/haq.rs:5266",
+    "source": "crates/liminal-xtask/src/haq.rs:5631",
    "requirement": "P1-R018",
    "defect": "advance revision clock",
    "killing_tests": [
@@ -1694,7 +1694,7 @@
    "id": "P1-M056",
    "family": "Basis/revision/query invalidation",
    "operator": "threshold-minus-one",
-   "source": "crates/liminal-xtask/src/haq.rs:5266",
+    "source": "crates/liminal-xtask/src/haq.rs:5631",
    "requirement": "P1-R018",
    "defect": "retreat revision clock",
    "killing_tests": [
@@ -1707,7 +1707,7 @@
    "id": "P1-M057",
    "family": "Basis/revision/query invalidation",
    "operator": "missing-enum-dispatch",
-   "source": "crates/liminal-xtask/src/haq.rs:5266",
+    "source": "crates/liminal-xtask/src/haq.rs:5631",
    "requirement": "P1-R019",
    "defect": "drop BasisPerspective variant",
    "killing_tests": [
@@ -1720,7 +1720,7 @@
    "id": "P1-M058",
    "family": "Basis/revision/query invalidation",
    "operator": "success-error-substitution",
-   "source": "crates/liminal-xtask/src/haq.rs:5266",
+    "source": "crates/liminal-xtask/src/haq.rs:5631",
    "requirement": "P1-R016",
    "defect": "accept invalid revision query",
    "killing_tests": [
@@ -1733,7 +1733,7 @@
    "id": "P1-M059",
    "family": "Basis/revision/query invalidation",
    "operator": "stale-basis-acceptance",
-   "source": "crates/liminal-xtask/src/haq.rs:5266",
+    "source": "crates/liminal-xtask/src/haq.rs:5631",
    "requirement": "P1-R017",
    "defect": "serve query from stale Basis",
    "killing_tests": [
@@ -1746,7 +1746,7 @@
    "id": "P1-M060",
    "family": "Basis/revision/query invalidation",
    "operator": "wrong-holder-selection",
-   "source": "crates/liminal-xtask/src/haq.rs:5266",
+    "source": "crates/liminal-xtask/src/haq.rs:5631",
    "requirement": "P1-R019",
    "defect": "bind query to wrong perspective",
    "killing_tests": [
@@ -1759,7 +1759,7 @@
    "id": "P1-M061",
    "family": "Basis/revision/query invalidation",
    "operator": "skipped-durable-transition",
-   "source": "crates/liminal-xtask/src/haq.rs:5266",
+    "source": "crates/liminal-xtask/src/haq.rs:5631",
    "requirement": "P1-R015",
    "defect": "skip revision publish checkpoint",
    "killing_tests": [
@@ -1772,7 +1772,7 @@
    "id": "P1-M062",
    "family": "Basis/revision/query invalidation",
    "operator": "disabled-crash-point",
-   "source": "crates/liminal-xtask/src/haq.rs:5266",
+    "source": "crates/liminal-xtask/src/haq.rs:5631",
    "requirement": "P1-R015",
    "defect": "disable revision recovery point",
    "killing_tests": [
@@ -1785,7 +1785,7 @@
    "id": "P1-M063",
    "family": "Basis/revision/query invalidation",
    "operator": "ordering-nondeterminism",
-   "source": "crates/liminal-xtask/src/haq.rs:5266",
+    "source": "crates/liminal-xtask/src/haq.rs:5631",
    "requirement": "P1-R018",
    "defect": "iterate invalidations unordered",
    "killing_tests": [
@@ -1798,7 +1798,7 @@
    "id": "P1-M064",
    "family": "Basis/revision/query invalidation",
    "operator": "oracle-short-circuit",
-   "source": "crates/liminal-xtask/src/haq.rs:5266",
+    "source": "crates/liminal-xtask/src/haq.rs:5631",
    "requirement": "P1-R017",
    "defect": "self-compare query result",
    "killing_tests": [
@@ -1811,7 +1811,7 @@
    "id": "P1-M065",
    "family": "Basis/revision/query invalidation",
    "operator": "broadened-allow-list",
-   "source": "crates/liminal-xtask/src/haq.rs:5266",
+    "source": "crates/liminal-xtask/src/haq.rs:5631",
    "requirement": "P1-R019",
    "defect": "allow unknown Basis perspective",
    "killing_tests": [
@@ -2036,7 +2036,7 @@
    ],
    "oracle": {
     "id": "oracle:source_CST_formatting",
-    "source": "generator-owned independent witness checks"
+    "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_cst"
    }
   },
   {
@@ -2074,7 +2074,7 @@
    ],
    "oracle": {
     "id": "oracle:graph_interchange_codecs",
-    "source": "generator-owned independent witness checks"
+    "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_graph"
    }
   },
   {
@@ -2112,7 +2112,7 @@
    ],
    "oracle": {
     "id": "oracle:transforms_projections",
-    "source": "generator-owned independent witness checks"
+    "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_transform"
    }
   },
   {
@@ -2152,7 +2152,7 @@
    ],
    "oracle": {
     "id": "oracle:repair_ILRP_recovery",
-    "source": "generator-owned independent witness checks"
+    "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_repair"
    }
   },
   {
@@ -2191,7 +2191,7 @@
    ],
    "oracle": {
     "id": "oracle:Basis_revision_query_invalidation",
-    "source": "generator-owned independent witness checks"
+    "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_invalidation"
    }
   }
  ],

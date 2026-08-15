@@ -79,7 +79,22 @@ impl IncrementalCompiler for ParagraphCompiler {
                     .iter()
                     .enumerate()
                     .any(|(other, &(other_start, other_end, _))| {
-                        other != index && start < other_end && other_start < end
+                        if other == index {
+                            return false;
+                        }
+                        // Empty edits are insertions at an original offset.
+                        // Two insertions at one offset, or an insertion on a
+                        // replacement boundary, have no deterministic order;
+                        // reject the whole overlap set fail-closed.
+                        if start == end && other_start == other_end {
+                            start == other_start
+                        } else if start == end {
+                            other_start <= start && start <= other_end
+                        } else if other_start == other_end {
+                            start <= other_start && other_start <= end
+                        } else {
+                            start < other_end && other_start < end
+                        }
                     });
             if overlaps {
                 continue;
@@ -279,6 +294,42 @@ mod tests {
             },
         ];
         assert_eq!(ParagraphCompiler.apply(&source, &edits), "abcdef");
+    }
+
+    #[test]
+    fn same_offset_insertions_are_ignored_as_overlapping() {
+        let source = "ab".to_owned();
+        let edits = [
+            SourceEdit {
+                start: 1,
+                end: 1,
+                replacement: "X".to_owned(),
+            },
+            SourceEdit {
+                start: 1,
+                end: 1,
+                replacement: "Y".to_owned(),
+            },
+        ];
+        assert_eq!(ParagraphCompiler.apply(&source, &edits), source);
+    }
+
+    #[test]
+    fn boundary_insertion_and_replacement_are_ignored_as_overlapping() {
+        let source = "ab".to_owned();
+        let edits = [
+            SourceEdit {
+                start: 1,
+                end: 1,
+                replacement: "X".to_owned(),
+            },
+            SourceEdit {
+                start: 1,
+                end: 2,
+                replacement: "Y".to_owned(),
+            },
+        ];
+        assert_eq!(ParagraphCompiler.apply(&source, &edits), source);
     }
 
     #[test]

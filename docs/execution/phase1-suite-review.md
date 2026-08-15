@@ -26,7 +26,7 @@ authorization, suite ratification, or access to locked acceptance inputs.
 | complete post-fix qualification rerun | NOT_RUN |
 | machine inventory | `conformance/haqp/packet.json` (`cargo run -p liminal-xtask -- haq verify-inventory`) |
 | machine inventory BLAKE3 | `aec2dea85361b1f9d87a8e8c4abe8fbf98cd0262d5baac189403e211de979975` |
-| packet digest | `d57cb9493d16850549c67f0c907b6ab71fcbc93ed440604a4340107a1250276a` |
+| packet digest | `023ea8e3658241cfc8708b2170fc245b797c56a437d46a27f9692799f46bde83` |
 
 ## Execution lanes
 
@@ -154,7 +154,7 @@ require proof plus concurrence in both independent review records.
 
 ## Disposable gate-canary campaign
 
-Target: exactly **16 predeclared canaries** covering every ratification gate and
+Target: exactly **25 predeclared canaries** covering every ratification gate and
 every M17 Level-3 measurement conjunct. Execution occurs outside working tree and
 restores fixed review base after each attempt.
 
