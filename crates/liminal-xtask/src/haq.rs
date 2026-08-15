@@ -3978,6 +3978,8 @@ fn verify_corpus_scope_replays(
             &row.command,
             &expected_command,
         )?;
+        // `row.command` is shell syntax only after exact equality with the
+        // closed lane-command registry above; never execute an unbound field.
         let output = Command::new("sh")
             .current_dir(&worktree)
             .args(["-c", &row.command])
@@ -6933,7 +6935,6 @@ fn is_qualification_canary(id: &str) -> bool {
     matches!(id, "C26" | "C27" | "C28" | "C29" | "C30" | "C31" | "C32")
 }
 
-#[derive(Default)]
 struct QualificationCanaryState {
     provenance_bound: bool,
     sanitizer_replayed: bool,
