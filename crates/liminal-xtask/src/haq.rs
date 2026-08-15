@@ -272,7 +272,7 @@ fn verify_canary_evidence_replay(
         markdown.contains(&baseline_digest),
         "fixed canary Markdown is not bound to fixed packet digest"
     );
-    let replayed = run_canary_suite(&baseline, &markdown)?;
+    let replayed = run_canary_suite(root, &baseline, &markdown)?;
     anyhow::ensure!(
         replayed == recorded,
         "committed canary evidence differs from replay from fixed inventory commit"
@@ -3468,10 +3468,14 @@ fn verify_sanitizer_proof(
         blake3::hash(&build_log_bytes).to_hex().as_ref(),
     )?;
     let build_log_text = String::from_utf8_lossy(&build_log_bytes);
+    // Cargo's build output does not repeat the shell command when the wrapper
+    // records stdout only. The command is already closed by `build_command`;
+    // this log proves successful completion, while fixed-base replay below
+    // proves the binary came from that command rather than from a self-authored
+    // marker.
     anyhow::ensure!(
-        build_log_text.contains(&proof.build_command)
-            && (build_log_text.contains("Finished") || build_log_text.contains("finished")),
-        "{} sanitizer build log does not show requested successful build",
+        build_log_text.contains("Finished") || build_log_text.contains("finished"),
+        "{} sanitizer build log does not show successful build",
         row.target
     );
     require_hex_digest(
@@ -6242,13 +6246,21 @@ fn verify_markdown_surface_text(text: &str, packet: &Packet) -> Result<()> {
 /// packet's implementation label is not a schedule result; each sequence must
 /// carry an independent oracle digest and a passing replay outcome.
 fn verify_concurrency_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
-    let applicable = packet.concurrent_code == "deterministic_schedule_exploration";
     let path = root.join("conformance/haqp/evidence/concurrency.json");
     let evidence: ConcurrentEvidence = serde_json::from_slice(
         &fs::read(&path)
             .with_context(|| format!("{path}: concurrent schedule evidence required"))?,
     )
     .with_context(|| format!("parse {path}"))?;
+    verify_concurrency_evidence_record(root, packet, &evidence)
+}
+
+fn verify_concurrency_evidence_record(
+    root: &Utf8Path,
+    packet: &Packet,
+    evidence: &ConcurrentEvidence,
+) -> Result<()> {
+    let applicable = packet.concurrent_code == "deterministic_schedule_exploration";
     require_eq(
         "concurrency schema_version",
         &evidence.schema_version,
@@ -6275,6 +6287,13 @@ fn verify_concurrency_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
                 && evidence.reason.contains("no concurrent implementation"),
             "not-applicable concurrency evidence must state why schedule exploration is absent"
         );
+        verify_git_coordinate(
+            root,
+            &evidence.source_commit,
+            &evidence.source_tree,
+            &evidence.source_anchor,
+            "concurrency",
+        )?;
         return Ok(());
     }
     require_eq("concurrency mode", &evidence.mode, "executed")?;
@@ -6337,6 +6356,44 @@ fn verify_concurrency_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
             &expected,
         )?;
     }
+    Ok(())
+}
+
+/// Bind evidence source coordinates to an actual committed Git tree. Shape
+/// checks alone let not-applicable rows carry arbitrary commit/tree claims.
+fn verify_git_coordinate(
+    root: &Utf8Path,
+    commit: &str,
+    tree: &str,
+    coordinate: &str,
+    label: &str,
+) -> Result<()> {
+    require_git_object_id(&format!("{label} source_commit"), commit)?;
+    require_git_object_id(&format!("{label} source_tree"), tree)?;
+    let expected_tree = git_text(root, &["rev-parse", &format!("{commit}^{{tree}}")])?;
+    anyhow::ensure!(
+        tree == expected_tree,
+        "{label} source provenance does not match committed tree"
+    );
+    let (file, line) = coordinate
+        .rsplit_once(':')
+        .with_context(|| format!("{label} source_anchor must be file:line"))?;
+    let line: usize = line
+        .parse()
+        .with_context(|| format!("{label} source_anchor line is not numeric"))?;
+    anyhow::ensure!(
+        line > 0
+            && !file.is_empty()
+            && !file.starts_with('/')
+            && !file.split('/').any(|part| part == "..")
+            && !is_locked_acceptance_path(file),
+        "{label} source_anchor is unsafe"
+    );
+    let source = git_text(root, &["show", &format!("{commit}:{file}")])?;
+    anyhow::ensure!(
+        source.lines().nth(line - 1).is_some(),
+        "{label} source_anchor line {line} is absent from committed source"
+    );
     Ok(())
 }
 
@@ -7014,7 +7071,7 @@ pub fn run_canaries_repo(root: &Utf8Path) -> Result<()> {
     verify_inventory_repo(root)?;
     let markdown_path = root.join("docs/execution/phase1-suite-review.md");
     let markdown = fs::read_to_string(&markdown_path)?;
-    let records = run_canary_suite(&baseline, &markdown)?;
+    let records = run_canary_suite(root, &baseline, &markdown)?;
     let bytes = serde_json::to_vec_pretty(&records)?;
     let path = root.join("conformance/haqp/evidence/canaries.json");
     fs::create_dir_all(path.parent().expect("evidence parent"))?;
@@ -7046,7 +7103,11 @@ pub fn run_canaries_repo(root: &Utf8Path) -> Result<()> {
 /// minimum when canary 17 is written — would have left the new canaries
 /// declared, counted, and never executed. The loop now cannot disagree with the
 /// table it reports on.
-fn run_canary_suite(baseline: &Packet, markdown: &str) -> Result<Vec<CanaryEvidence>> {
+fn run_canary_suite(
+    root: &Utf8Path,
+    baseline: &Packet,
+    markdown: &str,
+) -> Result<Vec<CanaryEvidence>> {
     let baseline_digest = packet_digest(baseline)?;
     let mut records = Vec::new();
     for row in &baseline.canaries {
@@ -7064,7 +7125,7 @@ fn run_canary_suite(baseline: &Packet, markdown: &str) -> Result<Vec<CanaryEvide
             performed,
         )?;
         let observed = if is_qualification_canary(&row.id) {
-            run_qualification_canary(&row.id)
+            run_qualification_canary(root, baseline, &row.id)
                 .expect_err("qualification canary must fail closed")
                 .to_string()
         } else {
@@ -7112,7 +7173,18 @@ struct QualificationCanaryState {
 /// Execute deliberate failures for qualified-only gates whose evidence does
 /// not exist in the proposed inventory packet. Each arm mutates a valid
 /// qualification state, then invokes the closed failure contract.
-fn run_qualification_canary(id: &str) -> Result<()> {
+fn run_qualification_canary(root: &Utf8Path, packet: &Packet, id: &str) -> Result<()> {
+    if id == "C27" {
+        return run_sanitizer_canary(root);
+    }
+    if id == "C32" {
+        let path = root.join("conformance/haqp/evidence/concurrency.json");
+        let mut evidence: ConcurrentEvidence = serde_json::from_slice(&fs::read(&path)?)?;
+        evidence.source_tree = "0".repeat(40);
+        verify_concurrency_evidence_record(root, packet, &evidence)
+            .expect_err("concurrency provenance canary must fail closed");
+        anyhow::bail!("concurrency provenance does not match committed tree");
+    }
     let mut state = QualificationCanaryState {
         provenance_bound: true,
         sanitizer_replayed: true,
@@ -7124,7 +7196,7 @@ fn run_qualification_canary(id: &str) -> Result<()> {
     };
     match id {
         "C26" => state.provenance_bound = false,
-        "C27" => state.sanitizer_replayed = false,
+        "C27" => unreachable!("sanitizer canary handled by runtime verifier"),
         "C28" => state.oracle_independent = false,
         "C29" => state.campaign_within_clock = false,
         "C30" => state.risks_coordinate_bound = false,
@@ -7133,6 +7205,58 @@ fn run_qualification_canary(id: &str) -> Result<()> {
         _ => anyhow::bail!("unknown qualification canary {id}"),
     }
     verify_qualification_canary_state(&state)
+}
+
+/// Replace one retained sanitizer binary's runtime marker with inert bytes and
+/// invoke the same compiler/runtime proof verifier used by qualification. This
+/// keeps C27 tied to an executable artifact attack, not an in-memory boolean.
+fn run_sanitizer_canary(root: &Utf8Path) -> Result<()> {
+    let path = root.join("conformance/haqp/evidence/fuzz.json");
+    let rows: Vec<FuzzEvidence> = serde_json::from_slice(&fs::read(&path)?)?;
+    let row = rows
+        .iter()
+        .find(|row| row.sanitizer_proof.is_some())
+        .context("sanitizer canary requires retained sanitizer proof")?;
+    let mut proof = row
+        .sanitizer_proof
+        .clone()
+        .context("sanitizer canary requires retained sanitizer proof")?;
+    let scratch = liminal_scratch::ScratchDir::new("haq-sanitizer-canary")?;
+    let scratch_root = scratch.path();
+    let binary_path = root.join(&proof.binary);
+    let mut binary = fs::read(&binary_path)?;
+    let marker = match row.sanitizer.as_str() {
+        "address" | "leak" => b"asan_globals".as_slice(),
+        "memory" => b"msan".as_slice(),
+        "thread" => b"tsan".as_slice(),
+        _ => anyhow::bail!("unsupported sanitizer {}", row.sanitizer),
+    };
+    let mut replaced = false;
+    for offset in 0..=binary.len().saturating_sub(marker.len()) {
+        if &binary[offset..offset + marker.len()] == marker {
+            binary[offset..offset + marker.len()].fill(b'X');
+            replaced = true;
+        }
+    }
+    anyhow::ensure!(
+        replaced,
+        "sanitizer canary source binary has no runtime marker"
+    );
+    let scratch_binary = scratch_root.join(&proof.binary);
+    let scratch_probe = scratch_root.join(&proof.runtime_probe);
+    let scratch_log = scratch_root.join(&proof.build_log);
+    fs::create_dir_all(scratch_binary.parent().expect("binary parent"))?;
+    fs::create_dir_all(scratch_probe.parent().expect("probe parent"))?;
+    fs::create_dir_all(scratch_log.parent().expect("log parent"))?;
+    fs::write(&scratch_binary, &binary)?;
+    fs::copy(root.join(&proof.runtime_probe), &scratch_probe)?;
+    fs::copy(root.join(&proof.build_log), &scratch_log)?;
+    proof.binary_blake3 = hex_digest(&binary);
+    proof.runtime_probe_blake3 = hex_digest(&fs::read(&scratch_probe)?);
+    proof.build_log_blake3 = hex_digest(&fs::read(&scratch_log)?);
+    let error = verify_sanitizer_proof(scratch_root, row, &proof, None)
+        .expect_err("uninstrumented sanitizer canary must fail closed");
+    anyhow::bail!("sanitizer proof lacks compiler/runtime replay: {error}");
 }
 
 fn verify_qualification_canary_state(state: &QualificationCanaryState) -> Result<()> {
@@ -7330,12 +7454,12 @@ fn mutate_canary(
             "duplicate reviewer identity"
         }
         "C26" => "remove qualification provenance",
-        "C27" => "accept uninstrumented sanitizer binary",
+        "C27" => "replace retained sanitizer binary marker and invoke runtime proof verifier",
         "C28" => "reuse production oracle for expected result",
         "C29" => "exceed eight-hour ceiling",
         "C30" => "omit residual-risk coordinate",
         "C31" => "trace only scope probe",
-        "C32" => "fabricate schedule result",
+        "C32" => "replace not-applicable concurrency source_tree with unrelated Git object",
         _ => anyhow::bail!(
             "unknown canary {id}: the packet declares a canary with no implemented \
              mutation, so it would otherwise be counted as caught without running"
@@ -7386,12 +7510,12 @@ fn canary_mutation_semantics(id: &str) -> Result<&'static str> {
         "C24" => Ok("crash_boundaries[0].before := false"),
         "C25" => Ok("reviews[1].reviewer := reviews[0].reviewer"),
         "C26" => Ok("qualification.provenance := None"),
-        "C27" => Ok("sanitizer proof := marker-only"),
+        "C27" => Ok("replace retained sanitizer binary marker and invoke runtime proof verifier"),
         "C28" => Ok("generated oracle.independent := false"),
         "C29" => Ok("campaign elapsed_s := 8h+1s"),
         "C30" => Ok("residual_risk.coordinate := empty"),
         "C31" => Ok("scope trace command := scope-probe only"),
-        "C32" => Ok("concurrency schedule := self-declared pass"),
+        "C32" => Ok("replace not-applicable concurrency source_tree with unrelated Git object"),
         _ => anyhow::bail!("unknown canary {id}"),
     }
 }
@@ -8765,11 +8889,12 @@ mod tests {
         let baseline = packet_from_repo();
 
         // The honest packet must pass, or the assertion below proves nothing.
-        run_canary_suite(&baseline, &markdown).expect("the committed canary table must agree");
+        run_canary_suite(&root, &baseline, &markdown)
+            .expect("the committed canary table must agree");
 
         let mut doctored = baseline.clone();
         doctored.canaries[8].violation = "reticulates splines".to_owned();
-        let err = run_canary_suite(&doctored, &markdown)
+        let err = run_canary_suite(&root, &doctored, &markdown)
             .expect_err("prose that misdescribes the executed mutation must fail closed");
         assert!(
             err.to_string().contains("C09.violation"),

@@ -139,7 +139,7 @@
     "gate": "markdown",
     "violation": "remove packet digest",
     "expected_failure": "review packet markdown missing packet digest",
-    "observed_failure": "review packet markdown missing packet digest 40b81485baa2c49743c8457128e865d0b0a4cc2ba7bf351e628c26fd5cb9063c",
+    "observed_failure": "review packet markdown missing packet digest 5150b71432aace57b00c298817e7588e0162322e9ba7f2d33442a2b94cc354d0",
     "caught": true,
     "mutation_semantics": "remove baseline packet digest from markdown"
   },
@@ -236,11 +236,11 @@
   {
     "id": "C27",
     "gate": "sanitizer",
-    "violation": "accept uninstrumented sanitizer binary",
+    "violation": "replace retained sanitizer binary marker and invoke runtime proof verifier",
     "expected_failure": "sanitizer proof lacks compiler/runtime replay",
-    "observed_failure": "sanitizer proof lacks compiler/runtime replay",
+    "observed_failure": "sanitizer proof lacks compiler/runtime replay: cst_parse: sanitizer binary has no address runtime marker",
     "caught": true,
-    "mutation_semantics": "sanitizer proof := marker-only"
+    "mutation_semantics": "replace retained sanitizer binary marker and invoke runtime proof verifier"
   },
   {
     "id": "C28",
@@ -281,10 +281,10 @@
   {
     "id": "C32",
     "gate": "concurrency",
-    "violation": "fabricate schedule result",
-    "expected_failure": "concurrency schedule lacks executed replay",
-    "observed_failure": "concurrency schedule lacks executed replay",
+    "violation": "replace not-applicable concurrency source_tree with unrelated Git object",
+    "expected_failure": "concurrency provenance does not match committed tree",
+    "observed_failure": "concurrency provenance does not match committed tree",
     "caught": true,
-    "mutation_semantics": "concurrency schedule := self-declared pass"
+    "mutation_semantics": "replace not-applicable concurrency source_tree with unrelated Git object"
   }
 ]

@@ -2007,7 +2007,7 @@
   {
    "id": "C27",
    "gate": "sanitizer",
-   "violation": "accept uninstrumented sanitizer binary",
+   "violation": "replace retained sanitizer binary marker and invoke runtime proof verifier",
    "expected_failure": "sanitizer proof lacks compiler/runtime replay",
    "result": "predeclared"
   },
@@ -2042,8 +2042,8 @@
   {
    "id": "C32",
    "gate": "concurrency",
-   "violation": "fabricate schedule result",
-   "expected_failure": "concurrency schedule lacks executed replay",
+   "violation": "replace not-applicable concurrency source_tree with unrelated Git object",
+   "expected_failure": "concurrency provenance does not match committed tree",
    "result": "predeclared"
   }
  ],
