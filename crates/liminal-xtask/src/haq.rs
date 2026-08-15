@@ -7222,6 +7222,23 @@ fn run_sanitizer_canary(root: &Utf8Path) -> Result<()> {
         .context("sanitizer canary requires retained sanitizer proof")?;
     let scratch = liminal_scratch::ScratchDir::new("haq-sanitizer-canary")?;
     let scratch_root = scratch.path();
+    // ScratchDir is fresh and private to this canary. Reject path escapes
+    // before reading committed artifacts or creating any scratch entry.
+    for (path, label) in [
+        (&proof.binary, "sanitizer canary binary"),
+        (&proof.runtime_probe, "sanitizer canary probe"),
+        (&proof.build_log, "sanitizer canary build log"),
+    ] {
+        let candidate = Utf8Path::new(path);
+        anyhow::ensure!(
+            !candidate.is_absolute()
+                && !candidate
+                    .components()
+                    .any(|part| part == camino::Utf8Component::ParentDir)
+                && !is_locked_acceptance_path(path),
+            "{label} path {path:?} escapes scratch evidence root"
+        );
+    }
     let binary_path = safe_repo_path(root, &proof.binary, "sanitizer canary binary")?;
     let mut binary = fs::read(&binary_path)?;
     let marker = match row.sanitizer.as_str() {
@@ -7241,21 +7258,6 @@ fn run_sanitizer_canary(root: &Utf8Path) -> Result<()> {
         replaced,
         "sanitizer canary source binary has no runtime marker"
     );
-    for (path, label) in [
-        (&proof.binary, "sanitizer canary binary"),
-        (&proof.runtime_probe, "sanitizer canary probe"),
-        (&proof.build_log, "sanitizer canary build log"),
-    ] {
-        let candidate = Utf8Path::new(path);
-        anyhow::ensure!(
-            !candidate.is_absolute()
-                && !candidate
-                    .components()
-                    .any(|part| part == camino::Utf8Component::ParentDir)
-                && !is_locked_acceptance_path(path),
-            "{label} path {path:?} escapes scratch evidence root"
-        );
-    }
     let scratch_binary_path = scratch_root.join(&proof.binary);
     let scratch_probe_path = scratch_root.join(&proof.runtime_probe);
     let scratch_log_path = scratch_root.join(&proof.build_log);
@@ -7267,24 +7269,9 @@ fn run_sanitizer_canary(root: &Utf8Path) -> Result<()> {
     let build_log_path = safe_repo_path(root, &proof.build_log, "sanitizer canary build log")?;
     fs::copy(runtime_probe_path, &scratch_probe_path)?;
     fs::copy(build_log_path, &scratch_log_path)?;
-    let _scratch_binary = safe_repo_path(
-        scratch_root,
-        &proof.binary,
-        "sanitizer canary scratch binary",
-    )?;
-    let scratch_probe = safe_repo_path(
-        scratch_root,
-        &proof.runtime_probe,
-        "sanitizer canary scratch probe",
-    )?;
-    let scratch_log = safe_repo_path(
-        scratch_root,
-        &proof.build_log,
-        "sanitizer canary scratch build log",
-    )?;
     proof.binary_blake3 = hex_digest(&binary);
-    proof.runtime_probe_blake3 = hex_digest(&fs::read(&scratch_probe)?);
-    proof.build_log_blake3 = hex_digest(&fs::read(&scratch_log)?);
+    proof.runtime_probe_blake3 = hex_digest(&fs::read(&scratch_probe_path)?);
+    proof.build_log_blake3 = hex_digest(&fs::read(&scratch_log_path)?);
     let error = verify_sanitizer_proof(scratch_root, row, &proof, None)
         .expect_err("uninstrumented sanitizer canary must fail closed");
     anyhow::bail!("sanitizer proof lacks compiler/runtime replay: {error}");
