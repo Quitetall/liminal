@@ -1452,6 +1452,21 @@ fn verify_review_record(root: &Utf8Path, review: &Review, record: &ReviewRecord)
         record.blindness_proof.ephemeral_session_requested == expected_ephemeral,
         "{who} blindness session state disagrees with ephemeral_session_requested"
     );
+    require_eq(
+        "review integrity_binding_sha256",
+        &record.integrity_binding_sha256,
+        &sha256_text(&format!(
+            "haqp-review-integrity-v1\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}",
+            record.pass,
+            record.reviewer.model_family,
+            record.fixed_base.commit,
+            record.fixed_base.tree,
+            record.prompt_binding_sha256,
+            record.raw_response_sha256,
+            record.result,
+            record.unresolved_verified_findings
+        )),
+    )?;
     Ok(())
 }
 
@@ -5674,7 +5689,7 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
             142,
             "if !text.is_empty()",
         ),
-        ("crates/liminal-cst/src/parser.rs", 157, "pub fn syntax("),
+        ("crates/liminal-cst/src/parser.rs", 196, "if !valid_close"),
         ("crates/liminal-cst/src/parser.rs", 163, "pub fn errors("),
         ("crates/liminal-cst/src/parser.rs", 169, "pub fn basis("),
         ("crates/liminal-cst/src/parser.rs", 64, "match raw.0 {"),
@@ -9369,7 +9384,7 @@ mod tests {
         let root = repo_root();
         let commit = git_text(&root, &["rev-parse", "HEAD"]).expect("test HEAD");
         let tree = git_text(&root, &["rev-parse", "HEAD^{tree}"]).expect("test tree");
-        ReviewRecord {
+        let mut record = ReviewRecord {
             schema_version: "haqp-blind-review-v1".to_owned(),
             pass,
             reviewer: ReviewRecordReviewer {
@@ -9386,7 +9401,7 @@ mod tests {
             unresolved_verified_findings: 0,
             result: "pass".to_owned(),
             raw_response_sha256: "a".repeat(64),
-            integrity_binding_sha256: "b".repeat(64),
+            integrity_binding_sha256: String::new(),
             isolated_session_hash: hex_digest(format!("session:{family}:{pass}").as_bytes()),
             sanitized_prompt_hash: hex_digest(format!("prompt:{family}").as_bytes()),
             prompt_binding_sha256: sha256_text(&format!(
@@ -9407,7 +9422,19 @@ mod tests {
                 prior_pass_artifact_supplied: false,
                 pass_two_original_spec_only: pass == 2,
             },
-        }
+        };
+        record.integrity_binding_sha256 = sha256_text(&format!(
+            "haqp-review-integrity-v1\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}",
+            record.pass,
+            record.reviewer.model_family,
+            record.fixed_base.commit,
+            record.fixed_base.tree,
+            record.prompt_binding_sha256,
+            record.raw_response_sha256,
+            record.result,
+            record.unresolved_verified_findings
+        ));
+        record
     }
 
     fn review_row() -> Review {
@@ -9498,6 +9525,18 @@ mod tests {
         let err = verify_review_record(&repo_root(), &review_row(), &record)
             .expect_err("review identity must bind to pass and model family");
         assert!(err.to_string().contains("identity_hash"), "{err}");
+    }
+
+    #[test]
+    fn review_integrity_binding_rejects_arbitrary_digests() {
+        let mut record = review_record(1, "openai", "codex");
+        record.raw_response_sha256 = "c".repeat(64);
+        let err = verify_review_record(&repo_root(), &review_row(), &record)
+            .expect_err("raw-response digest must be bound to integrity receipt");
+        assert!(
+            err.to_string().contains("integrity_binding_sha256"),
+            "{err}"
+        );
     }
 
     #[test]

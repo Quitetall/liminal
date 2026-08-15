@@ -992,7 +992,7 @@
   "id": "P1-M002",
   "family": "source/CST/formatting",
   "operator": "predicate-inversion",
-    "source": "crates/liminal-cst/src/parser.rs:157",
+    "source": "crates/liminal-cst/src/parser.rs:196",
    "requirement": "P1-R001",
    "defect": "invert formatter fixed-point predicate",
    "killing_tests": [

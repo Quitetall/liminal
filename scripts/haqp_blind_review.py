@@ -561,6 +561,25 @@ def bound_record_hash(*, prompt_hash: str, fixed_base: dict[str, Any], parsed: d
     return digest(json.dumps(bound, sort_keys=True, separators=(",", ":")).encode())
 
 
+def record_integrity_hash(*, record: dict[str, Any]) -> str:
+    """Bind persisted scalar provenance to one deterministic review record."""
+    return digest(
+        "\0".join(
+            [
+                "haqp-review-integrity-v1",
+                str(record["pass"]),
+                str(record["reviewer"]["model_family"]),
+                str(record["fixed_base"]["commit"]),
+                str(record["fixed_base"]["tree"]),
+                str(record["prompt_binding_sha256"]),
+                str(record["raw_response_sha256"]),
+                str(record["result"]),
+                str(record["unresolved_verified_findings"]),
+            ]
+        ).encode()
+    )
+
+
 def run_pass(
     name: str, model: str, context: str, fixed_base: dict[str, Any], *, pass_two: bool
 ) -> dict[str, Any]:
@@ -655,9 +674,7 @@ def run_pass(
         "fixed_base": fixed_base,
         "raw_response_sha256": digest(raw.encode()),
     }
-    record["integrity_binding_sha256"] = bound_record_hash(
-        prompt_hash=prompt_hash, fixed_base=fixed_base, parsed=parsed, raw=raw
-    )
+    record["integrity_binding_sha256"] = record_integrity_hash(record=record)
     # Do not persist raw model output; it is untrusted and may contain secrets.
     (OUT / f"{name}.json").write_text(json.dumps(record, indent=2) + "\n")
     return record
