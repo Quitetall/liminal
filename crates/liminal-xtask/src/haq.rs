@@ -78,6 +78,7 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     verify_canary_evidence(root, &packet)?;
     verify_generated_evidence(root, &packet)?;
     verify_review_evidence(root, &packet)?;
+    verify_mutant_concurrence(root, &packet)?;
     // HAQP-1a qualifies packet machinery before Phase 1 authorization; its
     // inventory may still name future M18-M24 tests. HAQP-1b runs at M24 and
     // must bind every declared test to a real, runnable function.
@@ -1214,7 +1215,48 @@ fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         );
         records.push((review.reviewer.clone(), record));
     }
-    verify_reviewer_independence(&records)
+    verify_reviewer_independence(&records)?;
+    verify_cross_pass_reproduction(&records)
+}
+
+/// A reviewer cannot make its own "independent reproduction" true by setting
+/// two booleans in one record. Every reproduced finding must have a matching
+/// verified defect in the other isolated pass, with the same attack class and
+/// exact source target. This is the minimum durable join between the two
+/// records; finding IDs remain pass-local and therefore are not compared.
+fn verify_cross_pass_reproduction(records: &[(String, ReviewRecord)]) -> Result<()> {
+    if records.is_empty() {
+        return Ok(());
+    }
+    anyhow::ensure!(
+        records.len() == 2,
+        "cross-pass reproduction requires two records"
+    );
+    for (index, (who, record)) in records.iter().enumerate() {
+        let other = &records[1 - index].1;
+        let findings = review_finding_ids(&record.findings, &record.attempts, who)?;
+        for finding_id in &record.independently_reproduced {
+            let attempt_id = findings.get(finding_id.as_str()).with_context(|| {
+                format!("{who}: reproduced finding {finding_id:?} is not linked")
+            })?;
+            let attempt = record
+                .attempts
+                .iter()
+                .find(|attempt| attempt.id == *attempt_id)
+                .expect("finding linkage validated");
+            let matched = other.attempts.iter().any(|candidate| {
+                candidate.classification == "verified_defect"
+                    && candidate.independently_reproduced
+                    && candidate.attack_class == attempt.attack_class
+                    && candidate.target == attempt.target
+            });
+            anyhow::ensure!(
+                matched,
+                "{who}: reproduced finding {finding_id:?} has no matching independently reproduced defect in the other pass"
+            );
+        }
+    }
+    Ok(())
 }
 
 /// One review row against its own committed record (M17.5 F-27 / P1-A05, A06).
@@ -1572,6 +1614,21 @@ fn verify_review_resolution(
         &resolution.evidence_sha256,
         &digest,
     )?;
+    let committed_bytes = git_blob(root, &resolution.commit, &resolution.evidence_path)
+        .with_context(|| {
+            format!(
+                "{who}: resolution evidence {} is absent at commit {}",
+                resolution.evidence_path, resolution.commit
+            )
+        })?;
+    let mut committed_hasher = Sha256::new();
+    committed_hasher.update(&committed_bytes);
+    let committed_digest = format!("{:x}", committed_hasher.finalize());
+    require_eq(
+        "resolution committed evidence_sha256",
+        &resolution.evidence_sha256,
+        &committed_digest,
+    )?;
     anyhow::ensure!(
         !resolution.coordinate.trim().is_empty(),
         "{who}: resolved finding attempt {:?} has empty fix coordinate",
@@ -1619,6 +1676,20 @@ fn verify_review_resolution(
         line,
     )?;
     Ok(())
+}
+
+fn git_blob(root: &Utf8Path, commit: &str, path: &str) -> Result<Vec<u8>> {
+    let output = Command::new("git")
+        .current_dir(root)
+        .args(["show", &format!("{commit}:{path}")])
+        .output()
+        .with_context(|| format!("read {commit}:{path} from Git"))?;
+    anyhow::ensure!(
+        output.status.success(),
+        "git show {commit}:{path} failed: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+    Ok(output.stdout)
 }
 
 fn verify_resolution_coordinate_changed(
@@ -2238,6 +2309,96 @@ fn validate_disposition(mutant: &Mutant) -> Result<()> {
             "{} claims killed but names no killing test",
             mutant.id
         );
+    }
+    Ok(())
+}
+
+/// Equivalent/duplicate mutant dispositions must point at findings that exist
+/// in the committed blind records. Reviewer names and pass labels alone are
+/// not concurrence evidence: each tuple resolves to a verified, independently
+/// reproduced finding in its named pass.
+fn verify_mutant_concurrence(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    if !packet
+        .mutants
+        .iter()
+        .any(|mutant| matches!(mutant.disposition.as_str(), "equivalent" | "duplicate"))
+    {
+        return Ok(());
+    }
+    let mut records = BTreeMap::<u8, (String, ReviewRecord)>::new();
+    for review in &packet.reviews {
+        anyhow::ensure!(
+            review.result == "pass",
+            "mutant concurrence requires passing committed review record for {}",
+            review.reviewer
+        );
+        let evidence = review
+            .evidence
+            .as_deref()
+            .with_context(|| format!("{} has no committed review record", review.reviewer))?;
+        let path = safe_repo_path(root, evidence, "mutant concurrence review")?;
+        let record: ReviewRecord =
+            serde_json::from_slice(&fs::read(&path).with_context(|| format!("read {path}"))?)
+                .with_context(|| format!("parse {path}"))?;
+        anyhow::ensure!(
+            records
+                .insert(record.pass, (review.reviewer.clone(), record))
+                .is_none(),
+            "duplicate committed review pass in mutant concurrence"
+        );
+    }
+    for mutant in packet
+        .mutants
+        .iter()
+        .filter(|mutant| matches!(mutant.disposition.as_str(), "equivalent" | "duplicate"))
+    {
+        for concurrence in &mutant.disposition_concurrence {
+            let pass = match concurrence.record.as_str() {
+                "pass-1" => 1,
+                "pass-2" => 2,
+                other => anyhow::bail!(
+                    "{} concurrence record {:?} must be pass-1 or pass-2",
+                    mutant.id,
+                    other
+                ),
+            };
+            let (reviewer, record) = records
+                .get(&pass)
+                .with_context(|| format!("{} concurrence names absent {pass:?}", mutant.id))?;
+            anyhow::ensure!(
+                concurrence.reviewer == *reviewer
+                    || concurrence.reviewer == record.reviewer.model_family,
+                "{} concurrence reviewer {:?} does not identify committed pass {}",
+                mutant.id,
+                concurrence.reviewer,
+                pass
+            );
+            let findings = review_finding_ids(&record.findings, &record.attempts, reviewer)?;
+            let attempt_id = findings
+                .get(concurrence.finding.as_str())
+                .with_context(|| {
+                    format!(
+                        "{} concurrence finding {:?} is absent from committed pass {}",
+                        mutant.id, concurrence.finding, pass
+                    )
+                })?;
+            let attempt = record
+                .attempts
+                .iter()
+                .find(|attempt| attempt.id == *attempt_id)
+                .expect("finding linkage validated");
+            anyhow::ensure!(
+                attempt.classification == "verified_defect"
+                    && attempt.independently_reproduced
+                    && record
+                        .independently_reproduced
+                        .iter()
+                        .any(|id| id == &concurrence.finding),
+                "{} concurrence finding {:?} is not independently reproduced verified defect",
+                mutant.id,
+                concurrence.finding
+            );
+        }
     }
     Ok(())
 }
@@ -3049,8 +3210,11 @@ fn verify_sanitizer_proof(
 ) -> Result<()> {
     anyhow::ensure!(
         !proof.build_command.trim().is_empty()
-            && proof.build_command.contains("fuzz")
-            && proof.build_command.contains(&row.sanitizer),
+            && proof.build_command
+                == format!(
+                    "cargo +nightly fuzz build -s {} {}",
+                    row.sanitizer, row.target
+                ),
         "{}: sanitizer proof build command does not name fuzz build and sanitizer",
         row.target
     );
@@ -3088,6 +3252,7 @@ fn verify_sanitizer_proof(
     anyhow::ensure!(
         binary.is_relative()
             && binary.starts_with("conformance/haqp/evidence/binaries")
+            && binary.file_name() == Some(row.target.as_str())
             && !binary
                 .components()
                 .any(|component| component == camino::Utf8Component::ParentDir),
@@ -3141,6 +3306,13 @@ fn verify_sanitizer_proof(
         row.target,
         row.sanitizer
     );
+    anyhow::ensure!(
+        binary_bytes
+            .windows(row.target.len())
+            .any(|window| window == row.target.as_bytes()),
+        "{}: sanitizer binary has no target identity marker",
+        row.target
+    );
     let probe_output = Command::new(&binary_path)
         .arg("-help=1")
         .output()
@@ -3152,6 +3324,11 @@ fn verify_sanitizer_proof(
     );
     let mut probe_bytes = probe_output.stdout;
     probe_bytes.extend_from_slice(&probe_output.stderr);
+    anyhow::ensure!(
+        String::from_utf8_lossy(&probe_bytes).contains(&row.target),
+        "{}: sanitizer runtime probe does not identify target",
+        row.target
+    );
     let recorded_probe = fs::read(&probe_path)?;
     anyhow::ensure!(
         probe_bytes == recorded_probe,
@@ -3455,6 +3632,43 @@ fn verify_corpus_audit_campaign_binding(root: &Utf8Path, audit: &CorpusAccessAud
             "{}: raw trace does not show target binary execution",
             row.target
         );
+        // The corpus and binary opens must come from the fuzz child, not from
+        // the strace launcher or a build helper. Bind that child to the
+        // launcher's SIGCHLD receipt; a hand-written trace containing only
+        // expected path strings cannot satisfy this relation.
+        let corpus_child_pids = trace_text
+            .lines()
+            .filter(|line| {
+                line.to_ascii_lowercase().contains(&target_corpus_marker)
+                    && line.contains(" openat(")
+            })
+            .filter_map(|line| line.split_whitespace().next())
+            .filter_map(|pid| pid.parse::<u32>().ok())
+            .collect::<BTreeSet<_>>();
+        anyhow::ensure!(
+            corpus_child_pids.len() == 1,
+            "{}: raw trace must identify exactly one fuzz child reading its corpus, got {:?}",
+            row.target,
+            corpus_child_pids
+        );
+        let child_pid = *corpus_child_pids.iter().next().expect("one child checked");
+        let child_exit_receipt = format!("si_pid={child_pid},");
+        anyhow::ensure!(
+            trace_text.lines().any(|line| line.starts_with(&pid_prefix)
+                && line.contains("SIGCHLD")
+                && line.contains(&child_exit_receipt)),
+            "{}: raw trace lacks launcher SIGCHLD receipt for corpus-reading child {}",
+            row.target,
+            child_pid
+        );
+        anyhow::ensure!(
+            trace_text.lines().any(|line| {
+                line.starts_with(&format!("{child_pid} ")) && line.contains(&target_binary_name)
+            }),
+            "{}: target binary execution is not attributed to corpus-reading child {}",
+            row.target,
+            child_pid
+        );
         for forbidden in ["heldout", "conformance/corpora"] {
             anyhow::ensure!(
                 !trace_lower.contains(forbidden),
@@ -3509,6 +3723,22 @@ fn verify_campaign_clock(root: &Utf8Path, expected: Option<&Provenance>) -> Resu
         );
         require_eq("campaign run result", &run.result, "pass")?;
         anyhow::ensure!(run.clean, "campaign run {} was not clean", run.id);
+        require_eq(
+            "campaign wrapper",
+            &run.wrapper,
+            "scripts/haqp_campaign_clock.sh",
+        )?;
+        require_hex_digest("campaign wrapper_sha256", &run.wrapper_sha256)?;
+        let wrapper_bytes = fs::read(root.join(&run.wrapper))
+            .with_context(|| format!("{}: campaign wrapper is required", run.wrapper))?;
+        let mut wrapper_hasher = Sha256::new();
+        wrapper_hasher.update(wrapper_bytes);
+        let wrapper_digest = format!("{:x}", wrapper_hasher.finalize());
+        require_eq(
+            "campaign wrapper_sha256",
+            &run.wrapper_sha256,
+            &wrapper_digest,
+        )?;
     }
     let breaches = clock
         .runs
@@ -3661,7 +3891,6 @@ fn qualification_metadata_path(path: &str) -> bool {
         "conformance/haqp/packet.json"
             | "docs/execution/phase1-suite-review.md"
             | "docs/execution/m17-5-adversarial-findings.md"
-            | "docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md"
     ) || path.starts_with("conformance/haqp/evidence/")
 }
 
@@ -5020,10 +5249,42 @@ fn verify_markdown_surface_text(text: &str, packet: &Packet) -> Result<()> {
     if !text.contains(&digest) {
         anyhow::bail!("review packet markdown missing packet digest {digest}");
     }
+    let status_tuple = format!(
+        "| machine status tuple | qualification_state={}; qualification_stage={}; requirements={}; tests={}; mutants={}; canaries={}; generated={}; crash_boundaries={}; reviews={} |",
+        packet.qualification_state,
+        packet.qualification_stage,
+        packet.requirements.len(),
+        packet.tests.len(),
+        packet.mutants.len(),
+        packet.canaries.len(),
+        packet.generated.len(),
+        packet.crash_boundaries.len(),
+        packet.reviews.len(),
+    );
+    anyhow::ensure!(
+        text.contains(&status_tuple),
+        "review packet markdown machine status tuple disagrees with packet"
+    );
     Ok(())
 }
 
 fn verify_crash_boundary_inventory(packet: &Packet) -> Result<()> {
+    // Closed authority is intentional: runtime and packet declarations must
+    // both be updated when a new durable transition is introduced.
+    const AUTHORITATIVE_CRASH_BOUNDARIES: [&str; 8] = [
+        "ilrp/before_intent_commit",
+        "ilrp/after_intent_commit",
+        "ilrp/before_external_apply",
+        "ilrp/after_external_apply",
+        "ilrp/before_ack",
+        "ilrp/after_ack",
+        "ilrp/before_finalize",
+        "ilrp/after_finalize_before_notify",
+    ];
+    let authoritative = AUTHORITATIVE_CRASH_BOUNDARIES
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
     let registered = liminal_jurisdiction::CrashPoint::all()
         .iter()
         .map(|point| point.name().to_owned())
@@ -5038,6 +5299,10 @@ fn verify_crash_boundary_inventory(packet: &Packet) -> Result<()> {
             "crash-boundary inventory mismatch: declared={declared:?}, registered={registered:?}"
         );
     }
+    anyhow::ensure!(
+        registered == authoritative,
+        "runtime crash-boundary registry differs from closed authoritative registry: runtime={registered:?}, authoritative={authoritative:?}"
+    );
     for row in &packet.crash_boundaries {
         if !row.before || !row.after {
             anyhow::bail!(
@@ -5258,6 +5523,8 @@ struct CampaignRun {
     elapsed_s: u64,
     clean: bool,
     result: String,
+    wrapper: String,
+    wrapper_sha256: String,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -8833,7 +9100,7 @@ mod tests {
             fs::write(
                 &trace_path,
                 format!(
-                    "1 openat(AT_FDCWD, \"/workspace/fuzz/target/x86_64-unknown-linux-gnu/release/{target}\", O_RDONLY) = 3\n1 openat(AT_FDCWD, \"/workspace/fuzz/corpus/{target}\", O_RDONLY) = 3\n1 +++ exited with 0 +++\n"
+                    "2 openat(AT_FDCWD, \"/workspace/fuzz/target/x86_64-unknown-linux-gnu/release/{target}\", O_RDONLY) = 3\n2 openat(AT_FDCWD, \"/workspace/fuzz/corpus/{target}\", O_RDONLY) = 3\n1 --- SIGCHLD {{si_signo=SIGCHLD, si_pid=2, si_status=0}} ---\n1 +++ exited with 0 +++\n"
                 ),
             )
             .expect("trace");
@@ -8952,6 +9219,13 @@ mod tests {
         let root: &Utf8Path = &scratch;
         let path = root.join("conformance/haqp/evidence/campaign.json");
         fs::create_dir_all(path.parent().expect("clock parent")).expect("mkdir");
+        let wrapper = root.join("scripts/haqp_campaign_clock.sh");
+        fs::create_dir_all(wrapper.parent().expect("wrapper parent")).expect("mkdir");
+        fs::write(
+            &wrapper,
+            fs::read(repo_root().join("scripts/haqp_campaign_clock.sh")).expect("wrapper bytes"),
+        )
+        .expect("write wrapper");
         let clock = CampaignClock {
             schema_version: "haqp-campaign-clock-v1".to_owned(),
             reference_machine: "test-host".to_owned(),
@@ -8965,6 +9239,14 @@ mod tests {
                 elapsed_s: 8 * 60 * 60 + 1,
                 clean: true,
                 result: "pass".to_owned(),
+                wrapper: "scripts/haqp_campaign_clock.sh".to_owned(),
+                wrapper_sha256: format!(
+                    "{:x}",
+                    Sha256::digest(
+                        fs::read(repo_root().join("scripts/haqp_campaign_clock.sh"))
+                            .expect("wrapper"),
+                    )
+                ),
             }],
         };
         fs::write(&path, serde_json::to_vec(&clock).expect("serialize")).expect("write");
@@ -8980,6 +9262,13 @@ mod tests {
             elapsed_s: 8 * 60 * 60 + 1,
             clean: true,
             result: "pass".to_owned(),
+            wrapper: "scripts/haqp_campaign_clock.sh".to_owned(),
+            wrapper_sha256: format!(
+                "{:x}",
+                Sha256::digest(
+                    fs::read(repo_root().join("scripts/haqp_campaign_clock.sh")).expect("wrapper"),
+                )
+            ),
         });
         fs::write(&path, serde_json::to_vec(&blocked).expect("serialize")).expect("write");
         verify_campaign_clock(root, None).expect_err("two clean breaches block ratification");

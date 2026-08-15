@@ -24,8 +24,11 @@ FINISHED=$(date +%s)
 ELAPSED=$(( FINISHED - STARTED ))
 CLEAN=1
 if [ -n "$(git status --porcelain=v1)" ]; then CLEAN=0; fi
+WRAPPER="scripts/haqp_campaign_clock.sh"
+WRAPPER_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+WRAPPER_SHA256=$(sha256sum "$WRAPPER_FILE" | cut -d' ' -f1)
 
 mkdir -p "$(dirname "$OUT")"
-printf '{"schema_version":"haqp-campaign-clock-v1","reference_machine":"%s","runs":[{"id":"%s","commit":"%s","tree":"%s","command":"%s","started_epoch":%s,"finished_epoch":%s,"elapsed_s":%s,"clean":%s,"result":"%s"}]}\n' \
-  "$(hostname -s)" "$RUN_ID" "$COMMIT" "$TREE" "$COMMAND" "$STARTED" "$FINISHED" "$ELAPSED" "$CLEAN" "$([ "$CODE" -eq 0 ] && echo pass || echo fail)" >"$OUT"
+printf '{"schema_version":"haqp-campaign-clock-v1","reference_machine":"%s","runs":[{"id":"%s","commit":"%s","tree":"%s","command":"%s","started_epoch":%s,"finished_epoch":%s,"elapsed_s":%s,"clean":%s,"result":"%s","wrapper":"%s","wrapper_sha256":"%s"}]}\n' \
+  "$(hostname -s)" "$RUN_ID" "$COMMIT" "$TREE" "$COMMAND" "$STARTED" "$FINISHED" "$ELAPSED" "$CLEAN" "$([ "$CODE" -eq 0 ] && echo pass || echo fail)" "$WRAPPER" "$WRAPPER_SHA256" >"$OUT"
 exit "$CODE"
