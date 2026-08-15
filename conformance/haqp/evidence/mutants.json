@@ -1,6 +1,6 @@
 {
   "schema_version": "haqp-mutants-v1",
-  "source_commit": "ba294a5f71e7a87c95500c874c7b53ac7602130f",
+  "source_commit": "dc2a22671329e884e82d5860ae064e6e7d6a876e",
   "lockfile_blake3": "a73bf11d046474c99a99d3d2583b9e48b3d0a5b7cb7b8312c3dd8ef8d1f150dc",
   "runner": "liminal-xtask haq mutants",
   "rows": [
@@ -15,7 +15,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M002",
@@ -28,7 +29,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M003",
@@ -41,7 +43,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M004",
@@ -54,7 +57,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M005",
@@ -67,7 +71,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M006",
@@ -80,7 +85,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M007",
@@ -93,7 +99,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M008",
@@ -106,7 +113,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M009",
@@ -119,7 +127,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M010",
@@ -132,7 +141,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M011",
@@ -145,7 +155,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M012",
@@ -158,7 +169,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M013",
@@ -171,7 +183,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M014",
@@ -184,7 +197,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M015",
@@ -197,7 +211,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M016",
@@ -210,7 +225,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M017",
@@ -223,7 +239,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M018",
@@ -236,7 +253,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M019",
@@ -249,7 +267,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M020",
@@ -262,7 +281,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M021",
@@ -275,7 +295,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M022",
@@ -288,7 +309,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M023",
@@ -301,7 +323,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M024",
@@ -314,7 +337,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M025",
@@ -327,7 +351,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M026",
@@ -340,7 +365,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M027",
@@ -353,7 +379,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M028",
@@ -366,7 +393,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M029",
@@ -379,7 +407,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M030",
@@ -392,7 +421,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M031",
@@ -405,7 +435,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M032",
@@ -418,7 +449,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M033",
@@ -431,7 +463,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M034",
@@ -444,7 +477,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M035",
@@ -457,7 +491,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M036",
@@ -470,7 +505,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M037",
@@ -483,7 +519,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M038",
@@ -496,7 +533,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M039",
@@ -509,7 +547,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M040",
@@ -522,7 +561,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M041",
@@ -535,7 +575,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M042",
@@ -548,7 +589,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M043",
@@ -561,7 +603,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M044",
@@ -574,7 +617,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M045",
@@ -587,7 +631,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M046",
@@ -600,7 +645,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M047",
@@ -613,7 +659,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M048",
@@ -626,7 +673,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M049",
@@ -639,7 +687,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M050",
@@ -652,7 +701,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M051",
@@ -665,7 +715,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M052",
@@ -678,7 +729,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M053",
@@ -691,7 +743,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M054",
@@ -704,7 +757,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M055",
@@ -717,7 +771,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M056",
@@ -730,7 +785,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M057",
@@ -743,7 +799,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M058",
@@ -756,7 +813,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M059",
@@ -769,7 +827,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M060",
@@ -782,7 +841,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M061",
@@ -795,7 +855,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M062",
@@ -808,7 +869,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M063",
@@ -821,7 +883,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M064",
@@ -834,7 +897,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     },
     {
       "id": "P1-M065",
@@ -847,7 +911,8 @@
       "exit_codes": [],
       "stdout_blake3": [],
       "stderr_blake3": [],
-      "reason": "no patch declared"
+      "reason": "no patch declared",
+      "failure_class": null
     }
   ]
 }
