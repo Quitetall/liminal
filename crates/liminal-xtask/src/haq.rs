@@ -3077,13 +3077,13 @@ fn verify_sanitizer_proof(
         row.target,
         proof.runtime_probe_exit_code
     );
+    let binary_path = safe_repo_path(root, &proof.binary, "sanitizer binary")?;
+    let probe_path = safe_repo_path(root, &proof.runtime_probe, "sanitizer runtime probe")?;
     anyhow::ensure!(
-        proof.binary != proof.runtime_probe,
+        binary_path != probe_path,
         "{}: sanitizer binary and runtime probe must be distinct files",
         row.target
     );
-    let binary_path = safe_repo_path(root, &proof.binary, "sanitizer binary")?;
-    let probe_path = safe_repo_path(root, &proof.runtime_probe, "sanitizer runtime probe")?;
     let binary = Utf8Path::new(&proof.binary);
     anyhow::ensure!(
         binary.is_relative()
