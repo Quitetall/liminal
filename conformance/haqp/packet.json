@@ -1252,7 +1252,7 @@
   "id": "P1-M022",
   "family": "graph/interchange codecs",
   "operator": "skipped-durable-transition",
-    "source": "crates/liminal-graph/src/store/mod.rs:328",
+    "source": "crates/liminal-graph/src/store/mod.rs:528",
    "requirement": "P1-R015",
    "defect": "omit codec checkpoint record",
    "killing_tests": [

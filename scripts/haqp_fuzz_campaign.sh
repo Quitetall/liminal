@@ -80,7 +80,7 @@ resolve_corpus_paths() {
       *heldout*|*conformance/corpora*) return 1 ;;
     esac
     printf '%s\0%s\n' "$raw" "$relative" >> "$resolved_input"
-  done < <(sed -n -E 's/.*openat2?\([^,]+, "(([^"\\]|\\.)*)".*/\1/p' "$raw_trace" | sort -u)
+  done < <(sed -n -E 's/.*(open|openat|openat2|creat|stat|statx|lstat|fstatat|newfstatat|readlink|readlinkat|access|faccessat|faccessat2|execve|execveat|name_to_handle_at|truncate|utimensat|unlink|unlinkat|rename|renameat|mkdir|chdir)\([^,]*,? "(([^"\\]|\\.)*)".*/\2/p' "$raw_trace" | sort -u)
   [ -s "$resolved_input" ] || return 1
   hash_file "$resolved_input"
 }
@@ -140,7 +140,7 @@ for t in "${TARGETS[@]}"; do
   # tool default is one a tool update can silently withdraw.
   audit_raw="$AUDIT_DIR/$t.trace"
   if [ "$AUDIT_ACCESS" = "1" ] && command -v strace >/dev/null 2>&1; then
-    ASAN_OPTIONS="$asan_options" strace -f -q -e trace=openat,openat2 -o "$audit_raw" \
+    ASAN_OPTIONS="$asan_options" strace -f -q -e trace=%file -o "$audit_raw" \
       cargo +nightly fuzz run -s "$SANITIZER" "$t" -- \
         -max_total_time="$SECS" -seed="$SEED" -rss_limit_mb=4096 -print_final_stats=1 \
         >"$log" 2>&1 &
@@ -218,7 +218,7 @@ for t in "${TARGETS[@]}"; do
   if [ -n "$asan_options" ]; then
     printf -v trace_prefix 'ASAN_OPTIONS=%q ' "$asan_options"
   fi
-  trace_command="$build_command && ${trace_prefix}strace -f -q -e trace=openat,openat2 -o $audit_raw cargo +nightly fuzz run -s $SANITIZER $t -- -max_total_time=$SECS -seed=$SEED -rss_limit_mb=4096 -print_final_stats=1"
+  trace_command="$build_command && ${trace_prefix}strace -f -q -e trace=%file -o $audit_raw cargo +nightly fuzz run -s $SANITIZER $t -- -max_total_time=$SECS -seed=$SEED -rss_limit_mb=4096 -print_final_stats=1"
   binding_input="target/haqp/process-binding-$t.txt"
   printf '%s\0%s\0%s\0%s' "$trace_command" "$trace_pid" "$trace_exit_code" "$trace_hash" >"$binding_input"
   process_binding=$(hash_file "$binding_input")

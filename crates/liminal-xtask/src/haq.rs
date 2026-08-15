@@ -4165,7 +4165,7 @@ fn verify_corpus_scope_replays(
     let mut guard = WorktreeGuard::new(root, &worktree);
     for row in rows {
         let expected_command = format!(
-            "strace -f -q -e trace=openat,openat2 -o target/haqp/scope-{}.trace {}",
+            "strace -f -q -e trace=%file -o target/haqp/scope-{}.trace {}",
             row.scope,
             scope_lane_command(&row.scope)?
         );
@@ -4263,6 +4263,7 @@ fn scope_trace_paths_digest(bytes: &[u8]) -> String {
     blake3::hash(
         scope_trace_open_paths(bytes)
             .into_iter()
+            .map(|path| normalize_scope_trace_path(&path))
             .collect::<Vec<_>>()
             .join("\n")
             .as_bytes(),
@@ -4272,9 +4273,36 @@ fn scope_trace_paths_digest(bytes: &[u8]) -> String {
 }
 
 fn scope_trace_open_paths(bytes: &[u8]) -> BTreeSet<String> {
+    const FILE_SYSCALLS: [&str; 25] = [
+        "open(",
+        "openat(",
+        "openat2(",
+        "creat(",
+        "stat(",
+        "statx(",
+        "lstat(",
+        "fstatat(",
+        "newfstatat(",
+        "readlink(",
+        "readlinkat(",
+        "access(",
+        "faccessat(",
+        "faccessat2(",
+        "execve(",
+        "execveat(",
+        "name_to_handle_at(",
+        "truncate(",
+        "utimensat(",
+        "unlink(",
+        "unlinkat(",
+        "rename(",
+        "renameat(",
+        "mkdir(",
+        "chdir(",
+    ];
     let mut paths = BTreeSet::new();
     for line in String::from_utf8_lossy(bytes).lines() {
-        let Some(open) = ["openat(", "openat2("]
+        let Some(open) = FILE_SYSCALLS
             .into_iter()
             .filter_map(|needle| line.find(needle))
             .min()
@@ -4291,6 +4319,15 @@ fn scope_trace_open_paths(bytes: &[u8]) -> BTreeSet<String> {
         paths.insert(rest[start + 1..start + 1 + end].to_owned());
     }
     paths
+}
+
+fn normalize_scope_trace_path(path: &str) -> String {
+    for marker in ["/fuzz/", "/conformance/", "/target/"] {
+        if let Some(index) = path.find(marker) {
+            return path[index + 1..].to_owned();
+        }
+    }
+    path.to_owned()
 }
 
 /// Resolve corpus paths from raw strace metadata. Lexical path filtering alone
@@ -5973,8 +6010,8 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
-            328,
-            "pub fn relation_at(",
+            528,
+            "self.store.commit_txn(self.ops, self.aux, meta)",
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
@@ -6515,6 +6552,23 @@ fn verify_markdown_surface_text(text: &str, packet: &Packet) -> Result<()> {
             "review packet markdown retains NOT_RUN placeholders for qualification state {:?}",
             packet.qualification_state
         );
+    }
+    let conclusion = text
+        .lines()
+        .find(|line| line.starts_with("Current conclusion:"))
+        .unwrap_or_default();
+    match packet.qualification_state.as_str() {
+        "not-run" => anyhow::ensure!(
+            conclusion == "Current conclusion: `NOT_RUN`. Packet remains proposed and unqualified.",
+            "review packet markdown conclusion disagrees with qualification state not-run: {conclusion:?}"
+        ),
+        "complete" => anyhow::ensure!(
+            conclusion.contains("QUALIFIED"),
+            "review packet markdown conclusion disagrees with qualification state complete: {conclusion:?}"
+        ),
+        state => anyhow::bail!(
+            "review packet markdown conclusion has no closed qualification state {state:?}"
+        ),
     }
     let digest = blake3::hash(
         serde_json::to_vec(packet)
@@ -8939,6 +8993,22 @@ mod tests {
 
     fn packet_from_repo() -> Packet {
         read_packet(&repo_root()).expect("read HAQP packet")
+    }
+
+    #[test]
+    fn scope_trace_digest_ignores_scratch_prefix_and_reads_file_syscalls() {
+        let first = br#"123 open("/tmp/first/fuzz/corpus/cst_parse", O_RDONLY) = 3
+123 readlink("/tmp/first/conformance/haqp/packet.json", 0x0, 0) = 0
+"#;
+        let second = br#"123 open("/tmp/second/fuzz/corpus/cst_parse", O_RDONLY) = 3
+123 readlink("/tmp/second/conformance/haqp/packet.json", 0x0, 0) = 0
+"#;
+        assert_eq!(
+            scope_trace_paths_digest(first),
+            scope_trace_paths_digest(second)
+        );
+        assert!(scope_trace_open_paths(first).contains("/tmp/first/fuzz/corpus/cst_parse"));
+        assert!(scope_trace_open_paths(first).contains("/tmp/first/conformance/haqp/packet.json"));
     }
 
     #[test]
