@@ -1,6 +1,6 @@
 {
   "schema_version": "haqp-generated-v3-negative-categories",
-  "artifact_blake3": "296eeb9a2b55194071f71fb351e6a1e4eb46eef7ed0def816708afe81301e6f0",
+  "artifact_blake3": "b8f742beb6ee869c65768aaddc582e4ebdcaf1073b2b39aaea5edf39d7e316a3",
   "rows": [
     {
       "family": "source/CST/formatting",
@@ -103,7 +103,7 @@
       "discards": 0,
       "negatives": 33537,
       "seed": 11400717018346454899,
-      "evidence_hash": "ca44ad0239aa6bff887a12a75b03d5d7e2fb6b4f6336b7cd2fce0b3e6f76f167",
+      "evidence_hash": "d2ceb73a224375330a67ca5dfd4e471e1ac38ba37f077a13e23f62680a958d65",
       "category_counts": {
         "boundary-span": 8489,
         "commute": 8351,
@@ -127,20 +127,20 @@
           "relation": "identity_merge",
           "oracle_id": "oracle:transforms_projections",
           "result": "pass",
-          "artifact_blake3": "aeeff561f59e7c2b7454125d26680b10ba06b88af116769b33c2daa6319821e6"
+          "artifact_blake3": "41de87042f0ae2475091dd0133c0965a297e3dc6c1e721b5028074f2b1ea983e"
         },
         {
           "relation": "outcome_class_symmetry",
           "oracle_id": "oracle:transforms_projections",
           "result": "pass",
-          "artifact_blake3": "0a6e8269d8199b8d65cbaf7c8c0c2f058329bdd37e4df8e410d849e084de91b0"
+          "artifact_blake3": "2d57e91175843b3e0e57afe8f4f7daa003aa170f718f1c105289b29448ae3150"
         }
       ],
       "oracle": {
         "id": "oracle:transforms_projections",
         "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_transform",
         "independent": true,
-        "relation_matrix_blake3": "776792ae430791d8bba7fcfc459356ac520dd13caa7af8143079eafe6dc8aea2"
+        "relation_matrix_blake3": "4d0121957c3e83354b4f0ba4ac5625fa22bb815c2424b58d72ba758191fe8abc"
       }
     },
     {

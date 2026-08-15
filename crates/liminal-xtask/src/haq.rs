@@ -60,6 +60,7 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     // artifacts a run actually produced, or the whole gate is satisfiable by
     // editing two files.
     verify_provenance(root, &packet)?;
+    verify_concurrency_evidence(root, &packet)?;
     verify_fuzz_evidence(root, &packet)?;
     verify_corpus_access_audit(root, &packet)?;
     verify_crash_evidence(root, &packet)?;
@@ -1249,6 +1250,8 @@ fn verify_cross_pass_reproduction(records: &[(String, ReviewRecord)]) -> Result<
                     && candidate.independently_reproduced
                     && candidate.attack_class == attempt.attack_class
                     && candidate.target == attempt.target
+                    && candidate.attempt == attempt.attempt
+                    && candidate.observed_result == attempt.observed_result
             });
             anyhow::ensure!(
                 matched,
@@ -1642,6 +1645,15 @@ fn verify_review_resolution(
         .coordinate
         .rsplit_once(':')
         .with_context(|| format!("{who}: resolution coordinate must be file:line"))?;
+    let target_file = attempt
+        .target
+        .rsplit_once(':')
+        .map(|(file, _)| file)
+        .unwrap_or_default();
+    anyhow::ensure!(
+        coordinate_file == target_file,
+        "{who}: resolution coordinate file {coordinate_file:?} does not match attacked target file {target_file:?}"
+    );
     let line: usize = coordinate_line
         .parse()
         .with_context(|| format!("{who}: resolution coordinate line is not numeric"))?;
@@ -3022,7 +3034,7 @@ fn verify_fuzz_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
                 row.target
             )
         })?;
-        verify_sanitizer_proof(root, row, proof)?;
+        verify_sanitizer_proof(root, row, proof, packet.provenance.as_ref())?;
     }
     verify_fuzz_seed_manifests(root, &recorded)?;
     verify_fuzz_logs(root, &recorded)?;
@@ -3207,6 +3219,7 @@ fn verify_sanitizer_proof(
     root: &Utf8Path,
     row: &FuzzEvidence,
     proof: &SanitizerProof,
+    expected: Option<&Provenance>,
 ) -> Result<()> {
     anyhow::ensure!(
         !proof.build_command.trim().is_empty()
@@ -3225,6 +3238,64 @@ fn verify_sanitizer_proof(
                 .iter()
                 .any(|flag| flag.contains(&row.sanitizer)),
         "{}: sanitizer proof has no matching instrumentation flag",
+        row.target
+    );
+    anyhow::ensure!(
+        !proof.build_log.trim().is_empty()
+            && !proof.build_log_blake3.trim().is_empty()
+            && !proof.source_commit.trim().is_empty()
+            && !proof.source_tree.trim().is_empty()
+            && !proof.build_result.trim().is_empty(),
+        "{} sanitizer proof lacks current build provenance; regenerate fuzz evidence",
+        row.target
+    );
+    require_eq(
+        &format!("{} sanitizer build_result", row.target),
+        &proof.build_result,
+        "pass",
+    )?;
+    require_eq(
+        &format!("{} sanitizer build_log", row.target),
+        &proof.build_log,
+        &format!("conformance/haqp/evidence/build-logs/{}.log", row.target),
+    )?;
+    require_hex_digest(
+        &format!("{} build_log_blake3", row.target),
+        &proof.build_log_blake3,
+    )?;
+    require_git_object_id(
+        &format!("{} sanitizer source_commit", row.target),
+        &proof.source_commit,
+    )?;
+    require_git_object_id(
+        &format!("{} sanitizer source_tree", row.target),
+        &proof.source_tree,
+    )?;
+    if let Some(expected) = expected {
+        require_eq(
+            &format!("{} sanitizer source_commit/provenance", row.target),
+            &proof.source_commit,
+            &expected.fixed_commit,
+        )?;
+        require_eq(
+            &format!("{} sanitizer source_tree/provenance", row.target),
+            &proof.source_tree,
+            &expected.fixed_tree,
+        )?;
+    }
+    let build_log_path = safe_repo_path(root, &proof.build_log, "sanitizer build log")?;
+    let build_log_bytes = fs::read(&build_log_path)
+        .with_context(|| format!("{build_log_path}: sanitizer build log is required"))?;
+    require_eq(
+        &format!("{} build_log_blake3", row.target),
+        &proof.build_log_blake3,
+        blake3::hash(&build_log_bytes).to_hex().as_ref(),
+    )?;
+    let build_log_text = String::from_utf8_lossy(&build_log_bytes);
+    anyhow::ensure!(
+        build_log_text.contains(&proof.build_command)
+            && (build_log_text.contains("Finished") || build_log_text.contains("finished")),
+        "{} sanitizer build log does not show requested successful build",
         row.target
     );
     require_hex_digest(
@@ -3473,6 +3544,70 @@ fn verify_corpus_access_audit(root: &Utf8Path, packet: &Packet) -> Result<()> {
         "corpus access audit target",
     )?;
     verify_corpus_audit_campaign_binding(root, &audit)?;
+    if packet.provenance.is_some() {
+        verify_corpus_scope_traces(root, &audit)?;
+    }
+    Ok(())
+}
+
+fn verify_corpus_scope_traces(root: &Utf8Path, audit: &CorpusAccessAudit) -> Result<()> {
+    const QUALIFICATION_SCOPES: [&str; 8] = [
+        "ci",
+        "canaries",
+        "generated",
+        "crash",
+        "replay",
+        "mutation",
+        "reviews",
+        "fuzz",
+    ];
+    let expected = QUALIFICATION_SCOPES.into_iter().collect::<BTreeSet<_>>();
+    let actual = audit
+        .scope_traces
+        .iter()
+        .map(|row| row.scope.as_str())
+        .collect::<BTreeSet<_>>();
+    anyhow::ensure!(
+        actual == expected,
+        "qualification corpus audit scopes differ: recorded={actual:?}, expected={expected:?}"
+    );
+    require_unique(
+        audit.scope_traces.iter().map(|row| row.scope.as_str()),
+        "corpus audit scope",
+    )?;
+    for row in &audit.scope_traces {
+        anyhow::ensure!(
+            row.command.contains("strace") && row.command.contains("-f"),
+            "{} corpus scope is not recursively traced",
+            row.scope
+        );
+        require_eq("corpus scope exit_code", &row.exit_code.to_string(), "0")?;
+        require_eq("corpus scope result", &row.result, "pass")?;
+        require_hex_digest(
+            &format!("{} corpus scope trace_blake3", row.scope),
+            &row.trace_blake3,
+        )?;
+        let expected_path = format!(
+            "conformance/haqp/evidence/access/scopes/{}.trace",
+            row.scope
+        );
+        require_eq("corpus scope trace path", &row.trace, &expected_path)?;
+        let path = safe_repo_path(root, &row.trace, "corpus scope trace")?;
+        let bytes = fs::read(&path).with_context(|| format!("{path}: scope trace required"))?;
+        require_eq(
+            &format!("{} corpus scope trace_blake3", row.scope),
+            &row.trace_blake3,
+            blake3::hash(&bytes).to_hex().as_ref(),
+        )?;
+        let lower = String::from_utf8_lossy(&bytes).to_ascii_lowercase();
+        for forbidden in ["heldout", "conformance/corpora"] {
+            anyhow::ensure!(
+                !lower.contains(forbidden),
+                "{} scope trace observed forbidden path fragment {forbidden:?}",
+                row.scope
+            );
+        }
+    }
     Ok(())
 }
 
@@ -3519,6 +3654,32 @@ fn verify_corpus_audit_campaign_binding(root: &Utf8Path, audit: &CorpusAccessAud
             "{}: corpus audit command is not recursive strace",
             row.target
         );
+        anyhow::ensure!(
+            !row.tracer_binary.trim().is_empty()
+                && !row.tracer_version.trim().is_empty()
+                && !row.tracer_version_blake3.trim().is_empty(),
+            "{} corpus audit lacks current tracer identity; regenerate corpus-access evidence",
+            row.target
+        );
+        require_eq("corpus tracer binary", &row.tracer_binary, "strace")?;
+        require_eq(
+            "corpus tracer version",
+            &row.tracer_version,
+            "conformance/haqp/evidence/access/strace.version",
+        )?;
+        require_hex_digest(
+            &format!("{} tracer_version_blake3", row.target),
+            &row.tracer_version_blake3,
+        )?;
+        let tracer_version_path =
+            safe_repo_path(root, &row.tracer_version, "corpus tracer version")?;
+        let tracer_version_bytes = fs::read(&tracer_version_path)
+            .with_context(|| format!("{tracer_version_path}: tracer version receipt required"))?;
+        require_eq(
+            &format!("{} tracer_version_blake3", row.target),
+            &row.tracer_version_blake3,
+            blake3::hash(&tracer_version_bytes).to_hex().as_ref(),
+        )?;
         require_hex_digest(&format!("{} trace_blake3", row.target), &row.trace_blake3)?;
         let trace_path = safe_repo_path(root, &row.trace, "corpus trace")?;
         let trace_bytes = fs::read(&trace_path)
@@ -5268,6 +5429,87 @@ fn verify_markdown_surface_text(text: &str, packet: &Packet) -> Result<()> {
     Ok(())
 }
 
+/// Concurrent implementations require a committed schedule matrix. The
+/// packet's implementation label is not a schedule result; each sequence must
+/// carry an independent oracle digest and a passing replay outcome.
+fn verify_concurrency_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    if packet.concurrent_code != "deterministic_schedule_exploration" {
+        return Ok(());
+    }
+    let path = root.join("conformance/haqp/evidence/concurrency.json");
+    let evidence: ConcurrentEvidence = serde_json::from_slice(
+        &fs::read(&path)
+            .with_context(|| format!("{path}: concurrent schedule evidence required"))?,
+    )
+    .with_context(|| format!("parse {path}"))?;
+    require_eq(
+        "concurrency schema_version",
+        &evidence.schema_version,
+        "haqp-concurrency-v1",
+    )?;
+    require_eq(
+        "concurrency implementation",
+        &evidence.implementation,
+        &packet.concurrent_code,
+    )?;
+    require_eq(
+        "concurrency oracle",
+        &evidence.oracle_id,
+        "independent_schedule_oracle_v1",
+    )?;
+    require_git_object_id("concurrency source_commit", &evidence.source_commit)?;
+    require_git_object_id("concurrency source_tree", &evidence.source_tree)?;
+    if let Some(provenance) = &packet.provenance {
+        require_eq(
+            "concurrency source_commit/provenance",
+            &evidence.source_commit,
+            &provenance.fixed_commit,
+        )?;
+        require_eq(
+            "concurrency source_tree/provenance",
+            &evidence.source_tree,
+            &provenance.fixed_tree,
+        )?;
+    }
+    anyhow::ensure!(
+        !evidence.schedules.is_empty(),
+        "concurrency evidence has no schedules"
+    );
+    require_unique(
+        evidence.schedules.iter().map(|row| row.id.as_str()),
+        "concurrency schedule",
+    )?;
+    for schedule in &evidence.schedules {
+        anyhow::ensure!(
+            schedule.sequence.len() >= 2,
+            "concurrency schedule {} has fewer than two operations",
+            schedule.id
+        );
+        anyhow::ensure!(
+            schedule.sequence.iter().all(|step| !step.trim().is_empty()),
+            "concurrency schedule {} has empty operation",
+            schedule.id
+        );
+        require_eq("concurrency schedule result", &schedule.result, "pass")?;
+        let expected = blake3::hash(
+            serde_json::to_vec(&(
+                schedule.id.as_str(),
+                &schedule.sequence,
+                schedule.result.as_str(),
+            ))?
+            .as_slice(),
+        )
+        .to_hex()
+        .to_string();
+        require_eq(
+            "concurrency schedule oracle_digest",
+            &schedule.oracle_digest,
+            &expected,
+        )?;
+    }
+    Ok(())
+}
+
 fn verify_crash_boundary_inventory(packet: &Packet) -> Result<()> {
     // Closed authority is intentional: runtime and packet declarations must
     // both be updated when a new durable transition is introduced.
@@ -5465,6 +5707,16 @@ struct SanitizerProof {
     runtime_probe_blake3: String,
     runtime_probe_exit_code: i32,
     instrumentation_flags: Vec<String>,
+    #[serde(default)]
+    build_log: String,
+    #[serde(default)]
+    build_log_blake3: String,
+    #[serde(default)]
+    source_commit: String,
+    #[serde(default)]
+    source_tree: String,
+    #[serde(default)]
+    build_result: String,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -5475,6 +5727,10 @@ struct CorpusAccessAudit {
     source_commit: String,
     source_tree: String,
     targets: Vec<CorpusAccessAuditTarget>,
+    /// Qualification-wide tracer receipts. Inventory-only audits may omit
+    /// these while the packet remains unrun; qualified packets may not.
+    #[serde(default)]
+    scope_traces: Vec<CorpusScopeTrace>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -5501,6 +5757,43 @@ struct CorpusAccessAuditTarget {
     trace_complete: bool,
     #[serde(default)]
     process_binding: String,
+    #[serde(default)]
+    tracer_binary: String,
+    #[serde(default)]
+    tracer_version: String,
+    #[serde(default)]
+    tracer_version_blake3: String,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct CorpusScopeTrace {
+    scope: String,
+    command: String,
+    trace: String,
+    trace_blake3: String,
+    exit_code: i32,
+    result: String,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct ConcurrentEvidence {
+    schema_version: String,
+    implementation: String,
+    source_commit: String,
+    source_tree: String,
+    oracle_id: String,
+    schedules: Vec<ConcurrentSchedule>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct ConcurrentSchedule {
+    id: String,
+    sequence: Vec<String>,
+    result: String,
+    oracle_digest: String,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -6506,7 +6799,12 @@ fn case_transform(rng: &mut Rng) -> Result<Case> {
 
     let category = rng.category("transforms/projections");
     if matches!(category, "empty" | "invalid-span" | "truncated" | "hostile") {
-        let witness = format!("transform-negative:{category}:{}", rng.word()).into_bytes();
+        // Negative inputs still cross the production merge implementation. A
+        // category label and random witness alone only tests the generator's
+        // branch, not the transform's refusal/preservation behavior.
+        let malformed = format!("{category}:{}", rng.word());
+        let outcome = three_way("{#negative}", &malformed, "{#negative}");
+        let witness = format!("transform-negative:{category}:{outcome:?}").into_bytes();
         return Ok(Case::Negative { category, witness });
     }
     let blocks = match category {
@@ -6789,10 +7087,22 @@ fn case_invalidation(rng: &mut Rng) -> Result<Case> {
         ));
         deps.record(key.clone());
         let invalidated = deps.invalidated_by(&key);
+        let raw = match category {
+            "truncated" => b"{".to_vec(),
+            "hostile" => vec![0xff, 0x00, 0x7f],
+            "invalid-token" => br#"{"perspective":"unknown"}"#.to_vec(),
+            "unknown-perspective" => br#"{"perspective":{"future":true}}"#.to_vec(),
+            _ => unreachable!("malformed invalidation category {category}"),
+        };
+        anyhow::ensure!(
+            serde_json::from_slice::<WorkspaceBasis>(&raw).is_err(),
+            "invalidation malformed category {category} unexpectedly decoded"
+        );
         return Ok(Case::Negative {
             category,
             witness: [
                 format!("basis-negative:{category}:{invalidated:?}:").into_bytes(),
+                raw,
                 basis_witness,
             ]
             .concat(),
@@ -8972,7 +9282,7 @@ mod tests {
             ),
             (
                 "transforms/projections",
-                "75c3014326c6b2b09413e7009cb49694f9aae6181ade42dd7ccabb8e1e561b8a",
+                "c3524a5a331362b5851e3151b30531876b769e40a454a8cd19d214caef3e6c82",
             ),
             (
                 "repair/ILRP/recovery",
@@ -9090,6 +9400,17 @@ mod tests {
             .collect::<BTreeSet<_>>();
         let mut rows = Vec::new();
         let mut fuzz_rows = Vec::new();
+        let tracer_version = Command::new("strace")
+            .arg("-V")
+            .output()
+            .expect("strace version");
+        let mut tracer_version_bytes = tracer_version.stdout;
+        tracer_version_bytes.extend_from_slice(&tracer_version.stderr);
+        let tracer_version_blake3 = blake3::hash(&tracer_version_bytes).to_hex().to_string();
+        let tracer_version_path = root.join("conformance/haqp/evidence/access/strace.version");
+        fs::create_dir_all(tracer_version_path.parent().expect("tracer version parent"))
+            .expect("mkdir tracer version");
+        fs::write(&tracer_version_path, &tracer_version_bytes).expect("write tracer version");
         for target in &targets {
             let manifest = format!("conformance/haqp/evidence/access/{target}.paths");
             let path = root.join(&manifest);
@@ -9129,6 +9450,9 @@ mod tests {
                 trace_exit_code: 0,
                 trace_complete: true,
                 process_binding: binding,
+                tracer_binary: "strace".to_owned(),
+                tracer_version: "conformance/haqp/evidence/access/strace.version".to_owned(),
+                tracer_version_blake3: tracer_version_blake3.clone(),
             });
             fuzz_rows.push(FuzzEvidence {
                 target: target.clone(),
@@ -9159,6 +9483,7 @@ mod tests {
             source_commit: "a".repeat(40),
             source_tree: "b".repeat(40),
             targets: rows,
+            scope_traces: Vec::new(),
         };
         let audit_path = root.join("conformance/haqp/evidence/corpus-access.json");
         fs::write(&audit_path, serde_json::to_vec(&audit).expect("serialize")).expect("write");
