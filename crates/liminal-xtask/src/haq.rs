@@ -3828,18 +3828,17 @@ fn verify_corpus_scope_traces(root: &Utf8Path, audit: &CorpusAccessAudit) -> Res
             &row.trace_blake3,
             blake3::hash(&bytes).to_hex().as_ref(),
         )?;
-        let lower = String::from_utf8_lossy(&bytes).to_ascii_lowercase();
+        let trace_text = String::from_utf8_lossy(&bytes);
+        let lower = trace_text.to_ascii_lowercase();
         let pid_prefix = format!("{} ", row.trace_pid);
         anyhow::ensure!(
-            String::from_utf8_lossy(&bytes)
-                .lines()
-                .any(|line| line.starts_with(&pid_prefix)),
+            trace_text.lines().any(|line| line.starts_with(&pid_prefix)),
             "{} scope trace has no event from traced PID {}",
             row.scope,
             row.trace_pid
         );
         anyhow::ensure!(
-            String::from_utf8_lossy(&bytes)
+            trace_text
                 .lines()
                 .any(|line| line == format!("{} +++ exited with 0 +++", row.trace_pid)),
             "{} scope trace has no successful exit for PID {}",
@@ -3979,7 +3978,11 @@ pub fn run_scope_probe_repo(root: &Utf8Path, scope: &str) -> Result<()> {
 fn scope_trace_paths_digest(bytes: &[u8]) -> String {
     let mut paths = BTreeSet::new();
     for line in String::from_utf8_lossy(bytes).lines() {
-        let Some(open) = line.find("openat(") else {
+        let Some(open) = ["openat(", "openat2("]
+            .into_iter()
+            .filter_map(|needle| line.find(needle))
+            .min()
+        else {
             continue;
         };
         let rest = &line[open..];
