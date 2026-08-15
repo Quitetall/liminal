@@ -852,12 +852,14 @@ fn ordered_block_contents(text: &str) -> BTreeMap<String, Vec<String>> {
         let marker = block
             .split_whitespace()
             .find(|token| token.starts_with("{#") && token.ends_with('}'))
-            .map(str::to_owned)
-            .unwrap_or_else(|| {
-                let key = format!("anon:{anonymous}");
-                anonymous += 1;
-                key
-            });
+            .map_or_else(
+                || {
+                    let key = format!("anon:{anonymous}");
+                    anonymous += 1;
+                    key
+                },
+                str::to_owned,
+            );
         let tokens = block
             .split_whitespace()
             .filter(|token| !token.starts_with("{#") || !token.ends_with('}'))
@@ -1649,6 +1651,7 @@ fn verify_review_attempts(
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 fn verify_review_resolution(
     root: &Utf8Path,
     fixed_base: &ReviewFixedBase,
@@ -3047,7 +3050,7 @@ fn verify_test_names_exist(root: &Utf8Path, packet: &Packet) -> Result<()> {
                 let mut local = BTreeMap::new();
                 collect_runnable_test_functions(&text, &mut local);
                 let prefix = path
-                    .strip_prefix(&root.join("conformance/tests"))
+                    .strip_prefix(root.join("conformance/tests"))
                     .ok()
                     .and_then(|relative| {
                         let mut parts = relative
@@ -3381,6 +3384,7 @@ fn verify_fuzz_rows(recorded: &[FuzzEvidence], present: &BTreeSet<String>) -> Re
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 fn verify_sanitizer_proof(
     root: &Utf8Path,
     row: &FuzzEvidence,
@@ -3659,8 +3663,9 @@ fn find_named_files(root: &Utf8Path, name: &str) -> Result<Vec<Utf8PathBuf>> {
     }
     for entry in fs::read_dir(root)? {
         let entry = entry?;
-        let path = Utf8PathBuf::from_path_buf(entry.path())
-            .map_err(|path| anyhow::anyhow!("non-UTF-8 path while finding {name}: {path:?}"))?;
+        let path = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
+            anyhow::anyhow!("non-UTF-8 path while finding {name}: {}", path.display())
+        })?;
         if entry.file_type()?.is_dir() {
             found.extend(find_named_files(&path, name)?);
         } else if path.file_name() == Some(name) {
@@ -3697,7 +3702,7 @@ fn verify_fuzz_log_metrics(row: &FuzzEvidence, bytes: &[u8]) -> Result<()> {
     let stat_execs = text
         .lines()
         .filter_map(|line| line.strip_prefix("stat::number_of_executed_units:"))
-        .last()
+        .next_back()
         .and_then(|value| value.trim().parse::<u64>().ok())
         .with_context(|| {
             format!(
@@ -3713,7 +3718,7 @@ fn verify_fuzz_log_metrics(row: &FuzzEvidence, bytes: &[u8]) -> Result<()> {
     let done = text
         .lines()
         .filter_map(|line| line.strip_prefix("Done "))
-        .last()
+        .next_back()
         .with_context(|| format!("{}: retained fuzz log has no Done footer", row.target))?;
     let done_execs = done
         .split_whitespace()
@@ -3811,6 +3816,7 @@ fn verify_corpus_access_audit(root: &Utf8Path, packet: &Packet) -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 fn verify_corpus_scope_traces(
     root: &Utf8Path,
     audit: &CorpusAccessAudit,
@@ -4049,7 +4055,7 @@ pub fn run_scope_probe_repo(root: &Utf8Path, scope: &str) -> Result<()> {
             "conformance/haqp/packet.json",
             "docs/execution/phase1-suite-review.md",
         ],
-        "generated" => &[
+        "generated" | "mutation" => &[
             "crates/liminal-xtask/src/haq.rs",
             "conformance/haqp/packet.json",
         ],
@@ -4057,12 +4063,7 @@ pub fn run_scope_probe_repo(root: &Utf8Path, scope: &str) -> Result<()> {
             "crates/liminal-jurisdiction/src/repair.rs",
             "conformance/haqp/packet.json",
         ],
-        "replay" => &["conformance/haqp/packet.json"],
-        "mutation" => &[
-            "crates/liminal-xtask/src/haq.rs",
-            "conformance/haqp/packet.json",
-        ],
-        "reviews" => &["conformance/haqp/packet.json"],
+        "replay" | "reviews" => &["conformance/haqp/packet.json"],
         "fuzz" => &["fuzz/Cargo.toml", "fuzz/fuzz_targets/cst_parse.rs"],
         _ => anyhow::bail!("unknown corpus scope {scope}"),
     };
@@ -4368,11 +4369,10 @@ fn verify_corpus_audit_campaign_binding(root: &Utf8Path, audit: &CorpusAccessAud
             row.target,
             target_corpus_marker
         );
-        let target_binary_marker = format!("/fuzz/target/");
+        let target_binary_marker = "/fuzz/target/";
         let target_binary_name = format!("/release/{}", row.target);
         anyhow::ensure!(
-            trace_lower.contains(&target_binary_marker)
-                && trace_lower.contains(&target_binary_name),
+            trace_lower.contains(target_binary_marker) && trace_lower.contains(&target_binary_name),
             "{}: raw trace does not show target binary execution",
             row.target
         );
@@ -5343,6 +5343,7 @@ fn verify_mutant_inventory(packet: &Packet) -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 fn verify_mutant_source_coordinates(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let mut seen = BTreeSet::new();
     for mutant in &packet.mutants {
@@ -5482,7 +5483,7 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
                 && before.matches(from).count() == 1
                 && after.matches(to).count() >= 1
         }),
-        "predicate-deletion" => before.contains("!") && after == before.replacen('!', "", 1),
+        "predicate-deletion" => before.contains('!') && after == before.replacen('!', "", 1),
         "threshold-plus-one" => integer_delta(before, after) == Some(1),
         "threshold-minus-one" => integer_delta(before, after) == Some(-1),
         "missing-enum-dispatch" => before.contains("match") && !after.contains("match"),
@@ -5510,7 +5511,7 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
                 && !after.to_ascii_lowercase().contains("crash")
         }
         "broadened-allow-list" => {
-            (!before.contains("*") && after.contains("*"))
+            (!before.contains('*') && after.contains('*'))
                 || (before.contains("ensure!") && !after.contains("ensure!"))
         }
         "wrong-holder-selection" => {
@@ -5541,10 +5542,10 @@ fn integer_delta(before: &str, after: &str) -> Option<i64> {
                 token.clear();
             }
         }
-        if !token.is_empty() {
-            if let Ok(value) = token.parse() {
-                values.push(value);
-            }
+        if !token.is_empty()
+            && let Ok(value) = token.parse()
+        {
+            values.push(value);
         }
         values
     }
@@ -7072,6 +7073,7 @@ fn is_qualification_canary(id: &str) -> bool {
     matches!(id, "C26" | "C27" | "C28" | "C29" | "C30" | "C31" | "C32")
 }
 
+#[allow(clippy::struct_excessive_bools)]
 struct QualificationCanaryState {
     provenance_bound: bool,
     sanitizer_replayed: bool,
@@ -7965,6 +7967,7 @@ fn case_repair(rng: &mut Rng) -> Result<Case> {
 /// must never invalidate) and **monotonicity** (recording more reads can only
 /// add invalidations). Both are checked against a key set the generator built
 /// itself, so `ComponentDeps` is never its own oracle.
+#[allow(clippy::too_many_lines)]
 fn case_invalidation(rng: &mut Rng) -> Result<Case> {
     use liminal_revision::{
         BasisComponent, BasisPerspective, CausalFrontier, ComponentDeps, WorkspaceBasis,
