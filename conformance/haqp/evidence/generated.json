@@ -1,6 +1,6 @@
 {
   "schema_version": "haqp-generated-v3-negative-categories",
-  "artifact_blake3": "b8f742beb6ee869c65768aaddc582e4ebdcaf1073b2b39aaea5edf39d7e316a3",
+  "artifact_blake3": "79f041ed9a39872ea8ace6ad70c9eb6aa00b63da83c6e0295a7caaadde63f725",
   "rows": [
     {
       "family": "source/CST/formatting",
@@ -200,54 +200,54 @@
     {
       "family": "Basis/revision/query invalidation",
       "accepted": 100000,
-      "attempts": 145569,
+      "attempts": 145876,
       "discards": 0,
-      "negatives": 45569,
+      "negatives": 45876,
       "seed": 11400719217369709273,
-      "evidence_hash": "f85ed05fbfb6f1d24ca21ac1ddc2947b400da234fbfb5ca28f6d3f4f2a65e7d0",
+      "evidence_hash": "02397cd41786126616fe5e570c9a75aacb97eed96fe407194c4cc820c21ed547",
       "category_counts": {
-        "branch": 9006,
-        "client-scoped": 9016,
-        "durable-only": 9044,
-        "empty-basis": 9006,
-        "federated": 9128,
-        "fresh": 9209,
-        "hostile": 8980,
-        "invalid-token": 9119,
-        "large-frontier": 9258,
-        "merge": 9146,
-        "published": 9174,
-        "reordered": 9065,
-        "single-revision": 9147,
-        "stale": 9072,
-        "truncated": 8907,
-        "unknown-perspective": 9292
+        "branch": 9012,
+        "client-scoped": 9034,
+        "durable-only": 9227,
+        "empty-basis": 8963,
+        "federated": 9148,
+        "fresh": 9068,
+        "hostile": 9069,
+        "invalid-token": 9158,
+        "large-frontier": 9138,
+        "merge": 9078,
+        "published": 9056,
+        "reordered": 9298,
+        "single-revision": 9100,
+        "stale": 9108,
+        "truncated": 9207,
+        "unknown-perspective": 9212
       },
       "relations": [
         {
           "relation": "irrelevant_input_invariance",
           "oracle_id": "oracle:Basis_revision_query_invalidation",
           "result": "pass",
-          "artifact_blake3": "c2c72a61329fdf73d89772925fe6b58acdabd85651ec3569161cbe9174466f0f"
+          "artifact_blake3": "a671db403580c706c2c45c1a6f858118c257a8916a8f6064140451458e86fbe1"
         },
         {
           "relation": "monotonicity",
           "oracle_id": "oracle:Basis_revision_query_invalidation",
           "result": "pass",
-          "artifact_blake3": "0c96302a60c2d120c98a11b079666026e156002a67ee0dc12824dd24fde67527"
+          "artifact_blake3": "112290030e0a14bf46c37a47c95ccb69c7991c4b8e1923a589e9039b35b36bd8"
         },
         {
           "relation": "independent_read_set_oracle",
           "oracle_id": "oracle:Basis_revision_query_invalidation",
           "result": "pass",
-          "artifact_blake3": "53b8b3ff21c1f42463921272b614a185407711ee137b35909ab2fa8004500167"
+          "artifact_blake3": "7bf1ba7cd2beb1822d9983b9443c46cb946098666c23d7ab31b868010f15e6f7"
         }
       ],
       "oracle": {
         "id": "oracle:Basis_revision_query_invalidation",
         "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_invalidation",
         "independent": true,
-        "relation_matrix_blake3": "b514356d68e4825aacc9b51af299d6a5ddace06cf030db023963ef953bbadfbf"
+        "relation_matrix_blake3": "20e57a13b2c70c05e4d084cf24f7441d4d0b46b3d02b00f78198888c35bb9450"
       }
     }
   ]

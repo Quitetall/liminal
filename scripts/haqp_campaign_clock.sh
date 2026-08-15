@@ -27,8 +27,16 @@ if [ -n "$(git status --porcelain=v1)" ]; then CLEAN=0; fi
 WRAPPER="scripts/haqp_campaign_clock.sh"
 WRAPPER_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 WRAPPER_SHA256=$(sha256sum "$WRAPPER_FILE" | cut -d' ' -f1)
+RECEIPT="conformance/haqp/evidence/campaign/$RUN_ID.receipt"
+mkdir -p "$(dirname "$RECEIPT")"
+printf 'run_id=%s\ncommit=%s\ntree=%s\ncommand=%s\nstarted_epoch=%s\nfinished_epoch=%s\nelapsed_s=%s\nclean=%s\nresult=%s\n' \
+  "$RUN_ID" "$COMMIT" "$TREE" "$COMMAND" "$STARTED" "$FINISHED" "$ELAPSED" "$CLEAN" "$([ "$CODE" -eq 0 ] && echo pass || echo fail)" >"$RECEIPT"
+if ! RECEIPT_BLAKE3=$(cargo run -q -p liminal-xtask -- haq hash "$RECEIPT"); then
+  echo "ERROR: campaign receipt hash failed" >&2
+  exit 1
+fi
 
 mkdir -p "$(dirname "$OUT")"
-printf '{"schema_version":"haqp-campaign-clock-v1","reference_machine":"%s","runs":[{"id":"%s","commit":"%s","tree":"%s","command":"%s","started_epoch":%s,"finished_epoch":%s,"elapsed_s":%s,"clean":%s,"result":"%s","wrapper":"%s","wrapper_sha256":"%s"}]}\n' \
-  "$(hostname -s)" "$RUN_ID" "$COMMIT" "$TREE" "$COMMAND" "$STARTED" "$FINISHED" "$ELAPSED" "$CLEAN" "$([ "$CODE" -eq 0 ] && echo pass || echo fail)" "$WRAPPER" "$WRAPPER_SHA256" >"$OUT"
+printf '{"schema_version":"haqp-campaign-clock-v1","reference_machine":"%s","runs":[{"id":"%s","commit":"%s","tree":"%s","command":"%s","started_epoch":%s,"finished_epoch":%s,"elapsed_s":%s,"clean":%s,"result":"%s","wrapper":"%s","wrapper_sha256":"%s","receipt":"%s","receipt_blake3":"%s"}]}\n' \
+  "$(hostname -s)" "$RUN_ID" "$COMMIT" "$TREE" "$COMMAND" "$STARTED" "$FINISHED" "$ELAPSED" "$CLEAN" "$([ "$CODE" -eq 0 ] && echo pass || echo fail)" "$WRAPPER" "$WRAPPER_SHA256" "$RECEIPT" "$RECEIPT_BLAKE3" >"$OUT"
 exit "$CODE"

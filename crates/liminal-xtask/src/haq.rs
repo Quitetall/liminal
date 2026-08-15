@@ -70,11 +70,12 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
         .as_ref()
         .context("qualified campaign clock requires packet provenance")?;
     verify_campaign_clock(root, Some(provenance))?;
-    verify_residual_risks(&packet)?;
+    verify_residual_risks(root, &packet)?;
     verify_qualification_stage(&packet)?;
     if packet.qualification_stage == "1b" {
         verify_mutant_killing_tests(root, &packet)?;
         verify_mutant_evidence(root, &packet)?;
+        verify_mutant_evidence_replay(root, &packet)?;
     }
     verify_canary_evidence(root, &packet)?;
     verify_generated_evidence(root, &packet)?;
@@ -2084,6 +2085,63 @@ fn verify_mutant_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
     Ok(())
 }
 
+/// Re-run every semantic killed mutant from its fixed source commit and
+/// compare the complete durable row. Exit codes and digests are claims until
+/// this replay observes them from a fresh disposable worktree.
+fn verify_mutant_evidence_replay(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    let selected = packet
+        .mutants
+        .iter()
+        .filter(|mutant| mutant.disposition == "killed")
+        .collect::<Vec<_>>();
+    if selected.is_empty() {
+        return Ok(());
+    }
+    let path = root.join("conformance/haqp/evidence/mutants.json");
+    let evidence: MutantEvidence = serde_json::from_slice(&fs::read(&path)?)?;
+    let source_commit = packet
+        .provenance
+        .as_ref()
+        .context("mutant replay requires packet provenance")?
+        .fixed_commit
+        .clone();
+    anyhow::ensure!(
+        git_text(root, &["status", "--porcelain"])?.is_empty(),
+        "mutant replay requires a clean source tree"
+    );
+    let ignored = ignored_test_names(root);
+    let scratch = liminal_scratch::ScratchDir::new("haq-mutant-replay")?;
+    let worktree = scratch.path().to_owned();
+    let add = Command::new("git")
+        .current_dir(root)
+        .args(["worktree", "add", "--detach", "--quiet"])
+        .arg(&worktree)
+        .arg(&source_commit)
+        .output()?;
+    anyhow::ensure!(
+        add.status.success(),
+        "mutant replay worktree add failed: {}",
+        String::from_utf8_lossy(&add.stderr).trim()
+    );
+    let mut guard = WorktreeGuard::new(root, &worktree);
+    for mutant in selected {
+        let expected = evidence
+            .rows
+            .iter()
+            .find(|row| row.id == mutant.id)
+            .with_context(|| format!("mutant replay missing evidence row {}", mutant.id))?;
+        let actual = run_mutant_row(&worktree, packet, mutant, &ignored, false)?;
+        anyhow::ensure!(
+            actual == *expected,
+            "mutant {} replay row differs from committed evidence",
+            mutant.id
+        );
+        reset_mutant_worktree(&worktree, &source_commit)?;
+    }
+    guard.remove()?;
+    Ok(())
+}
+
 #[allow(
     clippy::too_many_lines,
     reason = "mutation evidence gate keeps all row invariants together"
@@ -3900,6 +3958,35 @@ fn verify_campaign_clock(root: &Utf8Path, expected: Option<&Provenance>) -> Resu
             &run.wrapper_sha256,
             &wrapper_digest,
         )?;
+        anyhow::ensure!(
+            !run.receipt.trim().is_empty() && !run.receipt_blake3.trim().is_empty(),
+            "campaign run {} lacks wrapper receipt; regenerate campaign clock evidence",
+            run.id
+        );
+        let receipt_path = safe_repo_path(root, &run.receipt, "campaign receipt")?;
+        let receipt_bytes = fs::read(&receipt_path)
+            .with_context(|| format!("{receipt_path}: campaign receipt is required"))?;
+        require_hex_digest("campaign receipt_blake3", &run.receipt_blake3)?;
+        require_eq(
+            "campaign receipt_blake3",
+            &run.receipt_blake3,
+            blake3::hash(&receipt_bytes).to_hex().as_ref(),
+        )?;
+        let receipt = String::from_utf8(receipt_bytes)
+            .with_context(|| format!("{receipt_path}: campaign receipt is not UTF-8"))?;
+        let expected_receipt = format!(
+            "run_id={}\ncommit={}\ntree={}\ncommand={}\nstarted_epoch={}\nfinished_epoch={}\nelapsed_s={}\nclean={}\nresult={}\n",
+            run.id,
+            run.commit,
+            run.tree,
+            run.command,
+            run.started_epoch,
+            run.finished_epoch,
+            run.elapsed_s,
+            run.clean,
+            run.result
+        );
+        require_eq("campaign receipt contents", &receipt, &expected_receipt)?;
     }
     let breaches = clock
         .runs
@@ -3916,7 +4003,7 @@ fn verify_campaign_clock(root: &Utf8Path, expected: Option<&Provenance>) -> Resu
 /// Every limitation carried into qualification needs an owner, trigger,
 /// evidence coordinate, mitigation, and acceptance authority. Bare prose in a
 /// residual-risk table is not auditable (ADR-0020 §7).
-fn verify_residual_risks(packet: &Packet) -> Result<()> {
+fn verify_residual_risks(root: &Utf8Path, packet: &Packet) -> Result<()> {
     anyhow::ensure!(
         !packet.residual_risks.is_empty(),
         "qualified packet must record residual-risk coordinates"
@@ -3954,13 +4041,40 @@ fn verify_residual_risks(packet: &Packet) -> Result<()> {
             risk.id,
             risk.requirement
         );
-        anyhow::ensure!(
-            risk.evidence.contains(':')
-                || (risk.evidence.len() == 64
-                    && risk.evidence.chars().all(|ch| ch.is_ascii_hexdigit())),
-            "risk {} evidence must be a file:coordinate or 64-hex digest",
-            risk.id
-        );
+        if let Some((file, line)) = risk.evidence.rsplit_once(':') {
+            let line: usize = line
+                .parse()
+                .with_context(|| format!("risk {} evidence line is not numeric", risk.id))?;
+            anyhow::ensure!(
+                line > 0
+                    && !file.is_empty()
+                    && !file.starts_with('/')
+                    && !file.split('/').any(|part| part == ".."),
+                "risk {} evidence coordinate is unsafe",
+                risk.id
+            );
+            anyhow::ensure!(
+                !is_locked_acceptance_path(file),
+                "risk {} evidence coordinate names locked acceptance corpus",
+                risk.id
+            );
+            let path = safe_repo_path(root, file, "residual-risk evidence")?;
+            let source = fs::read_to_string(&path)
+                .with_context(|| format!("risk {} evidence source is missing", risk.id))?;
+            anyhow::ensure!(
+                source.lines().nth(line - 1).is_some(),
+                "risk {} evidence line {} is outside {}",
+                risk.id,
+                line,
+                file
+            );
+        } else {
+            anyhow::ensure!(
+                risk.evidence.len() == 64 && risk.evidence.chars().all(|ch| ch.is_ascii_hexdigit()),
+                "risk {} evidence must be an exact file:coordinate or 64-hex digest",
+                risk.id
+            );
+        }
         anyhow::ensure!(
             matches!(risk.state.as_str(), "open" | "mitigated" | "accepted"),
             "risk {} has unknown state {:?}",
@@ -5426,6 +5540,21 @@ fn verify_markdown_surface_text(text: &str, packet: &Packet) -> Result<()> {
         text.contains(&status_tuple),
         "review packet markdown machine status tuple disagrees with packet"
     );
+    let markdown_canaries = text
+        .lines()
+        .filter_map(|line| line.split('|').nth(1).map(str::trim))
+        .filter(|id| id.starts_with('C') && id[1..].chars().all(|ch| ch.is_ascii_digit()))
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    let packet_canaries = packet
+        .canaries
+        .iter()
+        .map(|row| row.id.clone())
+        .collect::<BTreeSet<_>>();
+    anyhow::ensure!(
+        markdown_canaries == packet_canaries,
+        "review packet markdown canary rows differ: markdown={markdown_canaries:?}, packet={packet_canaries:?}"
+    );
     Ok(())
 }
 
@@ -5818,6 +5947,10 @@ struct CampaignRun {
     result: String,
     wrapper: String,
     wrapper_sha256: String,
+    #[serde(default)]
+    receipt: String,
+    #[serde(default)]
+    receipt_blake3: String,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -5910,7 +6043,7 @@ struct MutantEvidence {
     rows: Vec<MutantEvidenceRow>,
 }
 
-#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 struct MutantEvidenceRow {
     id: String,
@@ -6661,6 +6794,14 @@ fn case_source_cst(rng: &mut Rng) -> Result<Case> {
         other => unreachable!("unknown source category {other}"),
     };
     let Ok(source) = String::from_utf8(bytes.clone()) else {
+        let basis = liminal_source::SourceBasis {
+            source: liminal_id::SourceId::from_name("haqp-generated"),
+            content_hash: liminal_id::ContentHash::of(&bytes),
+        };
+        anyhow::ensure!(
+            liminal_source::Utf8HolderView::from_bytes(basis, &bytes).is_err(),
+            "invalid-utf8 source unexpectedly entered Utf8HolderView"
+        );
         return Ok(Case::Negative {
             category,
             witness: bytes,
@@ -6804,6 +6945,15 @@ fn case_transform(rng: &mut Rng) -> Result<Case> {
         // branch, not the transform's refusal/preservation behavior.
         let malformed = format!("{category}:{}", rng.word());
         let outcome = three_way("{#negative}", &malformed, "{#negative}");
+        let liminal_source::merge::MergeOutcome::Disjoint { merged } = &outcome else {
+            anyhow::bail!(
+                "transform negative category {category} produced non-disjoint outcome: {outcome:?}"
+            );
+        };
+        anyhow::ensure!(
+            merged.contains(&malformed),
+            "transform negative category {category} lost malformed input"
+        );
         let witness = format!("transform-negative:{category}:{outcome:?}").into_bytes();
         return Ok(Case::Negative { category, witness });
     }
@@ -7022,15 +7172,6 @@ fn case_invalidation(rng: &mut Rng) -> Result<Case> {
     };
 
     let category = rng.category("Basis/revision/query invalidation");
-    if matches!(
-        category,
-        "truncated" | "hostile" | "invalid-token" | "unknown-perspective"
-    ) {
-        return Ok(Case::Negative {
-            category,
-            witness: format!("basis-negative:{category}:{}", rng.word()).into_bytes(),
-        });
-    }
     let perspective = match category {
         "client-scoped" => BasisPerspective::ClientScoped {
             client: liminal_id::ClientId::from_uuid(rng.uuid()),
@@ -9290,7 +9431,7 @@ mod tests {
             ),
             (
                 "Basis/revision/query invalidation",
-                "35745e1f6e7ef64b544c47a5e79c6512e8642f914f7e68dce3bcb3ceed68680e",
+                "96737e4564fe30e9c0bb224c6fa34c36b369663b49910406503cde551dd85ac0",
             ),
         ];
         // 3,000 rather than 64: `case_repair` closes a genuine cycle on
@@ -9551,7 +9692,7 @@ mod tests {
             fs::read(repo_root().join("scripts/haqp_campaign_clock.sh")).expect("wrapper bytes"),
         )
         .expect("write wrapper");
-        let clock = CampaignClock {
+        let mut clock = CampaignClock {
             schema_version: "haqp-campaign-clock-v1".to_owned(),
             reference_machine: "test-host".to_owned(),
             runs: vec![CampaignRun {
@@ -9572,8 +9713,16 @@ mod tests {
                             .expect("wrapper"),
                     )
                 ),
+                receipt: String::new(),
+                receipt_blake3: String::new(),
             }],
         };
+        let receipt = "run_id=run-1\ncommit=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ntree=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\ncommand=just ci\nstarted_epoch=100\nfinished_epoch=28901\nelapsed_s=28801\nclean=true\nresult=pass\n";
+        let receipt_path = root.join("conformance/haqp/evidence/campaign/run-1.receipt");
+        fs::create_dir_all(receipt_path.parent().expect("receipt parent")).expect("mkdir");
+        fs::write(&receipt_path, receipt).expect("write receipt");
+        clock.runs[0].receipt = "conformance/haqp/evidence/campaign/run-1.receipt".to_owned();
+        clock.runs[0].receipt_blake3 = blake3::hash(receipt.as_bytes()).to_hex().to_string();
         fs::write(&path, serde_json::to_vec(&clock).expect("serialize")).expect("write");
         verify_campaign_clock(root, None).expect("one retained breach is residual risk");
         let mut blocked = clock;
@@ -9594,7 +9743,13 @@ mod tests {
                     fs::read(repo_root().join("scripts/haqp_campaign_clock.sh")).expect("wrapper"),
                 )
             ),
+            receipt: "conformance/haqp/evidence/campaign/run-2.receipt".to_owned(),
+            receipt_blake3: String::new(),
         });
+        let receipt_two = "run_id=run-2\ncommit=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ntree=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\ncommand=just ci\nstarted_epoch=200\nfinished_epoch=29001\nelapsed_s=28801\nclean=true\nresult=pass\n";
+        let receipt_two_path = root.join("conformance/haqp/evidence/campaign/run-2.receipt");
+        fs::write(&receipt_two_path, receipt_two).expect("write receipt two");
+        blocked.runs[1].receipt_blake3 = blake3::hash(receipt_two.as_bytes()).to_hex().to_string();
         fs::write(&path, serde_json::to_vec(&blocked).expect("serialize")).expect("write");
         verify_campaign_clock(root, None).expect_err("two clean breaches block ratification");
     }
