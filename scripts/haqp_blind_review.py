@@ -577,6 +577,7 @@ def run_pass(
         "and attempt_id referencing an attempt whose classification is verified_defect. "
         "For false_positive or caught_violation attempts, record the attempt only and emit NO finding object. "
         "Do not link findings to false_positive, caught_violation, or unknown attempts. "
+        "Include at least one caught_violation attempt where a deliberate bad claim is rejected by the suite. "
         "Every attempt action and observation must be substantive (at least 24 characters and 4 words). "
         "A false_positive attempt must set independently_reproduced=true as reproduction evidence. "
         "A resolved verified_defect attempt must also carry resolution={commit,coordinate,evidence_path,evidence_sha256}; "
