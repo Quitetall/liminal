@@ -35,6 +35,14 @@ mkdir -p conformance/haqp/evidence/binaries conformance/haqp/evidence/probes
 audit_entries=""
 audit_tracer="strace-open-paths"
 
+# LeakSanitizer aborts under ptrace even when target code is clean. Keep ASan
+# memory checks enabled while disabling only leak detection for traced runs;
+# otherwise tracer itself manufactures a false fuzz failure and empty artifact.
+asan_options="${ASAN_OPTIONS:-}"
+if [ "$SANITIZER" = "address" ] && [[ "$asan_options" != *detect_leaks=* ]]; then
+  asan_options="${asan_options:+$asan_options:}detect_leaks=0"
+fi
+
 echo "[" > "$OUT"
 first=1
 overall=0
@@ -66,7 +74,7 @@ for t in "${TARGETS[@]}"; do
   # tool default is one a tool update can silently withdraw.
   audit_raw="$AUDIT_DIR/$t.trace"
   if [ "$AUDIT_ACCESS" = "1" ] && command -v strace >/dev/null 2>&1; then
-    strace -f -q -e trace=openat,openat2 -o "$audit_raw" \
+    ASAN_OPTIONS="$asan_options" strace -f -q -e trace=openat,openat2 -o "$audit_raw" \
       cargo +nightly fuzz run -s "$SANITIZER" "$t" -- \
         -max_total_time="$SECS" -seed="$SEED" -rss_limit_mb=4096 -print_final_stats=1 \
         >"$log" 2>&1 &
@@ -122,7 +130,9 @@ for t in "${TARGETS[@]}"; do
     seed_count=$((seed_count + 1))
   done
   seed_manifest_blake3=$(cargo run -q -p liminal-xtask -- haq hash "$seed_manifest" 2>/dev/null || echo "")
-  trace_command="strace -f -q -e trace=openat,openat2 -o $audit_raw $build_command && cargo +nightly fuzz run -s $SANITIZER $t -- -max_total_time=$SECS -seed=$SEED -rss_limit_mb=4096 -print_final_stats=1"
+  trace_prefix=""
+  [ -n "$asan_options" ] && trace_prefix="ASAN_OPTIONS=$asan_options "
+  trace_command="$build_command && ${trace_prefix}strace -f -q -e trace=openat,openat2 -o $audit_raw cargo +nightly fuzz run -s $SANITIZER $t -- -max_total_time=$SECS -seed=$SEED -rss_limit_mb=4096 -print_final_stats=1"
   binding_input="target/haqp/process-binding-$t.txt"
   printf '%s\0%s\0%s\0%s' "$trace_command" "$trace_pid" "$trace_exit_code" "$trace_hash" >"$binding_input"
   process_binding=$(cargo run -q -p liminal-xtask -- haq hash "$binding_input" 2>/dev/null || echo "")
