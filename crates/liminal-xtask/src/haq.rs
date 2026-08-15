@@ -2727,6 +2727,12 @@ fn cfg_attribute_excludes(trimmed: &str) -> bool {
     if trimmed == "#[cfg(any())]" {
         return true;
     }
+    if trimmed == "#[cfg(test)]" {
+        return false;
+    }
+    if trimmed == "#[cfg(not(test))]" {
+        return true;
+    }
     if trimmed == "#[cfg(unix)]" {
         return !cfg!(unix);
     }
@@ -6906,13 +6912,14 @@ mod tests {
     fn runnable_test_scanner_does_not_let_one_cfg_poison_later_tests() {
         let mut names = BTreeMap::new();
         collect_runnable_test_functions(
-            "#[cfg(any())]\nfn compiled_out() {}\n#[test]\nfn live() {}\n#[cfg(unix)]\n#[test]\nfn active_cfg() {}\n#[test]\nfn later_live() {}",
+            "#[cfg(any())]\nfn compiled_out() {}\n#[test]\nfn live() {}\n#[cfg(unix)]\n#[test]\nfn active_cfg() {}\n#[cfg(test)]\n#[test]\nfn active_test_cfg() {}\n#[cfg(not(test))]\n#[test]\nfn inactive_test_cfg() {}\n#[test]\nfn later_live() {}",
             &mut names,
         );
         assert_eq!(
             names,
             BTreeMap::from([
                 ("active_cfg".to_owned(), 1),
+                ("active_test_cfg".to_owned(), 1),
                 ("later_live".to_owned(), 1),
                 ("live".to_owned(), 1),
             ])
