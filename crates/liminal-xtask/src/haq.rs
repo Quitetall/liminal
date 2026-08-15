@@ -3764,7 +3764,7 @@ fn verify_corpus_access_audit(root: &Utf8Path, packet: &Packet) -> Result<()> {
     require_eq(
         "corpus access audit schema_version",
         &audit.schema_version,
-        "haqp-corpus-access-v1",
+        "haqp-corpus-access-v2",
     )?;
     require_eq(
         "corpus access audit tracer",
@@ -3916,6 +3916,13 @@ fn verify_corpus_scope_traces(
             &row.observed_paths_blake3,
             &observed_paths_blake3,
         )?;
+        verify_trace_corpus_resolution(
+            root,
+            &row.trace_root,
+            &bytes,
+            &row.resolved_paths_blake3,
+            &format!("{} corpus scope", row.scope),
+        )?;
         let binding = blake3::hash(
             format!(
                 "{}\0{}\0{}\0{}\0{}",
@@ -4007,6 +4014,13 @@ fn verify_corpus_scope_replays(
                 row.scope
             );
         }
+        verify_trace_corpus_resolution(
+            &worktree,
+            worktree.as_str(),
+            &bytes,
+            &row.resolved_paths_blake3,
+            &format!("{} replayed corpus scope", row.scope),
+        )?;
     }
     guard.remove()?;
     Ok(())
@@ -4062,6 +4076,18 @@ pub fn run_scope_probe_repo(root: &Utf8Path, scope: &str) -> Result<()> {
 }
 
 fn scope_trace_paths_digest(bytes: &[u8]) -> String {
+    blake3::hash(
+        scope_trace_open_paths(bytes)
+            .into_iter()
+            .collect::<Vec<_>>()
+            .join("\n")
+            .as_bytes(),
+    )
+    .to_hex()
+    .to_string()
+}
+
+fn scope_trace_open_paths(bytes: &[u8]) -> BTreeSet<String> {
     let mut paths = BTreeSet::new();
     for line in String::from_utf8_lossy(bytes).lines() {
         let Some(open) = ["openat(", "openat2("]
@@ -4080,9 +4106,92 @@ fn scope_trace_paths_digest(bytes: &[u8]) -> String {
         };
         paths.insert(rest[start + 1..start + 1 + end].to_owned());
     }
-    blake3::hash(paths.into_iter().collect::<Vec<_>>().join("\n").as_bytes())
-        .to_hex()
-        .to_string()
+    paths
+}
+
+/// Resolve corpus paths from raw strace metadata. Lexical path filtering alone
+/// is insufficient: a benign `fuzz/corpus/<target>` symlink can resolve into
+/// locked `conformance/corpora/heldout` data. The campaign records only a
+/// digest of `(lexical, canonical repository-relative)` pairs, so no path
+/// receipt can disclose corpus names; verification recomputes it and fails
+/// closed on missing, escaping, or forbidden resolutions.
+fn verify_trace_corpus_resolution(
+    root: &Utf8Path,
+    trace_root: &str,
+    bytes: &[u8],
+    expected_digest: &str,
+    label: &str,
+) -> Result<()> {
+    require_hex_digest(&format!("{label} resolved_paths_blake3"), expected_digest)?;
+    let canonical_root = fs::canonicalize(root.as_std_path())
+        .with_context(|| format!("{label}: canonicalize repository root"))?;
+    let trace_root = Path::new(trace_root);
+    anyhow::ensure!(
+        trace_root.is_absolute(),
+        "{label}: trace_root must be absolute"
+    );
+    let mut resolved = BTreeSet::new();
+    for lexical in scope_trace_open_paths(bytes)
+        .into_iter()
+        .filter(|path| path.to_ascii_lowercase().contains("/fuzz/corpus/"))
+    {
+        let local = trace_path_to_repo(root, trace_root, &lexical)
+            .with_context(|| format!("{label}: cannot map traced corpus path to repository"))?;
+        let canonical = fs::canonicalize(&local)
+            .with_context(|| format!("{label}: traced corpus path cannot be resolved"))?;
+        let relative = canonical
+            .strip_prefix(&canonical_root)
+            .with_context(|| format!("{label}: traced corpus path escapes repository root"))?;
+        let relative = relative.to_str().context("non-UTF-8 traced corpus path")?;
+        let lower = relative.to_ascii_lowercase();
+        for forbidden in ["heldout", "conformance/corpora"] {
+            anyhow::ensure!(
+                !lower.contains(forbidden),
+                "{label}: traced corpus path resolves into forbidden data"
+            );
+        }
+        resolved.insert(format!("{lexical}\0{relative}"));
+    }
+    anyhow::ensure!(
+        !resolved.is_empty(),
+        "{label}: trace contains no resolvable fuzz corpus path"
+    );
+    let resolved = resolved.into_iter().collect::<Vec<_>>();
+    let resolved_bytes = format!("{}\n", resolved.join("\n"));
+    let actual = blake3::hash(resolved_bytes.as_bytes()).to_hex().to_string();
+    require_eq(
+        &format!("{label} resolved_paths_blake3"),
+        &actual,
+        expected_digest,
+    )?;
+    Ok(())
+}
+
+fn trace_path_to_repo(root: &Utf8Path, trace_root: &Path, lexical: &str) -> Result<Utf8PathBuf> {
+    let path = Path::new(lexical);
+    if path.is_absolute() {
+        if let Ok(relative) = path.strip_prefix(trace_root) {
+            return Ok(
+                root.join(Utf8Path::from_path(relative).context("non-UTF-8 traced relative path")?)
+            );
+        }
+        // Some tracers print a container/workspace prefix while preserving
+        // repository-relative `fuzz/...`; bind that suffix to current root.
+        if let Ok(relative) = path.strip_prefix("/") {
+            let mut components = relative.components();
+            while let Some(component) = components.next() {
+                if component == Component::Normal("fuzz".as_ref()) {
+                    let mut suffix = Path::new("fuzz").to_path_buf();
+                    suffix.extend(components);
+                    return Ok(root.join(
+                        Utf8Path::from_path(&suffix).context("non-UTF-8 traced fuzz path")?,
+                    ));
+                }
+            }
+        }
+        anyhow::bail!("absolute traced path is outside recorded trace root")
+    }
+    Ok(root.join(Utf8Path::from_path(path).context("non-UTF-8 traced relative path")?))
 }
 
 #[allow(
@@ -4310,6 +4419,13 @@ fn verify_corpus_audit_campaign_binding(root: &Utf8Path, audit: &CorpusAccessAud
                 "{trace_path}: raw access trace observed forbidden path fragment {forbidden:?}"
             );
         }
+        verify_trace_corpus_resolution(
+            root,
+            &row.trace_root,
+            &trace_bytes,
+            &row.resolved_paths_blake3,
+            &format!("{} corpus audit", row.target),
+        )?;
     }
     Ok(())
 }
@@ -6451,6 +6567,10 @@ struct CorpusAccessAuditTarget {
     tracer_version: String,
     #[serde(default)]
     tracer_version_blake3: String,
+    #[serde(default)]
+    trace_root: String,
+    #[serde(default)]
+    resolved_paths_blake3: String,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -6478,6 +6598,10 @@ struct CorpusScopeTrace {
     tracer_version_blake3: String,
     #[serde(default)]
     observed_paths_blake3: String,
+    #[serde(default)]
+    trace_root: String,
+    #[serde(default)]
+    resolved_paths_blake3: String,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -10227,17 +10351,26 @@ mod tests {
         fs::create_dir_all(tracer_version_path.parent().expect("tracer version parent"))
             .expect("mkdir tracer version");
         fs::write(&tracer_version_path, &tracer_version_bytes).expect("write tracer version");
+        let trace_root = root
+            .as_std_path()
+            .canonicalize()
+            .expect("canonical scratch root")
+            .to_str()
+            .expect("utf8 scratch root")
+            .to_owned();
         for target in &targets {
             let manifest = format!("conformance/haqp/evidence/access/{target}.paths");
             let path = root.join(&manifest);
             fs::create_dir_all(path.parent().expect("manifest parent")).expect("mkdir");
-            fs::write(&path, format!("/workspace/fuzz/corpus/{target}\n")).expect("write");
+            let corpus_dir = root.join(format!("fuzz/corpus/{target}"));
+            fs::create_dir_all(&corpus_dir).expect("mkdir corpus");
+            fs::write(&path, format!("{trace_root}/fuzz/corpus/{target}\n")).expect("write");
             let trace = format!("conformance/haqp/evidence/access/{target}.trace");
             let trace_path = root.join(&trace);
             fs::write(
                 &trace_path,
                 format!(
-                    "2 openat(AT_FDCWD, \"/workspace/fuzz/target/x86_64-unknown-linux-gnu/release/{target}\", O_RDONLY) = 3\n2 openat(AT_FDCWD, \"/workspace/fuzz/corpus/{target}\", O_RDONLY) = 3\n1 --- SIGCHLD {{si_signo=SIGCHLD, si_pid=2, si_status=0}} ---\n1 +++ exited with 0 +++\n"
+                    "2 openat(AT_FDCWD, \"{trace_root}/fuzz/target/x86_64-unknown-linux-gnu/release/{target}\", O_RDONLY) = 3\n2 openat(AT_FDCWD, \"{trace_root}/fuzz/corpus/{target}\", O_RDONLY) = 3\n1 --- SIGCHLD {{si_signo=SIGCHLD, si_pid=2, si_status=0}} ---\n1 +++ exited with 0 +++\n"
                 ),
             )
             .expect("trace");
@@ -10269,6 +10402,12 @@ mod tests {
                 tracer_binary: "strace".to_owned(),
                 tracer_version: "conformance/haqp/evidence/access/strace.version".to_owned(),
                 tracer_version_blake3: tracer_version_blake3.clone(),
+                trace_root: trace_root.clone(),
+                resolved_paths_blake3: blake3::hash(
+                    format!("{trace_root}/fuzz/corpus/{target}\0fuzz/corpus/{target}\n").as_bytes(),
+                )
+                .to_hex()
+                .to_string(),
             });
             fuzz_rows.push(FuzzEvidence {
                 target: target.clone(),
@@ -10294,7 +10433,7 @@ mod tests {
         )
         .expect("write fuzz");
         let audit = CorpusAccessAudit {
-            schema_version: "haqp-corpus-access-v1".to_owned(),
+            schema_version: "haqp-corpus-access-v2".to_owned(),
             tracer: "strace-open-paths".to_owned(),
             source_commit: "a".repeat(40),
             source_tree: "b".repeat(40),
@@ -10306,6 +10445,20 @@ mod tests {
         verify_corpus_access_audit(root, &packet).expect("unlocked corpus paths are accepted");
 
         let first = audit.targets[0].clone();
+        // Lexical paths can stay benign while the fuzz corpus directory is a
+        // symlink into locked data. Canonical resolution must reject this
+        // without relying on a forbidden string in the raw trace.
+        let heldout_dir = root.join("conformance/corpora/heldout");
+        fs::create_dir_all(&heldout_dir).expect("mkdir scratch heldout");
+        fs::write(heldout_dir.join("secret"), b"fixture").expect("write scratch heldout");
+        let corpus_dir = root.join(format!("fuzz/corpus/{}", first.target));
+        fs::remove_dir(&corpus_dir).expect("remove corpus directory");
+        std::os::unix::fs::symlink(&heldout_dir, &corpus_dir).expect("symlink corpus directory");
+        verify_corpus_access_audit(root, &packet)
+            .expect_err("symlinked corpus resolving into held-out data must fail closed");
+        fs::remove_file(&corpus_dir).expect("remove corpus symlink");
+        fs::create_dir(&corpus_dir).expect("restore corpus directory");
+
         let forbidden_path = root.join(&first.manifest);
         fs::write(
             &forbidden_path,

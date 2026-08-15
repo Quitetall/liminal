@@ -43,10 +43,49 @@ hash_file() {
   fi
   printf '%s' "$digest"
 }
+
+# Hash lexical/canonical pairs for fuzz corpus opens. Keep canonical paths
+# repository-relative and never print a forbidden target: a symlink alias into
+# held-out data must fail without leaking its pathname into retained evidence.
+resolve_corpus_paths() {
+  local raw_trace="$1"
+  local target="$2"
+  local resolved_input="target/haqp/resolved-$target.input"
+  local raw canonical relative
+  : > "$resolved_input"
+  while IFS= read -r raw; do
+    [ -n "$raw" ] || continue
+    case "$raw" in
+      *"/fuzz/corpus/$target"*) ;;
+      *) continue ;;
+    esac
+    if [[ "$raw" = /* ]]; then
+      case "$raw" in
+        "$trace_root"/*) relative="${raw#"$trace_root"/}" ;;
+        */fuzz/*) relative="fuzz/${raw#*/fuzz/}" ;;
+        *) return 1 ;;
+      esac
+    else
+      relative="$raw"
+    fi
+    canonical=$(realpath -e -- "$relative" 2>/dev/null) || return 1
+    case "$canonical" in
+      "$trace_root"/*) relative="${canonical#"$trace_root"/}" ;;
+      *) return 1 ;;
+    esac
+    case "${relative,,}" in
+      *heldout*|*conformance/corpora*) return 1 ;;
+    esac
+    printf '%s\0%s\n' "$raw" "$relative" >> "$resolved_input"
+  done < <(sed -n -E 's/.*openat2?\([^,]+, "(([^"\\]|\\.)*)".*/\1/p' "$raw_trace" | sort -u)
+  [ -s "$resolved_input" ] || return 1
+  hash_file "$resolved_input"
+}
 audit_entries=""
 audit_tracer="strace-open-paths"
 source_commit=$(git rev-parse HEAD)
 source_tree=$(git rev-parse HEAD^{tree})
+trace_root=$(pwd -P)
 if command -v strace >/dev/null 2>&1; then
   mkdir -p conformance/haqp/evidence/access
   strace -V >"conformance/haqp/evidence/access/strace.version" 2>&1
@@ -156,6 +195,10 @@ for t in "${TARGETS[@]}"; do
     cp "$audit_raw" "$audit_manifest"
   fi
   audit_hash=$(hash_file "$audit_manifest")
+  resolved_paths_blake3=$(resolve_corpus_paths "$audit_raw" "$t") || {
+    echo "ERROR: traced corpus path resolution failed for $t" >&2
+    exit 1
+  }
   seed_manifest="target/haqp/seed-manifest-$t.txt"
   : > "$seed_manifest"
   seed_count=0
@@ -173,8 +216,8 @@ for t in "${TARGETS[@]}"; do
   binding_input="target/haqp/process-binding-$t.txt"
   printf '%s\0%s\0%s\0%s' "$trace_command" "$trace_pid" "$trace_exit_code" "$trace_hash" >"$binding_input"
   process_binding=$(hash_file "$binding_input")
-  audit_row=$(printf '{"target":"%s","manifest":"%s","manifest_blake3":"%s","seed":%s,"sanitizer":"%s","exit_code":%s,"log_blake3":"%s","command":"%s","trace":"%s","trace_blake3":"%s","trace_pid":%s,"trace_exit_code":%s,"trace_complete":%s,"process_binding":"%s","tracer_binary":"strace","tracer_version":"conformance/haqp/evidence/access/strace.version","tracer_version_blake3":"%s"}' \
-    "$t" "conformance/haqp/evidence/access/$t.paths" "$audit_hash" "$SEED" "$SANITIZER" "$code" "$loghash" "$trace_command" "conformance/haqp/evidence/access/$t.trace" "$trace_hash" "$trace_pid" "$trace_exit_code" "$trace_complete" "$process_binding" "$tracer_version_blake3")
+  audit_row=$(printf '{"target":"%s","manifest":"%s","manifest_blake3":"%s","seed":%s,"sanitizer":"%s","exit_code":%s,"log_blake3":"%s","command":"%s","trace":"%s","trace_blake3":"%s","trace_pid":%s,"trace_exit_code":%s,"trace_complete":%s,"process_binding":"%s","tracer_binary":"strace","tracer_version":"conformance/haqp/evidence/access/strace.version","tracer_version_blake3":"%s","trace_root":"%s","resolved_paths_blake3":"%s"}' \
+    "$t" "conformance/haqp/evidence/access/$t.paths" "$audit_hash" "$SEED" "$SANITIZER" "$code" "$loghash" "$trace_command" "conformance/haqp/evidence/access/$t.trace" "$trace_hash" "$trace_pid" "$trace_exit_code" "$trace_complete" "$process_binding" "$tracer_version_blake3" "$trace_root" "$resolved_paths_blake3")
   if [ -n "$audit_entries" ]; then audit_entries="$audit_entries,$audit_row"; else audit_entries="$audit_row"; fi
   printf '{"target":"%s","seconds":%s,"elapsed_s":%s,"exit_code":%s,"execs":%s,"artifacts":%s,"seed":%s,"seed_count":%s,"seed_manifest_blake3":"%s","sanitizer":"%s","log":"%s","log_blake3":"%s","sanitizer_proof":{"build_command":"%s","binary":"%s","binary_blake3":"%s","runtime_probe":"%s","runtime_probe_blake3":"%s","runtime_probe_exit_code":%s,"instrumentation_flags":["-fsanitize=%s"],"build_log":"%s","build_log_blake3":"%s","source_commit":"%s","source_tree":"%s","build_result":"%s"}}' \
     "$t" "$SECS" "$elapsed" "$code" "$execs" "$arts" "$SEED" "$seed_count" "$seed_manifest_blake3" "$SANITIZER" "$evidence_log" "$loghash" "$build_command" "$binary" "$binary_hash" "$probe" "$probe_hash" "$probe_code" "$SANITIZER" "$build_log_evidence" "$build_log_hash" "$source_commit" "$source_tree" "$([ "$build_code" -eq 0 ] && echo pass || echo fail)" >> "$OUT"
@@ -183,6 +226,6 @@ done
 
 echo "]" >> "$OUT"
 mkdir -p "$(dirname "$AUDIT_OUT")"
-printf '{"schema_version":"haqp-corpus-access-v1","tracer":"%s","source_commit":"%s","source_tree":"%s","targets":[%s]}\n' "$audit_tracer" "$source_commit" "$source_tree" "$audit_entries" >"$AUDIT_OUT"
+printf '{"schema_version":"haqp-corpus-access-v2","tracer":"%s","source_commit":"%s","source_tree":"%s","targets":[%s]}\n' "$audit_tracer" "$source_commit" "$source_tree" "$audit_entries" >"$AUDIT_OUT"
 echo "campaign complete; overall_exit=$overall; evidence=$OUT"
 exit "$overall"
