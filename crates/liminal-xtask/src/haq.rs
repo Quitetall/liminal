@@ -350,6 +350,10 @@ fn verify_generated_rows(
     Ok(())
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "generated relation contract keeps all cross-artifact invariants together"
+)]
 fn verify_generated_contract(
     root: &Utf8Path,
     family: &Generated,
@@ -403,9 +407,19 @@ fn verify_generated_contract(
     )?;
     for relation in &evidence.relations {
         require_eq("generated relation result", &relation.result, "pass")?;
-        require_hex_digest(
+        let expected_artifact = blake3::hash(
+            format!(
+                "{}\0{}\0{}",
+                family.family, relation.relation, evidence.evidence_hash
+            )
+            .as_bytes(),
+        )
+        .to_hex()
+        .to_string();
+        require_eq(
             &format!("{} relation artifact", family.family),
             &relation.artifact_blake3,
+            &expected_artifact,
         )?;
         require_eq("generated relation oracle", &relation.oracle_id, &oracle.id)?;
     }
@@ -440,9 +454,13 @@ fn verify_generated_contract(
         family.family
     );
     verify_oracle_source_coordinate(root, &oracle.source, &family.family)?;
-    require_hex_digest(
+    let expected_matrix = blake3::hash(serde_json::to_vec(&evidence.relations)?.as_slice())
+        .to_hex()
+        .to_string();
+    require_eq(
         &format!("{} relation_matrix_blake3", family.family),
         &oracle.relation_matrix_blake3,
+        &expected_matrix,
     )?;
     Ok(())
 }
@@ -664,6 +682,7 @@ fn independent_oracle_source_graph(
 /// Independent merge oracle. It checks raw content and outcome classes, not
 /// merge-result equality.
 fn independent_oracle_source_transform(
+    base: &str,
     ours: &str,
     identity: &liminal_source::merge::MergeOutcome,
     forward: &liminal_source::merge::MergeOutcome,
@@ -680,6 +699,24 @@ fn independent_oracle_source_transform(
         ours_tokens == merged_tokens,
         "identity merge dropped content: {ours:?} -> {merged:?}"
     );
+    // Token multisets alone permit an implementation to reorder every block.
+    // For inputs whose source order was unchanged, preserve the stronger
+    // ordered-marker relation too. Move cases intentionally exercise the
+    // merge's canonical base layout and therefore do not use this assertion.
+    let marker_order = |text: &str| {
+        text.split_whitespace()
+            .filter(|token| token.starts_with("{#") && token.ends_with('}'))
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    };
+    let base_markers = marker_order(base);
+    let ours_markers = marker_order(ours);
+    if ours_markers == base_markers {
+        anyhow::ensure!(
+            marker_order(merged) == ours_markers,
+            "identity merge reordered durable markers"
+        );
+    }
     let disjoint = |outcome: &liminal_source::merge::MergeOutcome| {
         matches!(
             outcome,
@@ -2015,6 +2052,18 @@ fn verify_mutant_evidence_row(
                 &row.status,
                 row.disposition.as_str(),
             )?;
+            anyhow::ensure!(
+                row.failed_tests.is_empty(),
+                "{} {} evidence cannot list failed tests",
+                row.id,
+                row.disposition
+            );
+            anyhow::ensure!(
+                row.exit_codes.iter().all(|code| *code == 0),
+                "{} {} evidence cannot contain nonzero exit codes",
+                row.id,
+                row.disposition
+            );
         }
         other => anyhow::bail!("{} has unsupported evaluated disposition {other:?}", row.id),
     }
@@ -2203,10 +2252,9 @@ fn is_semantic_test_failure(test_name: &str, stdout: &[u8], stderr: &[u8]) -> bo
     // infrastructure prose such as "launcher FAILED before tests" instead of
     // counting it as a semantic mutant kill.
     [text.as_ref(), err.as_ref()].iter().any(|output| {
-        output.lines().any(|line| {
-            let upper = line.to_ascii_uppercase();
-            line.contains(leaf) && (upper.contains("FAILED") || upper.contains("FAIL ["))
-        })
+        output
+            .lines()
+            .any(|line| line.trim_start().starts_with("FAIL [") && line.contains(leaf))
     })
 }
 
@@ -2643,7 +2691,7 @@ fn collect_runnable_test_functions(text: &str, names: &mut BTreeMap<String, usiz
             test_pending = true;
         } else if trimmed.starts_with("#[ignore")
             || (trimmed.starts_with("#[cfg_attr(") && trimmed.contains("ignore"))
-            || trimmed.starts_with("#[cfg(")
+            || cfg_attribute_excludes(trimmed)
         {
             // Keep an exclusion only across the attribute list immediately
             // preceding one test. A module-level cfg or one ignored function
@@ -2670,6 +2718,30 @@ fn collect_runnable_test_functions(text: &str, names: &mut BTreeMap<String, usiz
             excluded = false;
         }
     }
+}
+
+fn cfg_attribute_excludes(trimmed: &str) -> bool {
+    if !trimmed.starts_with("#[cfg(") {
+        return false;
+    }
+    if trimmed == "#[cfg(any())]" {
+        return true;
+    }
+    if trimmed == "#[cfg(unix)]" {
+        return !cfg!(unix);
+    }
+    if trimmed == "#[cfg(windows)]" {
+        return !cfg!(windows);
+    }
+    if trimmed.contains("target_os = \"linux\"") {
+        return !cfg!(target_os = "linux");
+    }
+    if trimmed.contains("target_os = \"windows\"") {
+        return !cfg!(target_os = "windows");
+    }
+    // Unknown predicates remain fail-closed: scanner cannot prove they are
+    // active on this host.
+    true
 }
 
 /// The recorded fuzz campaign is too long to re-run per verification (150
@@ -3078,7 +3150,7 @@ fn verify_corpus_audit_campaign_binding(root: &Utf8Path, audit: &CorpusAccessAud
             row.target
         );
         require_hex_digest(&format!("{} trace_blake3", row.target), &row.trace_blake3)?;
-        let trace_path = root.join(&row.trace);
+        let trace_path = safe_repo_path(root, &row.trace, "corpus trace")?;
         let trace_bytes = fs::read(&trace_path)
             .with_context(|| format!("{trace_path}: raw access trace is required"))?;
         require_eq(
@@ -4218,19 +4290,19 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ("crates/liminal-source/src/merge.rs", 167, "fn slot_order("),
         ("crates/liminal-source/src/merge.rs", 188, "fn line_merge("),
         (
-            "crates/liminal-source/src/paragraph.rs",
-            31,
-            "pub fn parse(",
+            "crates/liminal-source/src/merge.rs",
+            140,
+            "fn block_source(",
         ),
         (
-            "crates/liminal-source/src/paragraph.rs",
-            67,
-            "fn build_block(",
+            "crates/liminal-source/src/file.rs",
+            54,
+            "pub fn staged_path(",
         ),
         (
-            "crates/liminal-source/src/paragraph.rs",
-            116,
-            "fn extract_marker(",
+            "crates/liminal-source/src/file.rs",
+            60,
+            "pub fn target_path(",
         ),
         (
             "crates/liminal-source/src/paragraph.rs",
@@ -5682,6 +5754,8 @@ enum Case {
 struct GeneratedIlrpExecutor;
 
 impl liminal_jurisdiction::ExternalExecutor for GeneratedIlrpExecutor {
+    // Deliberate bounded smoke executor: production IlrpDriver, graph store,
+    // and recovery are exercised; external side effects stay deterministic.
     fn verify(
         &self,
         _mutation: &liminal_jurisdiction::ProposedMutation,
@@ -5862,7 +5936,13 @@ fn case_interchange(rng: &mut Rng) -> Result<Case> {
     );
     if malformed {
         let raw = match category {
-            "empty" => b"empty-graph".to_vec(),
+            "empty" => Vec::new(),
+            "duplicate-id" => br#"{"id":"00000000-0000-0000-0000-000000000001","id":"00000000-0000-0000-0000-000000000002","kind":1,"payload":"none","revision":0,"flags":0}"#.to_vec(),
+            "missing-node" => br"{}".to_vec(),
+            "cycle" => br#"{"id":"00000000-0000-0000-0000-000000000001","kind":1,"payload":{"cycle":["a","b","a"]},"revision":0,"flags":0}"#.to_vec(),
+            "unknown-kind" => br#"{"id":"00000000-0000-0000-0000-000000000001","kind":"unknown","payload":"none","revision":0,"flags":0}"#.to_vec(),
+            "external-value" => br#"{"id":"00000000-0000-0000-0000-000000000001","kind":1,"payload":{"external-value":"source"},"revision":0,"flags":0}"#.to_vec(),
+            "comment" => br#"{"id":"00000000-0000-0000-0000-000000000001","kind":1,"payload":{"comment":"note"},"revision":0,"flags":0}"#.to_vec(),
             "truncated-json" => format!(r#"{{"category":"{category}""#).into_bytes(),
             "invalid-json" => {
                 let mut bytes = format!("{category}\0").into_bytes();
@@ -5870,22 +5950,20 @@ fn case_interchange(rng: &mut Rng) -> Result<Case> {
                 bytes
             }
             "hostile" => vec![0, 0xff, 0x7f],
-            _ => format!(r#"{{"category":"{category}","node": ["unterminated""#).into_bytes(),
+            _ => unreachable!("unknown graph negative category {category}"),
         };
         anyhow::ensure!(
             serde_json::from_slice::<Node>(&raw).is_err(),
             "graph negative category {category} unexpectedly decoded"
         );
-        return Ok(Case::Negative {
-            category,
-            witness: raw,
-        });
+        let witness = if raw.is_empty() {
+            format!("{category}:empty").into_bytes()
+        } else {
+            raw
+        };
+        return Ok(Case::Negative { category, witness });
     }
-    let text = if category == "empty" {
-        String::new()
-    } else {
-        format!("{category}:{}", rng.word())
-    };
+    let text = format!("{category}:{}", rng.word());
     let durable = rng.below(2) == 1;
     // Domain rule: a node claiming a durable id must carry payload text.
     // Candidates violating it are out of domain and discarded, not "fixed".
@@ -5934,7 +6012,6 @@ fn case_transform(rng: &mut Rng) -> Result<Case> {
         return Ok(Case::Negative { category, witness });
     }
     let blocks = match category {
-        "empty" => 0,
         "deep" => 12,
         "wide" | "large-patch" => 8,
         _ => 1 + rng.below(4),
@@ -5956,13 +6033,13 @@ fn case_transform(rng: &mut Rng) -> Result<Case> {
     let second = lines.get(1).cloned().unwrap_or_else(|| first.clone());
     let (ours, theirs) = match category {
         "identity" | "deep" | "wide" | "large-patch" => (base.clone(), base.clone()),
-        "insert" => (format!("{token}\n{base}"), base.clone()),
+        "insert" => (format!("{token}\n\n{base}"), base.clone()),
         "delete" => (
             lines.iter().skip(1).cloned().collect::<Vec<_>>().join("\n"),
             base.clone(),
         ),
         "replace" => (
-            base.replacen(&first, &format!("{first} {token}"), 1),
+            base.replacen(&first, &format!("{token} {first}"), 1),
             base.clone(),
         ),
         "move" => {
@@ -5970,16 +6047,16 @@ fn case_transform(rng: &mut Rng) -> Result<Case> {
             (lines.join("\n"), base.clone())
         }
         "overlap" => (
-            base.replacen(&first, &format!("{first} ours"), 1),
-            base.replacen(&first, &format!("{first} theirs"), 1),
+            base.replacen(&first, &format!("ours {first}"), 1),
+            base.replacen(&first, &format!("theirs {first}"), 1),
         ),
         "commute" => (
-            base.replacen(&first, &format!("{first} ours"), 1),
-            base.replacen(&second, &format!("{second} theirs"), 1),
+            base.replacen(&first, &format!("ours {first}"), 1),
+            base.replacen(&second, &format!("theirs {second}"), 1),
         ),
         "conflict" => (
-            base.replacen(&first, &format!("{first} left"), 1),
-            base.replacen(&first, &format!("{first} right"), 1),
+            base.replacen(&first, &format!("left {first}"), 1),
+            base.replacen(&first, &format!("right {first}"), 1),
         ),
         "boundary-span" => (format!("\n{base}\n"), base.clone()),
         other => unreachable!("unknown transform category {other}"),
@@ -5995,7 +6072,7 @@ fn case_transform(rng: &mut Rng) -> Result<Case> {
     let identity = three_way(&base, &ours, &base);
     let forward = three_way(&base, &ours, &theirs);
     let swapped = three_way(&base, &theirs, &ours);
-    let witness = independent_oracle_source_transform(&ours, &identity, &forward, &swapped)?;
+    let witness = independent_oracle_source_transform(&base, &ours, &identity, &forward, &swapped)?;
     Ok(Case::Accepted { category, witness })
 }
 
@@ -6188,6 +6265,10 @@ fn case_invalidation(rng: &mut Rng) -> Result<Case> {
         },
     };
     let basis_witness = serde_json::to_vec(&basis)?;
+    let malformed = matches!(
+        category,
+        "truncated" | "hostile" | "invalid-token" | "unknown-perspective"
+    );
     // Target the declared domain (computations that read >=1 component) and
     // keep a rare out-of-domain probe so the discard path stays exercised.
     let read_count = if category == "empty-basis" || rng.below(384) == 0 {
@@ -6203,6 +6284,21 @@ fn case_invalidation(rng: &mut Rng) -> Result<Case> {
         ));
         deps.record(key.clone());
         expected.insert(key);
+    }
+    if malformed {
+        let key = liminal_id::JurisdictionKey::Path(liminal_id::PathId(
+            format!("{category}/__haqp_negative").into(),
+        ));
+        deps.record(key.clone());
+        let invalidated = deps.invalidated_by(&key);
+        return Ok(Case::Negative {
+            category,
+            witness: [
+                format!("basis-negative:{category}:{invalidated:?}:").into_bytes(),
+                basis_witness,
+            ]
+            .concat(),
+        });
     }
     // Out of domain: nothing was read, so invalidation is vacuous.
     if expected.is_empty() {
@@ -6810,12 +6906,16 @@ mod tests {
     fn runnable_test_scanner_does_not_let_one_cfg_poison_later_tests() {
         let mut names = BTreeMap::new();
         collect_runnable_test_functions(
-            "#[cfg(any())]\nfn compiled_out() {}\n#[test]\nfn live() {}\n#[cfg(unix)]\nfn helper() {}\n#[test]\nfn later_live() {}",
+            "#[cfg(any())]\nfn compiled_out() {}\n#[test]\nfn live() {}\n#[cfg(unix)]\n#[test]\nfn active_cfg() {}\n#[test]\nfn later_live() {}",
             &mut names,
         );
         assert_eq!(
             names,
-            BTreeMap::from([("later_live".to_owned(), 1), ("live".to_owned(), 1)])
+            BTreeMap::from([
+                ("active_cfg".to_owned(), 1),
+                ("later_live".to_owned(), 1),
+                ("live".to_owned(), 1),
+            ])
         );
     }
 
@@ -8365,11 +8465,11 @@ mod tests {
             ),
             (
                 "graph/interchange codecs",
-                "558a9c40e4df184699f7454e74e32c28f17c0271efaa6918fee3b2cc279a152e",
+                "68a9537820365388241d28b84daa4f0b195721033c950b9fd24573208d40201d",
             ),
             (
                 "transforms/projections",
-                "9e0e6cdaa083ce0c36b403a2363eeb972721ba17bdd3ea631a735f0fbe8322c6",
+                "75c3014326c6b2b09413e7009cb49694f9aae6181ade42dd7ccabb8e1e561b8a",
             ),
             (
                 "repair/ILRP/recovery",
@@ -8450,7 +8550,7 @@ mod tests {
         assert!(is_semantic_test_failure(
             "tests::target",
             b"",
-            b"test tests::target ... FAILED\n"
+            b"FAIL [0.01s] tests::target\n"
         ));
         assert!(!is_semantic_test_failure(
             "tests::target",
