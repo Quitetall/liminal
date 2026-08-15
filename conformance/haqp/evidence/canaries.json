@@ -3,7 +3,7 @@
     "id": "C01",
     "gate": "status",
     "violation": "set status to ratified",
-    "expected_failure": "status: expected proposed",
+    "expected_failure": "status: expected \"proposed\"",
     "observed_failure": "status: expected \"proposed\", got \"ratified\"",
     "caught": true,
     "mutation_semantics": "packet.status := ratified"
@@ -12,7 +12,7 @@
     "id": "C02",
     "gate": "ratification",
     "violation": "set ratification to approved",
-    "expected_failure": "ratification: expected unratified",
+    "expected_failure": "ratification: expected \"unratified\"",
     "observed_failure": "ratification: expected \"unratified\", got \"approved\"",
     "caught": true,
     "mutation_semantics": "packet.ratification := approved"
@@ -139,7 +139,7 @@
     "gate": "markdown",
     "violation": "remove packet digest",
     "expected_failure": "review packet markdown missing packet digest",
-    "observed_failure": "review packet markdown missing packet digest 4d08d881f7f33d5bc23f775fef78d79de49be586b130de2889cd3961d7171a54",
+    "observed_failure": "review packet markdown missing packet digest 7fd7501845b03a77bf23f39f4a4fa772fa1e7d7a791445f4238799c98dc2cc73",
     "caught": true,
     "mutation_semantics": "remove baseline packet digest from markdown"
   },

@@ -26,7 +26,7 @@ authorization, suite ratification, or access to locked acceptance inputs.
 | complete post-fix qualification rerun | NOT_RUN |
 | machine inventory | `conformance/haqp/packet.json` (`cargo run -p liminal-xtask -- haq verify-inventory`) |
 | machine inventory BLAKE3 | `aec2dea85361b1f9d87a8e8c4abe8fbf98cd0262d5baac189403e211de979975` |
-| packet digest | `4d08d881f7f33d5bc23f775fef78d79de49be586b130de2889cd3961d7171a54` |
+| packet digest | `7fd7501845b03a77bf23f39f4a4fa772fa1e7d7a791445f4238799c98dc2cc73` |
 | machine status tuple | qualification_state=not-run; qualification_stage=1a; requirements=55; tests=38; mutants=65; canaries=32; generated=5; crash_boundaries=8; reviews=2 |
 
 ## Execution lanes

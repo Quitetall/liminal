@@ -1826,14 +1826,14 @@
    "id": "C01",
    "gate": "status",
    "violation": "set status to ratified",
-   "expected_failure": "status: expected proposed",
+   "expected_failure": "status: expected \"proposed\"",
    "result": "predeclared"
   },
   {
    "id": "C02",
    "gate": "ratification",
    "violation": "set ratification to approved",
-   "expected_failure": "ratification: expected unratified",
+   "expected_failure": "ratification: expected \"unratified\"",
    "result": "predeclared"
   },
   {
