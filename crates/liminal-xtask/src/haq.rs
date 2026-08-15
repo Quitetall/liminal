@@ -1304,10 +1304,11 @@ fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
 }
 
 /// A reviewer cannot make its own "independent reproduction" true by setting
-/// two booleans in one record. Every reproduced finding must have a matching
-/// verified defect in the other isolated pass, with the same attack class and
-/// exact source target. This is the minimum durable join between the two
-/// records; finding IDs remain pass-local and therefore are not compared.
+/// two booleans in one record. Every reproduced finding must have one matching
+/// verified defect in the other isolated pass, with the same attack class,
+/// exact source target, and identical falsification claim/observation. This
+/// prevents two semantically different reports at one line from becoming a
+/// concurrence by coordinate coincidence; finding IDs remain pass-local.
 fn verify_cross_pass_reproduction(records: &[(String, ReviewRecord)]) -> Result<()> {
     if records.is_empty() {
         return Ok(());
@@ -1336,6 +1337,8 @@ fn verify_cross_pass_reproduction(records: &[(String, ReviewRecord)]) -> Result<
                         && candidate.independently_reproduced
                         && candidate.attack_class == attempt.attack_class
                         && candidate.target == attempt.target
+                        && candidate.attempt == attempt.attempt
+                        && candidate.observed_result == attempt.observed_result
                 })
                 .count();
             anyhow::ensure!(
@@ -1365,9 +1368,39 @@ fn verify_review_record(root: &Utf8Path, review: &Review, record: &ReviewRecord)
         &record.schema_version,
         "haqp-blind-review-v1",
     )?;
+    anyhow::ensure!(
+        !record.reviewer.model_family.trim().is_empty()
+            && !record.reviewer.backend.trim().is_empty(),
+        "{who}: review record omits model family or backend"
+    );
+    let expected_identity = sha256_text(&format!(
+        "pass{}:{}:haqp-blind-review-v1",
+        record.pass, record.reviewer.model_family
+    ));
+    require_eq(
+        "review identity_hash",
+        &record.reviewer.identity_hash,
+        &expected_identity,
+    )?;
     require_hex_digest(
         "review sanitized_prompt_hash",
         &record.sanitized_prompt_hash,
+    )?;
+    require_hex_digest("review raw_response_sha256", &record.raw_response_sha256)?;
+    require_hex_digest(
+        "review integrity_binding_sha256",
+        &record.integrity_binding_sha256,
+    )?;
+    require_eq(
+        "review prompt_binding_sha256",
+        &record.prompt_binding_sha256,
+        &sha256_text(&format!(
+            "haqp-blind-review-v1\0{}\0{}\0{}\0{}",
+            record.pass,
+            record.reviewer.model_family,
+            record.fixed_base.commit,
+            record.fixed_base.tree
+        )),
     )?;
     require_git_object_id("review fixed_base.commit", &record.fixed_base.commit)?;
     require_git_object_id("review fixed_base.tree", &record.fixed_base.tree)?;
@@ -1596,9 +1629,20 @@ fn verify_review_attempts(
         if !seen.insert(attempt.id.as_str()) {
             anyhow::bail!("{who}: attempt id {:?} appears twice", attempt.id);
         }
-        if attempt.classification == "false_positive" && !attempt.independently_reproduced {
+        if attempt.classification == "false_positive" && attempt.independently_reproduced {
             anyhow::bail!(
-                "{who}: false-positive attempt {:?} lacks independent reproduction evidence",
+                "{who}: false-positive attempt {:?} cannot be independently reproduced",
+                attempt.id
+            );
+        }
+        for (field, value) in [
+            ("attempt", attempt.attempt.as_str()),
+            ("observed_result", attempt.observed_result.as_str()),
+        ] {
+            let words = value.split_whitespace().count();
+            anyhow::ensure!(
+                value.trim().len() >= 24 && words >= 4,
+                "{who}: attempt {:?} {field} is not a substantive falsification record",
                 attempt.id
             );
         }
@@ -1704,6 +1748,18 @@ fn verify_review_resolution(
         attempt.id,
         attempt.target,
         resolution.coordinate
+    );
+    anyhow::ensure!(
+        evidence_text
+            .lines()
+            .any(|line| line.trim() == "resolution_result: pass")
+            && evidence_text
+                .lines()
+                .any(|line| line.trim_start().starts_with("verification_command:"))
+            && evidence_text
+                .lines()
+                .any(|line| line.trim() == "verification_exit_code: 0"),
+        "{who}: resolution evidence must include a passing verification command receipt"
     );
     let mut hasher = Sha256::new();
     hasher.update(&evidence_bytes);
@@ -2577,6 +2633,12 @@ fn verify_mutant_concurrence(root: &Utf8Path, packet: &Packet) -> Result<()> {
 
 fn hex_digest(bytes: &[u8]) -> String {
     blake3::hash(bytes).to_hex().to_string()
+}
+
+fn sha256_text(value: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(value.as_bytes());
+    format!("{:x}", hasher.finalize())
 }
 
 fn git_text(root: &Utf8Path, args: &[&str]) -> Result<String> {
@@ -4141,26 +4203,36 @@ fn verify_trace_corpus_resolution(
         "{label}: trace_root must be absolute"
     );
     let mut resolved = BTreeSet::new();
-    for lexical in scope_trace_open_paths(bytes)
-        .into_iter()
-        .filter(|path| path.to_ascii_lowercase().contains("/fuzz/corpus/"))
-    {
+    for lexical in scope_trace_open_paths(bytes) {
+        let lexical_path = Path::new(&lexical);
+        let under_trace_root =
+            !lexical_path.is_absolute() || lexical_path.strip_prefix(trace_root).is_ok();
+        if !under_trace_root {
+            continue;
+        }
         let local = trace_path_to_repo(root, trace_root, &lexical)
-            .with_context(|| format!("{label}: cannot map traced corpus path to repository"))?;
+            .with_context(|| format!("{label}: cannot map traced repository path"))?;
         let canonical = canonicalize_trace_path(local.as_std_path())
-            .with_context(|| format!("{label}: traced corpus path cannot be resolved"))?;
+            .with_context(|| format!("{label}: traced repository path cannot be resolved"))?;
         let relative = canonical
             .strip_prefix(&canonical_root)
-            .with_context(|| format!("{label}: traced corpus path escapes repository root"))?;
+            .with_context(|| format!("{label}: traced repository path escapes repository root"))?;
         let relative = relative.to_str().context("non-UTF-8 traced corpus path")?;
         let lower = relative.to_ascii_lowercase();
         for forbidden in ["heldout", "conformance/corpora"] {
             anyhow::ensure!(
                 !lower.contains(forbidden),
-                "{label}: traced corpus path resolves into forbidden data"
+                "{label}: traced repository path resolves into forbidden data"
             );
         }
-        resolved.insert(format!("{lexical}\0{relative}"));
+        let lexical_lower = lexical_path.to_string_lossy().to_ascii_lowercase();
+        if lexical_lower.contains("/fuzz/corpus/")
+            || lexical_lower.starts_with("fuzz/corpus/")
+            || lower.contains("/fuzz/corpus/")
+            || lower.starts_with("fuzz/corpus/")
+        {
+            resolved.insert(format!("{lexical}\0{relative}"));
+        }
     }
     anyhow::ensure!(
         !resolved.is_empty(),
@@ -5597,7 +5669,11 @@ fn integer_delta(before: &str, after: &str) -> Option<i64> {
 )]
 fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static str)> {
     const SOURCE: [(&str, usize, &str); 13] = [
-        ("crates/liminal-cst/src/parser.rs", 138, "pub fn parse("),
+        (
+            "crates/liminal-cst/src/parser.rs",
+            142,
+            "if !text.is_empty()",
+        ),
         ("crates/liminal-cst/src/parser.rs", 157, "pub fn syntax("),
         ("crates/liminal-cst/src/parser.rs", 163, "pub fn errors("),
         ("crates/liminal-cst/src/parser.rs", 169, "pub fn basis("),
@@ -6947,8 +7023,13 @@ struct ReviewRecord {
     independently_reproduced: Vec<String>,
     unresolved_verified_findings: u64,
     result: String,
+    #[serde(default)]
+    raw_response_sha256: String,
+    #[serde(default)]
+    integrity_binding_sha256: String,
     isolated_session_hash: String,
     sanitized_prompt_hash: String,
+    prompt_binding_sha256: String,
     fixed_base: ReviewFixedBase,
     blindness_proof: ReviewRecordBlindness,
 }
@@ -7141,6 +7222,14 @@ fn run_canary_suite(
                 row.expected_failure
             );
         }
+        let canonical = canary_expected_prefix(&row.id)?;
+        anyhow::ensure!(
+            row.expected_failure.starts_with(canonical),
+            "{}: expected failure {:?} is outside closed canary failure registry {:?}",
+            row.id,
+            row.expected_failure,
+            canonical
+        );
         records.push(CanaryEvidence {
             id: row.id.clone(),
             gate: row.gate.clone(),
@@ -7319,6 +7408,46 @@ fn canary_failure_matches(expected: &str, observed: &str) -> bool {
         || observed.starts_with(&format!("{expected}:"))
         || observed.starts_with(&format!("{expected},"))
         || observed.starts_with(&format!("{expected} "))
+}
+
+/// Packet prose may add concrete values after a closed failure prefix, but it
+/// cannot replace the failure family with a packet-controlled generic phrase.
+fn canary_expected_prefix(id: &str) -> Result<&'static str> {
+    Ok(match id {
+        "C01" => "status: expected",
+        "C02" => "ratification: expected",
+        "C03" => "locked_acceptance_corpora_touched must be false",
+        "C04" => "duplicate requirement id",
+        "C05" => "test ids differ",
+        "C06" => "P1-T01 has no requirement mapping",
+        "C07" => "mutant count must be 65",
+        "C08" => "operator predicate-deletion supplies 20 mutants; max 16",
+        "C09" => "family graph/interchange codecs mutant count must be 13",
+        "C10" => "canary ids differ",
+        "C11" => "source/CST/formatting accepted cases below 100000",
+        "C12" => "source/CST/formatting discard rate exceeds 1%",
+        "C13" => "fuzz target",
+        "C14" => "crash-boundary inventory mismatch",
+        "C15" => "gpt-5.6-sol-blind-pass has fewer than 12 attempts",
+        "C16" => "review packet markdown missing packet digest",
+        "C17" => "requirement P1-R001 differs from closed authoritative registry",
+        "C18" => "P1-T01 declares no evidence kind",
+        "C19" => "requirement P1-R015 is stateful and must set stateful=true",
+        "C20" => "P1-M001 source must be safe file:line",
+        "C21" => "P1-M001 declares unknown disposition",
+        "C22" => "source/CST/formatting repeats seed category",
+        "C23" => "source/CST/formatting:",
+        "C24" => "ilrp/before_intent_commit missing before/after injection declaration",
+        "C25" => "duplicate reviewer id gpt-5.6-sol-blind-pass",
+        "C26" => "packet has no provenance block; qualification is unbound to any tree",
+        "C27" => "sanitizer proof lacks compiler/runtime replay",
+        "C28" => "generated oracle is not independent",
+        "C29" => "campaign exceeded the eight-hour ceiling",
+        "C30" => "residual risk RISK-001 has no coordinate",
+        "C31" => "corpus scope command does not cover lane",
+        "C32" => "concurrency provenance does not match committed tree",
+        _ => anyhow::bail!("unknown canary {id}"),
+    })
 }
 
 fn inventory_statuses() -> PacketStatusExpectations {
@@ -9227,8 +9356,8 @@ mod tests {
             id: id.to_owned(),
             attack_class: REVIEW_ATTACK_CLASSES[index % REVIEW_ATTACK_CLASSES.len()].to_owned(),
             target: "crates/liminal-xtask/src/haq.rs:1".to_owned(),
-            attempt: format!("did a thing {id}"),
-            observed_result: format!("saw a thing {id}"),
+            attempt: format!("attempted concrete falsification against source coordinate {id}"),
+            observed_result: format!("observed verifier rejection for the concrete mutation {id}"),
             independently_reproduced: false,
             classification: "caught_violation".to_owned(),
             resolved: false,
@@ -9245,7 +9374,10 @@ mod tests {
             pass,
             reviewer: ReviewRecordReviewer {
                 model_family: family.to_owned(),
-                identity_hash: hex_digest(family.as_bytes()),
+                identity_hash: sha256_text(&format!(
+                    "pass{}:{}:haqp-blind-review-v1",
+                    pass, family
+                )),
                 backend: backend.to_owned(),
             },
             attempts: (0..12).map(|i| attempt(&format!("A{i}"))).collect(),
@@ -9253,8 +9385,13 @@ mod tests {
             independently_reproduced: Vec::new(),
             unresolved_verified_findings: 0,
             result: "pass".to_owned(),
+            raw_response_sha256: "a".repeat(64),
+            integrity_binding_sha256: "b".repeat(64),
             isolated_session_hash: hex_digest(format!("session:{family}:{pass}").as_bytes()),
             sanitized_prompt_hash: hex_digest(format!("prompt:{family}").as_bytes()),
+            prompt_binding_sha256: sha256_text(&format!(
+                "haqp-blind-review-v1\0{pass}\0{family}\0{commit}\0{tree}"
+            )),
             fixed_base: ReviewFixedBase {
                 commit,
                 tree,
@@ -9296,7 +9433,7 @@ mod tests {
     }
 
     #[test]
-    fn cross_pass_reproduction_uses_coordinate_not_identical_prose() {
+    fn cross_pass_reproduction_requires_identical_falsification_claim() {
         let mut first = review_record(1, "openai", "codex");
         first.attempts[0].attack_class = "vacuity".to_owned();
         first.attempts[0].target = "crates/liminal-xtask/src/haq.rs:1".to_owned();
@@ -9310,15 +9447,15 @@ mod tests {
         let mut second = review_record(2, "xiaomi", "lamu");
         second.attempts[0].attack_class = "vacuity".to_owned();
         second.attempts[0].target = "crates/liminal-xtask/src/haq.rs:1".to_owned();
-        second.attempts[0].attempt = "independent reviewer wording".to_owned();
-        second.attempts[0].observed_result = "independent reviewer observation".to_owned();
+        second.attempts[0].attempt = first.attempts[0].attempt.clone();
+        second.attempts[0].observed_result = first.attempts[0].observed_result.clone();
         second.attempts[0].classification = "verified_defect".to_owned();
         second.attempts[0].independently_reproduced = true;
         second.findings = vec![serde_json::json!({"id": "A-F1", "attempt_id": "A0"})];
         second.independently_reproduced = vec!["A-F1".to_owned()];
 
         verify_cross_pass_reproduction(&[("p1".to_owned(), first), ("p2".to_owned(), second)])
-            .expect("independent wording must not block coordinate-bound concurrence");
+            .expect("identical falsification claims must concur");
     }
 
     /// P1-A05: array padding is not a set of attempts.
@@ -9329,6 +9466,38 @@ mod tests {
         let err = verify_review_record(&repo_root(), &review_row(), &record)
             .expect_err("an attempt with no observed result is not an attempt");
         assert!(err.to_string().contains("empty observed_result"), "{err}");
+    }
+
+    #[test]
+    fn review_record_rejects_vacuous_attempt_prose() {
+        let mut record = review_record(1, "openai", "codex");
+        record.attempts[0].attempt = "did a thing".to_owned();
+        record.attempts[0].observed_result = "saw a thing".to_owned();
+        let err = verify_review_record(&repo_root(), &review_row(), &record)
+            .expect_err("generic prose is not a concrete falsification attempt");
+        assert!(err.to_string().contains("substantive"), "{err}");
+    }
+
+    #[test]
+    fn canary_failure_prefixes_are_closed() {
+        assert!(canary_failure_matches(
+            "status: expected",
+            "status: expected value"
+        ));
+        assert!(canary_expected_prefix("C01").expect("known canary") == "status: expected");
+        assert!(
+            canary_expected_prefix("C01").expect("known canary") != "unrelated generic failure"
+        );
+        canary_expected_prefix("C99").expect_err("unknown canary prefix must fail closed");
+    }
+
+    #[test]
+    fn review_identity_binding_rejects_arbitrary_hashes() {
+        let mut record = review_record(1, "openai", "codex");
+        record.reviewer.identity_hash = "a".repeat(64);
+        let err = verify_review_record(&repo_root(), &review_row(), &record)
+            .expect_err("review identity must bind to pass and model family");
+        assert!(err.to_string().contains("identity_hash"), "{err}");
     }
 
     #[test]
@@ -9344,16 +9513,16 @@ mod tests {
     }
 
     #[test]
-    fn review_record_requires_reproduction_for_false_positives() {
+    fn review_record_rejects_reproduced_false_positives() {
         let mut record = review_record(1, "openai", "codex");
         record.attempts[0].classification = "false_positive".to_owned();
         record.attempts[0].independently_reproduced = false;
-        let err = verify_review_record(&repo_root(), &review_row(), &record)
-            .expect_err("false positives must retain reproduction evidence");
-        assert!(err.to_string().contains("false-positive"), "{err}");
-        record.attempts[0].independently_reproduced = true;
         verify_review_record(&repo_root(), &review_row(), &record)
-            .expect("a reproduced false positive is admissible");
+            .expect("an unreproduced false positive is admissible");
+        record.attempts[0].independently_reproduced = true;
+        let err = verify_review_record(&repo_root(), &review_row(), &record)
+            .expect_err("a false positive cannot be independently reproduced");
+        assert!(err.to_string().contains("false-positive"), "{err}");
     }
 
     #[test]
@@ -10739,6 +10908,39 @@ mod tests {
             .expect_err("symlinked corpus resolving into held-out data must fail closed");
         fs::remove_file(&corpus_dir).expect("remove corpus symlink");
         fs::create_dir(&corpus_dir).expect("restore corpus directory");
+
+        // A second alias outside fuzz/corpus must also be resolved. Filtering
+        // only lexical corpus paths lets this symlink reach locked data
+        // without a forbidden token in the raw trace.
+        let alias = root.join("benign-alias");
+        std::os::unix::fs::symlink(&heldout_dir, &alias).expect("symlink benign alias");
+        let mut aliased = audit.clone();
+        let alias_trace = root.join(&aliased.targets[0].trace);
+        let normal_trace = format!(
+            "2 openat(AT_FDCWD, \"{trace_root}/fuzz/target/x86_64-unknown-linux-gnu/release/{}\", O_RDONLY) = 3\n2 openat(AT_FDCWD, \"{trace_root}/fuzz/corpus/{}\", O_RDONLY) = 3\n2 openat(AT_FDCWD, \"{trace_root}/benign-alias/secret\", O_RDONLY) = 3\n1 --- SIGCHLD {{si_signo=SIGCHLD, si_pid=2, si_status=0}} ---\n1 +++ exited with 0 +++\n",
+            aliased.targets[0].target, aliased.targets[0].target,
+        );
+        fs::write(&alias_trace, &normal_trace).expect("write aliased trace");
+        aliased.targets[0].trace_blake3 = hex_digest(normal_trace.as_bytes());
+        aliased.targets[0].process_binding = blake3::hash(
+            format!(
+                "{}\0{}\0{}\0{}",
+                aliased.targets[0].command,
+                aliased.targets[0].trace_pid,
+                aliased.targets[0].trace_exit_code,
+                aliased.targets[0].trace_blake3
+            )
+            .as_bytes(),
+        )
+        .to_hex()
+        .to_string();
+        fs::write(
+            &audit_path,
+            serde_json::to_vec(&aliased).expect("serialize"),
+        )
+        .expect("write aliased audit");
+        verify_corpus_access_audit(root, &packet)
+            .expect_err("alias outside fuzz/corpus must not reach held-out data");
 
         let forbidden_path = root.join(&first.manifest);
         fs::write(

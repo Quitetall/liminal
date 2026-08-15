@@ -454,6 +454,10 @@ def parse_json(text: str) -> dict[str, Any]:
             raise ValueError(f"attempt {identifier} has unknown attack class")
         if any(not str(attempt[field]).strip() for field in required - {"independently_reproduced"}):
             raise ValueError(f"attempt {identifier} contains an empty field")
+        for field in ("attempt", "observed_result"):
+            prose = str(attempt[field]).strip()
+            if len(prose) < 24 or len(prose.split()) < 4:
+                raise ValueError(f"attempt {identifier} {field} is not substantive")
         if not isinstance(attempt["independently_reproduced"], bool):
             raise ValueError(f"attempt {identifier} independently_reproduced must be boolean")
         if not isinstance(attempt["resolved"], bool):
@@ -478,6 +482,8 @@ def parse_json(text: str) -> dict[str, Any]:
                 for field in ("commit", "coordinate", "evidence_path", "evidence_sha256")
             ):
                 raise ValueError(f"resolved verified attempt {identifier} needs resolution proof")
+        if attempt["classification"] == "false_positive" and attempt["independently_reproduced"]:
+            raise ValueError(f"false-positive attempt {identifier} cannot be independently reproduced")
         if attempt["classification"] == "caught_violation":
             caught += 1
     if caught == 0:
@@ -571,7 +577,10 @@ def run_pass(
         "and attempt_id referencing an attempt whose classification is verified_defect. "
         "For false_positive or caught_violation attempts, record the attempt only and emit NO finding object. "
         "Do not link findings to false_positive, caught_violation, or unknown attempts. "
+        "Every attempt action and observation must be substantive (at least 24 characters and 4 words). "
+        "A false_positive attempt must set independently_reproduced=false. "
         "A resolved verified_defect attempt must also carry resolution={commit,coordinate,evidence_path,evidence_sha256}; "
+        "its evidence file must contain resolution_result: pass, verification_command:, and verification_exit_code: 0. "
         "leave resolved=false when no fix proof exists. "
         "Return JSON object with attempts array, findings array, independently_reproduced array of finding ids, "
         "unresolved_verified_findings integer, and result. Set unresolved_verified_findings to the count "
@@ -587,6 +596,10 @@ def run_pass(
     )
     identity = digest(f"{name}:{model}:haqp-blind-review-v1".encode())
     prompt_hash = digest(prompt.encode())
+    prompt_binding = digest(
+        f"haqp-blind-review-v1\0{2 if pass_two else 1}\0{model}\0"
+        f"{fixed_base['commit']}\0{fixed_base['tree']}".encode()
+    )
     try:
         raw = mcp_call(model, prompt, session_id)
     except (RuntimeError, subprocess.SubprocessError, OSError) as exc:
@@ -616,6 +629,7 @@ def run_pass(
         },
         "isolated_session_hash": digest(session_id.encode()),
         "sanitized_prompt_hash": prompt_hash,
+        "prompt_binding_sha256": prompt_binding,
         "attempts": redact_deep(parsed["attempts"]),
         "findings": redact_deep(parsed.get("findings", [])),
         "independently_reproduced": redact_deep(parsed["independently_reproduced"]),
@@ -727,8 +741,8 @@ def self_test() -> int:
                 "id": f"A{i}",
                 "attack_class": "vacuity",
                 "target": "haq.rs:1",
-                "attempt": "a",
-                "observed_result": "o",
+                "attempt": "attempted concrete falsification against source",
+                "observed_result": "observed verifier rejection for mutation",
                 "independently_reproduced": True,
                 "classification": "caught_violation",
                 "resolved": False,
