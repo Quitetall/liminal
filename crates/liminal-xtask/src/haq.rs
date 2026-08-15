@@ -1059,6 +1059,9 @@ fn verify_crash_rows(recorded: &CrashEvidence, declared: &BTreeSet<String>) -> R
 /// to measured evidence rows, rather than accepting packet-controlled claims
 /// that the runner injected both sides (P1-A12).
 fn verify_crash_injection_bindings(packet: &Packet, recorded: &CrashEvidence) -> Result<()> {
+    // verify_crash_rows already enforces exact packet/evidence boundary-set
+    // equality. This second pass binds each packet before/after boolean to the
+    // measured injection receipt for its closed authoritative pair.
     let measured = recorded
         .boundaries
         .iter()
@@ -1724,13 +1727,13 @@ fn verify_review_attempts(
             attempt.id
         );
         anyhow::ensure!(
-            attempt.attempt.contains(&attempt.target),
+            contains_exact_coordinate(&attempt.attempt, &attempt.target),
             "{who}: attempt {:?} falsification claim must quote exact target {}",
             attempt.id,
             attempt.target
         );
         anyhow::ensure!(
-            attempt.observed_result.contains(&attempt.target),
+            contains_exact_coordinate(&attempt.observed_result, &attempt.target),
             "{who}: attempt {:?} observation must quote exact target {}",
             attempt.id,
             attempt.target
@@ -5167,7 +5170,8 @@ fn verify_evidence_coverage(packet: &Packet) -> Result<()> {
 /// Closed digest over test identity, executable name, requirement mapping, and
 /// evidence kinds. Existence checks alone let a packet remap broad, unrelated
 /// test names to satisfy coverage; this registry makes the authoritative
-/// mapping tamper-evident (P1-A04).
+/// mapping tamper-evident (P1-A04). Recompute with the canonical NUL/US stream
+/// below and update this constant in the same commit as any test inventory edit.
 const TEST_REGISTRY_SHA256: &str =
     "7a29add0e81657e17786934010638abf1ea99dfee4e162921a9ef2699197d447";
 
@@ -5189,6 +5193,20 @@ fn verify_test_registry(packet: &Packet) -> Result<()> {
         "test registry digest differs from closed authority: got {digest}, expected {TEST_REGISTRY_SHA256}"
     );
     Ok(())
+}
+
+fn contains_exact_coordinate(text: &str, coordinate: &str) -> bool {
+    text.match_indices(coordinate).any(|(start, _)| {
+        let end = start + coordinate.len();
+        !text[..start]
+            .chars()
+            .next_back()
+            .is_some_and(|ch| ch.is_ascii_digit())
+            && !text[end..]
+                .chars()
+                .next()
+                .is_some_and(|ch| ch.is_ascii_digit())
+    })
 }
 
 /// M17.5 F-05: ADR-0020 §3 forbids mutation coverage clustering on
@@ -9601,6 +9619,18 @@ mod tests {
         let err = verify_review_record(&repo_root(), &review_row(), &record)
             .expect_err("generic prose is not a concrete falsification attempt");
         assert!(err.to_string().contains("substantive"), "{err}");
+    }
+
+    #[test]
+    fn review_coordinate_binding_rejects_numeric_prefix_collisions() {
+        assert!(contains_exact_coordinate(
+            "falsified crates/liminal-xtask/src/haq.rs:1 at runtime",
+            "crates/liminal-xtask/src/haq.rs:1"
+        ));
+        assert!(!contains_exact_coordinate(
+            "falsified crates/liminal-xtask/src/haq.rs:10 at runtime",
+            "crates/liminal-xtask/src/haq.rs:1"
+        ));
     }
 
     #[test]

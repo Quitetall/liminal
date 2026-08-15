@@ -136,7 +136,9 @@ fn main() -> anyhow::Result<()> {
         camino::Utf8PathBuf::from,
     );
     std::fs::create_dir_all(path.parent().expect("evidence parent"))?;
-    std::fs::write(&path, serde_json::to_vec_pretty(&evidence)?)?;
+    let mut bytes = serde_json::to_vec_pretty(&evidence)?;
+    bytes.push(b'\n');
+    std::fs::write(&path, bytes)?;
     println!(
         "crash evidence complete: {}/{} registered boundaries exercised; {path}",
         exercised_names.len(),
