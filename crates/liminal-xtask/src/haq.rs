@@ -1328,17 +1328,19 @@ fn verify_cross_pass_reproduction(records: &[(String, ReviewRecord)]) -> Result<
                 .iter()
                 .find(|attempt| attempt.id == *attempt_id)
                 .expect("finding linkage validated");
-            let matched = other.attempts.iter().any(|candidate| {
-                candidate.classification == "verified_defect"
-                    && candidate.independently_reproduced
-                    && candidate.attack_class == attempt.attack_class
-                    && candidate.target == attempt.target
-                    && candidate.attempt == attempt.attempt
-                    && candidate.observed_result == attempt.observed_result
-            });
+            let matches = other
+                .attempts
+                .iter()
+                .filter(|candidate| {
+                    candidate.classification == "verified_defect"
+                        && candidate.independently_reproduced
+                        && candidate.attack_class == attempt.attack_class
+                        && candidate.target == attempt.target
+                })
+                .count();
             anyhow::ensure!(
-                matched,
-                "{who}: reproduced finding {finding_id:?} has no matching independently reproduced defect in the other pass"
+                matches == 1,
+                "{who}: reproduced finding {finding_id:?} needs exactly one independently reproduced defect with the same attack class and source coordinate in the other pass; found {matches}"
             );
         }
     }
@@ -4216,20 +4218,6 @@ fn trace_path_to_repo(root: &Utf8Path, trace_root: &Path, lexical: &str) -> Resu
                 root.join(Utf8Path::from_path(relative).context("non-UTF-8 traced relative path")?)
             );
         }
-        // Some tracers print a container/workspace prefix while preserving
-        // repository-relative `fuzz/...`; bind that suffix to current root.
-        if let Ok(relative) = path.strip_prefix("/") {
-            let mut components = relative.components();
-            while let Some(component) = components.next() {
-                if component == Component::Normal("fuzz".as_ref()) {
-                    let mut suffix = Path::new("fuzz").to_path_buf();
-                    suffix.extend(components);
-                    return Ok(root.join(
-                        Utf8Path::from_path(&suffix).context("non-UTF-8 traced fuzz path")?,
-                    ));
-                }
-            }
-        }
         anyhow::bail!("absolute traced path is outside recorded trace root")
     }
     Ok(root.join(Utf8Path::from_path(path).context("non-UTF-8 traced relative path")?))
@@ -5569,32 +5557,37 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
 }
 
 fn integer_delta(before: &str, after: &str) -> Option<i64> {
-    fn numbers(text: &str) -> Vec<i64> {
-        let mut values = Vec::new();
-        let mut token = String::new();
-        for ch in text.chars() {
-            if ch.is_ascii_digit() || (ch == '-' && token.is_empty()) {
-                token.push(ch);
-            } else if !token.is_empty() {
-                if let Ok(value) = token.parse() {
-                    values.push(value);
+    fn split_single_integer(text: &str) -> Option<(&str, i64, &str)> {
+        let mut chars = text.char_indices().peekable();
+        let mut start = None;
+        let mut end = 0;
+        while let Some((index, ch)) = chars.next() {
+            let starts_integer = ch.is_ascii_digit()
+                || (ch == '-' && chars.peek().is_some_and(|(_, next)| next.is_ascii_digit()));
+            if !starts_integer {
+                continue;
+            }
+            if start.replace(index).is_some() {
+                return None;
+            }
+            end = index + ch.len_utf8();
+            while let Some((next_index, next)) = chars.peek().copied() {
+                if !next.is_ascii_digit() {
+                    break;
                 }
-                token.clear();
+                chars.next();
+                end = next_index + next.len_utf8();
             }
         }
-        if !token.is_empty()
-            && let Ok(value) = token.parse()
-        {
-            values.push(value);
-        }
-        values
+        let start = start?;
+        let value = text[start..end].parse().ok()?;
+        Some((&text[..start], value, &text[end..]))
     }
-    let before_numbers = numbers(before);
-    let after_numbers = numbers(after);
-    if before_numbers.len() != after_numbers.len() || before_numbers.len() != 1 {
-        return None;
-    }
-    Some(after_numbers[0] - before_numbers[0])
+
+    let (before_prefix, before_value, before_suffix) = split_single_integer(before)?;
+    let (after_prefix, after_value, after_suffix) = split_single_integer(after)?;
+    (before_prefix == after_prefix && before_suffix == after_suffix)
+        .then_some(after_value - before_value)
 }
 
 /// Closed M24 mutation-source registry. Each predeclared mutant owns one
@@ -7187,8 +7180,7 @@ fn verify_qualification_canary_state(state: &QualificationCanaryState) -> Result
 /// exact equality or a delimited suffix preserves diagnostic detail without
 /// allowing that false positive.
 fn canary_failure_matches(expected: &str, observed: &str) -> bool {
-    let expected = expected.trim().replace('"', "");
-    let observed = observed.replace('"', "");
+    let expected = expected.trim();
     observed == expected
         || observed.starts_with(&format!("{expected}:"))
         || observed.starts_with(&format!("{expected},"))
@@ -8476,6 +8468,24 @@ mod tests {
     }
 
     #[test]
+    fn threshold_mutation_changes_only_the_declared_integer() {
+        let exact = MutantPatch {
+            file: "crates/example.rs".to_owned(),
+            before: "if count >= 16 {".to_owned(),
+            after: "if count >= 17 {".to_owned(),
+        };
+        verify_mutant_operator_patch("threshold-plus-one", &exact)
+            .expect("a single threshold increment is a valid mutation");
+
+        let unrelated = MutantPatch {
+            after: "if count >= 17 { panic!(\"unrelated\"); }".to_owned(),
+            ..exact
+        };
+        verify_mutant_operator_patch("threshold-plus-one", &unrelated)
+            .expect_err("an integer delta must not excuse unrelated source changes");
+    }
+
+    #[test]
     fn evaluated_equivalent_mutant_requires_proof_and_two_concurrences() {
         let mut packet = packet_from_repo();
         packet.mutants[0].disposition = "equivalent".to_owned();
@@ -9135,6 +9145,32 @@ mod tests {
         .expect("a complete record must pass, or every check below is vacuous");
     }
 
+    #[test]
+    fn cross_pass_reproduction_uses_coordinate_not_identical_prose() {
+        let mut first = review_record(1, "openai", "codex");
+        first.attempts[0].attack_class = "vacuity".to_owned();
+        first.attempts[0].target = "crates/liminal-xtask/src/haq.rs:1".to_owned();
+        first.attempts[0].attempt = "first reviewer wording".to_owned();
+        first.attempts[0].observed_result = "first reviewer observation".to_owned();
+        first.attempts[0].classification = "verified_defect".to_owned();
+        first.attempts[0].independently_reproduced = true;
+        first.findings = vec![serde_json::json!({"id": "P1-F1", "attempt_id": "A0"})];
+        first.independently_reproduced = vec!["P1-F1".to_owned()];
+
+        let mut second = review_record(2, "xiaomi", "lamu");
+        second.attempts[0].attack_class = "vacuity".to_owned();
+        second.attempts[0].target = "crates/liminal-xtask/src/haq.rs:1".to_owned();
+        second.attempts[0].attempt = "independent reviewer wording".to_owned();
+        second.attempts[0].observed_result = "independent reviewer observation".to_owned();
+        second.attempts[0].classification = "verified_defect".to_owned();
+        second.attempts[0].independently_reproduced = true;
+        second.findings = vec![serde_json::json!({"id": "A-F1", "attempt_id": "A0"})];
+        second.independently_reproduced = vec!["A-F1".to_owned()];
+
+        verify_cross_pass_reproduction(&[("p1".to_owned(), first), ("p2".to_owned(), second)])
+            .expect("independent wording must not block coordinate-bound concurrence");
+    }
+
     /// P1-A05: array padding is not a set of attempts.
     #[test]
     fn review_record_rejects_empty_attempt_records() {
@@ -9545,6 +9581,18 @@ mod tests {
         expectation.expected_failure = "something else entirely".to_owned();
         verify_canary_rows(&[canary_row("C01")], &[expectation])
             .expect_err("the packet's expected failure must be the one asserted");
+    }
+
+    #[test]
+    fn canary_failure_matching_preserves_quoted_diagnostic_detail() {
+        assert!(canary_failure_matches(
+            "field \"status\" missing",
+            "field \"status\" missing: found none"
+        ));
+        assert!(!canary_failure_matches(
+            "field \"status\" missing",
+            "field status missing: found none"
+        ));
     }
 
     #[test]
@@ -10363,6 +10411,23 @@ mod tests {
             .expect_err("criticality is closed authority, not packet-controlled metadata");
         assert!(
             err.to_string().contains("closed authoritative registry"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn traced_absolute_path_outside_root_cannot_rebase_on_fuzz_suffix() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-trace-root").expect("scratch");
+        let trace_root = scratch.join("trace-root");
+        fs::create_dir_all(&trace_root).expect("trace root");
+        let err = trace_path_to_repo(
+            &scratch,
+            trace_root.as_std_path(),
+            "/attacker/fuzz/corpus/cst_parse/input",
+        )
+        .expect_err("an external absolute path must not be rebased by suffix");
+        assert!(
+            err.to_string().contains("outside recorded trace root"),
             "{err}"
         );
     }
