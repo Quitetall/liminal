@@ -139,7 +139,7 @@
     "gate": "markdown",
     "violation": "remove packet digest",
     "expected_failure": "review packet markdown missing packet digest",
-    "observed_failure": "review packet markdown missing packet digest 023ea8e3658241cfc8708b2170fc245b797c56a437d46a27f9692799f46bde83",
+    "observed_failure": "review packet markdown missing packet digest dcda9ca381e9e5ab373b11d4898e0c6507ca5102499245b062d64364c0478b61",
     "caught": true,
     "mutation_semantics": "remove baseline packet digest from markdown"
   },
@@ -201,8 +201,8 @@
     "id": "C23",
     "gate": "generated",
     "violation": "break generated count accounting",
-    "expected_failure": "source/CST/formatting: accepted 100000 + discards 204 != attempts 100205",
-    "observed_failure": "source/CST/formatting: accepted 100000 + discards 204 != attempts 100205 — the counts do not describe a single run",
+    "expected_failure": "source/CST/formatting: accepted 100000 + discards 0 + negatives 22956 != attempts 122957 — the counts do not describe a single run",
+    "observed_failure": "source/CST/formatting: accepted 100000 + discards 0 + negatives 22956 != attempts 122957 — the counts do not describe a single run",
     "caught": true,
     "mutation_semantics": "generated[0].attempts += 1"
   },

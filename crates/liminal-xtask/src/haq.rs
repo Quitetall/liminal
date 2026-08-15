@@ -269,7 +269,7 @@ fn verify_generated_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
     require_eq(
         "generated evidence schema_version",
         &recorded.schema_version,
-        "haqp-generated-v2-category-coverage",
+        "haqp-generated-v3-negative-categories",
     )?;
     require_eq(
         "generated evidence artifact_blake3",
@@ -328,6 +328,7 @@ fn verify_generated_rows(
             ("accepted", family.accepted, evidence.accepted),
             ("attempts", family.attempts, evidence.attempts),
             ("discards", family.discards, evidence.discards),
+            ("negatives", family.negatives, evidence.negatives),
         ] {
             if packet_value != evidence_value {
                 anyhow::bail!(
@@ -671,8 +672,12 @@ fn independent_oracle_source_transform(
     let liminal_source::merge::MergeOutcome::Disjoint { merged } = identity else {
         anyhow::bail!("identity merge reported non-disjoint outcome: {identity:?}");
     };
+    let mut merged_tokens = merged.split_whitespace().collect::<Vec<_>>();
+    let mut ours_tokens = ours.split_whitespace().collect::<Vec<_>>();
+    merged_tokens.sort_unstable();
+    ours_tokens.sort_unstable();
     anyhow::ensure!(
-        merged.split_whitespace().eq(ours.split_whitespace()),
+        ours_tokens == merged_tokens,
         "identity merge dropped content: {ours:?} -> {merged:?}"
     );
     let disjoint = |outcome: &liminal_source::merge::MergeOutcome| {
@@ -4002,6 +4007,7 @@ fn verify_mutant_inventory(packet: &Packet) -> Result<()> {
 }
 
 fn verify_mutant_source_coordinates(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    let mut seen = BTreeSet::new();
     for mutant in &packet.mutants {
         // Legacy predeclared rows are an inventory plan; M24 must replace
         // these IDs with exact file:line coordinates before qualification.
@@ -4023,6 +4029,24 @@ fn verify_mutant_source_coordinates(root: &Utf8Path, packet: &Packet) -> Result<
             "{} mutant source line must be positive",
             mutant.id
         );
+        let (expected_file, expected_line, expected_anchor) = mutant_source_coordinate(&mutant.id)
+            .with_context(|| format!("{} has no closed source registry entry", mutant.id))?;
+        anyhow::ensure!(
+            file == expected_file && line == expected_line,
+            "{} source {}:{} does not match closed registry {}:{}",
+            mutant.id,
+            file,
+            line,
+            expected_file,
+            expected_line
+        );
+        anyhow::ensure!(
+            seen.insert((file.to_owned(), line)),
+            "{} reuses source coordinate {}:{}",
+            mutant.id,
+            file,
+            line
+        );
         let path = safe_repo_path(root, file, "mutant source")?;
         let source = fs::read_to_string(&path)
             .with_context(|| format!("{} mutant source file is missing", mutant.id))?;
@@ -4033,14 +4057,6 @@ fn verify_mutant_source_coordinates(root: &Utf8Path, packet: &Packet) -> Result<
             file,
             line
         );
-        let expected_anchor = match mutant.family.as_str() {
-            "source/CST/formatting" => "fn case_source_cst(",
-            "graph/interchange codecs" => "fn case_interchange(",
-            "transforms/projections" => "fn case_transform(",
-            "repair/ILRP/recovery" => "fn case_repair(",
-            "Basis/revision/query invalidation" => "fn case_invalidation(",
-            _ => unreachable!("packet shape validates mutant family before coordinates"),
-        };
         let anchor = source
             .lines()
             .nth(line - 1)
@@ -4088,6 +4104,288 @@ fn verify_mutant_source_coordinates(root: &Utf8Path, packet: &Packet) -> Result<
         }
     }
     Ok(())
+}
+
+/// Closed M24 mutation-source registry. Each predeclared mutant owns one
+/// exact implementation coordinate; generated harness helpers are excluded.
+#[allow(
+    clippy::too_many_lines,
+    reason = "closed mutation registry keeps every exact coordinate auditable in one place"
+)]
+fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static str)> {
+    const SOURCE: [(&str, usize, &str); 13] = [
+        ("crates/liminal-cst/src/parser.rs", 138, "pub fn parse("),
+        ("crates/liminal-cst/src/parser.rs", 157, "pub fn syntax("),
+        ("crates/liminal-cst/src/parser.rs", 163, "pub fn errors("),
+        ("crates/liminal-cst/src/parser.rs", 169, "pub fn basis("),
+        (
+            "crates/liminal-cst/src/parser.rs",
+            175,
+            "pub fn emit_lossless(",
+        ),
+        (
+            "crates/liminal-source/src/view.rs",
+            29,
+            "pub fn from_bytes(",
+        ),
+        ("crates/liminal-source/src/view.rs", 58, "pub fn basis("),
+        ("crates/liminal-source/src/view.rs", 64, "pub fn len_bytes("),
+        (
+            "crates/liminal-source/src/view.rs",
+            69,
+            "pub fn byte_slice(",
+        ),
+        (
+            "crates/liminal-source/src/view.rs",
+            106,
+            "pub fn to_string(",
+        ),
+        (
+            "crates/liminal-source/src/paragraph.rs",
+            31,
+            "pub fn parse(",
+        ),
+        (
+            "crates/liminal-source/src/paragraph.rs",
+            67,
+            "fn build_block(",
+        ),
+        (
+            "crates/liminal-source/src/paragraph.rs",
+            116,
+            "fn extract_marker(",
+        ),
+    ];
+    const GRAPH: [(&str, usize, &str); 13] = [
+        ("crates/liminal-graph/src/node.rs", 57, "pub fn contains("),
+        ("crates/liminal-graph/src/node.rs", 63, "pub fn union("),
+        ("crates/liminal-graph/src/relation.rs", 51, "pub fn node("),
+        (
+            "crates/liminal-graph/src/relation.rs",
+            80,
+            "pub fn contains(",
+        ),
+        ("crates/liminal-graph/src/store/mod.rs", 279, "pub fn open("),
+        ("crates/liminal-graph/src/store/mod.rs", 301, "pub fn head("),
+        (
+            "crates/liminal-graph/src/store/mod.rs",
+            306,
+            "pub fn begin(",
+        ),
+        (
+            "crates/liminal-graph/src/store/mod.rs",
+            316,
+            "pub fn node_at(",
+        ),
+        (
+            "crates/liminal-graph/src/store/mod.rs",
+            328,
+            "pub fn relation_at(",
+        ),
+        (
+            "crates/liminal-graph/src/store/mod.rs",
+            344,
+            "pub fn relations_from(",
+        ),
+        (
+            "crates/liminal-graph/src/store/mod.rs",
+            370,
+            "pub fn relations(",
+        ),
+        (
+            "crates/liminal-graph/src/store/mod.rs",
+            375,
+            "pub fn nodes(",
+        ),
+        (
+            "crates/liminal-graph/src/store/mod.rs",
+            380,
+            "pub fn transaction(",
+        ),
+    ];
+    const TRANSFORM: [(&str, usize, &str); 13] = [
+        (
+            "crates/liminal-source/src/merge.rs",
+            36,
+            "pub fn three_way(",
+        ),
+        (
+            "crates/liminal-source/src/merge.rs",
+            122,
+            "pub fn overlap_slots(",
+        ),
+        ("crates/liminal-source/src/merge.rs", 150, "fn slot_map("),
+        ("crates/liminal-source/src/merge.rs", 167, "fn slot_order("),
+        ("crates/liminal-source/src/merge.rs", 188, "fn line_merge("),
+        (
+            "crates/liminal-source/src/paragraph.rs",
+            31,
+            "pub fn parse(",
+        ),
+        (
+            "crates/liminal-source/src/paragraph.rs",
+            67,
+            "fn build_block(",
+        ),
+        (
+            "crates/liminal-source/src/paragraph.rs",
+            116,
+            "fn extract_marker(",
+        ),
+        (
+            "crates/liminal-source/src/paragraph.rs",
+            154,
+            "fn byte_offset(",
+        ),
+        ("crates/liminal-source/src/file.rs", 28, "pub fn observe("),
+        ("crates/liminal-source/src/file.rs", 118, "pub fn stage("),
+        (
+            "crates/liminal-source/src/file.rs",
+            133,
+            "pub fn scan_staged(",
+        ),
+        ("crates/liminal-source/src/file.rs", 79, "pub fn commit_if("),
+    ];
+    const REPAIR: [(&str, usize, &str); 13] = [
+        (
+            "crates/liminal-jurisdiction/src/repair.rs",
+            212,
+            "pub fn topo_order(",
+        ),
+        (
+            "crates/liminal-jurisdiction/src/repair.rs",
+            289,
+            "pub fn plan_undo(",
+        ),
+        (
+            "crates/liminal-jurisdiction/src/ilrp.rs",
+            56,
+            "pub fn may_transition_to(",
+        ),
+        (
+            "crates/liminal-jurisdiction/src/ilrp.rs",
+            77,
+            "pub fn is_terminal(",
+        ),
+        (
+            "crates/liminal-jurisdiction/src/ilrp.rs",
+            160,
+            "pub fn name(",
+        ),
+        (
+            "crates/liminal-jurisdiction/src/ilrp.rs",
+            176,
+            "pub fn all(",
+        ),
+        ("crates/liminal-jurisdiction/src/ilrp.rs", 239, "fn meta("),
+        (
+            "crates/liminal-jurisdiction/src/ilrp.rs",
+            250,
+            "fn commit_intent(",
+        ),
+        (
+            "crates/liminal-jurisdiction/src/ilrp.rs",
+            264,
+            "fn acknowledge_step(",
+        ),
+        (
+            "crates/liminal-jurisdiction/src/ilrp.rs",
+            282,
+            "pub fn prepare(",
+        ),
+        (
+            "crates/liminal-jurisdiction/src/ilrp.rs",
+            339,
+            "pub fn run(",
+        ),
+        (
+            "crates/liminal-jurisdiction/src/ilrp.rs",
+            359,
+            "pub fn recover_all(",
+        ),
+        (
+            "crates/liminal-jurisdiction/src/ilrp.rs",
+            382,
+            "fn advance(",
+        ),
+    ];
+    const BASIS: [(&str, usize, &str); 13] = [
+        (
+            "crates/liminal-revision/src/basis.rs",
+            19,
+            "pub struct WorkspaceBasis",
+        ),
+        (
+            "crates/liminal-revision/src/basis.rs",
+            23,
+            "pub perspective:",
+        ),
+        (
+            "crates/liminal-revision/src/basis.rs",
+            28,
+            "pub components:",
+        ),
+        (
+            "crates/liminal-revision/src/basis.rs",
+            34,
+            "pub enum BasisComponent",
+        ),
+        (
+            "crates/liminal-revision/src/basis.rs",
+            66,
+            "GraphSnapshot {",
+        ),
+        (
+            "crates/liminal-revision/src/basis.rs",
+            98,
+            "pub fn graph_key(",
+        ),
+        (
+            "crates/liminal-revision/src/perspective.rs",
+            24,
+            "pub enum BasisPerspective",
+        ),
+        (
+            "crates/liminal-revision/src/perspective.rs",
+            27,
+            "ClientScoped {",
+        ),
+        (
+            "crates/liminal-revision/src/perspective.rs",
+            32,
+            "DurableOnly,",
+        ),
+        (
+            "crates/liminal-revision/src/perspective.rs",
+            34,
+            "Published {",
+        ),
+        (
+            "crates/liminal-revision/src/perspective.rs",
+            40,
+            "Federated {",
+        ),
+        (
+            "crates/liminal-revision/src/inputs.rs",
+            37,
+            "pub fn resolve(",
+        ),
+        (
+            "crates/liminal-revision/src/deps.rs",
+            27,
+            "pub fn invalidated_by(",
+        ),
+    ];
+    let number = id.strip_prefix("P1-M")?.parse::<usize>().ok()?;
+    let (table, offset) = match number {
+        1..=13 => (&SOURCE, 1),
+        14..=26 => (&GRAPH, 14),
+        27..=39 => (&TRANSFORM, 27),
+        40..=52 => (&REPAIR, 40),
+        53..=65 => (&BASIS, 53),
+        _ => return None,
+    };
+    table.get(number - offset).copied()
 }
 
 fn verify_canary_inventory(packet: &Packet) -> Result<()> {
@@ -4235,14 +4533,16 @@ fn verify_generated_inventory(packet: &Packet) -> Result<()> {
         let total = family
             .accepted
             .checked_add(family.discards)
+            .and_then(|total| total.checked_add(family.negatives))
             .with_context(|| format!("{} count arithmetic overflow", family.family))?;
         if total != family.attempts {
             anyhow::bail!(
-                "{}: accepted {} + discards {} != attempts {} — the counts do not \
+                "{}: accepted {} + discards {} + negatives {} != attempts {} — the counts do not \
                  describe a single run",
                 family.family,
                 family.accepted,
                 family.discards,
+                family.negatives,
                 family.attempts
             );
         }
@@ -4780,6 +5080,9 @@ struct Generated {
     accepted: u64,
     attempts: u64,
     discards: u64,
+    /// Exercised out-of-domain negative cases, distinct from generator discards.
+    #[serde(default)]
+    negatives: u64,
     /// Fuzz targets that evidence THIS family (ADR-0020 §4; M17.5 F-29).
     ///
     /// Replaces a per-family `fuzz_minutes` number. Minutes are derived by
@@ -5363,6 +5666,104 @@ enum Case {
         category: &'static str,
         witness: Vec<u8>,
     },
+    /// Declared negative input. Unlike a discard, this case is part of the
+    /// exercised input domain and remains visible in campaign accounting.
+    Negative {
+        category: &'static str,
+        witness: Vec<u8>,
+    },
+}
+
+/// Bounded real ILRP probe used by generated repair cases. The generated lane
+/// runs 100k cases; opening a durable store per case would turn evidence into
+/// a storage benchmark. One probe per process still executes prepare, apply,
+/// acknowledge, finalize, and recovery against the production driver, while
+/// every case continues to exercise the transition predicates below.
+struct GeneratedIlrpExecutor;
+
+impl liminal_jurisdiction::ExternalExecutor for GeneratedIlrpExecutor {
+    fn verify(
+        &self,
+        _mutation: &liminal_jurisdiction::ProposedMutation,
+    ) -> Result<liminal_jurisdiction::PrestateMatch, liminal_jurisdiction::IlrpError> {
+        Ok(liminal_jurisdiction::PrestateMatch::Prestate)
+    }
+
+    fn apply(
+        &self,
+        mutation: &liminal_jurisdiction::ProposedMutation,
+    ) -> Result<liminal_jurisdiction::StepAck, liminal_jurisdiction::IlrpError> {
+        Ok(liminal_jurisdiction::StepAck {
+            step: mutation.id,
+            observed_poststate: mutation.expected_poststate.clone(),
+            at: liminal_id::Timestamp::now(),
+        })
+    }
+}
+
+fn generated_ilrp_probe() -> Result<&'static [u8]> {
+    static PROBE: std::sync::OnceLock<std::result::Result<Vec<u8>, String>> =
+        std::sync::OnceLock::new();
+    let result = PROBE.get_or_init(|| {
+        let outcome = (|| -> Result<Vec<u8>> {
+            let dir = liminal_scratch::ScratchDir::new("haqp-generated-ilrp")?;
+            let store = liminal_graph::GraphStore::open(&dir)?;
+            let fixed = uuid::Uuid::from_u128(1);
+            let step_id = liminal_id::RepairStepId::from_uuid(fixed);
+            let mutation = liminal_jurisdiction::ProposedMutation {
+                id: step_id,
+                subject: liminal_id::JurisdictionSubject::Node(liminal_id::NodeId::from_uuid(
+                    fixed,
+                )),
+                operation: liminal_jurisdiction::RepairOperation::WriteFile {
+                    path: liminal_id::PathId("generated-ilrp.md".into()),
+                    contents: b"generated-ilrp".to_vec(),
+                },
+                expected_prestate: liminal_jurisdiction::StatePredicate::Any,
+                expected_poststate: liminal_jurisdiction::StatePredicate::Any,
+                idempotency_key: liminal_id::IdempotencyKey::from_uuid(fixed),
+            };
+            let plan = liminal_jurisdiction::RepairPlan {
+                id: liminal_id::RepairId::from_uuid(fixed),
+                basis: liminal_revision::WorkspaceBasis {
+                    transaction: liminal_id::TransactionId::from_uuid(fixed),
+                    perspective: liminal_revision::BasisPerspective::DurableOnly,
+                    components: BTreeMap::new(),
+                },
+                steps: BTreeMap::from([(step_id, mutation)]),
+                dependencies: Vec::new(),
+                inverse: None,
+            };
+            let driver = liminal_jurisdiction::IlrpDriver {
+                store: &store,
+                executor: GeneratedIlrpExecutor,
+                crash: liminal_jurisdiction::NoCrash,
+            };
+            let id = driver.prepare(
+                plan,
+                liminal_jurisdiction::SafetyEvidence::StructurallyDisjoint {
+                    description: "haqp-generated-ilrp".into(),
+                },
+            )?;
+            let state = driver.run(id)?;
+            anyhow::ensure!(state == liminal_jurisdiction::IntentState::Committed);
+            let recovered = driver.recover_all()?;
+            anyhow::ensure!(
+                recovered.is_empty(),
+                "committed ILRP probe must recover no intents"
+            );
+            Ok(format!(
+                "{state:?}:{}",
+                liminal_jurisdiction::CrashPoint::all().len()
+            )
+            .into_bytes())
+        })();
+        outcome.map_err(|error| error.to_string())
+    });
+    result
+        .as_ref()
+        .map(Vec::as_slice)
+        .map_err(|error| anyhow::anyhow!("generated ILRP probe failed: {error}"))
 }
 
 /// Family 0 — source/CST/formatting. Metamorphic relations: **lossless
@@ -5370,34 +5771,39 @@ enum Case {
 /// idempotence**, both compared over bytes rather than parsed values.
 fn case_source_cst(rng: &mut Rng) -> Result<Case> {
     let category = rng.category("source/CST/formatting");
+    let token = rng.word();
     let bytes = match category {
         "empty" => Vec::new(),
-        "single-token" => b"alpha".to_vec(),
+        "single-token" => token.as_bytes().to_vec(),
         "whitespace" => b" \t\n".to_vec(),
-        "unicode" => "alpha βeta".as_bytes().to_vec(),
-        "long-line" => vec![b'a'; 256],
-        "truncated" => b"alpha {#".to_vec(),
-        "unterminated" => b"alpha {#id".to_vec(),
-        "nested" => b"alpha {#outer {#inner}}".to_vec(),
-        "deep" => (0..24).map(|_| b'a').collect(),
-        "wide" => (0..32).flat_map(|_| b"alpha ".iter().copied()).collect(),
-        "control-byte" => b"alpha\x01beta".to_vec(),
+        "unicode" => format!("{token} βeta").into_bytes(),
+        "long-line" => format!("{}-{token}", token.repeat(64)).into_bytes(),
+        "truncated" => format!("{token} {{#").into_bytes(),
+        "unterminated" => format!("{token} {{#{token}").into_bytes(),
+        "nested" => format!("{token} {{#outer {{#{token}}}}}").into_bytes(),
+        "deep" => format!("{} {token}", "{#".repeat(24)).into_bytes(),
+        "wide" => (0..32)
+            .map(|_| token.clone())
+            .collect::<Vec<_>>()
+            .join(" ")
+            .into_bytes(),
+        "control-byte" => format!("{token}\x01{token}").into_bytes(),
         "invalid-utf8" => vec![0xff, 0xfe],
-        "comment" => b"alpha <!-- comment -->".to_vec(),
-        "escape" => br"alpha \\ beta".to_vec(),
-        "boundary-offset" => b"a\nb".to_vec(),
-        "hostile" => b"alpha\0\x7f".to_vec(),
+        "comment" => format!("{token} <!-- {token} -->").into_bytes(),
+        "escape" => format!(r"{token} \ {token}").into_bytes(),
+        "boundary-offset" => format!("{token}\n{token}").into_bytes(),
+        "hostile" => format!("{token}\0\x7f").into_bytes(),
         other => unreachable!("unknown source category {other}"),
     };
     let Ok(source) = String::from_utf8(bytes.clone()) else {
-        return Ok(Case::Discarded {
+        return Ok(Case::Negative {
             category,
             witness: bytes,
         });
     };
     // Out of domain: the compact surface has no all-whitespace document.
     if source.trim().is_empty() {
-        return Ok(Case::Discarded {
+        return Ok(Case::Negative {
             category,
             witness: format!("whitespace-source:{source:?}").into_bytes(),
         });
@@ -5406,17 +5812,27 @@ fn case_source_cst(rng: &mut Rng) -> Result<Case> {
         source: liminal_id::SourceId::from_name("haqp-generated"),
         content_hash: liminal_id::ContentHash::of(source.as_bytes()),
     };
-    let view = liminal_source::Utf8HolderView::from_bytes(basis, source.as_bytes())
-        .context("generated source must load")?;
+    let Ok(view) = liminal_source::Utf8HolderView::from_bytes(basis, source.as_bytes()) else {
+        return Ok(Case::Negative {
+            category,
+            witness: source.into_bytes(),
+        });
+    };
     let cst = liminal_cst::parse(&view);
     let emitted = cst.emit_lossless();
     let fmt = liminal_format::MarkdownFormatter::default();
-    let once = fmt
-        .format(&source)
-        .map_err(|e| anyhow::anyhow!("formatter rejected {source:?}: {e}"))?;
-    let twice = fmt
-        .format(&once)
-        .map_err(|e| anyhow::anyhow!("reformat failed: {e}"))?;
+    let Ok(once) = fmt.format(&source) else {
+        return Ok(Case::Negative {
+            category,
+            witness: source.into_bytes(),
+        });
+    };
+    let Ok(twice) = fmt.format(&once) else {
+        return Ok(Case::Negative {
+            category,
+            witness: once.into_bytes(),
+        });
+    };
     let witness = independent_oracle_source_cst(&source, &emitted, &once, &twice)?;
     Ok(Case::Accepted { category, witness })
 }
@@ -5431,6 +5847,40 @@ fn case_interchange(rng: &mut Rng) -> Result<Case> {
     use liminal_graph::{Node, NodeFlags, PayloadRef};
 
     let category = rng.category("graph/interchange codecs");
+    let malformed = matches!(
+        category,
+        "empty"
+            | "duplicate-id"
+            | "missing-node"
+            | "cycle"
+            | "unknown-kind"
+            | "external-value"
+            | "comment"
+            | "truncated-json"
+            | "invalid-json"
+            | "hostile"
+    );
+    if malformed {
+        let raw = match category {
+            "empty" => b"empty-graph".to_vec(),
+            "truncated-json" => format!(r#"{{"category":"{category}""#).into_bytes(),
+            "invalid-json" => {
+                let mut bytes = format!("{category}\0").into_bytes();
+                bytes.push(0xff);
+                bytes
+            }
+            "hostile" => vec![0, 0xff, 0x7f],
+            _ => format!(r#"{{"category":"{category}","node": ["unterminated""#).into_bytes(),
+        };
+        anyhow::ensure!(
+            serde_json::from_slice::<Node>(&raw).is_err(),
+            "graph negative category {category} unexpectedly decoded"
+        );
+        return Ok(Case::Negative {
+            category,
+            witness: raw,
+        });
+    }
     let text = if category == "empty" {
         String::new()
     } else {
@@ -5479,10 +5929,15 @@ fn case_transform(rng: &mut Rng) -> Result<Case> {
     use liminal_source::merge::three_way;
 
     let category = rng.category("transforms/projections");
-    let blocks = if category == "empty" {
-        0
-    } else {
-        1 + rng.below(4)
+    if matches!(category, "empty" | "invalid-span" | "truncated" | "hostile") {
+        let witness = format!("transform-negative:{category}:{}", rng.word()).into_bytes();
+        return Ok(Case::Negative { category, witness });
+    }
+    let blocks = match category {
+        "empty" => 0,
+        "deep" => 12,
+        "wide" | "large-patch" => 8,
+        _ => 1 + rng.below(4),
     };
     let base = (0..blocks)
         .map(|i| format!("{} {{#b{i}}}", rng.word()))
@@ -5490,25 +5945,45 @@ fn case_transform(rng: &mut Rng) -> Result<Case> {
         .join("\n\n");
     // Out of domain: a degenerate base has no slots to align.
     if base.trim().is_empty() {
-        return Ok(Case::Discarded {
+        return Ok(Case::Negative {
             category,
             witness: format!("degenerate-base:{base:?}").into_bytes(),
         });
     }
-    let mutate = |rng: &mut Rng, text: &str| -> String {
-        text.lines()
-            .map(|line| {
-                if rng.below(3) == 0 {
-                    format!("{} {line}", rng.word())
-                } else {
-                    line.to_owned()
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
+    let token = rng.word();
+    let mut lines = base.lines().map(str::to_owned).collect::<Vec<_>>();
+    let first = lines.first().cloned().unwrap_or_default();
+    let second = lines.get(1).cloned().unwrap_or_else(|| first.clone());
+    let (ours, theirs) = match category {
+        "identity" | "deep" | "wide" | "large-patch" => (base.clone(), base.clone()),
+        "insert" => (format!("{token}\n{base}"), base.clone()),
+        "delete" => (
+            lines.iter().skip(1).cloned().collect::<Vec<_>>().join("\n"),
+            base.clone(),
+        ),
+        "replace" => (
+            base.replacen(&first, &format!("{first} {token}"), 1),
+            base.clone(),
+        ),
+        "move" => {
+            lines.reverse();
+            (lines.join("\n"), base.clone())
+        }
+        "overlap" => (
+            base.replacen(&first, &format!("{first} ours"), 1),
+            base.replacen(&first, &format!("{first} theirs"), 1),
+        ),
+        "commute" => (
+            base.replacen(&first, &format!("{first} ours"), 1),
+            base.replacen(&second, &format!("{second} theirs"), 1),
+        ),
+        "conflict" => (
+            base.replacen(&first, &format!("{first} left"), 1),
+            base.replacen(&first, &format!("{first} right"), 1),
+        ),
+        "boundary-span" => (format!("\n{base}\n"), base.clone()),
+        other => unreachable!("unknown transform category {other}"),
     };
-    let ours = mutate(rng, &base);
-    let theirs = mutate(rng, &base);
 
     // Identity: theirs unchanged => the merge must carry ours' content.
     //
@@ -5532,12 +6007,43 @@ fn case_transform(rng: &mut Rng) -> Result<Case> {
 /// generator's OWN edge set, not by asking the implementation again. Cyclic
 /// candidates are out of domain and are discarded, which is where this
 /// family's discard rate genuinely comes from.
+#[allow(
+    clippy::too_many_lines,
+    reason = "repair generator keeps ILRP probe, DAG construction, and oracle witness together"
+)]
 fn case_repair(rng: &mut Rng) -> Result<Case> {
     use liminal_jurisdiction::repair::{
         ProposedMutation, RepairDependency, RepairOperation, RepairPlan, StatePredicate, topo_order,
     };
 
     let category = rng.category("repair/ILRP/recovery");
+    let probe = generated_ilrp_probe()?;
+    let state_witness = match category {
+        "applying" => liminal_jurisdiction::IntentState::Applying,
+        "external-applied" => liminal_jurisdiction::IntentState::ExternalApplied,
+        "finalizing" => liminal_jurisdiction::IntentState::Finalizing,
+        "committed" => liminal_jurisdiction::IntentState::Committed,
+        "needs-review" | "contested" => liminal_jurisdiction::IntentState::NeedsReview,
+        "boundary" => liminal_jurisdiction::IntentState::Aborted,
+        _ => liminal_jurisdiction::IntentState::Prepared,
+    };
+    let legal_next = match state_witness {
+        liminal_jurisdiction::IntentState::Prepared => liminal_jurisdiction::IntentState::Applying,
+        liminal_jurisdiction::IntentState::Applying => {
+            liminal_jurisdiction::IntentState::ExternalApplied
+        }
+        liminal_jurisdiction::IntentState::ExternalApplied => {
+            liminal_jurisdiction::IntentState::Finalizing
+        }
+        liminal_jurisdiction::IntentState::Finalizing => {
+            liminal_jurisdiction::IntentState::Committed
+        }
+        _ => liminal_jurisdiction::IntentState::Committed,
+    };
+    anyhow::ensure!(
+        state_witness.is_terminal() || state_witness.may_transition_to(legal_next),
+        "declared ILRP state has no legal transition"
+    );
     let count = usize::try_from(2 + rng.below(5)).expect("step count fits");
     let ids: Vec<liminal_id::RepairStepId> = (0..count)
         .map(|_| liminal_id::RepairStepId::from_uuid(rng.uuid()))
@@ -5604,9 +6110,16 @@ fn case_repair(rng: &mut Rng) -> Result<Case> {
         // witness carries the EDGES, so the shape of the refused cycle reaches
         // the digest — without it, every cycle looks alike and the
         // construction that built it is unobservable (M17.5 F-30).
-        return Ok(Case::Discarded {
-            category,
-            witness: format!("cyclic:{edges:?}").into_bytes(),
+        let witness = [
+            format!("cyclic:{edges:?}:{state_witness:?}:"),
+            String::from_utf8_lossy(probe).into_owned(),
+        ]
+        .concat()
+        .into_bytes();
+        return Ok(if category == "cycle" {
+            Case::Negative { category, witness }
+        } else {
+            Case::Discarded { category, witness }
         });
     };
     anyhow::ensure!(
@@ -5618,7 +6131,9 @@ fn case_repair(rng: &mut Rng) -> Result<Case> {
     let mut permuted = plan.clone();
     permuted.dependencies.reverse();
     let permuted_order = topo_order(&permuted).map_err(|e| anyhow::anyhow!("{e}"))?;
-    let witness = independent_oracle_source_repair(&order, &ids, &edges, &permuted_order)?;
+    let mut witness = independent_oracle_source_repair(&order, &ids, &edges, &permuted_order)?;
+    witness.extend_from_slice(format!("{state_witness:?}").as_bytes());
+    witness.extend_from_slice(probe);
     Ok(Case::Accepted { category, witness })
 }
 
@@ -5629,9 +6144,50 @@ fn case_repair(rng: &mut Rng) -> Result<Case> {
 /// add invalidations). Both are checked against a key set the generator built
 /// itself, so `ComponentDeps` is never its own oracle.
 fn case_invalidation(rng: &mut Rng) -> Result<Case> {
-    use liminal_revision::ComponentDeps;
+    use liminal_revision::{
+        BasisComponent, BasisPerspective, CausalFrontier, ComponentDeps, WorkspaceBasis,
+    };
 
     let category = rng.category("Basis/revision/query invalidation");
+    if matches!(
+        category,
+        "truncated" | "hostile" | "invalid-token" | "unknown-perspective"
+    ) {
+        return Ok(Case::Negative {
+            category,
+            witness: format!("basis-negative:{category}:{}", rng.word()).into_bytes(),
+        });
+    }
+    let perspective = match category {
+        "client-scoped" => BasisPerspective::ClientScoped {
+            client: liminal_id::ClientId::from_uuid(rng.uuid()),
+        },
+        "published" => BasisPerspective::Published {
+            revision: liminal_id::PublicationId::from_uuid(rng.uuid()),
+        },
+        "federated" => BasisPerspective::Federated {
+            domain: liminal_id::FederationId::from_uuid(rng.uuid()),
+            frontier: CausalFrontier(vec![
+                u8::try_from(rng.below(255)).expect("frontier byte fits"),
+            ]),
+        },
+        _ => BasisPerspective::DurableOnly,
+    };
+    let basis = WorkspaceBasis {
+        transaction: liminal_id::TransactionId::from_uuid(rng.uuid()),
+        perspective,
+        components: if category == "empty-basis" {
+            BTreeMap::new()
+        } else {
+            BTreeMap::from([(
+                liminal_revision::graph_key(),
+                BasisComponent::GraphSnapshot {
+                    revision: liminal_id::GraphRevisionId(rng.below(10_000)),
+                },
+            )])
+        },
+    };
+    let basis_witness = serde_json::to_vec(&basis)?;
     // Target the declared domain (computations that read >=1 component) and
     // keep a rare out-of-domain probe so the discard path stays exercised.
     let read_count = if category == "empty-basis" || rng.below(384) == 0 {
@@ -5650,9 +6206,9 @@ fn case_invalidation(rng: &mut Rng) -> Result<Case> {
     }
     // Out of domain: nothing was read, so invalidation is vacuous.
     if expected.is_empty() {
-        return Ok(Case::Discarded {
+        return Ok(Case::Negative {
             category,
-            witness: b"vacuous-invalidation".to_vec(),
+            witness: [b"vacuous-invalidation:".to_vec(), basis_witness].concat(),
         });
     }
 
@@ -5671,7 +6227,8 @@ fn case_invalidation(rng: &mut Rng) -> Result<Case> {
         format!("{category}/{}", rng.word()).into(),
     ));
     deps.record(extra.clone());
-    let witness = independent_oracle_source_invalidation(&deps, &expected, &unrelated, &extra)?;
+    let mut witness = independent_oracle_source_invalidation(&deps, &expected, &unrelated, &extra)?;
+    witness.extend_from_slice(&basis_witness);
     Ok(Case::Accepted { category, witness })
 }
 
@@ -5688,7 +6245,7 @@ type Family = (&'static str, fn(&mut Rng) -> Result<Case>);
 pub fn run_generated_repo(root: &Utf8Path, cases: u64) -> Result<()> {
     let (evidence, timings) = generate_evidence(cases)?;
     let artifact = GeneratedEvidenceArtifact {
-        schema_version: "haqp-generated-v2-category-coverage".to_owned(),
+        schema_version: "haqp-generated-v3-negative-categories".to_owned(),
         artifact_blake3: generated_artifact_digest(&evidence)?,
         rows: evidence.clone(),
     };
@@ -5734,6 +6291,10 @@ fn validate_case_count(cases: u64) -> Result<()> {
     Ok(())
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "evidence runner keeps deterministic accounting and digest boundaries together"
+)]
 fn generate_evidence(cases: u64) -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> {
     validate_case_count(cases)?;
     let families: [Family; 5] = [
@@ -5756,9 +6317,12 @@ fn generate_evidence(cases: u64) -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> {
         // acceptance target is met rather than stopping at N attempts. The
         // attempt cap keeps a badly-targeted generator from running forever
         // instead of silently reporting a short campaign.
-        let (mut accepted, mut discards, mut attempts) = (0u64, 0u64, 0u64);
+        let (mut accepted, mut discards, mut negatives, mut attempts) = (0u64, 0u64, 0u64, 0u64);
         let mut category_counts = BTreeMap::<String, u64>::new();
-        let attempt_cap = cases.saturating_mul(2);
+        // Negative categories are exercised inputs, not discards; families
+        // with broad malformed coverage need a larger attempt budget to reach
+        // their accepted floor without silently dropping categories.
+        let attempt_cap = cases.saturating_mul(4);
         while accepted < cases {
             anyhow::ensure!(
                 attempts < attempt_cap,
@@ -5793,12 +6357,23 @@ fn generate_evidence(cases: u64) -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> {
                     digest.update(category.as_bytes());
                     digest.update(&witness);
                 }
+                Case::Negative { category, witness } => {
+                    anyhow::ensure!(
+                        !witness.is_empty(),
+                        "{family}: negative attempt {attempts} has an empty witness"
+                    );
+                    negatives += 1;
+                    *category_counts.entry(category.to_owned()).or_default() += 1;
+                    digest.update(b"N");
+                    digest.update(category.as_bytes());
+                    digest.update(&witness);
+                }
             }
             // The RNG state binds the INPUT; the witness above binds the OUTPUT.
             digest.update(&rng.0.to_le_bytes());
         }
         anyhow::ensure!(
-            accepted + discards == attempts,
+            accepted + discards + negatives == attempts,
             "{family}: accounting lost cases"
         );
         let evidence_hash = digest.finalize().to_hex().to_string();
@@ -5827,13 +6402,14 @@ fn generate_evidence(cases: u64) -> Result<(Vec<GeneratedEvidence>, Vec<u64>)> {
             accepted,
             attempts,
             discards,
+            negatives,
             seed,
             evidence_hash,
             category_counts,
             relations: relation_rows,
             oracle: Some(GeneratedOracleEvidence {
                 id: format!("oracle:{}", family.replace(['/', ' ', '-'], "_")),
-                source: "generator-owned independent witness checks".to_owned(),
+                source: generated_oracle_source(family).to_owned(),
                 independent: true,
                 relation_matrix_blake3,
             }),
@@ -5872,6 +6448,8 @@ struct GeneratedEvidence {
     accepted: u64,
     attempts: u64,
     discards: u64,
+    #[serde(default)]
+    negatives: u64,
     /// Recorded so the run is reproducible (ADR-0020 §1).
     seed: u64,
     evidence_hash: String,
@@ -6836,6 +7414,7 @@ mod tests {
             accepted: 100_000,
             attempts: 100_000,
             discards: 0,
+            negatives: 0,
             fuzz_targets: vec!["cst_parse".to_owned()],
             seed_categories: (0..16).map(|i| format!("s{i}")).collect(),
             result: "pass".to_owned(),
@@ -6852,6 +7431,7 @@ mod tests {
             accepted: 100_000,
             attempts: 100_000,
             discards: 0,
+            negatives: 0,
             seed: 7,
             evidence_hash: "ab".repeat(32),
             category_counts: BTreeMap::new(),
@@ -6960,7 +7540,7 @@ mod tests {
             .map(|family| generated_evidence_row(family))
             .collect::<Vec<_>>();
         let artifact = GeneratedEvidenceArtifact {
-            schema_version: "haqp-generated-v2-category-coverage".to_owned(),
+            schema_version: "haqp-generated-v3-negative-categories".to_owned(),
             artifact_blake3: generated_artifact_digest(&rows).expect("digest"),
             rows: rows.clone(),
         };
@@ -6984,7 +7564,7 @@ mod tests {
         let mut duplicate = rows;
         duplicate[0].family = duplicate[1].family.clone();
         let tampered = GeneratedEvidenceArtifact {
-            schema_version: "haqp-generated-v2-category-coverage".to_owned(),
+            schema_version: "haqp-generated-v3-negative-categories".to_owned(),
             artifact_blake3: generated_artifact_digest(&duplicate).expect("digest"),
             rows: duplicate,
         };
@@ -7244,6 +7824,7 @@ mod tests {
             accepted: 100_000,
             attempts: 100_000,
             discards: 0,
+            negatives: 0,
             fuzz_targets: targets.iter().map(|t| (*t).to_owned()).collect(),
             seed_categories: (0..16).map(|i| format!("s{i}")).collect(),
             result: "pass".to_owned(),
@@ -7748,7 +8329,7 @@ mod tests {
                 row.family
             );
             assert_eq!(
-                row.accepted + row.discards,
+                row.accepted + row.discards + row.negatives,
                 row.attempts,
                 "{}: counts do not describe one run",
                 row.family
@@ -7780,23 +8361,23 @@ mod tests {
         const GOLDENS: [(&str, &str); 5] = [
             (
                 "source/CST/formatting",
-                "a3d63ed0e6a999f6a49119a02d6b2ebdb3223b220a52583f054cab1bbb06e0cb",
+                "4324cebe6403bbbcb899a7557fd6871eed0a76f3edcdbd6430f464fd12822b26",
             ),
             (
                 "graph/interchange codecs",
-                "a2b6222670928ae472e71e8d6f96970b4ab7783fffb26822c89d03c3449eff3e",
+                "558a9c40e4df184699f7454e74e32c28f17c0271efaa6918fee3b2cc279a152e",
             ),
             (
                 "transforms/projections",
-                "927b10a5b0fb332be15f532fda20b65b3afba759a8d081092abb578c26a48b9f",
+                "9e0e6cdaa083ce0c36b403a2363eeb972721ba17bdd3ea631a735f0fbe8322c6",
             ),
             (
                 "repair/ILRP/recovery",
-                "31f24ec7c7fc57900cdbc0ac480ee5292aaf6c56bf80b951c301b85e2347d355",
+                "2b0d9f1b62eb1699c5da50aefdd1c5adc68b1cb102d22ba95dd516c87e40efdc",
             ),
             (
                 "Basis/revision/query invalidation",
-                "a63d41f8d8c99afa540c8a49c4d47d6875056e5b404fba86bb92117a3dfb71f3",
+                "841d02140ec868daa069f45970c5e898b6fbf69e6fbdf3c76c4f4f19da26cd40",
             ),
         ];
         // 3,000 rather than 64: `case_repair` closes a genuine cycle on
@@ -8106,12 +8687,14 @@ mod tests {
         for family in &mut packet.generated {
             family.accepted = 100_000;
             family.discards = 1_010;
+            family.negatives = 0;
             family.attempts = 101_010;
         }
         verify_generated_inventory(&packet).expect("1,010 discards is at the ceiling");
 
         for family in &mut packet.generated {
             family.discards = 1_011;
+            family.negatives = 0;
             family.attempts = 101_011;
         }
         verify_generated_inventory(&packet).expect_err("1,011 discards is above the ceiling");
@@ -8123,6 +8706,7 @@ mod tests {
         let discards = u64::MAX / 100 + 1;
         for family in &mut packet.generated {
             family.accepted = 100_000;
+            family.negatives = 0;
             family.discards = discards;
             family.attempts = family.accepted + family.discards;
         }

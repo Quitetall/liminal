@@ -1,152 +1,156 @@
 {
-  "schema_version": "haqp-generated-v2-category-coverage",
-  "artifact_blake3": "05c33c6354ec750320a0a2e9f42ae9152902c68f1c988675c0b938413d275e31",
+  "schema_version": "haqp-generated-v3-negative-categories",
+  "artifact_blake3": "a9db7c647aa0bc479d1bcf18e9db6e9b55e7fac262203f9ef5fe8a119445bc33",
   "rows": [
     {
       "family": "source/CST/formatting",
       "accepted": 100000,
-      "attempts": 123006,
-      "discards": 23006,
+      "attempts": 122956,
+      "discards": 0,
+      "negatives": 22956,
       "seed": 11400714819323198485,
-      "evidence_hash": "d95c5623392863f2e93c6cf7ce1c76cd9b0352221fb836cce05fb45521632ba8",
+      "evidence_hash": "4f96c1bbb58bfbf136f6b66e92a1029e919d32a90635d1d025ec87efca1af43e",
       "category_counts": {
-        "boundary-offset": 7715,
-        "comment": 7708,
-        "control-byte": 7659,
-        "deep": 7557,
-        "empty": 7645,
-        "escape": 7667,
-        "hostile": 7631,
-        "invalid-utf8": 7752,
-        "long-line": 7645,
-        "nested": 7830,
-        "single-token": 7762,
-        "truncated": 7804,
-        "unicode": 7485,
-        "unterminated": 7746,
-        "whitespace": 7609,
-        "wide": 7791
+        "boundary-offset": 7720,
+        "comment": 7650,
+        "control-byte": 7779,
+        "deep": 7633,
+        "empty": 7705,
+        "escape": 7588,
+        "hostile": 7728,
+        "invalid-utf8": 7667,
+        "long-line": 7654,
+        "nested": 7685,
+        "single-token": 7661,
+        "truncated": 7606,
+        "unicode": 7692,
+        "unterminated": 7795,
+        "whitespace": 7537,
+        "wide": 7856
       },
       "relations": [
         {
           "relation": "lossless_emit",
           "oracle_id": "oracle:source_CST_formatting",
           "result": "pass",
-          "artifact_blake3": "b529824f6e2f0a7a759f7e142f30a3c3fd2c85b33df587ff9b3e59cc7999e4d9"
+          "artifact_blake3": "7f493f8950bd83643c2114d171ef53aed76c186b82017a538628c32400f35d08"
         },
         {
           "relation": "format_idempotence",
           "oracle_id": "oracle:source_CST_formatting",
           "result": "pass",
-          "artifact_blake3": "a1daed2b91c0caed9b37e4849b1f4b4541573691323b2811379bf535133d08a0"
+          "artifact_blake3": "64955ecf276c036ae6d93dd82b8bce1bf21688b02b50fd428db5d5e874b4df3c"
         }
       ],
       "oracle": {
         "id": "oracle:source_CST_formatting",
-        "source": "generator-owned independent witness checks",
+        "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_cst",
         "independent": true,
-        "relation_matrix_blake3": "2c1cba5ca13a14844ec172131d565bba8f939290e19bc101f8465c7935124575"
+        "relation_matrix_blake3": "4b13fcd06f00db173605314247923fe4ceb0e3e743d05fe91407b5ec0fcc453e"
       }
     },
     {
       "family": "graph/interchange codecs",
       "accepted": 100000,
-      "attempts": 103218,
-      "discards": 3218,
+      "attempts": 266440,
+      "discards": 0,
+      "negatives": 166440,
       "seed": 11400713719811571110,
-      "evidence_hash": "cf97de78eb2029f1653e4c2625c3d5ef2217d81e6d4b632365818d52891a33d6",
+      "evidence_hash": "74881b1dadaf39625143f9599a463bbae04488755425cd5b000aaa0f60a8b13a",
       "category_counts": {
-        "comment": 6450,
-        "cycle": 6383,
-        "dag": 6534,
-        "deep": 6507,
-        "duplicate-id": 6426,
-        "empty": 6513,
-        "external-value": 6281,
-        "hostile": 6603,
-        "invalid-json": 6385,
-        "large-payload": 6422,
-        "missing-node": 6441,
-        "single-edge": 6492,
-        "single-node": 6428,
-        "truncated-json": 6488,
-        "unknown-kind": 6430,
-        "wide": 6435
+        "comment": 16856,
+        "cycle": 16686,
+        "dag": 16671,
+        "deep": 16615,
+        "duplicate-id": 16564,
+        "empty": 16592,
+        "external-value": 16691,
+        "hostile": 16929,
+        "invalid-json": 16513,
+        "large-payload": 16658,
+        "missing-node": 16602,
+        "single-edge": 16608,
+        "single-node": 16725,
+        "truncated-json": 16448,
+        "unknown-kind": 16559,
+        "wide": 16723
       },
       "relations": [
         {
           "relation": "byte_canonical_stability",
           "oracle_id": "oracle:graph_interchange_codecs",
           "result": "pass",
-          "artifact_blake3": "9cc5a839d18ef9b5d3b3d338f5ed87ab8634842649abaa432a30e459c461ffc0"
+          "artifact_blake3": "fe3a83105fed3ff37d2073c427303f593fbd4ce6b326efe12907410d562752f5"
         },
         {
           "relation": "field_fidelity",
           "oracle_id": "oracle:graph_interchange_codecs",
           "result": "pass",
-          "artifact_blake3": "7b9e42eae29b9677164b34aa5e99136f7579018e373e5eb79e6beb9b5eb33f07"
+          "artifact_blake3": "e42d46bb88e3c876c25dfde1fca6862024be56917c3b7a88ade87aedbf565d10"
         }
       ],
       "oracle": {
         "id": "oracle:graph_interchange_codecs",
-        "source": "generator-owned independent witness checks",
+        "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_graph",
         "independent": true,
-        "relation_matrix_blake3": "acbc2ebd12996ef5298e4608b6848c9fffdc571ce8572f6275bff17613b50810"
+        "relation_matrix_blake3": "3db55dcd553501e49ddd9fd159cdd054bcd3aadb717e06f2a2860ebba97db378"
       }
     },
     {
       "family": "transforms/projections",
       "accepted": 100000,
-      "attempts": 106759,
-      "discards": 6759,
+      "attempts": 133537,
+      "discards": 0,
+      "negatives": 33537,
       "seed": 11400717018346454899,
-      "evidence_hash": "d20949fbefb5b116f0f6f1759857597c6b14b3dab346125c1ef714562e5c4458",
+      "evidence_hash": "e49b2ddee01dcfb4dad8a4085839045de2495524b936cd7ab2f49b9cae5f2e4f",
       "category_counts": {
-        "boundary-span": 6566,
-        "commute": 6793,
-        "conflict": 6723,
-        "deep": 6553,
-        "delete": 6574,
-        "empty": 6759,
-        "hostile": 6735,
-        "identity": 6545,
-        "insert": 6669,
-        "invalid-span": 6686,
-        "large-patch": 6671,
-        "move": 6631,
-        "overlap": 6727,
-        "replace": 6729,
-        "truncated": 6713,
-        "wide": 6685
+        "boundary-span": 8489,
+        "commute": 8351,
+        "conflict": 8350,
+        "deep": 8338,
+        "delete": 8348,
+        "empty": 8233,
+        "hostile": 8355,
+        "identity": 8408,
+        "insert": 8387,
+        "invalid-span": 8514,
+        "large-patch": 8315,
+        "move": 8247,
+        "overlap": 8351,
+        "replace": 8076,
+        "truncated": 8435,
+        "wide": 8340
       },
       "relations": [
         {
           "relation": "identity_merge",
           "oracle_id": "oracle:transforms_projections",
           "result": "pass",
-          "artifact_blake3": "f227ff5384abefd6b0f7179695709fe561afc65f3722505f84cbe605f17169f5"
+          "artifact_blake3": "a00afd06d80f819f3998aaf23ce72a16fdbb94387dd4c3b26392a3f34a2d60f3"
         },
         {
           "relation": "outcome_class_symmetry",
           "oracle_id": "oracle:transforms_projections",
           "result": "pass",
-          "artifact_blake3": "38263f9b939374d226f7fdfefdc7e7f136e63793c93428fbfbc8eb5fa8bc3be8"
+          "artifact_blake3": "c76cf1c708051a565e25a46a4286631ba160971573427119ef2cee42fcfe37c4"
         }
       ],
       "oracle": {
         "id": "oracle:transforms_projections",
-        "source": "generator-owned independent witness checks",
+        "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_transform",
         "independent": true,
-        "relation_matrix_blake3": "47b06f5e6934205b1e0aaad696fc5f7cc1d1372ee29899f9709edc835a1a2d93"
+        "relation_matrix_blake3": "1ccea463e46066f4d073a2f89909f3899863ef940b12dc9f1ca7b07796094deb"
       }
     },
     {
       "family": "repair/ILRP/recovery",
       "accepted": 100000,
       "attempts": 106434,
-      "discards": 6434,
+      "discards": 269,
+      "negatives": 6165,
       "seed": 11400715918834825484,
-      "evidence_hash": "afd3f77855c259dd0661527854c496a55af25acd4d3494a390b9cb987594164c",
+      "evidence_hash": "ee3e1d1e4f97948639535910c411ecf06ce0cb9572a31e9fd3ed5a0d2262383f",
       "category_counts": {
         "applying": 6324,
         "boundary": 6116,
@@ -171,78 +175,79 @@
           "relation": "dependency_order",
           "oracle_id": "oracle:repair_ILRP_recovery",
           "result": "pass",
-          "artifact_blake3": "afbde52691e02e9494e9231b47dc96372a70009fef44b9dca31fc36c2624b3f1"
+          "artifact_blake3": "75a9249cddc7d48131a54fbf722a9481b1fbc63f5ae20dc29f9d5e17ebe39d84"
         },
         {
           "relation": "permutation_invariance",
           "oracle_id": "oracle:repair_ILRP_recovery",
           "result": "pass",
-          "artifact_blake3": "db8f29fc5dcd67612518c78e4ac075c0ef4a4e6df23333caaf4d704a72de0626"
+          "artifact_blake3": "7750f94aeb030e19276b812a36eeb5b41edc49661a8d3fa1f90ea9c68392c768"
         },
         {
           "relation": "independent_edge_check",
           "oracle_id": "oracle:repair_ILRP_recovery",
           "result": "pass",
-          "artifact_blake3": "3b63dbd0062d0453eacc72c441906cb60b34e56d06f501e023eb4d8990206c83"
+          "artifact_blake3": "05fe02f5035d64c24100808b123c9aa7c19a41482667a0d0433d4018acff67f2"
         }
       ],
       "oracle": {
         "id": "oracle:repair_ILRP_recovery",
-        "source": "generator-owned independent witness checks",
+        "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_repair",
         "independent": true,
-        "relation_matrix_blake3": "27a6a7ec74514c1c3704772a3376f7d3221306aed90e70ca078b483e1b4544d5"
+        "relation_matrix_blake3": "2fa60c867410be764505a7423687fc3497fbd797357e1998a72c1e9dfb7b78ef"
       }
     },
     {
       "family": "Basis/revision/query invalidation",
       "accepted": 100000,
-      "attempts": 106973,
-      "discards": 6973,
+      "attempts": 146193,
+      "discards": 0,
+      "negatives": 46193,
       "seed": 11400719217369709273,
-      "evidence_hash": "4bc6b62a49b4ac9001883326141f8d5a10a830460071df9119b461a56fe53aa3",
+      "evidence_hash": "3cb31eef6b278d458aeeec5e6a0d1f6b4c7b2cb1e562f0045c731cfb1770a716",
       "category_counts": {
-        "branch": 6695,
-        "client-scoped": 6636,
-        "durable-only": 6661,
-        "empty-basis": 6692,
-        "federated": 6607,
-        "fresh": 6653,
-        "hostile": 6666,
-        "invalid-token": 6774,
-        "large-frontier": 6640,
-        "merge": 6585,
-        "published": 6687,
-        "reordered": 6635,
-        "single-revision": 6698,
-        "stale": 6750,
-        "truncated": 6862,
-        "unknown-perspective": 6732
+        "branch": 9098,
+        "client-scoped": 9104,
+        "durable-only": 9119,
+        "empty-basis": 9133,
+        "federated": 9129,
+        "fresh": 9207,
+        "hostile": 9236,
+        "invalid-token": 9009,
+        "large-frontier": 9346,
+        "merge": 8919,
+        "published": 9075,
+        "reordered": 9065,
+        "single-revision": 9036,
+        "stale": 9158,
+        "truncated": 9267,
+        "unknown-perspective": 9292
       },
       "relations": [
         {
           "relation": "irrelevant_input_invariance",
           "oracle_id": "oracle:Basis_revision_query_invalidation",
           "result": "pass",
-          "artifact_blake3": "a729d85017ef839f3737f62320dd814042d248f8c75fe34fd1a7ea7702f7b8d5"
+          "artifact_blake3": "1236181da2ccaa00757ddf92343012fd97b3a2185d064014ff335a06bd7985d6"
         },
         {
           "relation": "monotonicity",
           "oracle_id": "oracle:Basis_revision_query_invalidation",
           "result": "pass",
-          "artifact_blake3": "308e056aaa4903c6e30fdd71aa4591e44877b05dd4981c82831880697e9e49a7"
+          "artifact_blake3": "7e38321277b024ae48027aadf4faff4939f9df1b9f523165a313fbf4ca7f5cef"
         },
         {
           "relation": "independent_read_set_oracle",
           "oracle_id": "oracle:Basis_revision_query_invalidation",
           "result": "pass",
-          "artifact_blake3": "d66a188ac11cdd223e37eb0dfb5ec2a96b8dfcad89bb263888cb1faea8b5d247"
+          "artifact_blake3": "2c52b0e66659e487bccf271092854de4bbb55a1402b9aedf2ce900373c87afde"
         }
       ],
       "oracle": {
         "id": "oracle:Basis_revision_query_invalidation",
-        "source": "generator-owned independent witness checks",
+        "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_invalidation",
         "independent": true,
-        "relation_matrix_blake3": "914425d850378717ee6de0f9b439b59d25ad1dca5fcc86ade98e5a6066415d4e"
+        "relation_matrix_blake3": "c680a7477731d71e8beff0a3c39d084052c4947e628b1a3027574235cd0b08e4"
       }
     }
   ]
