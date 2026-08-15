@@ -3991,6 +3991,11 @@ fn verify_corpus_scope_traces(
     audit: &CorpusAccessAudit,
     provenance: &Provenance,
 ) -> Result<()> {
+    verify_corpus_scope_presence(audit)?;
+    verify_corpus_scope_rows(root, audit, provenance)
+}
+
+fn verify_corpus_scope_presence(audit: &CorpusAccessAudit) -> Result<()> {
     const QUALIFICATION_SCOPES: [&str; 8] = [
         "ci",
         "canaries",
@@ -4009,8 +4014,17 @@ fn verify_corpus_scope_traces(
         .collect::<BTreeSet<_>>();
     anyhow::ensure!(
         actual == expected,
-        "qualification corpus audit scopes differ: recorded={actual:?}, expected={expected:?}"
+        "corpus scope command does not cover lane: recorded={actual:?}, expected={expected:?}"
     );
+    Ok(())
+}
+
+#[allow(clippy::too_many_lines)]
+fn verify_corpus_scope_rows(
+    root: &Utf8Path,
+    audit: &CorpusAccessAudit,
+    provenance: &Provenance,
+) -> Result<()> {
     verify_corpus_scope_replays(root, &audit.scope_traces, &provenance.fixed_commit)?;
     require_unique(
         audit.scope_traces.iter().map(|row| row.scope.as_str()),
@@ -4736,6 +4750,10 @@ fn verify_campaign_clock(root: &Utf8Path, expected: Option<&Provenance>) -> Resu
         );
         require_eq("campaign receipt contents", &receipt, &expected_receipt)?;
     }
+    verify_campaign_clock_budget(&clock)
+}
+
+fn verify_campaign_clock_budget(clock: &CampaignClock) -> Result<()> {
     let breaches = clock
         .runs
         .iter()
@@ -7474,17 +7492,6 @@ fn is_qualification_canary(id: &str) -> bool {
     matches!(id, "C26" | "C27" | "C28" | "C29" | "C30" | "C31" | "C32")
 }
 
-#[allow(clippy::struct_excessive_bools)]
-struct QualificationCanaryState {
-    provenance_bound: bool,
-    sanitizer_replayed: bool,
-    oracle_independent: bool,
-    campaign_within_clock: bool,
-    risks_coordinate_bound: bool,
-    corpus_lane_traced: bool,
-    concurrency_replayed: bool,
-}
-
 /// Execute deliberate failures for qualified-only gates whose evidence does
 /// not exist in the proposed inventory packet. Each arm mutates a valid
 /// qualification state, then invokes the closed failure contract.
@@ -7500,26 +7507,102 @@ fn run_qualification_canary(root: &Utf8Path, packet: &Packet, id: &str) -> Resul
             .expect_err("concurrency provenance canary must fail closed");
         anyhow::bail!("concurrency provenance does not match committed tree");
     }
-    let mut state = QualificationCanaryState {
-        provenance_bound: true,
-        sanitizer_replayed: true,
-        oracle_independent: true,
-        campaign_within_clock: true,
-        risks_coordinate_bound: true,
-        corpus_lane_traced: true,
-        concurrency_replayed: true,
-    };
     match id {
-        "C26" => state.provenance_bound = false,
-        "C27" => unreachable!("sanitizer canary handled by runtime verifier"),
-        "C28" => state.oracle_independent = false,
-        "C29" => state.campaign_within_clock = false,
-        "C30" => state.risks_coordinate_bound = false,
-        "C31" => state.corpus_lane_traced = false,
-        "C32" => state.concurrency_replayed = false,
+        "C26" => {
+            let mut candidate = packet.clone();
+            candidate.provenance = None;
+            let error = verify_provenance(root, &candidate)
+                .expect_err("provenance canary must exercise provenance verifier");
+            anyhow::bail!("{error}");
+        }
+        "C28" => {
+            let path = root.join("conformance/haqp/evidence/generated.json");
+            let artifact: GeneratedEvidenceArtifact = serde_json::from_slice(&fs::read(&path)?)?;
+            let row = artifact
+                .rows
+                .iter()
+                .find(|row| row.family == packet.generated[0].family)
+                .context("oracle canary requires generated evidence")?;
+            let mut row = row.clone();
+            let oracle = row
+                .oracle
+                .as_mut()
+                .context("oracle canary requires generated oracle evidence")?;
+            oracle.independent = false;
+            let family = &packet.generated[0];
+            let error = verify_generated_contract(root, family, &row)
+                .expect_err("oracle canary must exercise independent-oracle verifier");
+            anyhow::bail!("generated oracle is not independent: {error}");
+        }
+        "C29" => {
+            let clock = CampaignClock {
+                schema_version: "haqp-campaign-clock-v1".to_owned(),
+                reference_machine: "canary".to_owned(),
+                runs: vec![
+                    CampaignRun {
+                        id: "C29-1".to_owned(),
+                        commit: "0".repeat(40),
+                        tree: "0".repeat(40),
+                        command: "canary".to_owned(),
+                        started_epoch: 1,
+                        finished_epoch: 1 + 8 * 60 * 60 + 1,
+                        elapsed_s: 8 * 60 * 60 + 1,
+                        clean: true,
+                        result: "pass".to_owned(),
+                        wrapper: "canary".to_owned(),
+                        wrapper_sha256: "0".repeat(64),
+                        receipt: String::new(),
+                        receipt_blake3: String::new(),
+                    },
+                    CampaignRun {
+                        id: "C29-2".to_owned(),
+                        commit: "0".repeat(40),
+                        tree: "0".repeat(40),
+                        command: "canary".to_owned(),
+                        started_epoch: 1,
+                        finished_epoch: 1 + 8 * 60 * 60 + 1,
+                        elapsed_s: 8 * 60 * 60 + 1,
+                        clean: true,
+                        result: "pass".to_owned(),
+                        wrapper: "canary".to_owned(),
+                        wrapper_sha256: "0".repeat(64),
+                        receipt: String::new(),
+                        receipt_blake3: String::new(),
+                    },
+                ],
+            };
+            let error = verify_campaign_clock_budget(&clock)
+                .expect_err("campaign clock canary must exercise breach ceiling");
+            anyhow::bail!("{error}");
+        }
+        "C30" => {
+            let mut candidate = packet.clone();
+            candidate.residual_risks = vec![ResidualRisk {
+                id: "RISK-001".to_owned(),
+                owner: "canary".to_owned(),
+                severity: "high".to_owned(),
+                trigger: "canary".to_owned(),
+                requirement: "P1-R001".to_owned(),
+                evidence: String::new(),
+                planned_phase: "M24".to_owned(),
+                mitigation: "canary".to_owned(),
+                authority: "ADR-0020".to_owned(),
+                state: "open".to_owned(),
+            }];
+            let error = verify_residual_risks(root, &candidate)
+                .expect_err("residual-risk canary must exercise coordinate verifier");
+            anyhow::bail!("{error}");
+        }
+        "C31" => {
+            let path = root.join("conformance/haqp/evidence/corpus-access.json");
+            let mut audit: CorpusAccessAudit = serde_json::from_slice(&fs::read(&path)?)?;
+            audit.scope_traces.clear();
+            verify_corpus_scope_presence(&audit)
+                .expect_err("corpus canary must exercise qualification scope registry");
+            anyhow::bail!("corpus scope command does not cover lane");
+        }
         _ => anyhow::bail!("unknown qualification canary {id}"),
     }
-    verify_qualification_canary_state(&state)
 }
 
 /// Replace one retained sanitizer binary's runtime marker with inert bytes and
@@ -7593,38 +7676,6 @@ fn run_sanitizer_canary(root: &Utf8Path) -> Result<()> {
     anyhow::bail!("sanitizer proof lacks compiler/runtime replay: {error}");
 }
 
-fn verify_qualification_canary_state(state: &QualificationCanaryState) -> Result<()> {
-    anyhow::ensure!(
-        state.provenance_bound,
-        "packet has no provenance block; qualification is unbound to any tree"
-    );
-    anyhow::ensure!(
-        state.sanitizer_replayed,
-        "sanitizer proof lacks compiler/runtime replay"
-    );
-    anyhow::ensure!(
-        state.oracle_independent,
-        "generated oracle is not independent"
-    );
-    anyhow::ensure!(
-        state.campaign_within_clock,
-        "campaign exceeded the eight-hour ceiling"
-    );
-    anyhow::ensure!(
-        state.risks_coordinate_bound,
-        "residual risk RISK-001 has no coordinate"
-    );
-    anyhow::ensure!(
-        state.corpus_lane_traced,
-        "corpus scope command does not cover lane"
-    );
-    anyhow::ensure!(
-        state.concurrency_replayed,
-        "concurrency schedule lacks executed replay"
-    );
-    Ok(())
-}
-
 /// Match expected canary coordinates at the beginning of the verifier error.
 /// A substring search lets unrelated detail later in an error satisfy a row;
 /// exact equality or a delimited suffix preserves diagnostic detail without
@@ -7670,7 +7721,7 @@ fn canary_expected_prefix(id: &str) -> Result<&'static str> {
         "C27" => "sanitizer proof lacks compiler/runtime replay",
         "C28" => "generated oracle is not independent",
         "C29" => "campaign exceeded the eight-hour ceiling",
-        "C30" => "residual risk RISK-001 has no coordinate",
+        "C30" => "risk RISK-001 has empty evidence",
         "C31" => "corpus scope command does not cover lane",
         "C32" => "concurrency provenance does not match committed tree",
         _ => anyhow::bail!("unknown canary {id}"),
@@ -7887,7 +7938,7 @@ fn canary_mutation_semantics(id: &str) -> Result<&'static str> {
         "C27" => Ok("replace retained sanitizer binary marker and invoke runtime proof verifier"),
         "C28" => Ok("generated oracle.independent := false"),
         "C29" => Ok("campaign elapsed_s := 8h+1s"),
-        "C30" => Ok("residual_risk.coordinate := empty"),
+        "C30" => Ok("residual_risk.evidence := empty"),
         "C31" => Ok("scope trace command := scope-probe only"),
         "C32" => Ok("replace not-applicable concurrency source_tree with unrelated Git object"),
         _ => anyhow::bail!("unknown canary {id}"),
