@@ -5754,7 +5754,10 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
             ((before.contains("sort") || before.contains("BTree"))
                 && (!after.contains("sort") || after.contains("Hash")))
                 // P1-M011's closed anchor; require a Hash collection.
-                || (before.starts_with("let lines: Vec<") && after.contains("Hash"))
+                || (before.starts_with("let lines: Vec<")
+                    && before != after
+                    && after.contains("Hash")
+                    && !after.contains("let lines: Vec<"))
         }
         "stale-basis-acceptance" => {
             before.to_ascii_lowercase().contains("basis")
@@ -5776,8 +5779,9 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
                 // P1-M013 and P1-M026 are admitted by exact anchors below.
                 || (before == "if id_str.is_empty()" && after == "if false")
                 || (before == "match &aux.value {"
+                    && before != after
                     && !after.contains("match")
-                    && (after.contains("if let") || after.contains("_")))
+                    && after.contains("if let"))
         }
         "wrong-holder-selection" => {
             // P1-M008: basis getter redirected to text; no generic self.* escape.
