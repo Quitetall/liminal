@@ -7517,11 +7517,19 @@ fn run_qualification_canary(root: &Utf8Path, packet: &Packet, id: &str) -> Resul
         }
         "C28" => {
             let path = root.join("conformance/haqp/evidence/generated.json");
-            let artifact: GeneratedEvidenceArtifact = serde_json::from_slice(&fs::read(&path)?)?;
+            let artifact: GeneratedEvidenceArtifact = serde_json::from_slice(
+                &fs::read(&path)
+                    .with_context(|| "C28 canary requires committed generated evidence")?,
+            )?;
+            let family = packet
+                .generated
+                .iter()
+                .find(|family| family.family == "source/CST/formatting")
+                .context("C28 canary requires source/CST/formatting family")?;
             let row = artifact
                 .rows
                 .iter()
-                .find(|row| row.family == packet.generated[0].family)
+                .find(|row| row.family == family.family)
                 .context("oracle canary requires generated evidence")?;
             let mut row = row.clone();
             let oracle = row
@@ -7529,7 +7537,6 @@ fn run_qualification_canary(root: &Utf8Path, packet: &Packet, id: &str) -> Resul
                 .as_mut()
                 .context("oracle canary requires generated oracle evidence")?;
             oracle.independent = false;
-            let family = &packet.generated[0];
             let error = verify_generated_contract(root, family, &row)
                 .expect_err("oracle canary must exercise independent-oracle verifier");
             anyhow::bail!("generated oracle is not independent: {error}");
@@ -7541,8 +7548,10 @@ fn run_qualification_canary(root: &Utf8Path, packet: &Packet, id: &str) -> Resul
                 runs: vec![
                     CampaignRun {
                         id: "C29-1".to_owned(),
-                        commit: "0".repeat(40),
-                        tree: "0".repeat(40),
+                        // Budget-only helper intentionally skips provenance;
+                        // keep object IDs syntactically valid for expansion.
+                        commit: "a".repeat(40),
+                        tree: "b".repeat(40),
                         command: "canary".to_owned(),
                         started_epoch: 1,
                         finished_epoch: 1 + 8 * 60 * 60 + 1,
@@ -7556,8 +7565,8 @@ fn run_qualification_canary(root: &Utf8Path, packet: &Packet, id: &str) -> Resul
                     },
                     CampaignRun {
                         id: "C29-2".to_owned(),
-                        commit: "0".repeat(40),
-                        tree: "0".repeat(40),
+                        commit: "a".repeat(40),
+                        tree: "b".repeat(40),
                         command: "canary".to_owned(),
                         started_epoch: 1,
                         finished_epoch: 1 + 8 * 60 * 60 + 1,
