@@ -5201,11 +5201,11 @@ fn contains_exact_coordinate(text: &str, coordinate: &str) -> bool {
         !text[..start]
             .chars()
             .next_back()
-            .is_some_and(|ch| ch.is_ascii_digit())
+            .is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == ':')
             && !text[end..]
                 .chars()
                 .next()
-                .is_some_and(|ch| ch.is_ascii_digit())
+                .is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == ':')
     })
 }
 
@@ -9629,6 +9629,14 @@ mod tests {
         ));
         assert!(!contains_exact_coordinate(
             "falsified crates/liminal-xtask/src/haq.rs:10 at runtime",
+            "crates/liminal-xtask/src/haq.rs:1"
+        ));
+        assert!(!contains_exact_coordinate(
+            "falsified crates/liminal-xtask/src/haq.rs:1a at runtime",
+            "crates/liminal-xtask/src/haq.rs:1"
+        ));
+        assert!(!contains_exact_coordinate(
+            "falsified crates/liminal-xtask/src/haq.rs:1:5 at runtime",
             "crates/liminal-xtask/src/haq.rs:1"
         ));
     }

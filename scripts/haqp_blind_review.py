@@ -459,7 +459,7 @@ def parse_json(text: str) -> dict[str, Any]:
             prose = str(attempt[field]).strip()
             if len(prose) < 24 or len(prose.split()) < 4:
                 raise ValueError(f"attempt {identifier} {field} is not substantive")
-            if not re.search(rf"(?<![0-9]){re.escape(target)}(?![0-9])", prose):
+            if not re.search(rf"(?<![A-Za-z0-9_:]){re.escape(target)}(?![A-Za-z0-9_:])", prose):
                 raise ValueError(f"attempt {identifier} {field} must quote exact target")
         if not isinstance(attempt["independently_reproduced"], bool):
             raise ValueError(f"attempt {identifier} independently_reproduced must be boolean")
