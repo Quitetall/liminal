@@ -202,12 +202,15 @@ for t in "${TARGETS[@]}"; do
     echo "ERROR: traced corpus path resolution failed for $t" >&2
     exit 1
   }
-  seed_manifest="target/haqp/seed-manifest-$t.txt"
+  seed_manifest="target/haqp/seed-manifest-$t.bin"
   : > "$seed_manifest"
   seed_count=0
   mapfile -t seed_paths < <(find "fuzz/corpus/$t" -maxdepth 1 -type f -print | LC_ALL=C sort)
   for seed in "${seed_paths[@]}"; do
-    printf '%s %s\n' "${seed#fuzz/corpus/$t/}" "$(sha256sum "$seed" | cut -d' ' -f1)" >> "$seed_manifest"
+    # Match verifier seed_manifest_digest exactly: lexical filename, NUL,
+    # SHA-256 hex, NUL. Human-readable separators would bind a different
+    # byte stream and make an otherwise valid campaign fail closed.
+    printf '%s\0%s\0' "${seed#fuzz/corpus/$t/}" "$(sha256sum "$seed" | cut -d' ' -f1)" >> "$seed_manifest"
     seed_count=$((seed_count + 1))
   done
   seed_manifest_blake3=$(hash_file "$seed_manifest")
