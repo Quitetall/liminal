@@ -30,6 +30,9 @@ fn main() -> Result<()> {
                     run_ignored,
                 )?;
             }
+            HaqCommand::ScopeProbe { scope } => {
+                liminal_xtask::haq::run_scope_probe_repo(&liminal_xtask::repo_root()?, &scope)?;
+            }
         },
         Command::Bench { command } => match command {
             BenchCommand::Sample { count } => {
@@ -98,6 +101,11 @@ enum HaqCommand {
         /// Include tests marked `#[ignore]` in the runnable set.
         #[arg(long)]
         run_ignored: bool,
+    },
+    /// Read only the committed files assigned to one corpus-audit scope.
+    ScopeProbe {
+        /// Closed qualification scope name (for example `generated`).
+        scope: String,
     },
 }
 

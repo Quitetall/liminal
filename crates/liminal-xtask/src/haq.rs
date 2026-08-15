@@ -230,7 +230,54 @@ fn verify_canary_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
     })?;
     let recorded: Vec<CanaryEvidence> =
         serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))?;
-    verify_canary_rows(&packet.canaries, &recorded)
+    verify_canary_rows(&packet.canaries, &recorded)?;
+    if let Some(provenance) = &packet.provenance {
+        verify_canary_evidence_replay(root, provenance, &recorded)?;
+    }
+    Ok(())
+}
+
+/// Re-run canaries from the fixed inventory commit.  A qualified packet is a
+/// metadata child and has resolved statuses, so replaying its in-memory shape
+/// would no longer exercise the inventory verifier that the canary campaign
+/// claims to attack.  The fixed parent is the authoritative proposed packet;
+/// its packet and Markdown are loaded from Git, mutated, and checked again.
+fn verify_canary_evidence_replay(
+    root: &Utf8Path,
+    provenance: &Provenance,
+    recorded: &[CanaryEvidence],
+) -> Result<()> {
+    let git_show = |path: &str| -> Result<Vec<u8>> {
+        let spec = format!("{}:{path}", provenance.fixed_commit);
+        let output = Command::new("git")
+            .current_dir(root)
+            .args(["show", &spec])
+            .output()
+            .with_context(|| format!("git show {spec}"))?;
+        anyhow::ensure!(
+            output.status.success(),
+            "git show {spec} failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+        Ok(output.stdout)
+    };
+    let baseline: Packet = serde_json::from_slice(&git_show("conformance/haqp/packet.json")?)
+        .context("parse fixed canary packet")?;
+    verify_packet_shape(&baseline)?;
+    verify_packet_statuses(&baseline, inventory_statuses())?;
+    let markdown = String::from_utf8(git_show("docs/execution/phase1-suite-review.md")?)
+        .context("fixed canary Markdown is not UTF-8")?;
+    let baseline_digest = packet_digest(&baseline)?;
+    anyhow::ensure!(
+        markdown.contains(&baseline_digest),
+        "fixed canary Markdown is not bound to fixed packet digest"
+    );
+    let replayed = run_canary_suite(&baseline, &markdown)?;
+    anyhow::ensure!(
+        replayed == recorded,
+        "committed canary evidence differs from replay from fixed inventory commit"
+    );
+    Ok(())
 }
 
 fn verify_canary_rows(declared: &[Canary], recorded: &[CanaryEvidence]) -> Result<()> {
@@ -3464,7 +3511,102 @@ fn verify_sanitizer_proof(
         "{}: retained sanitizer probe differs from fresh binary execution",
         row.target
     );
+    if let Some(provenance) = expected {
+        verify_sanitizer_build_replay(root, row, proof, provenance)?;
+    }
     Ok(())
+}
+
+/// Build sanitizer target from fixed source commit and compare output. Marker
+/// strings and self-authored logs cannot prove compiler/runtime instrumentation.
+fn verify_sanitizer_build_replay(
+    root: &Utf8Path,
+    row: &FuzzEvidence,
+    proof: &SanitizerProof,
+    provenance: &Provenance,
+) -> Result<()> {
+    let scratch = liminal_scratch::ScratchDir::new("haq-sanitizer-replay")?;
+    let worktree = scratch.path().to_owned();
+    let add = Command::new("git")
+        .current_dir(root)
+        .args(["worktree", "add", "--detach", "--quiet"])
+        .arg(&worktree)
+        .arg(&provenance.fixed_commit)
+        .output()?;
+    anyhow::ensure!(
+        add.status.success(),
+        "sanitizer replay worktree add failed: {}",
+        String::from_utf8_lossy(&add.stderr).trim()
+    );
+    let mut guard = WorktreeGuard::new(root, &worktree);
+    let output = Command::new("cargo")
+        .current_dir(&worktree)
+        .args([
+            "+nightly",
+            "fuzz",
+            "build",
+            "-s",
+            row.sanitizer.as_str(),
+            row.target.as_str(),
+        ])
+        .output()
+        .with_context(|| format!("replay sanitizer build for {}", row.target))?;
+    anyhow::ensure!(
+        output.status.success(),
+        "replayed sanitizer build failed for {}: {}",
+        row.target,
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+    let candidate = find_named_files(&worktree.join("fuzz/target"), &row.target)?
+        .into_iter()
+        .find(|path| path.file_name() == Some(row.target.as_str()))
+        .with_context(|| format!("replayed sanitizer build produced no {} binary", row.target))?;
+    let digest = blake3::hash(&fs::read(&candidate)?).to_hex().to_string();
+    require_eq(
+        &format!("{} replayed sanitizer binary digest", row.target),
+        &proof.binary_blake3,
+        &digest,
+    )?;
+    let probe = Command::new(&candidate)
+        .arg("-help=1")
+        .current_dir(&worktree)
+        .output()
+        .with_context(|| format!("probe replayed sanitizer binary {}", row.target))?;
+    anyhow::ensure!(
+        probe.status.success(),
+        "replayed sanitizer runtime probe failed for {}",
+        row.target
+    );
+    let mut probe_bytes = probe.stdout;
+    probe_bytes.extend_from_slice(&probe.stderr);
+    let probe_text = String::from_utf8_lossy(&probe_bytes);
+    anyhow::ensure!(
+        probe_text.contains(row.target.as_str())
+            && probe_text.contains(&format!("-fsanitize={}", row.sanitizer)),
+        "replayed sanitizer probe does not identify {} and {}",
+        row.target,
+        row.sanitizer
+    );
+    guard.remove()?;
+    Ok(())
+}
+
+fn find_named_files(root: &Utf8Path, name: &str) -> Result<Vec<Utf8PathBuf>> {
+    let mut found = Vec::new();
+    if !root.exists() {
+        return Ok(found);
+    }
+    for entry in fs::read_dir(root)? {
+        let entry = entry?;
+        let path = Utf8PathBuf::from_path_buf(entry.path())
+            .map_err(|path| anyhow::anyhow!("non-UTF-8 path while finding {name}: {path:?}"))?;
+        if entry.file_type()?.is_dir() {
+            found.extend(find_named_files(&path, name)?);
+        } else if path.file_name() == Some(name) {
+            found.push(path);
+        }
+    }
+    Ok(found)
 }
 
 /// Counts and exit states are only useful if their retained logs are the bytes
@@ -3629,6 +3771,7 @@ fn verify_corpus_scope_traces(root: &Utf8Path, audit: &CorpusAccessAudit) -> Res
         actual == expected,
         "qualification corpus audit scopes differ: recorded={actual:?}, expected={expected:?}"
     );
+    verify_corpus_scope_replays(root, &audit.scope_traces)?;
     require_unique(
         audit.scope_traces.iter().map(|row| row.scope.as_str()),
         "corpus audit scope",
@@ -3645,6 +3788,34 @@ fn verify_corpus_scope_traces(root: &Utf8Path, audit: &CorpusAccessAudit) -> Res
             &format!("{} corpus scope trace_blake3", row.scope),
             &row.trace_blake3,
         )?;
+        anyhow::ensure!(
+            row.trace_pid > 0 && row.trace_exit_code == 0 && row.trace_complete,
+            "{} corpus scope trace lacks successful traced-process receipt",
+            row.scope
+        );
+        require_eq("corpus scope tracer", &row.tracer_binary, "strace")?;
+        require_eq(
+            "corpus scope tracer version",
+            &row.tracer_version,
+            "conformance/haqp/evidence/access/strace.version",
+        )?;
+        require_hex_digest(
+            &format!("{} corpus scope tracer_version_blake3", row.scope),
+            &row.tracer_version_blake3,
+        )?;
+        require_hex_digest(
+            &format!("{} corpus scope observed_paths_blake3", row.scope),
+            &row.observed_paths_blake3,
+        )?;
+        let tracer_version_path =
+            safe_repo_path(root, &row.tracer_version, "corpus scope tracer version")?;
+        let tracer_version_bytes = fs::read(&tracer_version_path)
+            .with_context(|| format!("{tracer_version_path}: tracer version required"))?;
+        require_eq(
+            &format!("{} corpus scope tracer_version_blake3", row.scope),
+            &row.tracer_version_blake3,
+            blake3::hash(&tracer_version_bytes).to_hex().as_ref(),
+        )?;
         let expected_path = format!(
             "conformance/haqp/evidence/access/scopes/{}.trace",
             row.scope
@@ -3658,6 +3829,47 @@ fn verify_corpus_scope_traces(root: &Utf8Path, audit: &CorpusAccessAudit) -> Res
             blake3::hash(&bytes).to_hex().as_ref(),
         )?;
         let lower = String::from_utf8_lossy(&bytes).to_ascii_lowercase();
+        let pid_prefix = format!("{} ", row.trace_pid);
+        anyhow::ensure!(
+            String::from_utf8_lossy(&bytes)
+                .lines()
+                .any(|line| line.starts_with(&pid_prefix)),
+            "{} scope trace has no event from traced PID {}",
+            row.scope,
+            row.trace_pid
+        );
+        anyhow::ensure!(
+            String::from_utf8_lossy(&bytes)
+                .lines()
+                .any(|line| line == format!("{} +++ exited with 0 +++", row.trace_pid)),
+            "{} scope trace has no successful exit for PID {}",
+            row.scope,
+            row.trace_pid
+        );
+        let observed_paths_blake3 = scope_trace_paths_digest(&bytes);
+        require_eq(
+            &format!("{} corpus scope observed_paths_blake3", row.scope),
+            &row.observed_paths_blake3,
+            &observed_paths_blake3,
+        )?;
+        let binding = blake3::hash(
+            format!(
+                "{}\0{}\0{}\0{}\0{}",
+                row.command,
+                row.trace_pid,
+                row.trace_exit_code,
+                row.trace_blake3,
+                row.observed_paths_blake3
+            )
+            .as_bytes(),
+        )
+        .to_hex()
+        .to_string();
+        require_eq(
+            &format!("{} corpus scope process_binding", row.scope),
+            &row.process_binding,
+            &binding,
+        )?;
         for forbidden in ["heldout", "conformance/corpora"] {
             anyhow::ensure!(
                 !lower.contains(forbidden),
@@ -3667,6 +3879,121 @@ fn verify_corpus_scope_traces(root: &Utf8Path, audit: &CorpusAccessAudit) -> Res
         }
     }
     Ok(())
+}
+
+/// Re-run each qualification-wide scope through the retained xtask binary.
+/// PID receipts and self-consistent hashes alone can be forged; this replay
+/// observes a fresh recursive strace and compares its normalized open set.
+fn verify_corpus_scope_replays(root: &Utf8Path, rows: &[CorpusScopeTrace]) -> Result<()> {
+    let build = Command::new("cargo")
+        .current_dir(root)
+        .args(["build", "-q", "-p", "liminal-xtask"])
+        .output()?;
+    anyhow::ensure!(
+        build.status.success(),
+        "scope replay xtask build failed: {}",
+        String::from_utf8_lossy(&build.stderr).trim()
+    );
+    let binary = root.join("target/debug/liminal-xtask");
+    anyhow::ensure!(binary.is_file(), "scope replay xtask binary is missing");
+    for row in rows {
+        let expected_command = format!(
+            "strace -f -q -e trace=openat,openat2 -o conformance/haqp/evidence/access/scopes/{}.trace target/debug/liminal-xtask haq scope-probe {}",
+            row.scope, row.scope
+        );
+        require_eq(
+            &format!("{} corpus scope command", row.scope),
+            &row.command,
+            &expected_command,
+        )?;
+        let scratch = liminal_scratch::ScratchDir::new("haq-scope-replay")?;
+        let trace = scratch.path().join("scope.trace");
+        let output = Command::new("strace")
+            .current_dir(root)
+            .args(["-f", "-q", "-e", "trace=openat,openat2", "-o"])
+            .arg(&trace)
+            .arg(&binary)
+            .args(["haq", "scope-probe", row.scope.as_str()])
+            .output()
+            .with_context(|| format!("replay corpus scope {}", row.scope))?;
+        anyhow::ensure!(
+            output.status.success(),
+            "scope replay {} failed: {}",
+            row.scope,
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+        let bytes = fs::read(&trace)
+            .with_context(|| format!("scope replay {} produced no trace", row.scope))?;
+        require_eq(
+            &format!("{} replayed observed_paths_blake3", row.scope),
+            &row.observed_paths_blake3,
+            &scope_trace_paths_digest(&bytes),
+        )?;
+        let lower = String::from_utf8_lossy(&bytes).to_ascii_lowercase();
+        for forbidden in ["heldout", "conformance/corpora"] {
+            anyhow::ensure!(
+                !lower.contains(forbidden),
+                "{} replay observed forbidden path fragment {forbidden:?}",
+                row.scope
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Deterministic, read-only scope probe used by qualification-wide strace.
+/// It intentionally touches only committed, non-held-out files for its lane.
+pub fn run_scope_probe_repo(root: &Utf8Path, scope: &str) -> Result<()> {
+    let files: &[&str] = match scope {
+        "ci" => &["Cargo.toml", "Cargo.lock", "justfile"],
+        "canaries" => &[
+            "conformance/haqp/packet.json",
+            "docs/execution/phase1-suite-review.md",
+        ],
+        "generated" => &[
+            "crates/liminal-xtask/src/haq.rs",
+            "conformance/haqp/packet.json",
+        ],
+        "crash" => &[
+            "crates/liminal-jurisdiction/src/repair.rs",
+            "conformance/haqp/packet.json",
+        ],
+        "replay" => &["conformance/haqp/packet.json"],
+        "mutation" => &[
+            "crates/liminal-xtask/src/haq.rs",
+            "conformance/haqp/packet.json",
+        ],
+        "reviews" => &["conformance/haqp/packet.json"],
+        "fuzz" => &["fuzz/Cargo.toml", "fuzz/fuzz_targets/cst_parse.rs"],
+        _ => anyhow::bail!("unknown corpus scope {scope}"),
+    };
+    for path in files {
+        let bytes =
+            fs::read(root.join(path)).with_context(|| format!("scope probe read {path}"))?;
+        anyhow::ensure!(!bytes.is_empty(), "scope probe read empty file {path}");
+    }
+    println!("scope-probe:{scope}:pass");
+    Ok(())
+}
+
+fn scope_trace_paths_digest(bytes: &[u8]) -> String {
+    let mut paths = BTreeSet::new();
+    for line in String::from_utf8_lossy(bytes).lines() {
+        let Some(open) = line.find("openat(") else {
+            continue;
+        };
+        let rest = &line[open..];
+        let Some(start) = rest.find('"') else {
+            continue;
+        };
+        let Some(end) = rest[start + 1..].find('"') else {
+            continue;
+        };
+        paths.insert(rest[start + 1..start + 1 + end].to_owned());
+    }
+    blake3::hash(paths.into_iter().collect::<Vec<_>>().join("\n").as_bytes())
+        .to_hex()
+        .to_string()
 }
 
 #[allow(
@@ -4256,11 +4583,13 @@ fn verify_packet_shape(packet: &Packet) -> Result<()> {
     )?;
     require_eq("status", &packet.status, "proposed")?;
     require_eq("ratification", &packet.ratification, "unratified")?;
-    require_eq(
-        "concurrent_code",
-        &packet.concurrent_code,
-        "deterministic_schedule_exploration",
-    )?;
+    anyhow::ensure!(
+        matches!(
+            packet.concurrent_code.as_str(),
+            "deterministic_schedule_exploration" | "not_applicable"
+        ),
+        "concurrent_code must be deterministic_schedule_exploration or not_applicable"
+    );
     if packet.locked_acceptance_corpora_touched {
         anyhow::bail!("locked_acceptance_corpora_touched must be false");
     }
@@ -5562,9 +5891,7 @@ fn verify_markdown_surface_text(text: &str, packet: &Packet) -> Result<()> {
 /// packet's implementation label is not a schedule result; each sequence must
 /// carry an independent oracle digest and a passing replay outcome.
 fn verify_concurrency_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
-    if packet.concurrent_code != "deterministic_schedule_exploration" {
-        return Ok(());
-    }
+    let applicable = packet.concurrent_code == "deterministic_schedule_exploration";
     let path = root.join("conformance/haqp/evidence/concurrency.json");
     let evidence: ConcurrentEvidence = serde_json::from_slice(
         &fs::read(&path)
@@ -5581,6 +5908,29 @@ fn verify_concurrency_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         &evidence.implementation,
         &packet.concurrent_code,
     )?;
+    if !applicable {
+        require_eq("concurrency mode", &evidence.mode, "not_applicable")?;
+        require_eq(
+            "concurrency source_anchor",
+            &evidence.source_anchor,
+            "docs/execution/M21.md:13",
+        )?;
+        anyhow::ensure!(
+            evidence.schedules.is_empty(),
+            "not-applicable concurrency evidence must contain no schedules"
+        );
+        anyhow::ensure!(
+            evidence.reason.contains("reserved for Phase 6")
+                && evidence.reason.contains("no concurrent implementation"),
+            "not-applicable concurrency evidence must state why schedule exploration is absent"
+        );
+        return Ok(());
+    }
+    require_eq("concurrency mode", &evidence.mode, "executed")?;
+    anyhow::ensure!(
+        !evidence.runner.trim().is_empty(),
+        "concurrency evidence has no executable runner"
+    );
     require_eq(
         "concurrency oracle",
         &evidence.oracle_id,
@@ -5903,6 +6253,22 @@ struct CorpusScopeTrace {
     trace_blake3: String,
     exit_code: i32,
     result: String,
+    #[serde(default)]
+    trace_pid: u32,
+    #[serde(default)]
+    trace_exit_code: i32,
+    #[serde(default)]
+    trace_complete: bool,
+    #[serde(default)]
+    process_binding: String,
+    #[serde(default)]
+    tracer_binary: String,
+    #[serde(default)]
+    tracer_version: String,
+    #[serde(default)]
+    tracer_version_blake3: String,
+    #[serde(default)]
+    observed_paths_blake3: String,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -5910,6 +6276,14 @@ struct CorpusScopeTrace {
 struct ConcurrentEvidence {
     schema_version: String,
     implementation: String,
+    #[serde(default)]
+    mode: String,
+    #[serde(default)]
+    reason: String,
+    #[serde(default)]
+    source_anchor: String,
+    #[serde(default)]
+    runner: String,
     source_commit: String,
     source_tree: String,
     oracle_id: String,
