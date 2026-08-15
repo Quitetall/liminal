@@ -21,10 +21,11 @@ COMMAND=$(printf '%q ' "$@")
 "$@"
 CODE=$?
 ELAPSED=$(( $(date +%s) - STARTED ))
+FINISHED=$(( STARTED + ELAPSED ))
 CLEAN=1
 if [ -n "$(git status --porcelain=v1)" ]; then CLEAN=0; fi
 
 mkdir -p "$(dirname "$OUT")"
-printf '{"schema_version":"haqp-campaign-clock-v1","reference_machine":"%s","runs":[{"id":"%s","commit":"%s","tree":"%s","command":"%s","elapsed_s":%s,"clean":%s,"result":"%s"]}\n' \
-  "$(hostname -s)" "$RUN_ID" "$COMMIT" "$TREE" "$COMMAND" "$ELAPSED" "$CLEAN" "$([ "$CODE" -eq 0 ] && echo pass || echo fail)" >"$OUT"
+printf '{"schema_version":"haqp-campaign-clock-v1","reference_machine":"%s","runs":[{"id":"%s","commit":"%s","tree":"%s","command":"%s","started_epoch":%s,"finished_epoch":%s,"elapsed_s":%s,"clean":%s,"result":"%s"}]}\n' \
+  "$(hostname -s)" "$RUN_ID" "$COMMIT" "$TREE" "$COMMAND" "$STARTED" "$FINISHED" "$ELAPSED" "$CLEAN" "$([ "$CODE" -eq 0 ] && echo pass || echo fail)" >"$OUT"
 exit "$CODE"

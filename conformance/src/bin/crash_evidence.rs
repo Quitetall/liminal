@@ -130,7 +130,9 @@ fn main() -> anyhow::Result<()> {
     // it: the packet asserted a crash result that nothing on disk corroborated,
     // and the inventory exited 0 with the artifact saying `pass` and the packet
     // saying `registered`. `fuzz.json` already lives here for the same reason.
-    let path = camino::Utf8PathBuf::from("conformance/haqp/evidence/crash.json");
+    let path = std::env::var("HAQP_CRASH_EVIDENCE_OUT")
+        .map(camino::Utf8PathBuf::from)
+        .unwrap_or_else(|_| camino::Utf8PathBuf::from("conformance/haqp/evidence/crash.json"));
     std::fs::create_dir_all(path.parent().expect("evidence parent"))?;
     std::fs::write(&path, serde_json::to_vec_pretty(&evidence)?)?;
     println!(

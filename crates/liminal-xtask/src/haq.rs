@@ -63,6 +63,7 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     verify_fuzz_evidence(root, &packet)?;
     verify_corpus_access_audit(root, &packet)?;
     verify_crash_evidence(root, &packet)?;
+    verify_crash_replay(root, &packet)?;
     let provenance = packet
         .provenance
         .as_ref()
@@ -140,6 +141,52 @@ fn verify_crash_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         .collect::<BTreeSet<_>>();
     verify_recovery_proof_presence(&recorded)?;
     verify_crash_rows(&recorded, &declared)
+}
+
+/// Re-run the fault matrix during qualification and compare its measured
+/// recovery rows with the committed artifact. Hex digests alone are claims;
+/// this replay is the independent producer that makes fabricated terminal,
+/// Basis, and effect proofs inadmissible (P1-A05).
+fn verify_crash_replay(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    let recorded_path = root.join("conformance/haqp/evidence/crash.json");
+    let replay_path = root.join("target/haqp/crash-replay.json");
+    if let Some(parent) = replay_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let status = Command::new("cargo")
+        .current_dir(root)
+        .args([
+            "run",
+            "-q",
+            "-p",
+            "liminal-conformance",
+            "--bin",
+            "crash-evidence",
+        ])
+        .env("HAQP_CRASH_EVIDENCE_OUT", &replay_path)
+        .status()
+        .context("run independent crash-evidence replay")?;
+    anyhow::ensure!(status.success(), "independent crash-evidence replay failed");
+    let recorded: CrashEvidence = serde_json::from_slice(&fs::read(&recorded_path)?)?;
+    let replayed: CrashEvidence = serde_json::from_slice(&fs::read(&replay_path)?)?;
+    require_eq(
+        "crash replay lockfile_blake3",
+        &replayed.lockfile_blake3,
+        &recorded.lockfile_blake3,
+    )?;
+    anyhow::ensure!(
+        replayed.registered == recorded.registered
+            && replayed.exercised == recorded.exercised
+            && replayed.scenarios == recorded.scenarios
+            && replayed.boundaries == recorded.boundaries,
+        "committed crash evidence differs from independent fault-matrix replay"
+    );
+    let declared = packet
+        .crash_boundaries
+        .iter()
+        .map(|row| row.boundary.clone())
+        .collect::<BTreeSet<_>>();
+    verify_crash_rows(&replayed, &declared)
 }
 
 fn verify_recovery_proof_presence(recorded: &CrashEvidence) -> Result<()> {
@@ -3068,6 +3115,38 @@ fn verify_sanitizer_proof(
         let digest = blake3::hash(&fs::read(&path)?).to_hex().to_string();
         require_eq(&format!("{} {label} digest", row.target), expected, &digest)?;
     }
+    let binary_bytes = fs::read(root.join(binary))?;
+    let marker = match row.sanitizer.as_str() {
+        "address" | "leak" => b"asan_globals".as_slice(),
+        "memory" => b"msan".as_slice(),
+        "thread" => b"tsan".as_slice(),
+        _ => unreachable!("sanitizer was checked before proof"),
+    };
+    anyhow::ensure!(
+        binary_bytes
+            .windows(marker.len())
+            .any(|window| window == marker),
+        "{}: sanitizer binary has no {} runtime marker",
+        row.target,
+        row.sanitizer
+    );
+    let probe_output = Command::new(root.join(binary))
+        .arg("-help=1")
+        .output()
+        .with_context(|| format!("{}: execute sanitizer runtime probe", row.target))?;
+    anyhow::ensure!(
+        probe_output.status.success(),
+        "{}: sanitizer runtime probe execution failed",
+        row.target
+    );
+    let mut probe_bytes = probe_output.stdout;
+    probe_bytes.extend_from_slice(&probe_output.stderr);
+    let recorded_probe = fs::read(root.join(probe))?;
+    anyhow::ensure!(
+        probe_bytes == recorded_probe,
+        "{}: retained sanitizer probe differs from fresh binary execution",
+        row.target
+    );
     Ok(())
 }
 
@@ -3088,7 +3167,65 @@ fn verify_fuzz_logs(root: &Utf8Path, recorded: &[FuzzEvidence]) -> Result<()> {
         let bytes = fs::read(&path).with_context(|| format!("read retained fuzz log {path}"))?;
         let digest = blake3::hash(&bytes).to_hex().to_string();
         require_eq("fuzz log_blake3", &row.log_blake3, &digest)?;
+        verify_fuzz_log_metrics(row, &bytes)?;
     }
+    Ok(())
+}
+
+fn verify_fuzz_log_metrics(row: &FuzzEvidence, bytes: &[u8]) -> Result<()> {
+    let text = String::from_utf8_lossy(bytes);
+    let stat_execs = text
+        .lines()
+        .filter_map(|line| line.strip_prefix("stat::number_of_executed_units:"))
+        .last()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .with_context(|| {
+            format!(
+                "{}: retained fuzz log has no execution-count footer",
+                row.target
+            )
+        })?;
+    require_eq(
+        &format!("{} log execution count", row.target),
+        &stat_execs.to_string(),
+        &row.execs.to_string(),
+    )?;
+    let done = text
+        .lines()
+        .filter_map(|line| line.strip_prefix("Done "))
+        .last()
+        .with_context(|| format!("{}: retained fuzz log has no Done footer", row.target))?;
+    let done_execs = done
+        .split_whitespace()
+        .next()
+        .and_then(|value| value.parse::<u64>().ok())
+        .with_context(|| format!("{}: malformed Done execution count", row.target))?;
+    let done_elapsed = done
+        .split(" in ")
+        .nth(1)
+        .and_then(|value| value.split_whitespace().next())
+        .and_then(|value| value.parse::<u64>().ok())
+        .with_context(|| format!("{}: malformed Done elapsed seconds", row.target))?;
+    anyhow::ensure!(
+        done_execs == row.execs,
+        "{}: log Done count {} differs from evidence {}",
+        row.target,
+        done_execs,
+        row.execs
+    );
+    anyhow::ensure!(
+        done_elapsed <= row.elapsed_s && row.elapsed_s <= done_elapsed.saturating_add(60),
+        "{}: log elapsed {}s is not bound to evidence elapsed {}s",
+        row.target,
+        done_elapsed,
+        row.elapsed_s
+    );
+    anyhow::ensure!(
+        text.contains(&format!("-max_total_time={}", row.seconds))
+            && text.contains(&format!("-seed={}", row.seed)),
+        "{}: retained log command is not bound to recorded budget/seed",
+        row.target
+    );
     Ok(())
 }
 
@@ -3297,6 +3434,14 @@ fn verify_corpus_audit_campaign_binding(root: &Utf8Path, audit: &CorpusAccessAud
             row.target,
             target_corpus_marker
         );
+        let target_binary_marker = format!("/fuzz/target/");
+        let target_binary_name = format!("/release/{}", row.target);
+        anyhow::ensure!(
+            trace_lower.contains(&target_binary_marker)
+                && trace_lower.contains(&target_binary_name),
+            "{}: raw trace does not show target binary execution",
+            row.target
+        );
         for forbidden in ["heldout", "conformance/corpora"] {
             anyhow::ensure!(
                 !trace_lower.contains(forbidden),
@@ -3341,6 +3486,12 @@ fn verify_campaign_clock(root: &Utf8Path, expected: Option<&Provenance>) -> Resu
         anyhow::ensure!(
             run.elapsed_s > 0,
             "campaign run {} has zero elapsed seconds",
+            run.id
+        );
+        anyhow::ensure!(
+            run.finished_epoch >= run.started_epoch
+                && run.finished_epoch - run.started_epoch == run.elapsed_s,
+            "campaign run {} elapsed_s is not derived from recorded start/end epochs",
             run.id
         );
         require_eq("campaign run result", &run.result, "pass")?;
@@ -3588,14 +3739,11 @@ fn verify_packet_shape(packet: &Packet) -> Result<()> {
     )?;
     require_eq("status", &packet.status, "proposed")?;
     require_eq("ratification", &packet.ratification, "unratified")?;
-    anyhow::ensure!(
-        matches!(
-            packet.concurrent_code.as_str(),
-            "not_applicable" | "deterministic_schedule_exploration"
-        ),
-        "concurrent_code must be not_applicable or deterministic_schedule_exploration, got {:?}",
-        packet.concurrent_code
-    );
+    require_eq(
+        "concurrent_code",
+        &packet.concurrent_code,
+        "deterministic_schedule_exploration",
+    )?;
     if packet.locked_acceptance_corpora_touched {
         anyhow::bail!("locked_acceptance_corpora_touched must be false");
     }
@@ -5092,6 +5240,8 @@ struct CampaignRun {
     commit: String,
     tree: String,
     command: String,
+    started_epoch: u64,
+    finished_epoch: u64,
     elapsed_s: u64,
     clean: bool,
     result: String,
@@ -5362,7 +5512,7 @@ struct ReviewRecordBlindness {
 /// ignored it — the field was typed `Vec<serde_json::Value>` and read by
 /// nothing, so a scenario that injected no faults, or reported a non-pass
 /// result, satisfied every check.
-#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 struct CrashScenario {
     scenario: String,
@@ -5372,7 +5522,7 @@ struct CrashScenario {
 }
 
 /// One boundary's recorded fault-matrix outcome (committed artifact).
-#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 struct CrashEvidence {
     source_commit: String,
@@ -5387,7 +5537,7 @@ struct CrashEvidence {
     boundaries: Vec<CrashEvidenceBoundary>,
 }
 
-#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 struct CrashEvidenceBoundary {
     boundary: String,
@@ -5397,7 +5547,7 @@ struct CrashEvidenceBoundary {
     result: String,
 }
 
-#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 struct RecoveryPair {
     scenario: String,
@@ -8670,7 +8820,7 @@ mod tests {
             fs::write(
                 &trace_path,
                 format!(
-                    "1 openat(AT_FDCWD, \"/workspace/fuzz/corpus/{target}\", O_RDONLY) = 3\n1 +++ exited with 0 +++\n"
+                    "1 openat(AT_FDCWD, \"/workspace/fuzz/target/x86_64-unknown-linux-gnu/release/{target}\", O_RDONLY) = 3\n1 openat(AT_FDCWD, \"/workspace/fuzz/corpus/{target}\", O_RDONLY) = 3\n1 +++ exited with 0 +++\n"
                 ),
             )
             .expect("trace");
@@ -8797,6 +8947,8 @@ mod tests {
                 commit: "a".repeat(40),
                 tree: "b".repeat(40),
                 command: "just ci".to_owned(),
+                started_epoch: 100,
+                finished_epoch: 8 * 60 * 60 + 101,
                 elapsed_s: 8 * 60 * 60 + 1,
                 clean: true,
                 result: "pass".to_owned(),
@@ -8810,6 +8962,8 @@ mod tests {
             commit: "a".repeat(40),
             tree: "b".repeat(40),
             command: "just ci".to_owned(),
+            started_epoch: 200,
+            finished_epoch: 8 * 60 * 60 + 201,
             elapsed_s: 8 * 60 * 60 + 1,
             clean: true,
             result: "pass".to_owned(),

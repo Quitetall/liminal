@@ -4,7 +4,7 @@
  "ratification": "unratified",
  "qualification_state": "not-run",
  "qualification_stage": "1a",
- "concurrent_code": "not_applicable",
+ "concurrent_code": "deterministic_schedule_exploration",
  "locked_acceptance_corpora_touched": false,
  "residual_risks": [],
  "requirements": [

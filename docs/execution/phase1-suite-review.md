@@ -16,7 +16,7 @@ authorization, suite ratification, or access to locked acceptance inputs.
 | profile | HAQP-1 (ADR-0020) |
 | packet authoring state | predeclared inventory committed |
 | qualification state | NOT_RUN |
-| concurrent implementation | `not_applicable` — Phase 1 has no concurrent implementation; deterministic schedule lane is not applicable |
+| concurrent implementation | `deterministic_schedule_exploration` — graph/daemon synchronization requires serialized schedule evidence |
 | ratification decision | unratified — Brian T1 decision required |
 | Phase 1 execution authorization | NOT_RUN |
 | locked acceptance corpora touched | NOT_RUN — prohibited |
@@ -26,7 +26,7 @@ authorization, suite ratification, or access to locked acceptance inputs.
 | complete post-fix qualification rerun | NOT_RUN |
 | machine inventory | `conformance/haqp/packet.json` (`cargo run -p liminal-xtask -- haq verify-inventory`) |
 | machine inventory BLAKE3 | `aec2dea85361b1f9d87a8e8c4abe8fbf98cd0262d5baac189403e211de979975` |
-| packet digest | `c59ba90a16f4c08929a306ec7029e2778866df77ee63d50d6dc87db65a100d3f` |
+| packet digest | `5f0ece94fabe0d1ba8de04ae50eec147915631531e2576e76e2ea54ea0bb3be5` |
 
 ## Execution lanes
 
