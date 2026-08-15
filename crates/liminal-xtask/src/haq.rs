@@ -3640,7 +3640,7 @@ fn verify_corpus_audit_campaign_binding(root: &Utf8Path, audit: &CorpusAccessAud
             .lines()
             .filter(|line| {
                 line.to_ascii_lowercase().contains(&target_corpus_marker)
-                    && line.contains(" openat(")
+                    && line.contains("openat(")
             })
             .filter_map(|line| line.split_whitespace().next())
             .filter_map(|pid| pid.parse::<u32>().ok())
