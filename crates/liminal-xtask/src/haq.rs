@@ -865,8 +865,8 @@ fn ordered_block_contents(text: &str) -> BTreeMap<String, Vec<String>> {
             .filter(|token| !token.starts_with("{#") || !token.ends_with('}'))
             .map(str::to_owned)
             .collect::<Vec<_>>();
-        // Identity merge may normalize whitespace-only anonymous blocks. They
-        // carry no ordinary content whose order can falsify the oracle.
+        // Blocks containing only marker tokens carry no ordinary content whose
+        // order can falsify this ordering oracle; marker order is checked above.
         if !tokens.is_empty() {
             blocks.insert(marker, tokens);
         }
