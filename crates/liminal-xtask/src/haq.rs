@@ -4189,6 +4189,11 @@ fn canonicalize_trace_path(path: &Path) -> Result<std::path::PathBuf> {
                         .context("traced path has no recoverable leaf")?
                         .to_owned(),
                 );
+                let leaf = missing.last().expect("just pushed missing leaf");
+                anyhow::ensure!(
+                    leaf != std::ffi::OsStr::new(".") && leaf != std::ffi::OsStr::new(".."),
+                    "traced path contains a parent-directory suffix"
+                );
                 cursor = cursor
                     .parent()
                     .context("traced path has no existing ancestor")?;
