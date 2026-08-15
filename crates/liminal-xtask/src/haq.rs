@@ -143,7 +143,8 @@ fn verify_crash_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         .map(|row| row.boundary.clone())
         .collect::<BTreeSet<_>>();
     verify_recovery_proof_presence(&recorded)?;
-    verify_crash_rows(&recorded, &declared)
+    verify_crash_rows(&recorded, &declared)?;
+    verify_crash_injection_bindings(packet, &recorded)
 }
 
 /// Re-run the fault matrix during qualification and compare its measured
@@ -189,7 +190,8 @@ fn verify_crash_replay(root: &Utf8Path, packet: &Packet) -> Result<()> {
         .iter()
         .map(|row| row.boundary.clone())
         .collect::<BTreeSet<_>>();
-    verify_crash_rows(&replayed, &declared)
+    verify_crash_rows(&replayed, &declared)?;
+    verify_crash_injection_bindings(packet, &replayed)
 }
 
 fn verify_recovery_proof_presence(recorded: &CrashEvidence) -> Result<()> {
@@ -1029,6 +1031,11 @@ fn verify_crash_rows(recorded: &CrashEvidence, declared: &BTreeSet<String>) -> R
         if row.occurrences_exercised == 0 {
             anyhow::bail!("crash boundary {} was never exercised", row.boundary);
         }
+        anyhow::ensure!(
+            row.injected,
+            "crash boundary {} has no measured injection receipt",
+            row.boundary
+        );
         if row.result != "pass" {
             anyhow::bail!(
                 "crash boundary {} reports result {:?}",
@@ -1044,6 +1051,46 @@ fn verify_crash_rows(recorded: &CrashEvidence, declared: &BTreeSet<String>) -> R
                 row.staged_residue
             );
         }
+    }
+    Ok(())
+}
+
+/// Packet booleans describe both sides of each durable transition. Bind them
+/// to measured evidence rows, rather than accepting packet-controlled claims
+/// that the runner injected both sides (P1-A12).
+fn verify_crash_injection_bindings(packet: &Packet, recorded: &CrashEvidence) -> Result<()> {
+    let measured = recorded
+        .boundaries
+        .iter()
+        .map(|row| (row.boundary.as_str(), row.injected))
+        .collect::<BTreeMap<_, _>>();
+    for declaration in &packet.crash_boundaries {
+        let (prefix, suffix) = declaration.boundary.split_once('/').with_context(|| {
+            format!("crash boundary {:?} lacks namespace", declaration.boundary)
+        })?;
+        let suffix = suffix
+            .strip_prefix("before_")
+            .or_else(|| suffix.strip_prefix("after_"))
+            .with_context(|| {
+                format!(
+                    "crash boundary {:?} lacks before/after side",
+                    declaration.boundary
+                )
+            })?;
+        let before = format!("{prefix}/before_{suffix}");
+        let after = format!("{prefix}/after_{suffix}");
+        let measured_before = measured.get(before.as_str()).copied().unwrap_or(false);
+        let measured_after = measured.get(after.as_str()).copied().unwrap_or(false);
+        anyhow::ensure!(
+            declaration.before == measured_before,
+            "crash boundary {} before injection claim differs from measured evidence",
+            declaration.boundary
+        );
+        anyhow::ensure!(
+            declaration.after == measured_after,
+            "crash boundary {} after injection claim differs from measured evidence",
+            declaration.boundary
+        );
     }
     Ok(())
 }
@@ -1675,6 +1722,18 @@ fn verify_review_attempts(
                 && !target_file.split('/').any(|part| part == ".."),
             "{who}: attempt {:?} target must be a safe file:coordinate",
             attempt.id
+        );
+        anyhow::ensure!(
+            attempt.attempt.contains(&attempt.target),
+            "{who}: attempt {:?} falsification claim must quote exact target {}",
+            attempt.id,
+            attempt.target
+        );
+        anyhow::ensure!(
+            attempt.observed_result.contains(&attempt.target),
+            "{who}: attempt {:?} observation must quote exact target {}",
+            attempt.id,
+            attempt.target
         );
         let target_lower = target_file.to_ascii_lowercase();
         anyhow::ensure!(
@@ -5016,6 +5075,7 @@ fn verify_packet_shape(packet: &Packet) -> Result<()> {
         );
     }
     verify_evidence_coverage(packet)?;
+    verify_test_registry(packet)?;
     verify_mutant_inventory(packet)?;
     verify_kill_concentration(packet)?;
     verify_canary_inventory(packet)?;
@@ -5101,6 +5161,33 @@ fn verify_evidence_coverage(packet: &Packet) -> Result<()> {
             );
         }
     }
+    Ok(())
+}
+
+/// Closed digest over test identity, executable name, requirement mapping, and
+/// evidence kinds. Existence checks alone let a packet remap broad, unrelated
+/// test names to satisfy coverage; this registry makes the authoritative
+/// mapping tamper-evident (P1-A04).
+const TEST_REGISTRY_SHA256: &str =
+    "7a29add0e81657e17786934010638abf1ea99dfee4e162921a9ef2699197d447";
+
+fn verify_test_registry(packet: &Packet) -> Result<()> {
+    let mut canonical = String::new();
+    for test in &packet.tests {
+        canonical.push_str(&test.id);
+        canonical.push('\0');
+        canonical.push_str(&test.name);
+        canonical.push('\0');
+        canonical.push_str(&test.requirements.join("\x1f"));
+        canonical.push('\0');
+        canonical.push_str(&test.evidence.join("\x1f"));
+        canonical.push('\0');
+    }
+    let digest = sha256_text(&canonical);
+    anyhow::ensure!(
+        digest == TEST_REGISTRY_SHA256,
+        "test registry digest differs from closed authority: got {digest}, expected {TEST_REGISTRY_SHA256}"
+    );
     Ok(())
 }
 
@@ -5727,7 +5814,11 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
     ];
     const GRAPH: [(&str, usize, &str); 13] = [
-        ("crates/liminal-graph/src/node.rs", 57, "pub fn contains("),
+        (
+            "crates/liminal-graph/src/node.rs",
+            58,
+            "self.0 & other.0 == other.0",
+        ),
         ("crates/liminal-graph/src/node.rs", 63, "pub fn union("),
         ("crates/liminal-graph/src/relation.rs", 51, "pub fn node("),
         (
@@ -7132,6 +7223,8 @@ struct CrashEvidence {
 #[serde(deny_unknown_fields)]
 struct CrashEvidenceBoundary {
     boundary: String,
+    /// Receipt that runtime fault injection reached this exact boundary.
+    injected: bool,
     occurrences_exercised: u64,
     recovery_pairs: Vec<RecoveryPair>,
     staged_residue: String,
@@ -8986,8 +9079,10 @@ mod tests {
             "unexpected error: {err}"
         );
 
-        // The same packet stays valid at the inventory layer.
-        verify_packet_shape(&packet).expect("predeclared names are legal in a proposed inventory");
+        // Closed test registry rejects remapping even before qualification.
+        let err = verify_packet_shape(&packet)
+            .expect_err("a remapped test name must differ from closed registry");
+        assert!(err.to_string().contains("test registry digest"), "{err}");
     }
 
     #[test]
@@ -9367,12 +9462,13 @@ mod tests {
 
     fn attempt(id: &str) -> ReviewRecordAttempt {
         let index = id.trim_start_matches('A').parse::<usize>().unwrap_or(0);
+        let target = "crates/liminal-xtask/src/haq.rs:1";
         ReviewRecordAttempt {
             id: id.to_owned(),
             attack_class: REVIEW_ATTACK_CLASSES[index % REVIEW_ATTACK_CLASSES.len()].to_owned(),
-            target: "crates/liminal-xtask/src/haq.rs:1".to_owned(),
-            attempt: format!("attempted concrete falsification against source coordinate {id}"),
-            observed_result: format!("observed verifier rejection for the concrete mutation {id}"),
+            target: target.to_owned(),
+            attempt: format!("attempted concrete falsification at {target} for case {id}"),
+            observed_result: format!("observed verifier rejection at {target} for case {id}"),
             independently_reproduced: false,
             classification: "caught_violation".to_owned(),
             resolved: false,
@@ -9464,8 +9560,10 @@ mod tests {
         let mut first = review_record(1, "openai", "codex");
         first.attempts[0].attack_class = "vacuity".to_owned();
         first.attempts[0].target = "crates/liminal-xtask/src/haq.rs:1".to_owned();
-        first.attempts[0].attempt = "first reviewer wording".to_owned();
-        first.attempts[0].observed_result = "first reviewer observation".to_owned();
+        first.attempts[0].attempt =
+            "first reviewer falsification at crates/liminal-xtask/src/haq.rs:1".to_owned();
+        first.attempts[0].observed_result =
+            "first reviewer observation at crates/liminal-xtask/src/haq.rs:1".to_owned();
         first.attempts[0].classification = "verified_defect".to_owned();
         first.attempts[0].independently_reproduced = true;
         first.findings = vec![serde_json::json!({"id": "P1-F1", "attempt_id": "A0"})];

@@ -108,6 +108,7 @@ fn main() -> anyhow::Result<()> {
             // sides of every pair are exercised or the check above failed.
             serde_json::json!({
                 "boundary": name,
+                "injected": exercised.contains_key(name),
                 "occurrences_exercised": exercised.get(name).copied().unwrap_or(0),
                 "recovery_pairs": recovery_by_boundary.get(name).cloned().unwrap_or_default(),
                 "staged_residue": "none",

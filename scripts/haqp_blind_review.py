@@ -454,15 +454,17 @@ def parse_json(text: str) -> dict[str, Any]:
             raise ValueError(f"attempt {identifier} has unknown attack class")
         if any(not str(attempt[field]).strip() for field in required - {"independently_reproduced"}):
             raise ValueError(f"attempt {identifier} contains an empty field")
+        target = str(attempt["target"])
         for field in ("attempt", "observed_result"):
             prose = str(attempt[field]).strip()
             if len(prose) < 24 or len(prose.split()) < 4:
                 raise ValueError(f"attempt {identifier} {field} is not substantive")
+            if target not in prose:
+                raise ValueError(f"attempt {identifier} {field} must quote exact target")
         if not isinstance(attempt["independently_reproduced"], bool):
             raise ValueError(f"attempt {identifier} independently_reproduced must be boolean")
         if not isinstance(attempt["resolved"], bool):
             raise ValueError(f"attempt {identifier} resolved must be boolean")
-        target = str(attempt["target"])
         target_file, separator, target_line = target.rpartition(":")
         if (
             not separator
@@ -597,7 +599,8 @@ def run_pass(
         "For false_positive or caught_violation attempts, record the attempt only and emit NO finding object. "
         "Do not link findings to false_positive, caught_violation, or unknown attempts. "
         "Include at least one caught_violation attempt where a deliberate bad claim is rejected by the suite. "
-        "Every attempt action and observation must be substantive (at least 24 characters and 4 words). "
+        "Every attempt action and observation must be substantive (at least 24 characters and 4 words) "
+        "and must quote the exact target coordinate literally in both fields. "
         "A false_positive attempt must set independently_reproduced=true as reproduction evidence. "
         "A resolved verified_defect attempt must also carry resolution={commit,coordinate,evidence_path,evidence_sha256}; "
         "its evidence file must contain resolution_result: pass, verification_command:, and verification_exit_code: 0. "
@@ -761,8 +764,8 @@ def self_test() -> int:
                 "id": f"A{i}",
                 "attack_class": "vacuity",
                 "target": "haq.rs:1",
-                "attempt": "attempted concrete falsification against source",
-                "observed_result": "observed verifier rejection for mutation",
+                "attempt": "attempted concrete falsification against haq.rs:1 source coordinate",
+                "observed_result": "observed verifier rejection at haq.rs:1 for mutation",
                 "independently_reproduced": True,
                 "classification": "caught_violation",
                 "resolved": False,

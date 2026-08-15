@@ -1148,7 +1148,7 @@
   "id": "P1-M014",
   "family": "graph/interchange codecs",
   "operator": "predicate-deletion",
-    "source": "crates/liminal-graph/src/node.rs:57",
+   "source": "crates/liminal-graph/src/node.rs:58",
    "requirement": "P1-R008",
    "defect": "drop graph round-trip equality",
    "killing_tests": [
