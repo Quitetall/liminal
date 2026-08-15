@@ -5919,14 +5919,22 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
             64,
             "NodeFlags(self.0 | other.0)",
         ),
-        ("crates/liminal-graph/src/relation.rs", 51, "pub fn node("),
         (
             "crates/liminal-graph/src/relation.rs",
-            80,
-            "pub fn contains(",
+            76,
+            "pub const TOMBSTONE: RelationFlags = RelationFlags(1)",
         ),
-        ("crates/liminal-graph/src/store/mod.rs", 279, "pub fn open("),
-        ("crates/liminal-graph/src/store/mod.rs", 301, "pub fn head("),
+        (
+            "crates/liminal-graph/src/store/mod.rs",
+            100,
+            "node.revision.0 += 1",
+        ),
+        ("crates/liminal-graph/src/store/mod.rs", 81, "match op {"),
+        (
+            "crates/liminal-graph/src/store/mod.rs",
+            302,
+            "Ok(self.lock()?.state.head)",
+        ),
         (
             "crates/liminal-graph/src/store/mod.rs",
             306,
@@ -5998,7 +6006,11 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
             "fn byte_offset(",
         ),
         ("crates/liminal-source/src/file.rs", 28, "pub fn observe("),
-        ("crates/liminal-source/src/file.rs", 118, "pub fn stage("),
+        (
+            "crates/liminal-source/src/file.rs",
+            140,
+            "for entry in entries.flatten()",
+        ),
         (
             "crates/liminal-source/src/file.rs",
             133,
@@ -6045,8 +6057,8 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            264,
-            "fn acknowledge_step(",
+            274,
+            "self.commit_intent(id, intent, &format!(\"ack:{step_id}\"), origin)?;",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",

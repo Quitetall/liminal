@@ -1124,7 +1124,7 @@
   "operator": "oracle-short-circuit",
     "source": "crates/liminal-source/src/paragraph.rs:76",
    "requirement": "P1-R004",
-   "defect": "compare output to itself",
+   "defect": "replace ID-presence oracle branch with a constant",
    "killing_tests": [
     "P1-T18",
     "P1-T04"
@@ -1174,7 +1174,7 @@
   "id": "P1-M016",
   "family": "graph/interchange codecs",
   "operator": "threshold-plus-one",
-    "source": "crates/liminal-graph/src/relation.rs:51",
+    "source": "crates/liminal-graph/src/relation.rs:76",
    "requirement": "P1-R009",
    "defect": "advance relation count",
    "killing_tests": [
@@ -1187,7 +1187,7 @@
   "id": "P1-M017",
   "family": "graph/interchange codecs",
   "operator": "threshold-minus-one",
-    "source": "crates/liminal-graph/src/relation.rs:80",
+    "source": "crates/liminal-graph/src/store/mod.rs:100",
    "requirement": "P1-R009",
    "defect": "drop relation count",
    "killing_tests": [
@@ -1200,7 +1200,7 @@
   "id": "P1-M018",
   "family": "graph/interchange codecs",
   "operator": "missing-enum-dispatch",
-    "source": "crates/liminal-graph/src/store/mod.rs:279",
+    "source": "crates/liminal-graph/src/store/mod.rs:81",
    "requirement": "P1-R010",
    "defect": "drop edge kind dispatch",
    "killing_tests": [
@@ -1213,7 +1213,7 @@
   "id": "P1-M019",
   "family": "graph/interchange codecs",
   "operator": "success-error-substitution",
-    "source": "crates/liminal-graph/src/store/mod.rs:301",
+    "source": "crates/liminal-graph/src/store/mod.rs:302",
    "requirement": "P1-R011",
    "defect": "accept invalid interchange payload",
    "killing_tests": [
@@ -1447,7 +1447,7 @@
   "id": "P1-M037",
   "family": "transforms/projections",
   "operator": "ordering-nondeterminism",
-    "source": "crates/liminal-source/src/file.rs:118",
+    "source": "crates/liminal-source/src/file.rs:140",
    "requirement": "P1-R013",
    "defect": "permute independent transform order",
    "killing_tests": [
@@ -1590,7 +1590,7 @@
   "id": "P1-M048",
   "family": "repair/ILRP/recovery",
   "operator": "skipped-durable-transition",
-    "source": "crates/liminal-jurisdiction/src/ilrp.rs:264",
+    "source": "crates/liminal-jurisdiction/src/ilrp.rs:274",
    "requirement": "P1-R015",
    "defect": "skip ack persistence",
    "killing_tests": [
