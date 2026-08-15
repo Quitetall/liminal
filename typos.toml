@@ -21,6 +21,7 @@ extend-exclude = [
   "target/**",
   "conformance/fixtures/**",
   "conformance/haqp/evidence/logs/**",
+  "conformance/haqp/evidence/probes/**",
   "conformance/corpora/**",
   "conformance/golden/**",
   "**/snapshots/*.snap",
