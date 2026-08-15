@@ -3273,8 +3273,8 @@ fn verify_corpus_audit_campaign_binding(root: &Utf8Path, audit: &CorpusAccessAud
                 "{manifest}: corpus access audit observed forbidden path fragment {forbidden:?}"
             );
         }
-        let trace_lower = String::from_utf8_lossy(&trace_bytes).to_ascii_lowercase();
         let trace_text = String::from_utf8_lossy(&trace_bytes);
+        let trace_lower = trace_text.to_ascii_lowercase();
         let pid_prefix = format!("{} ", row.trace_pid);
         anyhow::ensure!(
             trace_text.lines().any(|line| line.starts_with(&pid_prefix)),
@@ -6387,14 +6387,13 @@ fn case_invalidation(rng: &mut Rng) -> Result<Case> {
         })
         .find(|candidate| !expected.contains(candidate))
         .expect("finite generated read set leaves a negative witness");
-    let extra = (0..u32::MAX)
-        .map(|index| {
-            liminal_id::JurisdictionKey::Path(liminal_id::PathId(
-                format!("extra/{category}/__haqp_{index}").into(),
-            ))
-        })
-        .find(|candidate| !expected.contains(candidate))
-        .expect("finite generated read set leaves an extra dependency");
+    let extra = liminal_id::JurisdictionKey::Path(liminal_id::PathId(
+        format!("extra/{category}/__haqp_0").into(),
+    ));
+    anyhow::ensure!(
+        !expected.contains(&extra),
+        "extra dependency key collided with generated read set"
+    );
     let mut witness =
         independent_oracle_source_invalidation(&mut deps, &expected, &unrelated, &extra)?;
     witness.extend_from_slice(&basis_witness);

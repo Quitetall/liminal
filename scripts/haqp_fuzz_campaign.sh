@@ -92,7 +92,16 @@ for t in "${TARGETS[@]}"; do
     code=$?
     audit_tracer="unavailable"
   fi
+  # The shell background PID can differ from strace's final tracer PID when
+  # env-assignment/exec wrappers fork. Bind evidence to the PID actually
+  # present in raw strace output, not the launcher process.
   trace_pid=${fuzz_pid:-0}
+  if [ -s "$audit_raw" ]; then
+    traced_pid=$(awk '/\+\+\+ exited with 0 \+\+\+$/ { pid=$1 } END { print pid + 0 }' "$audit_raw")
+    if [ "${traced_pid:-0}" -gt 0 ]; then
+      trace_pid=$traced_pid
+    fi
+  fi
   trace_exit_code=$code
   trace_complete=false
   if [ -s "$audit_raw" ] && grep -q '+++ exited with 0 +++' "$audit_raw"; then

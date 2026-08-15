@@ -15,10 +15,10 @@
       "command": "cargo +nightly fuzz build -s address cst_parse && ASAN_OPTIONS=detect_leaks=0 strace -f -q -e trace=openat,openat2 -o conformance/haqp/evidence/access/cst_parse.trace cargo +nightly fuzz run -s address cst_parse -- -max_total_time=1800 -seed=20260725 -rss_limit_mb=4096 -print_final_stats=1",
       "trace": "conformance/haqp/evidence/access/cst_parse.trace",
       "trace_blake3": "2c15ee7c68edac028ea50d346947e084e792c40316dc7ecbf95d642bd1a9084a",
-      "trace_pid": 2848462,
+      "trace_pid": 2848477,
       "trace_exit_code": 0,
       "trace_complete": true,
-      "process_binding": "14044f9e8f243052dd6317fbb4edd086b85a797e63ba51d7e055229a2d57c827"
+      "process_binding": "84e679647df104f99d6b7146cf69cb56dac138b49887c2802df0a5acf261c729"
     },
     {
       "target": "format_idempotent",
@@ -31,10 +31,10 @@
       "command": "cargo +nightly fuzz build -s address format_idempotent && ASAN_OPTIONS=detect_leaks=0 strace -f -q -e trace=openat,openat2 -o conformance/haqp/evidence/access/format_idempotent.trace cargo +nightly fuzz run -s address format_idempotent -- -max_total_time=1800 -seed=20260725 -rss_limit_mb=4096 -print_final_stats=1",
       "trace": "conformance/haqp/evidence/access/format_idempotent.trace",
       "trace_blake3": "4b60abf39276d714a96b0a450383c7b4c4304e052737fa0f92dea025f0b5c4d1",
-      "trace_pid": 3119939,
+      "trace_pid": 3119941,
       "trace_exit_code": 0,
       "trace_complete": true,
-      "process_binding": "1b1d5e2ba3f928d4cd7e5b54f7bf5c706834c5fddadcb22d4180374666536b08"
+      "process_binding": "a16c0c492c6336cb335f0af36e29b6fa1ff4d66dbef5a5f7938cb0865f42c417"
     },
     {
       "target": "canonical_round_trip",
@@ -47,10 +47,10 @@
       "command": "cargo +nightly fuzz build -s address canonical_round_trip && ASAN_OPTIONS=detect_leaks=0 strace -f -q -e trace=openat,openat2 -o conformance/haqp/evidence/access/canonical_round_trip.trace cargo +nightly fuzz run -s address canonical_round_trip -- -max_total_time=1800 -seed=20260725 -rss_limit_mb=4096 -print_final_stats=1",
       "trace": "conformance/haqp/evidence/access/canonical_round_trip.trace",
       "trace_blake3": "b63108eb9fdeb61d8e74e0e77b3d39bca2a26153da518d99053acd7d87708f4e",
-      "trace_pid": 3151106,
+      "trace_pid": 3151147,
       "trace_exit_code": 0,
       "trace_complete": true,
-      "process_binding": "3cb7d8b7c5e93c0ebb36a157ab2f7adc4d4c6732532ede870d536d627ab034ae"
+      "process_binding": "503c72dfbeb2263a6b6513c11dda19666b5dc271f0c2f364946f3091c862bab1"
     },
     {
       "target": "incremental_full_equivalence",
@@ -63,10 +63,10 @@
       "command": "cargo +nightly fuzz build -s address incremental_full_equivalence && ASAN_OPTIONS=detect_leaks=0 strace -f -q -e trace=openat,openat2 -o conformance/haqp/evidence/access/incremental_full_equivalence.trace cargo +nightly fuzz run -s address incremental_full_equivalence -- -max_total_time=1800 -seed=20260725 -rss_limit_mb=4096 -print_final_stats=1",
       "trace": "conformance/haqp/evidence/access/incremental_full_equivalence.trace",
       "trace_blake3": "e312985af64b05e9c7fd007e446e13d4002206d8330607642c80e777e6e89475",
-      "trace_pid": 3182122,
+      "trace_pid": 3182132,
       "trace_exit_code": 0,
       "trace_complete": true,
-      "process_binding": "db76906853ca718011e36485f19277f710a7af5aace1adb82ac63c8ab1d72aa4"
+      "process_binding": "8287642872eb8d6b0296fb9fea8d807b837473246656bf9448e3be65432f5fc6"
     },
     {
       "target": "html_render",
