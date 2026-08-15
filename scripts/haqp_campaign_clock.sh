@@ -20,8 +20,8 @@ TREE=$(git rev-parse "${COMMIT}^{tree}")
 COMMAND=$(printf '%q ' "$@")
 "$@"
 CODE=$?
-ELAPSED=$(( $(date +%s) - STARTED ))
-FINISHED=$(( STARTED + ELAPSED ))
+FINISHED=$(date +%s)
+ELAPSED=$(( FINISHED - STARTED ))
 CLEAN=1
 if [ -n "$(git status --porcelain=v1)" ]; then CLEAN=0; fi
 

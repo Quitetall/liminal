@@ -3077,6 +3077,8 @@ fn verify_sanitizer_proof(
         row.target,
         proof.runtime_probe_exit_code
     );
+    let binary_path = safe_repo_path(root, &proof.binary, "sanitizer binary")?;
+    let probe_path = safe_repo_path(root, &proof.runtime_probe, "sanitizer runtime probe")?;
     let binary = Utf8Path::new(&proof.binary);
     anyhow::ensure!(
         binary.is_relative()
@@ -3105,7 +3107,11 @@ fn verify_sanitizer_proof(
             &proof.runtime_probe_blake3,
         ),
     ] {
-        let path = root.join(path);
+        let path = if path == binary {
+            binary_path.clone()
+        } else {
+            probe_path.clone()
+        };
         let metadata =
             fs::symlink_metadata(&path).with_context(|| format!("{path}: {label} is required"))?;
         anyhow::ensure!(
@@ -3115,7 +3121,7 @@ fn verify_sanitizer_proof(
         let digest = blake3::hash(&fs::read(&path)?).to_hex().to_string();
         require_eq(&format!("{} {label} digest", row.target), expected, &digest)?;
     }
-    let binary_bytes = fs::read(root.join(binary))?;
+    let binary_bytes = fs::read(&binary_path)?;
     let marker = match row.sanitizer.as_str() {
         "address" | "leak" => b"asan_globals".as_slice(),
         "memory" => b"msan".as_slice(),
@@ -3130,7 +3136,7 @@ fn verify_sanitizer_proof(
         row.target,
         row.sanitizer
     );
-    let probe_output = Command::new(root.join(binary))
+    let probe_output = Command::new(&binary_path)
         .arg("-help=1")
         .output()
         .with_context(|| format!("{}: execute sanitizer runtime probe", row.target))?;
@@ -3141,7 +3147,7 @@ fn verify_sanitizer_proof(
     );
     let mut probe_bytes = probe_output.stdout;
     probe_bytes.extend_from_slice(&probe_output.stderr);
-    let recorded_probe = fs::read(root.join(probe))?;
+    let recorded_probe = fs::read(&probe_path)?;
     anyhow::ensure!(
         probe_bytes == recorded_probe,
         "{}: retained sanitizer probe differs from fresh binary execution",
@@ -3214,6 +3220,8 @@ fn verify_fuzz_log_metrics(row: &FuzzEvidence, bytes: &[u8]) -> Result<()> {
         row.execs
     );
     anyhow::ensure!(
+        // Fuzzer-reported duration may omit setup/teardown; allow one minute
+        // for launcher overhead while still binding elapsed evidence to log.
         done_elapsed <= row.elapsed_s && row.elapsed_s <= done_elapsed.saturating_add(60),
         "{}: log elapsed {}s is not bound to evidence elapsed {}s",
         row.target,
