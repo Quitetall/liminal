@@ -1,0 +1,12 @@
+{
+  "schema_version": "haqp-concurrency-v1",
+  "implementation": "not_applicable",
+  "mode": "not_applicable",
+  "reason": "no concurrent implementation exists; deterministic schedule exploration is reserved for Phase 6",
+  "source_anchor": "docs/execution/M21.md:13",
+  "runner": "",
+  "source_commit": "ca5be196d87ca94a9ada73a73da8d16e586e1073",
+  "source_tree": "7d39d492edd1dcd18131f2691a535021bd3eb328",
+  "oracle_id": "not_applicable",
+  "schedules": []
+}
