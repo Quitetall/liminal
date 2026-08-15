@@ -3469,10 +3469,9 @@ fn verify_sanitizer_proof(
     )?;
     let build_log_text = String::from_utf8_lossy(&build_log_bytes);
     // Cargo's build output does not repeat the shell command when the wrapper
-    // records stdout only. The command is already closed by `build_command`;
-    // this log proves successful completion, while fixed-base replay below
-    // proves the binary came from that command rather than from a self-authored
-    // marker.
+    // records stdout only. The exact command is closed by `build_command`,
+    // artifact digests, and fixed-base replay; this log only proves successful
+    // build completion.
     anyhow::ensure!(
         build_log_text.contains("Finished") || build_log_text.contains("finished"),
         "{} sanitizer build log does not show successful build",
@@ -7223,7 +7222,7 @@ fn run_sanitizer_canary(root: &Utf8Path) -> Result<()> {
         .context("sanitizer canary requires retained sanitizer proof")?;
     let scratch = liminal_scratch::ScratchDir::new("haq-sanitizer-canary")?;
     let scratch_root = scratch.path();
-    let binary_path = root.join(&proof.binary);
+    let binary_path = safe_repo_path(root, &proof.binary, "sanitizer canary binary")?;
     let mut binary = fs::read(&binary_path)?;
     let marker = match row.sanitizer.as_str() {
         "address" | "leak" => b"asan_globals".as_slice(),
@@ -7242,15 +7241,47 @@ fn run_sanitizer_canary(root: &Utf8Path) -> Result<()> {
         replaced,
         "sanitizer canary source binary has no runtime marker"
     );
-    let scratch_binary = scratch_root.join(&proof.binary);
-    let scratch_probe = scratch_root.join(&proof.runtime_probe);
-    let scratch_log = scratch_root.join(&proof.build_log);
-    fs::create_dir_all(scratch_binary.parent().expect("binary parent"))?;
-    fs::create_dir_all(scratch_probe.parent().expect("probe parent"))?;
-    fs::create_dir_all(scratch_log.parent().expect("log parent"))?;
-    fs::write(&scratch_binary, &binary)?;
-    fs::copy(root.join(&proof.runtime_probe), &scratch_probe)?;
-    fs::copy(root.join(&proof.build_log), &scratch_log)?;
+    for (path, label) in [
+        (&proof.binary, "sanitizer canary binary"),
+        (&proof.runtime_probe, "sanitizer canary probe"),
+        (&proof.build_log, "sanitizer canary build log"),
+    ] {
+        let candidate = Utf8Path::new(path);
+        anyhow::ensure!(
+            !candidate.is_absolute()
+                && !candidate
+                    .components()
+                    .any(|part| part == camino::Utf8Component::ParentDir)
+                && !is_locked_acceptance_path(path),
+            "{label} path {path:?} escapes scratch evidence root"
+        );
+    }
+    let scratch_binary_path = scratch_root.join(&proof.binary);
+    let scratch_probe_path = scratch_root.join(&proof.runtime_probe);
+    let scratch_log_path = scratch_root.join(&proof.build_log);
+    fs::create_dir_all(scratch_binary_path.parent().expect("binary parent"))?;
+    fs::create_dir_all(scratch_probe_path.parent().expect("probe parent"))?;
+    fs::create_dir_all(scratch_log_path.parent().expect("log parent"))?;
+    fs::write(&scratch_binary_path, &binary)?;
+    let runtime_probe_path = safe_repo_path(root, &proof.runtime_probe, "sanitizer canary probe")?;
+    let build_log_path = safe_repo_path(root, &proof.build_log, "sanitizer canary build log")?;
+    fs::copy(runtime_probe_path, &scratch_probe_path)?;
+    fs::copy(build_log_path, &scratch_log_path)?;
+    let _scratch_binary = safe_repo_path(
+        scratch_root,
+        &proof.binary,
+        "sanitizer canary scratch binary",
+    )?;
+    let scratch_probe = safe_repo_path(
+        scratch_root,
+        &proof.runtime_probe,
+        "sanitizer canary scratch probe",
+    )?;
+    let scratch_log = safe_repo_path(
+        scratch_root,
+        &proof.build_log,
+        "sanitizer canary scratch build log",
+    )?;
     proof.binary_blake3 = hex_digest(&binary);
     proof.runtime_probe_blake3 = hex_digest(&fs::read(&scratch_probe)?);
     proof.build_log_blake3 = hex_digest(&fs::read(&scratch_log)?);
