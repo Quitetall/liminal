@@ -5322,6 +5322,19 @@ fn verify_mutant_source_coordinates(root: &Utf8Path, packet: &Packet) -> Result<
                 file,
                 line
             );
+            anyhow::ensure!(
+                patch
+                    .before
+                    .lines()
+                    .filter(|text| !text.trim().is_empty())
+                    .count()
+                    == 1
+                    && source_line.trim() == patch_anchor,
+                "{} patch coordinate {}:{} is not an exact single-line source anchor",
+                mutant.id,
+                file,
+                line
+            );
             verify_mutant_operator_patch(&mutant.operator, patch)?;
         }
     }
