@@ -5746,12 +5746,15 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
         "oracle-short-circuit" => {
             ((before.contains("&&") || before.contains("||"))
                 && (after.contains("return") || after.contains("Ok(")))
-                || (before.contains("is_some") && before != after)
+                // P1-M012's closed anchor; exact replacements only.
+                || (before == "if id.is_some() {"
+                    && matches!(after, "if true {" | "if false {"))
         }
         "ordering-nondeterminism" => {
             ((before.contains("sort") || before.contains("BTree"))
                 && (!after.contains("sort") || after.contains("Hash")))
-                || (before.contains("let lines: Vec") && before != after)
+                // P1-M011's closed anchor; require a Hash collection.
+                || (before.starts_with("let lines: Vec<") && after.contains("Hash"))
         }
         "stale-basis-acceptance" => {
             before.to_ascii_lowercase().contains("basis")
@@ -5763,20 +5766,22 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
         "disabled-crash-point" => {
             (before.to_ascii_lowercase().contains("crash")
                 && !after.to_ascii_lowercase().contains("crash"))
-                || (before.contains("fail_after") && before != after)
+                // P1-M010 disables only its injected branch.
+                || (before == "if fail_after.is_some_and(|limit| committed >= limit) {"
+                    && after == "if false {")
         }
         "broadened-allow-list" => {
             (!before.contains('*') && after.contains('*'))
                 || (before.contains("ensure!") && !after.contains("ensure!"))
-                || (before.contains("id_str.is_empty") && before != after)
-                || (before.contains("match &aux.value") && before != after)
+                // P1-M013 and P1-M026 are admitted by exact anchors below.
+                || (before == "if id_str.is_empty()" && after == "if false")
+                || (before == "match &aux.value {"
+                    && !after.contains("match")
+                    && (after.contains("if let") || after.contains("_")))
         }
         "wrong-holder-selection" => {
-            let holderish = |text: &str| {
-                let lower = text.to_ascii_lowercase();
-                lower.contains("holder") || lower.contains("basis") || lower.contains("self.")
-            };
-            holderish(before) && holderish(after) && before != after
+            // P1-M008: basis getter redirected to text; no generic self.* escape.
+            before == "&self.basis" && after == "&self.text"
         }
         _ => false,
     };
@@ -8959,6 +8964,46 @@ mod tests {
         };
         verify_mutant_operator_patch("missing-enum-dispatch", &patch)
             .expect("the declared operator must be reachable at its source anchor");
+    }
+
+    #[test]
+    fn specialized_mutant_operators_reject_unrelated_line_edits() {
+        let oracle = MutantPatch {
+            file: "x".to_owned(),
+            before: "if id.is_some() {".to_owned(),
+            after: "if true {".to_owned(),
+        };
+        verify_mutant_operator_patch("oracle-short-circuit", &oracle)
+            .expect("closed oracle anchor is valid");
+        let mut unrelated = oracle.clone();
+        unrelated.after = "if id.is_none() {".to_owned();
+        verify_mutant_operator_patch("oracle-short-circuit", &unrelated)
+            .expect_err("predicate inversion is not an oracle bypass");
+
+        let ordering = MutantPatch {
+            file: "x".to_owned(),
+            before: "let lines: Vec<(usize, &str)> = input.lines().enumerate().collect();"
+                .to_owned(),
+            after: "let lines: HashSet<(usize, &str)> = input.lines().collect();".to_owned(),
+        };
+        verify_mutant_operator_patch("ordering-nondeterminism", &ordering)
+            .expect("Hash replacement is nondeterministic");
+        let mut unrelated_ordering = ordering.clone();
+        unrelated_ordering.after = unrelated_ordering.before.replace("Vec", "VecDeque");
+        verify_mutant_operator_patch("ordering-nondeterminism", &unrelated_ordering)
+            .expect_err("type rename is not nondeterminism");
+
+        let holder = MutantPatch {
+            file: "x".to_owned(),
+            before: "&self.basis".to_owned(),
+            after: "&self.text".to_owned(),
+        };
+        verify_mutant_operator_patch("wrong-holder-selection", &holder)
+            .expect("closed holder redirect is valid");
+        let mut unrelated_holder = holder.clone();
+        unrelated_holder.after = "&self.other".to_owned();
+        verify_mutant_operator_patch("wrong-holder-selection", &unrelated_holder)
+            .expect_err("generic self-field change is not holder selection");
     }
 
     #[test]
