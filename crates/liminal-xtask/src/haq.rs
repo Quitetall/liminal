@@ -4629,11 +4629,7 @@ fn verify_residual_risks(root: &Utf8Path, packet: &Packet) -> Result<()> {
                 file
             );
         } else {
-            anyhow::ensure!(
-                risk.evidence.len() == 64 && risk.evidence.chars().all(|ch| ch.is_ascii_hexdigit()),
-                "risk {} evidence must be an exact file:coordinate or 64-hex digest",
-                risk.id
-            );
+            anyhow::bail!("risk {} evidence must be an exact file:coordinate", risk.id);
         }
         anyhow::ensure!(
             matches!(risk.state.as_str(), "open" | "mitigated" | "accepted"),
@@ -5602,11 +5598,7 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ("crates/liminal-cst/src/parser.rs", 157, "pub fn syntax("),
         ("crates/liminal-cst/src/parser.rs", 163, "pub fn errors("),
         ("crates/liminal-cst/src/parser.rs", 169, "pub fn basis("),
-        (
-            "crates/liminal-cst/src/parser.rs",
-            175,
-            "pub fn emit_lossless(",
-        ),
+        ("crates/liminal-cst/src/parser.rs", 64, "match raw.0 {"),
         (
             "crates/liminal-source/src/view.rs",
             29,
@@ -8486,6 +8478,21 @@ mod tests {
     }
 
     #[test]
+    fn missing_enum_dispatch_binds_to_a_match_anchor() {
+        let (file, line, anchor) = mutant_source_coordinate("P1-M005").expect("closed entry");
+        assert_eq!(file, "crates/liminal-cst/src/parser.rs");
+        assert_eq!(line, 64);
+        assert_eq!(anchor, "match raw.0 {");
+        let patch = MutantPatch {
+            file: file.to_owned(),
+            before: anchor.to_owned(),
+            after: "raw.0 {".to_owned(),
+        };
+        verify_mutant_operator_patch("missing-enum-dispatch", &patch)
+            .expect("the declared operator must be reachable at its source anchor");
+    }
+
+    #[test]
     fn evaluated_equivalent_mutant_requires_proof_and_two_concurrences() {
         let mut packet = packet_from_repo();
         packet.mutants[0].disposition = "equivalent".to_owned();
@@ -9593,6 +9600,26 @@ mod tests {
             "field \"status\" missing",
             "field status missing: found none"
         ));
+    }
+
+    #[test]
+    fn residual_risk_digest_without_coordinate_is_rejected() {
+        let mut packet = packet_from_repo();
+        packet.residual_risks = vec![ResidualRisk {
+            id: "RISK-TEST".to_owned(),
+            owner: "owner".to_owned(),
+            severity: "low".to_owned(),
+            trigger: "trigger".to_owned(),
+            requirement: "P1-R001".to_owned(),
+            evidence: "a".repeat(64),
+            planned_phase: "M24".to_owned(),
+            mitigation: "mitigation".to_owned(),
+            authority: "ADR-0020".to_owned(),
+            state: "open".to_owned(),
+        }];
+        let err = verify_residual_risks(&repo_root(), &packet)
+            .expect_err("an unbound digest cannot identify retained evidence");
+        assert!(err.to_string().contains("exact file:coordinate"), "{err}");
     }
 
     #[test]

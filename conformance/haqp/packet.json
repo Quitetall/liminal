@@ -1031,7 +1031,7 @@
   "id": "P1-M005",
   "family": "source/CST/formatting",
   "operator": "missing-enum-dispatch",
-    "source": "crates/liminal-cst/src/parser.rs:175",
+    "source": "crates/liminal-cst/src/parser.rs:64",
    "requirement": "P1-R003",
    "defect": "drop trivia token kind",
    "killing_tests": [
