@@ -594,7 +594,9 @@ def run_pass(
         )
         + context
     )
-    identity = digest(f"{name}:{model}:haqp-blind-review-v1".encode())
+    identity = digest(
+        f"pass{2 if pass_two else 1}:{model}:haqp-blind-review-v1".encode()
+    )
     prompt_hash = digest(prompt.encode())
     prompt_binding = digest(
         f"haqp-blind-review-v1\0{2 if pass_two else 1}\0{model}\0"
