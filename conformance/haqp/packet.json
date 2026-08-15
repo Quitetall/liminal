@@ -1044,7 +1044,7 @@
   "id": "P1-M006",
   "family": "source/CST/formatting",
   "operator": "success-error-substitution",
-    "source": "crates/liminal-source/src/view.rs:29",
+    "source": "crates/liminal-source/src/view.rs:32",
    "requirement": "P1-R004",
    "defect": "treat malformed parse as clean success",
    "killing_tests": [
@@ -1057,7 +1057,7 @@
   "id": "P1-M007",
   "family": "source/CST/formatting",
   "operator": "stale-basis-acceptance",
-    "source": "crates/liminal-source/src/view.rs:58",
+    "source": "crates/liminal-source/src/view.rs:51",
    "requirement": "P1-R005",
    "defect": "reuse source basis after edit",
    "killing_tests": [
@@ -1070,7 +1070,7 @@
   "id": "P1-M008",
   "family": "source/CST/formatting",
   "operator": "wrong-holder-selection",
-    "source": "crates/liminal-source/src/view.rs:64",
+    "source": "crates/liminal-source/src/view.rs:59",
    "requirement": "P1-R006",
    "defect": "classify source node as graph-native",
    "killing_tests": [
@@ -1083,7 +1083,7 @@
   "id": "P1-M009",
   "family": "source/CST/formatting",
   "operator": "skipped-durable-transition",
-    "source": "crates/liminal-cli/src/format.rs:31",
+    "source": "crates/liminal-cli/src/format.rs:73",
    "requirement": "P1-R015",
    "defect": "skip per-file atomic replacement checkpoint",
    "killing_tests": [
@@ -1096,7 +1096,7 @@
   "id": "P1-M010",
   "family": "source/CST/formatting",
   "operator": "disabled-crash-point",
-    "source": "crates/liminal-source/src/view.rs:106",
+    "source": "crates/liminal-cli/src/format.rs:63",
    "requirement": "P1-R015",
    "defect": "remove source fault occurrence",
    "killing_tests": [
@@ -1109,7 +1109,7 @@
   "id": "P1-M011",
   "family": "source/CST/formatting",
   "operator": "ordering-nondeterminism",
-    "source": "crates/liminal-source/src/paragraph.rs:31",
+    "source": "crates/liminal-source/src/paragraph.rs:33",
    "requirement": "P1-R003",
    "defect": "emit unordered attributes",
    "killing_tests": [
@@ -1122,7 +1122,7 @@
   "id": "P1-M012",
   "family": "source/CST/formatting",
   "operator": "oracle-short-circuit",
-    "source": "crates/liminal-source/src/paragraph.rs:67",
+    "source": "crates/liminal-source/src/paragraph.rs:76",
    "requirement": "P1-R004",
    "defect": "compare output to itself",
    "killing_tests": [
@@ -1135,7 +1135,7 @@
   "id": "P1-M013",
   "family": "source/CST/formatting",
   "operator": "broadened-allow-list",
-    "source": "crates/liminal-source/src/paragraph.rs:116",
+    "source": "crates/liminal-source/src/paragraph.rs:131",
    "requirement": "P1-R016",
    "defect": "allow any malformed fixture label",
    "killing_tests": [
@@ -1147,10 +1147,10 @@
   {
   "id": "P1-M014",
   "family": "graph/interchange codecs",
-  "operator": "predicate-deletion",
+  "operator": "predicate-inversion",
    "source": "crates/liminal-graph/src/node.rs:58",
    "requirement": "P1-R008",
-   "defect": "drop graph round-trip equality",
+    "defect": "invert graph flag containment predicate",
    "killing_tests": [
     "P1-T27",
     "P1-T06"
@@ -1161,7 +1161,7 @@
   "id": "P1-M015",
   "family": "graph/interchange codecs",
   "operator": "predicate-inversion",
-    "source": "crates/liminal-graph/src/node.rs:63",
+    "source": "crates/liminal-graph/src/node.rs:64",
    "requirement": "P1-R008",
    "defect": "invert node-presence check",
    "killing_tests": [
@@ -1304,7 +1304,7 @@
   "id": "P1-M026",
   "family": "graph/interchange codecs",
   "operator": "broadened-allow-list",
-    "source": "crates/liminal-graph/src/store/mod.rs:380",
+    "source": "crates/liminal-graph/src/store/mod.rs:186",
    "requirement": "P1-R011",
    "defect": "allow unknown graph fields",
    "killing_tests": [

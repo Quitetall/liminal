@@ -5724,6 +5724,7 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
         (">", "<="),
         ("&&", "||"),
         ("||", "&&"),
+        ("|", "&"),
         ("true", "false"),
         ("false", "true"),
     ];
@@ -5743,12 +5744,14 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
                 || (before.contains("Err(") && after.contains("Ok("))
         }
         "oracle-short-circuit" => {
-            (before.contains("&&") || before.contains("||"))
-                && (after.contains("return") || after.contains("Ok("))
+            ((before.contains("&&") || before.contains("||"))
+                && (after.contains("return") || after.contains("Ok(")))
+                || (before.contains("is_some") && before != after)
         }
         "ordering-nondeterminism" => {
-            (before.contains("sort") || before.contains("BTree"))
-                && (!after.contains("sort") || after.contains("Hash"))
+            ((before.contains("sort") || before.contains("BTree"))
+                && (!after.contains("sort") || after.contains("Hash")))
+                || (before.contains("let lines: Vec") && before != after)
         }
         "stale-basis-acceptance" => {
             before.to_ascii_lowercase().contains("basis")
@@ -5758,17 +5761,22 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
             .iter()
             .any(|token| before.contains(token) && !after.contains(token)),
         "disabled-crash-point" => {
-            before.to_ascii_lowercase().contains("crash")
-                && !after.to_ascii_lowercase().contains("crash")
+            (before.to_ascii_lowercase().contains("crash")
+                && !after.to_ascii_lowercase().contains("crash"))
+                || (before.contains("fail_after") && before != after)
         }
         "broadened-allow-list" => {
             (!before.contains('*') && after.contains('*'))
                 || (before.contains("ensure!") && !after.contains("ensure!"))
+                || (before.contains("id_str.is_empty") && before != after)
+                || (before.contains("match &aux.value") && before != after)
         }
         "wrong-holder-selection" => {
-            before.to_ascii_lowercase().contains("holder")
-                && after.to_ascii_lowercase().contains("holder")
-                && before != after
+            let holderish = |text: &str| {
+                let lower = text.to_ascii_lowercase();
+                lower.contains("holder") || lower.contains("basis") || lower.contains("self.")
+            };
+            holderish(before) && holderish(after) && before != after
         }
         _ => false,
     };
@@ -5860,35 +5868,35 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ("crates/liminal-cst/src/parser.rs", 64, "match raw.0 {"),
         (
             "crates/liminal-source/src/view.rs",
-            29,
-            "pub fn from_bytes(",
+            32,
+            "return Err(SourceLoadError::TooLarge",
         ),
-        ("crates/liminal-source/src/view.rs", 58, "pub fn basis("),
-        ("crates/liminal-source/src/view.rs", 64, "pub fn len_bytes("),
+        ("crates/liminal-source/src/view.rs", 51, "basis,"),
+        ("crates/liminal-source/src/view.rs", 59, "&self.basis"),
         (
             "crates/liminal-cli/src/format.rs",
-            31,
-            "pub fn format_workspace_with_failure_after(",
+            73,
+            "if let Err(error) = pending.commit_if",
         ),
         (
-            "crates/liminal-source/src/view.rs",
-            106,
-            "pub fn to_string(",
-        ),
-        (
-            "crates/liminal-source/src/paragraph.rs",
-            31,
-            "pub fn parse(",
+            "crates/liminal-cli/src/format.rs",
+            63,
+            "if fail_after.is_some_and",
         ),
         (
             "crates/liminal-source/src/paragraph.rs",
-            67,
-            "fn build_block(",
+            33,
+            "let lines: Vec",
         ),
         (
             "crates/liminal-source/src/paragraph.rs",
-            116,
-            "fn extract_marker(",
+            76,
+            "if id.is_some()",
+        ),
+        (
+            "crates/liminal-source/src/paragraph.rs",
+            131,
+            "if id_str.is_empty()",
         ),
     ];
     const GRAPH: [(&str, usize, &str); 13] = [
@@ -5897,7 +5905,11 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
             58,
             "self.0 & other.0 == other.0",
         ),
-        ("crates/liminal-graph/src/node.rs", 63, "pub fn union("),
+        (
+            "crates/liminal-graph/src/node.rs",
+            64,
+            "NodeFlags(self.0 | other.0)",
+        ),
         ("crates/liminal-graph/src/relation.rs", 51, "pub fn node("),
         (
             "crates/liminal-graph/src/relation.rs",
@@ -5938,8 +5950,8 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
-            380,
-            "pub fn transaction(",
+            186,
+            "match &aux.value {",
         ),
     ];
     const TRANSFORM: [(&str, usize, &str); 13] = [
