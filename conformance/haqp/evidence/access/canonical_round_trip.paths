@@ -351,6 +351,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/000bc1ab8e0225ebd652a39c72dc175ff9ba2cb4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/001288ecf2f19cbfc3aa248867bfe05902cdcc44
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/001abf56dc837858368f2e8c56d049725e39cb15
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/00254cfd1b95d8d16c558b8e77b319f2433c20f0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/003309ef0dcacde5dcf2265e8df15dabccbebf84
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/004afb3d2a23d56719d066e5747eb371e72b17bd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/004dfe509eec1f4b80e16b3337e418c4ca86fe36
@@ -396,6 +397,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/010af0c8d28171ab458a354181b4e207b3451f55
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/010cfd28a80db1ce0a785ebe1f3dfc4e8c083ce5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0110c0040efe87a8113e0bb5f9588bc9a190c843
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0111e4e5bc1ae5428e4986f6ccd1da9d5379df96
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0117e14f9d3bc33c7d102a36521360aadf8c7792
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0120735bbc12eb611498a514d7c7fc0a0a8ed731
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/01210fdebd61f6893ddc1314ed353add13033867
@@ -437,6 +439,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/01af3962d45540db195e4e9577027c6051a95e40
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/01b49305abb02524f2123d569763073d6c9660ba
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/01baad1577387b40f1d6b2deb9a34d165e7dfca0
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/01bc87ef0f9419ab19500b63c0e1b7c3e028afbc
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/01bf36954f6603c8ae9803c44d48dfdc56fe77b3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/01c2c05feb586a2253413a257abf1237e16f7753
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/01c2ceddf8abd161e04339b6060198719b333f9b
@@ -479,6 +482,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0290fd7699b4706a699afae3fe63619dc1fc2b72
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0294369e5e8b004503a34491f730776a1716acc7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/02a29fc679e94c1ae57f0d70f34c4630ca9f0b07
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/02a50b3480941650ced6f0fbae6d69320fda3fa5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/02a877c4edfd20d8852c3d9ff72e6678becff84b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/02aa03350e5afc0e85d52e2a271ecf52c43fef11
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/02ae522f43110578474274e23aa094db63e66afa
@@ -492,7 +496,9 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/02c6a52b6e494c41c8489b2104e247285e00812c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/02c96c7ce7cdfbcf4cb2869d08cfb7fc709984f4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/02c971f4a55e52fedd105481e08902c4c9105eaa
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/02de91b8dedcc61e1a49fc3d979f5b6e8c4387c2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/02e2d5567a2d427500681706944343f32ec7e49d
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/02e71d71fd5259c580e85e34c764a33580e40af5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/02eb1cf88f55563267ea558438f8694091e09d01
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/02facc9083f909b6b8d5a7a85b475023a11324f5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/02ffec9c6b28de4e9bc744d620c1fb142b86c851
@@ -543,6 +549,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/03bc795481b0c9dab8cf7b43d2e862c3d00ba32d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/03c95738a6b2dcb669c3b042fe08d7a0f48a291e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/03cf7400b2ce6531837c75c9a36f9fe4fe329892
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/03d3117231ebf1f4e56efa104a7f9a94d8bdb02a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/03d84849c8c7e00df1249e5aff9b457eff9c9499
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/03dad05ffa55553bf3c9836e1a32eb3a52133d4a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/03dc0270b72b81644bd49998226989d722a5dd9a
@@ -786,6 +793,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0831f7efc17f17dee3459e09e805154d351cf918
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0844ab7995035be754ce0a08522e84f05deacde8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/084aa17646f3ccfebc92e9d2d46581323f692447
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/085154323da7e9eea1c478ae4cab3a65ee879b79
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/08690b1f0a03ac03ccde27310c3981977c440d36
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0869a36c8850dac0b9f05132e003004fdfec4df9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/086d399879084d62e028a16b7c7610d6ba2f81e0
@@ -835,6 +843,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/094c2771e3cbff59b8ad0048b6b65c925121e13f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/09553214e866cc0fd220aab0764db444259405b7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/09569e5bae4ea6ca0b22fc30413b530724b550d3
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/095c8fd5e5ee04cebf63664d20fedab4463010ea
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/095d726a87d53ef026a05754655dd087e55d920f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/095e3fe60e1a2b21e974bc424c303c9db2b5d020
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0962bc6b02ae197436daf717045f0de4229cd670
@@ -954,11 +963,13 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0b9e0e1560589d4695a8a7514194d7ab7307e094
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0ba579d9a6cbae17de247b8b2b3c3d950dd35190
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0bab7c68170264942f215f583947bddbad0267b6
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0bafe0ce55e706af7232d246134edc475a0bf2ad
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0bbf8e52676e61aaaef6416194215545e35f4c47
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0bc25fa7f2e15569a92758d519ae049eb255b78a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0bcc89386f07c105748baaa1e34151b7293655de
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0bcf69be3c0ec2e8ce22efeb52f9b1b4b2f37a7b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0bd4540528b79983a6f6b92312ccb6c3ee252305
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0bd6b36f1a8a7b26b81698a778d798194b4dcbd3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0bdd7126190efe18d8f5708cb21964eb35e9152e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0bdf78b25a04289bf4124e69a9c40531431c4c86
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0be18937edba0669d9e5900e2e06942e65be3b31
@@ -1095,6 +1106,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0ea65f039b890f364275ccb96b5142b33b5231b0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0eaa6c8c559242c339700ec60a799e8ec50f979c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0eada7d9c3beb8876b1e890908089a52691f3699
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0eae8f7202a42b54edc2b5ed11b61ac538f69fab
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0eb00dd090276939a1815f2c8a3655af17387a8b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0eb284c423b1e539d6c7925106b78a4eed5d36f9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0eb338c23ad0c9a22d37cec503472e4513ae498f
@@ -1104,6 +1116,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0ed16103571ce0d02dd8818de0fbcabc6931f190
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0ed62e6a36453f1f01b7a183586be9eefc5f8d14
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0ee9ac645a642f1f2a302547b77dc59095a2c8ba
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0eebab08ad3d1cf53e19d9ba249b948b6cd4c117
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0eefaff7a2fcf7fe1d9ffb2ccd9964d5e6b6f28d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0ef59b242ec785ae8b60aee601c753b2686feaf9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0ef754ffcaa7c21314cce580ad7e8f3469b86db5
@@ -1114,6 +1127,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0f21caff3c887a1550b7264d80eb99b3d14a6ec2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0f2d2abb74d0ac7e886d5ab56edf64130c85a62f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0f30fef4f3c89af3463eaa6ea1c157ebb2c73c9e
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0f39365876ad84ec2d54af20ce8210e5e419c641
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0f4339c0450fe34b45d7305c8f2b61d917efa5db
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0f466a13dce9e7857d9d40f73c70d3ccb2c499a0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0f47e368f40b444137e319cb65b9328d9489756f
@@ -1126,6 +1140,8 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0f7433ed31b06b93b2113911429e3283f56887b5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0f7784c6a9e63e02d108c9afc617c95a584e8e16
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0f7829b8ee892f7c5f15bcf3d8d6159596080e9d
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0f84748a79eb9c6fe291081da327fa9d39304737
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0f85fe7836584233358fcc0d59fe9f711d88f80b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0f8e373fb8833c60f70be8678cbe8e4a92a7e31a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0f9a05b1f71cf1548ae31eec244a9f538e60029b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/0fa23ae0b28d46193a916bde202a28be55e7cca0
@@ -1156,6 +1172,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/101531198c8d42f44ae91bedb1c59788cfbf4cc6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1017b34a1beb525059d35f0b0b71796ad83bbc1e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/10194d6ec8b0d2f22c4bc6c3045c9a36866525ca
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/101a2160e27e85712dc8b02559f1f0f2ab9a81a3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/101bd3d37ab9b5e5aef201fe06f72b2d4789325d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/101bf9ad4a1060e1b391fd91dbf609b046d5985c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/101d58470ffec4fb8032d1acbe9aa5876fd894da
@@ -1168,6 +1185,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1034d82c1e1f656a27259bdb9a838956fddd9253
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1041eff96f185afba0f56694e00d9acc3e6e577f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1044b7a47875a585caf720b07770257c46ce8f5b
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/10467915723a5ffdd3a2d94ab82258b82e5dfb2e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/104b19658ed34d490c8fd9b46cbcd7a59aee21a0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/105aa9ee61dad0c59e0bdd2645c724d850a2eac1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/106389bb44278f016112d268e278ed571ad68e06
@@ -1175,6 +1193,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1072fd0b765fa9f3e327f771a4c504ab861284d1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/107889fd57a2d6ff7860ddb22b76eceb5b1e20da
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1079cd514a7568ced6e0ef2b433351aeb1b870b0
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1086631263d89e6429d9fc008b8c932485aa735a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/10945bac6c2562392873d592c9aa09fb5c3e8cec
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/109946a1490d8fb1644af7c1b98c31de01b67316
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/109d78ef74155a549aa3c2c458a50229eed8a7c1
@@ -1252,7 +1271,9 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1245e8b3c4dfcf3563ccecfe7523bbf109207dbf
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/125f47a27999683a3b10be142949f354acab3638
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/12603c10e0c7b9d5417d420a5348c2d3c670c50e
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1261498b19d2d4d5da6b6918bb3ebb4ea3b81065
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/126a7a2af2427b8b778c08e92b3adca9711c270f
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/126b02be403cc213773bfc8562487fa8dc48067e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1278bb703f61f64dbdaa8acc467277a2966d6742
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/127a8d3d3779a17cb09981298639ccb1e065e8f8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/12801d71c7015b8efb5136ec4b1ef7ca8cc19459
@@ -1456,6 +1477,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/162e7fd13dc05ca96824f680ca9fecd7b4ec881f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/162edc56bb719d76e58b6f8b41314012ddd96b2b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/163171d70664e93f2874072df6dc5cf15846f25a
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1631c0328a24125fcb12887de1a4fd0e2906f647
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/16332475db278c696d74c14efef5a11ca5c3621c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1635a71392fab9df44a527aac248db532606f8ad
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/163b1afebc636d75f0add8c716b4700824004da3
@@ -1468,6 +1490,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/164c54013b8f3491ed4ec4787cb4f564a7d8b72e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/16535b2afe071d1fa23ce4bb24a325b2e0fe4d3d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/16576baddf5d4c781fb53e36428d91b6e2197122
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1657bfbd157c8c158d0a41d3b42cb04f87853346
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/165a14446fcc2ce99d9436b52bb79d1cdefe1923
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/165f1e4717c53d7996a667f0315b386a4158f9fc
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/166867bd1abe14d17620ba3b7d6546e8a7f86057
@@ -1541,6 +1564,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/17f7fe311282afc03443db366957d48525a50a91
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/17f84ceff828b60e1976454b3c7f2dab6e8a81a6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/180436a3608ad50956bc86505b793247c4bfcf43
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/18087476c517d9310da81aedb0584354fd8767ee
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/18094d840452bcdf6645f837be2cc810be95be35
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/18119c51f78f37e352887bc740b874f6ca520e19
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/181cba2e2648aa9b842f5e0e69231874139425b8
@@ -1598,6 +1622,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/19247115e9cbca1eaabaefe73e0ce2211bfa1840
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/192557dc89b37897c2f4ba68e17af89f1f73e502
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1927676ae65cfa7b06e2fba71437bacaca9d912f
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/192ab3c7a4825b6fe3860fdebf333a6b611f0b9e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/192d6a0542d3dcc7d4e9087077afc9a273f44e6f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/192e242212acdd0ccd2f7d372671352589cdde5e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1932e6dab1fa886a5b9934a89990ad859c09fae4
@@ -1621,6 +1646,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/198aaa00c5a5326d8e9070bcc0c526a0ffd62eb0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1990da153a17bb942121263946fd9107004ec7b1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/19928fb42f4f15034105e67ad5b3a16fab781b3c
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/199b1e8ebe84f6222c88fdaf6facb4a584fc5590
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/19a3602ee19773cb9686a4e0c0eb01a86285ff0e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/19ac5d452d92508d811df22017aeeb551673fc73
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/19adcfa285a1115d178f539c10df50cdf1052f3e
@@ -1679,6 +1705,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1ad575ce4a260609893357d998c0d0640cf94c60
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1ad768e0caec9992e9fc7d8cd8e2acfdf3e10aca
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1ada226b8356e380720ad4425272215085b3eece
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1adcd8e5618b889a6c64402050d0ada664de501e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1adf3cc2ce2394242e7fab7d13dd4236cfa78c10
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1ae8acc45777877b28898ccf6f6401fe738cf2c2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1aef2d7cfdd934048b930f62bb4984364291f513
@@ -1701,6 +1728,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1b66e03f8f8f3dbaed35846b1b7359381f739770
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1b6d3252cacd6bdedd91f9b428f48b339cb20b9e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1b6e2bf00eebe22a1ae7fe73de5634eda9b16fa1
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1b7604043268b0ad87cbfbd65af7f00363fdd728
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1b76a5f91e37d1bbceb0fa5009b28b9f60705fe5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1b8737be876794478d799ac99c9bb92534986628
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1b87416db8214eed8d5cc87a469bb279493ef048
@@ -1734,6 +1762,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1c0ef64cc49f9bd00dc288216d922b1fefa8cef6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1c0f00d8681fd12a927e98180d69dc2a6b383c0e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1c1370bf593724dd6321ebfcdf61862ad2e1f2a8
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1c1955b753b7fe978d932056269e2b9cd4abb7e6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1c1dbcd591358b5b7092ccc10e997088036bbba1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1c1dd52dee00a8216f975412c4f2e28e7625a233
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1c1fe288b7a23689cbe802b1f56fd53e3341bf97
@@ -1751,6 +1780,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1c6896d64b4d8f7baef3ba167b86f5cb33f964a4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1c6a96308cbfbdce11744bd39a62a538eae96516
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1c6f1ba1161d8b28c4a43637c902d7fd3f5fe0eb
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1c7292a2ea7649582b3513dec950cf422a291735
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1c7904d4caa0be54c4c88aa17d1c289647c0f702
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1c7f1cf94f0a2abc44067542571609745d7647bc
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1c83ea00b702e2a0e7aad65c6b3898b0e659f84e
@@ -1765,6 +1795,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1caf56cba869137962abb19a6e5e246c403be444
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1cbb4ee4b2143bdf6c502522c31c0f2929e9d57c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1cc12d34bb755bb734605b5eb0e4e3e0d0111470
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1cc3e7bc92c0d4615641c74f92d5db995d227a98
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1ccff14fea84a8abd21843711f012f7cae1415b1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1cd00f078bf48b680790fa8ba0f84e86d383ebf3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1cd10702089f683bedcaa189f37e1b15924f82bc
@@ -1825,6 +1856,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1d93deba8c9efdc3def63b68d26dd0813eb65276
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1d9f95f29407f477bb44a9ac0aca32f87bfe7b26
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1dad1f7c641093f7d05ba4fd2a1c6a80d1e7d160
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1db13c099341590297d5e65abfb6362488dfd495
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1db91f1d98efe20f8a9d1d27edb81b64ee980560
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1dbbd447ba22d3e372259e6e3cbd6f33764193e3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1dcb245079809112bb6a223967aad86b9b76f9f3
@@ -1859,12 +1891,15 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1e4f834ccd8b7ed205990ec2d118deb0a7ed71fd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1e56a341ab351ac6192549fd1b3641482a9415fe
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1e5c2f367f02e47a8c160cda1cd9d91decbac441
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1e75980a35076117e647fcd30bfeba7445bef901
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1e76d65980b002a5d378a48415361c90254009b6
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1e7b8342966e2aeb4d375bf05641d170c534f6b5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1e8a4ddb79b0c333566dedf8edc797bc1b73312e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1e8e90ebac890388c794711fbbdfc500d097300a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1e8ea24fe1fba2ca4b25d55a50529e46286963d6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1e94d154e97c3857328d0fd091a855c268675746
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1ea45906d351159b6dc610497f4b863d481b6d06
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1ea50345a314b4350db565a0cdcd577e333a2721
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1ea8fc28b3136411eb8d6b4ad9f4bcd393ff5384
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1eadac692b4145b4cc3742c2a3ff59d859e3e206
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1eb32e58db0aedabf10395d99977ea7ad9bb6f09
@@ -1934,6 +1969,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1fc3e865b9227bcd97b85330d30a8cc96af29a23
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1fc56a251f3ed04b8436b59586eb60028d7a506e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1fc968be60f1960cebf8a6aa0c9498336f6ebaa0
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1fd3b02b9e1ff385909db05000e1f41c00abb4c7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1fd7e494e86d803ea82f58ec4054ec86b01e786e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1fd85092868f2159de83b6a467ad41416c02403d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/1fd8d44315c49ca121a04df4a6e87d2e30f4ffb4
@@ -1942,6 +1978,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/200764997bb8146a649343d45c7b0d31daea7798
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/200ffd8b46c6792c54816b53ab0ea38ddf7e0587
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2010b67511a0716b509bee7c2864eb69d8b04642
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2010c5d8de852e56d9bbf4f7e6f3ec8ab3c45532
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2012d16fb09f3fe503b175f3e1f358f58a18f81a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2015cc35eb61cdf3379502797d605f28d1c7bcd8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2023de04af5eb61cb50efb2702aef184f277f42d
@@ -1966,6 +2003,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/20a5daebe6ef21c05eb80cdb0c68504b4704f1fe
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/20b383d50a422e6ec64d8ed76f3fb700b5c8a79b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/20b6e350f8b8863162394074b39b345701fb20d5
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/20bb3fde1e3bc36d311a977d8956f247e9a8c954
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/20c1196320af8c989a063f38aa0a0036f49a5811
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/20c415fb92a0738c9e3d7b9b67042c43c69084b2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/20cb3a41d49bb75858d9216c7b5cc4c3c24a7b82
@@ -2002,6 +2040,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/21a46f8efc9435b7ec48da2eef2cc19066cbe1c2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/21a7ccf9187bb3c2a3e5308167153a41bc0fc71f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/21ae6f1b736e62748d2801d353acc1a40b6c49ab
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/21aee3761b69b63b414f19beb277a0dee0cf8af2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/21af2a9afb15c1982839658f8e82970f4bb19067
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/21b825df3faa11615ed424e23e8cff717a5252d5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/21c0d6c1150855eb0cd3e8f9ab0dbe60568c732b
@@ -2076,6 +2115,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/234b3320bf9a911b470370917691362eb98e2c05
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/234edcb0e45c65a87e84c248c88f4714652b0ad1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/234eeef2ffafe7a0557f9ba081f9cf9e142197e2
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/234f63365239e76ac30c29cd657a5ba54b33b1b0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/234fd8dcbc9d181e516354ae6e0a8889606e1228
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/23502392c5f819663e264851f2c1bf6d96572f6f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/235367c43f01375a2feb20cce6f6070caa6a1e25
@@ -2089,6 +2129,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2382bb84794e24bd4b82475b45447e6bc8c48f12
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2384a434ee1093238f60c504c59a5543d1d3c676
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2384c643a120b4736e04bd76814efd8c33b0c2cc
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/238542eaab1e48e084d268c81ef3ad0e1050a447
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2386763d88be7a61ff27b69e96a5b0d1818d8fdd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2399c8ea1de6088eb3fe3818930a7ef7342f2503
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2399db4adb0c06ea5c8be2cbda43334b9b046b19
@@ -2122,6 +2163,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/244f2f4e7389a68a7eff95af86f62070a39481ee
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2452057863240ffdda48a5e29a19dcc421b45170
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/24534df0c152ef9ef613b13a88b63161d891ac43
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/24549525744a0fb9512a3e2533457897c3aeaddd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/245be34feb2436ea9b7e6d663cb95bcf860d9a35
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/246191bde8668852ee485e4c065699ac28d3e785
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2467b5430ef76e1e77971fd7f3fc7cf033eb7fec
@@ -2136,11 +2178,13 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/249b3d217f7c8bea6e7a311caae79f7e02803c63
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/24a08480463ffe5af20f73d75b47fd5fa5f2d733
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/24a6b54eb8bde56e05586e6918791c16a2d7f89c
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/24a81f6398d18bba4de9431dcc89fd711ddcfa1c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/24acff635d1a940c9a94fe88fbd532638c80df35
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/24b37c51c79c388a9b77df04265afe583bbcb9f9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/24beb13aaaa8dd51906fabd5f9237c540b64479d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/24c3f194f49064bdc579dace90519147853924f5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/24ce971b18325a55e3e5db6b608650ac232b4205
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/24d1bbc300882ad09627f8fdb09dff377b88bc6a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/24d247bf1fcda34b0e1bb69f94a636b20655ff2d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/24dab870a31803e69f0575729f0d04388669ffa0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/24db036ee9c338dd41af5edb206166caf0b08caf
@@ -2219,9 +2263,11 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/26789edbc1f874a6f2680f351c891223665e9c1e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/267f856c4c7c371d569fdd42694f6f2f60fab75f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/26888ac86a38a3219717de552a5f3606177e4db8
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/268899d0fe786daed52896ba0e67d192d711ae5b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2690cfe3c65b02af40a6b26a9c81830e4483a751
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/26954d81327777d72540dd8ee27fb8b27aa8ce0e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2697dd1c0b717fe8fccfceba2d30ec92fa01364b
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/26982148550bbeac87a40c88c867d8f7ad08b748
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/269c1d66cd827a78a3b8f43a0a459c329db3d9fd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/269c5d134abe44a43cc6e9c4950f15ca3b6d5904
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/26ad85e7e1671f2fc296b90d5923acc864cdaf60
@@ -2281,7 +2327,6 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/28004c521982975add0cdc3467bd633faf6f1c06
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2802c2930c2a999f67b1756018c0165244fb242a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2803378d83bde227b61d7dd701c16a4f79af33b4
-/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2803a0744d7c6a24050db41787fb44941d6de4e6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2803c0fda9e63f0b4a4f912dc673074bbbde21bb
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2805a53a0b6dc7b8241a5294cd4c891f7ffcbe7a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2806c4054cfe5f9318fc019f7fb14d8104873941
@@ -2304,9 +2349,11 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/285624ac06f957f8508d33f44c6d33d9d9e39139
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2857cb9f82ed039d32ae15242226a99b233e6cb6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2868b85999b01f4b084c617c00c305d032559299
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/286d3fc04553e8e4dd2ce63b25390bd9d8dcb9f1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/287250167d5e0f9a6412fc616d4bc78749aab966
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/287316b0865359481d237689cdcb751de9647ce7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/287dd52359ea7b9e43ef260c12270c25e141bf5f
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/28824cafc010690ea99ad563faa1ab78c214d796
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2885af3cb6f76c8481a5e1079529d93b57407754
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/288735fef07257dc1acf0d998f5678ebab7dd4a6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/288a3631a3c82bbf0d6a1ba46a4f1f747e6f4e3b
@@ -2356,6 +2403,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2971b0527175e53163266e82edab9a0a908cd344
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/29724560ef9bdbfb56dff07400ef9d0217a9c2e1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2973b6faf9b8abffdfef3a902d6ab45ed54b3f5f
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2978f0d7ba33970361603035d055a41d9024c5cb
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/297e3a13aaa6600df74669aec30946769601767b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/297f91c16d75f7dfc127a82930466311943ebd2f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2980951f1af37c9a51a6e12169304c9ed267a475
@@ -2444,6 +2492,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2b14a19eca51c241640bb52ccbd05c75250fa646
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2b2798319243df36e563fc8213a7b04b00c0f991
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2b2a9f2279eaa1fb576175d07a8bfc6420ecbf1c
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2b2cb818ed70d2bf05c0a190c690fb3c3771b75c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2b487f247b908a917de2af2cd38bced76f390b63
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2b4f68305191dd299cae9672d7e790d8db50eed6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2b50c9c42487643f69f2e25d6949021df1cbd007
@@ -2476,6 +2525,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2c1bf09596e9cb2f34d260156901193f2b911759
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2c1c7166566392e27131263f8630470d77717386
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2c249c9bd62f1e736a28d13fc38c929a8b269745
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2c2920bb1ad782b6d32081aabad922531331bacc
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2c2cee54d485df08c98e930ed4bf9a185144556e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2c3056402ecc218ef065451d5fcb193fca10fae4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/2c3de2001166e0da95b9a864728473ffd3353753
@@ -2658,6 +2708,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/30dd51c3756db32ee1790491b1fdf483d428c1d8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/30eb1f44f49bc601597559bb8e25dd37d009d795
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/30ed3f96597e08ba839b993e55d0c14b6fa6b963
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/30ed8eb7b01cf0c365be04d0b6c5b3363ba8bb61
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/30efa9dabb3f509bfa9476b44602bd610c73d46d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/30f00ba39e307d3aaff5d8ad3fcc9b77ce8d42d5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/30f1907f40606998f22a6d0843294b6803eeeac3
@@ -2683,6 +2734,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/31661e91ec4805703930770dcfa3c2ec0036a666
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3166f953b389d3541fc75d9d6049ef287b09dce6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3167ca7ee233dbeabb0681bace28a893e61c698c
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/316938078daa04edddb230c84a5ada4977f620f9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/316cb0dfdf631957cf6748ddf04c364554efee5f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/31771370a1356c5e68b0c5c7871b665b9131ee27
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3185cf3e11250fe7c857b171f3ddb89b7bf728a7
@@ -2712,6 +2764,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3211fb0e6686ed5154df5f0ee1275d744f94b3c4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/321246e3bccb747ba44d3f0d99531f70fb399d57
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3212663765c98c38ca3dddf388f38d93e8048c9c
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/32191cd0ea6465630a1212ad709cffee75b4bf8e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/321969738cf82623079ba318143facd0ec9f2446
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/321cc73e8ba91f561c50ffce8a0a42af71041a38
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/321d0d2ca1f2b5da715d07a57fbeefaff80de1ad
@@ -2754,6 +2807,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/32c61e999bfc0c08753cdb4d1d479e94dd383d51
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/32d054a7b458f9aaf48ab10cfa3e5f17ff3eb30f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/32d2b5dbba5fbd336f509b00b468fc355fa93c4b
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/32d80239f93a1bfe6719ed432152bf487be08daa
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/32e142effa5953fbfe0c7d093bdd6e4804be0d32
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/32e93cef9780acb3f8d02d36a6b35445e7e9fcdc
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/32f1a49b82ad031a4eacb57d49a152b22b0dc195
@@ -2970,6 +3024,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/372bcb9bf728880499efe20d56a23597342f6c2d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/372d46b5083ca924046b9dff2e699165d683ea46
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/372d4fb7d28c087806c8588dcd96112371d928ff
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3731a823b238e96387d1a11868b2b63f5341b0ea
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3731b5722da0959e179804581599ce91f60a5ee2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/37342c561cf325bd35385f5a134c4c67286d1816
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3735687c00b325bb530c68dcb6fc3623f9b2fa05
@@ -2977,11 +3032,13 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3739527c42fd0373c1cbca4ff0a0c89dfd401c70
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/373b62787491366ac6c25b2b8e6c0a35cb2af948
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/373cd42b5532d1515dc9093899d7160154b29266
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3746f6a90222c0e35b03f331eedbc0b54c93fc20
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/374888957b3e33427e3e68e0c1321e0f24d1ea68
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3749842d1702f71db9e0915da7f765e7bb20d139
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3762cffa9a4a8f25d3f75961495436060800ff5d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/37663841643522c0c1a3d39fb5ca414ef2492c7b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/376facef3f10362cb18e0e760a108e0eca1e6fec
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/377294fea54277f5a12f49453d847c43ccb425c9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/37783d8a8f4e637b7699f49c84fe8183284544e4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3780e93de3105a4f56c5512505ce6c557977ed6d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/37838869166bc9908bc41c10858ba193f64bc4ae
@@ -3014,6 +3071,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3806ef386bc33f641bf3351db85ff5a54d0e76d0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3807ddde29aeb42a8a06fe38e0ea8f2f33fdd6cf
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3810ca165da957c31ce0b39ba2ebe642d1d5f15c
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3814064d12b3c74a3db0569536a7fee4c4716517
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/381909b2a0e4117c4adf1000e0b5efde4b55ecc1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/381e9cbf62fa32241992e69a7813aee97f621849
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/383543a6b1fb0d1b52427d7a30370ca8ccba4cc4
@@ -3113,6 +3171,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3a6d73f6b33393bf0142870ddeac25d279012e6a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3a711722159ed087cd928ed1e83fbb83468e2103
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3a7619c014599b6a3ac61deb752959643cd025d8
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3a761da8b89513a13245f71e896a858bdb860afb
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3a7865e164c9726c936087678d83c78092ce5051
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3a7e7347880c8f0e2b7a486e6540eeb322b3bb2a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3a8090479ec5c6164cf423d68242dfd5fab82e88
@@ -3208,6 +3267,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3c5848069058a2673e676075081f93a8f610fbb7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3c5905983869db68dce4f5307e8d009dc22129bb
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3c5964f619fd8bc3cb71d256751a5a158634b27c
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3c5f9424bf10051cbfc72f6d463b847235f6dc11
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3c63e17d540cfc7847fb84372721616c04a5eb05
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3c72ac7d4978d847f1f6a53ae638437b78d35c3f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3c7699111df2b2e2d9b989696b2710352096f0b8
@@ -3230,6 +3290,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3cbec0f566f4e54fef6f646b75bdb2301d6dc8b5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3cbf49947fd06218beb289f835e4a1c9170ad912
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3cc632e894527315dbeb6a53f63400e186a4a829
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3cc73f0d472618f1073c366f3f891321e623b3b8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3cc80164b164bd387efef1e15bbe0cf8f4e2885e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3ccdf8c245ad6906f6bdbd9af78a987085ad8d5b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3cd5eec840843da984b24a3e130d429899c47b38
@@ -3244,12 +3305,15 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3d06431df658ceaeb89b1e5f635b28f27da11f9b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3d07dd05f38f4db1685a8d26ffa1a7fc8051f4f9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3d16382a3964d109598d90679cc0456c8ed172f3
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3d18c26103471884ebac33a2c99bb907a5db7cc1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3d1c96c0682c48c945afeb516a14ae0e442b6309
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3d24042e19dbc145c20a7c6f32b7792c91bc3359
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3d2b12f5aac53d5693356f2f6ace9a3355869b19
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3d2b8c146624f671b211f1c5ee6c536ce142c5e8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3d37ef277adcd0b81752c49ff85bce15a8fad21b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3d3ba5f64202c1ad867553af880c75ef4e33b9b2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3d3cde4ff146da9835504d078bbce32c21b718a0
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3d3e924af7862ba78364fb95efcbe9ba91909df1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3d41f68f63c18caa9c28d5e7577f7e2a9fc5a72b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3d463a4477e14c6ff8b96e8f29cb187b283754be
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/3d46a68af75d3de33c2ab98abef9780c04702e71
@@ -3409,6 +3473,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/40cf56a4e8432f1f7e592427f4acc39983fd9b83
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/40d324acc666a2d9488050139c4707464d1df8ae
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/40eaacbaba771c74d2bc6644bbd558cd206fc2b1
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/40ee0e5671cc3e381ab871e893254e66578e3f07
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/40f1f5333dc8ab6a3e6dcd6328496056245bde78
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/40f20342aba99e76cdd45618f4a7b1680396219d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/40feb10875931fc4826c2c35d71d120dab1e6024
@@ -3423,6 +3488,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/413974ae0805acbb05d972a161708cef029fff06
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4139fbef282f613a97c3789cab7750dfd4750484
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/41408615e605a39e078d193a5b808bd18a42d984
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4141b3040080807109d0b5ba320c67a0822cf0e2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/41471589fa436b303fb43466e3ca18de9da1318a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/414742b3b3befe1a94de30d05858b6633ed3308c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4147dd48c29d2405c7257b4280220cf9007f3f04
@@ -3479,6 +3545,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4229cb738879729dbe1f766f6463243f14e69195
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/422b68099902778f20734be529d89485d7ceab1b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/422fa164de307b91d246ed3a9188e974032b56ef
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/423249ba832b3bc39368b112318ec3321c2b8102
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4238839401edd51446ab554392817f8aeb288cad
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/423a81de078f21063f5140844d76b722b3b1073f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/42457b27cc3213181e407fce07bed1f5f6a5abbf
@@ -3540,6 +3607,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/43745615fe4ba92c2b1be4cbdb274a86142be787
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/437568f81daf1d06ea23b645b2286ce32767a4c4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/437b09e07f33ed8dc8eaa335321d2fae5b92f103
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/43804f1358e9ae539be7556329102c9411e67990
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/438b51eb9260306f8ec712b0cbe200c7dc425089
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/438ef37b9354714a13d6ec3a8538e4cee2b58c6b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/43925d1430e11fb01dd528a04eff6cb24d964a1f
@@ -3617,12 +3685,14 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/451077f312249b7d15a39e3b7726b43386af9f02
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4520688926637a5b6ec1528f6e66738674946fbd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4520a16bbea9f659820589c0420ecf16b15639bd
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4521724a5ad59db0c680cce24fcd111b27a8ca35
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/452666dc22c845bf4a69c665ae33b22983b59c0d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/452e570f98091e34b733dca6fcf5415612ed7491
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/453101c39f126c8c1c2462935aee1a465dedc6d5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/45381643e9a63202e0744ca3e234dad9c0b3aa47
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4545cfc7f39cfa8b590643e46ab2ec948c7c9458
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/45481d76549c650b1412203af008d0efea60da48
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/45484be8a4c6d81c7a5ba4b31132ea06fec14b5e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/454ba46fc8722636162ce3308490d280adf0f981
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/454f2d856653b2860fb0b7160c174c7587dcae2e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/455237d5470bf2673e706589d5012473b43cff3b
@@ -3664,7 +3734,9 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/460446d767b78c0a22e212324f617b67631faa6f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/460973d2810bb942457c955e80f50a6a65b7702e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4609efa3b726f498657090c4e231013597f00090
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/460bbd80a59ffb2fafcd1d1bb01bbe2d7b38ee85
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/46115bbe5332be17dab03eff0cd4c0bf7883ea19
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/461d85573a4a74083dc734e2d73127e294a4eae5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4622210caa5e3294fdf2d4ec7d1d68523c7d7c41
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/46230f4e1e1af38ead260bf173d7ac2f375cd622
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/462418d0ba382505172d7d5369eca650d0f12201
@@ -3713,6 +3785,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/470d5d2a871c31b61b40893f14c35bf601557b40
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4711be9521e014b0014e599f009bf1dc50c99369
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4717696e1fea56dcf6b548ed38dc932d7fa25412
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/471cb5698d0acc8e0a3ef10890500195c51a527f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4720a4054e88b7ba9c7d0b688e35a89d33215209
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/47280dc322630d60a05edaf8c799707ab20849ed
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/47299ecb41f7920c3ad539766962a626105c3edb
@@ -3938,11 +4011,13 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4bdba76a3b9a6a45b670f19232c60808846b41b3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4be34e077f071861a4e28b13049ca896894311fa
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4bee37150589eb42f904420ac81bc0045d7f18c3
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4bf3a45d7aedbaf3f3f5b9343361225c117dc1f6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4bf753414cadf53f1caf7f34e86406b897496374
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4bfd86f0825346751f02b43764da3ba43bd01310
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4bfe1aa1e7e829e8b92f36cb88e15026bdcc9ad6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4c0777c9bb5077f693156993c85f03157749ad97
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4c08ed3925f15db50840c3a921e4b4dd19a20f88
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4c13aa9dd6ada8f984d24ee2883ca8bf8da914f5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4c2701825f594467171f1fbf372a4c6804d13d79
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4c2931b8cdfac3c3b982e4555d42b7743195d8f1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4c362b9cae242e5273a9fa64b5f65910946d41ea
@@ -3964,6 +4039,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4c6dce180e7b14c73b79363e1107ff17fa2d1d20
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4c7042b7f1404946e95de7fab5cba95000d898ad
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4c763086d077bdad50d1bacb318cba9fec2381a8
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4c78437a42df7a8fb5b99754f32e535756ce6343
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4c7a7fbc8f5fe485f15b502a3bdfa59477813299
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4c7b5517175925f333988862385b711e6b600604
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4c8a5dd68391a7bb1502f09a8b518d6211c5176a
@@ -4016,6 +4092,8 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4da0fca107b41836a637dab2a40a98e087aad82e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4db2a84da0b6d2509be60955d4a0a5539300842f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4dbe5f436699c4bc1852bf1ca6b9dd322b4ade8e
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4dc00a60018afcd60e7ba9d56a72071489cb1d4f
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4dc13e2b03d849f2234772be7872a7dfd75851fc
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4dc677709c433e9d91fc6066be58336b3652b588
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4dc8c792af9cb66a9c50998b556dbc1979de19b3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4dcf2dca5e5d2244dbc9005976c3e53111332325
@@ -4034,6 +4112,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4e3bb13e0a84aaa147ee797cf6fe4c958005b2fe
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4e3c0c4ce8d424ce62423c4895edc3e49834f70c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4e46edb8ac91953c5fda8e3f96a49a7180af88f8
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4e513b8bc41bc5c4af2ce249996fadb14647ac70
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4e5881e42d483005d87fdcabe3bd58c031e2afff
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4e594d5798f1910d56f8faf6f11f0f8814dabb5a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4e6017a38d16667bc5c2673d972944f05c78be6b
@@ -4042,6 +4121,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4e6f7bf6c0fefa2f5746d8970c0bba2612aee84a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4e79e1034c9182b9a1b237110ffa8da3327e557d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4e7f27bab6079aff63e2f64184e0c7451c93c596
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4e809c096b4dc015884577616419b42f8f4ef468
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4e80cf0657381692f585a8982babd6b37bcf0e0d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4e8395c6fd3410f70a91e58365a57575eba775a0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4e85ab73299ebec324c7a49fd7c3f1c215552710
@@ -4104,6 +4184,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4fc31aeab2ad846a335853cb418f383fc098966a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4fc412f9feebc60d2156e642b68bbf7d630e15d8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4fcc9080f3ddab7c379b07621ecde86a1f8d551e
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4fccfe96a478ce85b72796bd7c73a1db54a037c0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4fd109454ac09bd6b091ea548ba30a5aa1e5a13d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4fd2a31c31e3bb084de6173176b7b96b34b43e12
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/4fdb66c02c95c1bbce5f5bc639a7b0c5d948812d
@@ -4174,6 +4255,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/514d419a3b426b5ecc7773b4c9013bba8ac85144
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/51502fd4a410545e6d256967a80ac12fe8499bf7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/515367c046c862458b5945b72cd3bb3f810c69fd
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/515792963f7b8881f1b15c02a7964da7fd6af989
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/515d39ca5968e5a904994b6ae913f3e2bba4578b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/515db1d1716048c4011b380267a5c54843de232c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5167bc4a54340110c152d5be613565f8fb3c6eef
@@ -4237,6 +4319,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/52481e686238f62f7c0922a9788dbb5604967358
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/524b27c65f4453924f3621f63b30654173a6957f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/524b808c052ae58a3485c59bb5784fee06037f1f
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/525795d0d24fcf68052d1ce637c85f3d8c7031ee
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5258284181851e70675d5d6e46933bb6abd6ed40
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/52649ab8dd5020e4e4e15cbad98679dca1991b28
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5267d326fb292e529a61ee56d955834f633021c5
@@ -4261,6 +4344,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/52d5262d0e759dd1ef81e346bc8b015455b2f394
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/52d8eb293ad8a346d9210a392095d72aab93fcdb
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/52de863a26e00312fd7c00eaeb2fff15d61c4cb9
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/52debb23d6e8d1689e2ce8b9a81dc8299ded78b6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/52e4585939e64c931c3607200fac586a2f3b9f43
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/52e6959939e7a65c4e69f63ff3b99dd37eae8f47
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/52e7f21d9b4803fa37349896dcc40f49efcea7e0
@@ -4292,6 +4376,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/536d3866071c9f9c382568c772b86ad9b497cba9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/536d6a1158224aaafaabca5fbdbe3c05fab6df48
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/536ef54e6fe85052fb27c1615d883113f552611e
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/536f833f09c627247772d640e814846dd174712c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/537382888cf84e0f3c4f1463c8bcaa054c67710c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/537755a872bb68089c927ba2a02ef549530490c4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/53798bb374845c92585d1b7fbdd1bedbe889fbf0
@@ -4305,6 +4390,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/53a6e1ba0e2881ec017a13960c38d0a812cf6f54
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/53b3084c415c6fb113a4a005d6b728191b6128d4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/53b7dcb8a5e0f0905eb3742d90ea85a07007b5bf
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/53bbafdfc5682eeb5a7944f6ed3b7af5d81bc5bb
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/53c1cc4888bef648bfb429aab11aa05066ad4fd3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/53c2e86e0bf245449f1c3ad32d13f388f3e837d1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/53c2e9fed5771a2f7493b85730000009c8658fbe
@@ -4341,6 +4427,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5488ba7c880eae7f0519e8328cd44533d600e042
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5490859d6e5ac05fa650444025775f26179f05c3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5493eb5174919dec5dc3c78b36a14f32af65ed25
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/54955e0101ecca5b94ac95d18855113b785ddb55
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/54969ab63d99eb9890166b8764443b17e72b0967
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/549825b992b5cff6a9f5c287954a0c01f38f71d8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/549a4fd9ca6d0679baba28a0fbe652f085b6b99e
@@ -4368,6 +4455,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/54fb048ba309dd3a01cdba8526af0298ae8ae6ca
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/550d2c98ca0e0dc16dff10876bef67764b291580
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/550e072f3287aee6964fcb89335fd9512963a54a
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/551af99451995dc8bfef4474e01a74485a24f291
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5529a50cc0c41140cc1e2c8b5bfa4dd829862726
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/552e243a0628eae2f717613a317c14f2e2188b24
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5539fd6eae1a8161fe340bfb710bdfca6beba78d
@@ -4483,6 +4571,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/57ba43bdd2c03a7a8696f3954d8748e1f5015edd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/57baa33ca9278863da3ea4573e06c4ad9e972583
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/57bfba2a353ce2bf74f5c3fa138f66e71090ba0f
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/57c6065bd1855a54b0e5543be7f7e847f454ea5d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/57ca48732268dac06bcf9726caabd123c7fce885
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/57cd13e1db00f3f7a1ae5d7010df1aaf3a27bd9a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/57e15d78a14e515d00145c1c42bfe520f2c94591
@@ -4518,6 +4607,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5852f4793e98bc2964dcc0852b337eed762089ec
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5855d2af8c1d649fe8271982d47aaeb3a05a87af
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5859c051246ca9244cbfee66536bad1c33fa279b
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5859c7a629529db7d4f1084b920ce52985161623
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/585a047737be8f12e66d9210445a7a8a0dacbbe3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5862807d89a3f373914737903aa5c381a8d40f24
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5864717a769d4dc27373b84e297a4755de94c4ff
@@ -4569,6 +4659,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/595d167742fc2e079e874cd849a8c9fa7011f105
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/595d9ae9f6ee641aaca2c5a91474a9edf94da316
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/595f48acfa9af442e21d08ec39cc67a33dc83839
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/59613591869506e7bade3362b18015b4ff5a84ef
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5961655549db4c0f6d71a9657a971dc8a2adfdcb
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5964d1a6eb12a4685bb7736f81880fd60d452e95
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/596ea854e14b2dacb0fa513de2467645840193ca
@@ -4582,7 +4673,9 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/599195afb4ae8848c0715d98374c864a9ca9daf4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5993db9cc6d34b61ae7a1065668dbe1c5374827a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5996e84a194b052a5a4f2428d6788011866b52b1
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5999f6acfdda7f1029337475a76188c9a024f58d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/59a047dd73a4958ed55b10f46920296618fe2be0
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/59a4a51f9dea247340e844d259f7d6747b9948db
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/59a5355b6c68565b081c1bde6a1ff529478a3b45
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/59a750e23f43a57036706aed861817fc7fae0b92
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/59a7d7106bdf52530baf7a552f33582d0471d293
@@ -4594,6 +4687,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/59b53960cf9ce1f3f21c41e5580fcfd50d7681f9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/59b5b3f8cfe0ff0be96e27af23d071851afdb4c2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/59cb1daa69e97cf8a998cd2a434cce876d0e69a2
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/59cb4949634ea0e0ff5c8212d89c8e91c3879183
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/59d295f929d76cc44f0e8e17f5716d09515d9d74
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/59d2cf79f82362e0e12805eb3f7876c3136d4394
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/59d52091bd96c026c76f3514bc7e9cdd086a5b50
@@ -4605,6 +4699,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/59f2d1e0a5b3ba8f9a71f5c49e4c3a177b6ff1a3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/59f5a3a830251b0075304dc2d2fbe14c44e73b06
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/59f6c6f97a19502cb87b3d0794d544d58c4f3677
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/59ffdf59321ee5c1d4ebbe224b01b6bc1cf6fe45
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5a02f3e9d6cc79027318c72f1941b3c984116c5b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5a0391311d3209053d08f0b515b25ab79aab57bd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5a0e1d54e7a04d3299c9783753aff39a04368dc5
@@ -4669,6 +4764,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5b34f231a9b7033c09bf682885c48c24fa133e5f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5b35882ac0ad51bc156a1a422a1608a7e21c241a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5b3899a44aef9a0a85b9ebafbd2942e2ba6486c3
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5b427120fdd289ec9070a396dbffbe4bb881fb76
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5b45b1ba889621b0ef0d44b9382bde6bb2a62c98
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5b4cac173979dd3adf2107196050e63aefa382d6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5b50fb69735f74088badeec1203e810f7512925d
@@ -4681,7 +4777,9 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5b6d098aaac3c3b36b6dd9ec8ff13b08a7bccc37
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5b74e177efd546db52c71956b88c029c03919250
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5b755ea5f6bee4c94b00ef68a290f02a650a6fd2
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5b7dd4d1866cb2c16a35325d8f309953a5b217ae
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5b83d0618b7f1fe360ae611da21153712b6bcbd4
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5b83d2385c98dbb6fa40cf700a59bc57a750ac1c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5b93bb665b31d9c9c38dec9e3808291b065b74e8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5b975cc13f715cdfd901b7f8c48b04ac87e45f01
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5ba93c9db0cff93f52b521d7420e43f6eda2784f
@@ -4698,10 +4796,12 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5be99a9e4f63ea9af95efd47471cb06c52ccda02
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5bed6110d86900c0ed41ca744edb09ec9d291b7c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5bee7281d8bdb9c0f343fdd1a268279c06310b9f
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5bf864ff50d281533abebd21074a7b9996240e32
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5bfda0b4f24ab33f38d26c67a2c52a4bfb5abbcb
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5bff099e3c8c65129aaff578c8fa3ac471ccf8a1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5bff5d269600ae71538d50869f62eadfb8f4b795
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5c0943ab11855ce671cbcd85e669ce09cfe7fee5
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5c0ca4128401eb3be67e9940ec0ce1833c76a732
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5c1887f3bab84ae26b10b8b3e1bf2f04b128f748
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5c1c4514446399eb0375896d3ff31335fad104e9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5c26466f606f7718e533edd4fa1fe89120b3e49b
@@ -4733,7 +4833,6 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5cd8e7467af5dd6d89f3232e66024eca29da9cbb
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5cdc39f9a9d17ccd88bf141b53356503199f9483
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5ce309ce5eb8f7fb312470903451b47bd96d85e7
-/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5ce3c6f6541dcdcaf53ceeb0443fd281d563b210
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5ce3d7e11403241b716ea81a5b408230a1b54050
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5ce484025a9d1e6e5051ecfaf681367e9e748f33
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5cf60a28154c3d82e1c60a059ff3d556549385df
@@ -4782,6 +4881,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5dd33174bdb5d203890cee3b6b187746fa2e9ebb
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5de05e2059e14f12fae430e7f34d70bdde130de5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5de195be0bd46a2469dc36bc6d446072d3596016
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5de6be96e3a321532aa74608a1d83410e89c6da7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5df10c6665a30c0b0388cd2a3834c44b56f25dc9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5df982500bd7583dae3a4b615b98015cd9f956fa
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5e02a40df6e800d48e8513c8325b5e9807786a58
@@ -4856,6 +4956,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5f71ade8f2ce19f3e9a6ddde55148cdb3c371b99
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5f72dac98b6b46c6b1dcd6677e979831c848431f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5f7681aa368b125182d30201cf9ec8a02b5a864a
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5f7a6a05d85b39bd85782a2180b8d79f628cbda1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5f7d2869c1b542d98e8f1cdf2b60c082ed983590
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5f7d470ec8ca946fdedf81b0b6e17e9cc8e548b4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/5f81fe0af8e497e05eb2a961f86967ef1b8b5ba6
@@ -4931,6 +5032,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/612d5eac0ddc37e2e6c3dc3ce0a175bbeaf35221
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/612f4d0bf0ce9558455cde5ffa49b1813d446a10
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/612f9bc363c99220fd36fa8371dfe4472a8f76c8
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/61321965a6c19052863ce5cdf486ad328985b746
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6135b2f6ed784c03bb64999629f5734d49812c6d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6137da7c8e7b7cd4d6e2ccc837af1c930d099dc7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/61381c3dae471a413764ac47c97fd4b953d9d763
@@ -4938,6 +5040,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6143baf450a149935e3ce80dfd6636177ab11955
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6144d22ef978e6a558dc19e538e03d6f17751976
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/61463f626aae9019ce707ed6c61e26c2a9256ddb
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/614e4b73a9dfb04fafb0057b8971186babc9f395
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6157917049b506fbd0d2524d10417d4153efd44c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6158e761183f03aebe76d74ae1db8464e30eca01
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/615dafd20f2d26778088c81b27430b47aa414eb3
@@ -4949,6 +5052,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/618292e46da6c0b1fb70761b8dc60e43bf8d0949
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/61834c875a672b76a734247aff4d22c996252292
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/618d9cd2fb3ef4c24ada9b85f2c096e90f2cf60c
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/61951fc9c8d6ea056822628bf6dac7878c8095f3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/61a49799282b5a61036f03afa53aa05cba114104
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/61bee5097357cfc2ec36fed7f44cc5b9f99820e8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/61bfbcf06594fcb05627b635ba94ce0d0cc5f2ce
@@ -4997,6 +5101,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/62b5343320e64441e78b56999b9062b93d1f34c1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/62b6322db9ca67dacea1e3a5c1484162b20633ba
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/62b991843033ffd0e9c6eed16c49cfcc6a1ecae5
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/62bcf781f438fb952a81dbbd003c159c7a37bfc4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/62c3cfe58c711b5da301134e1a999e641d2e87ba
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/62cd6e8c71d0070438fde403c31be675da66644f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/62ddc463e423f80d24b7197e84733511b10f6ab4
@@ -5007,6 +5112,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/630a8ef363008ce4a49e812ab5978da34c5e4032
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/630f26ca0169476530d2eee7e98b70ac227d0682
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/630f787206a116d646e44eb38ba9e4761aea1346
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6319ee40253be3989693dcf2bf4d80da951dc1b9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/631a4a64d92b53b0ad7fe36b6a164090ffac4094
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6328584b60794f1e13e07c703585624b3c9096ee
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/632e4af45e2bacf15b953e15ec47207099b8a3f8
@@ -5104,6 +5210,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/64e2cbfec5d3e0c032f802a1c805ae3385692342
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/64e554f83c8ed11c8951315df3bddde1ead973e5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/64e738655f01173e7775ffe680b201176472277f
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/64f4275eb9dc6f84781630891e3fba13424e6870
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/65029f84e545a4e0a641d5f8674fda7eae2cf7cf
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6503aa64f01940c547a86b8ebcecc4136efc37e7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/650a65cb8bb821144d06f467c956e5c7511a49cb
@@ -5197,6 +5304,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/669201cd0bb4e03da73049e031f2ccc3f627b9fb
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/669d4e9c290aa65697c55623376853ad18418812
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/66a222eab7a424c1ea55ffd4853ff60652817af8
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/66a2d0ac306822fb084d4aee0b43286893e8ebd3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/66a684e5cb76c35f19eac09d1fb30016d767b986
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/66b047ea94c5b0081ad27dba068be6296dec2755
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/66ba78000efc991ac32ec4e8bc31d2912f931af6
@@ -5255,6 +5363,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6829a9034dd301ab6ed7dfe309545c8917514d75
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6830a1aceddea0127ff47d2ec93890c0c65755c2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6835047cce497dc3b42ebc08428040955e9d193f
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/683ff297b2c9dd262ac7c86529294024c2bf0bc1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/68400d992dcffd0381dd8d60bf2011923d5782e4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/684134e99b46298b0c74c117ed12dc8c5ad06620
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/68466386ec219255ebccf6b5b4819213c9b06bbd
@@ -5275,6 +5384,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/68af8be2ae89c6cf5cd5b14e0b9ec6f0fd0bec1f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/68b508dcf6d94b4b38129b75ca5cf0ef58f6ef63
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/68bc63f6e044866b76dbbe9b469508826e39f104
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/68c43c511a0e59d9df338c1745fd2827e0f23699
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/68ce1f1d5c949ad605efefbb553d6e2c1ad8a563
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/68d27b6f9fed86fdd2d526514deddd051413db34
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/68d5d82db774351c3c7502752e9b1ec895a522bc
@@ -5308,6 +5418,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/697b7e56089231c44afb13fab61a0bf36df4647c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/697d7130bad25e0493547643943d37d583e45bed
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/698226d1a598cf28bc607fac59f224a18c6659f4
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/69831883fe89d9205d699a1af7d710fce4c352b2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6986a664b7914fefa6f483f414b8ba301113c40d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/699da34f7cf945a3b3af7a8655f537711bdbf05f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/699f90bb22e97e9872cb9528b7b0c73d17a7a18f
@@ -5332,9 +5443,12 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6a089b7dc18ced19eb8ec073872c3a95e3fb2149
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6a0e0bdc7edf131912c64ff5ecf26fb35bdc1e56
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6a0ea1643e64a999f162684b9ce8951e9d8d5a13
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6a18dc31b5a0bd4e047376938d851ee04f0a51b6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6a264ae38533870de2b93758e90efea5c84b2e4f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6a2899234dc2e008c67ded239450ff3edbcd6c31
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6a34681e7f64194a46dcfd0854adf34ec22ec3e5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6a3c84e2ce91bb6e3029f65931589ef6d49c47aa
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6a3df53b734ce70408f8cf9cabc44b9f05154fb2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6a41b580c277b13a71df3ba921e98d98475277fc
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6a41ff03be57c02a62dd312d0e58992fa98ac0cf
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6a4b8c1380a5e3b496078afbc65abee249c23376
@@ -5414,8 +5528,10 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6bef7b79a0f7a73a4b5c1936690379084fdfbaad
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6bf494fcee80477435eabe4992124383e830d5b3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6bf4ebea1de0ad600c175306bf78e26a570245c2
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6bf6561fb42d2bb2763f0c893105dde22205a100
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6bf8da7bc1e046af62c4d7e2f8dde56ba47be7de
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6bfe0939b7607cc76dcac6db742522c3bead6dc8
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6c06a67cce837b080446d284ce2b44b9d6411b97
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6c0a70466ff5d66b0a2acdf840aaca950dfc25fd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6c15ace80b74d8b01c3bed96e854d4ba300d6909
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6c1b37de87bc9eb6e65ba6e404a71da6049435ef
@@ -5426,6 +5542,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6c313fdf6ebdb625abc5d6d5bd79debcf00fc683
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6c3232a3f76d7b09ca19809f29789e71d6823f21
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6c36040bb5c5d63f37272c87c75464b0ccd91dc7
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6c3bbec20efdc41c3c0401a8f66d38be19510599
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6c3d46fb98abd41b043fe93257f64779e446587c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6c45fd71fb4a0a4402a9ce8e059d07a25be96949
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6c4ac98f9cd9b8a30a060859a122a875d3326646
@@ -5468,6 +5585,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6cfc808fd09b988417d99c27da47abacb98491b9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6d03457e0cad2d45e90f65c94520c5f41b1aabc1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6d08a6d9653a75304b4c04fb78bf36f55853667d
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6d0b74321c607ddf18b9b786a247db640c23ec9b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6d0e122163dd30cd8df2aea636dcb2677759270f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6d14ceace9850118b1b22e4eadba978fa4a8130a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/6d17789c925932d61d3a2a06f74f27bd5b142e67
@@ -5753,6 +5871,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/72df47ec8c63b3a9d62e536f1b27d07369429255
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/72dfb052341fa3b4857936ad16d84564ec922df1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/72e35d8287f64fc3d702019b8fc41c1112b790d2
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/72e3bc9e9b9a4bac3116735890c7fb3c463293ef
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/72e87e7a0dabc3b92611f52777c305e91197934e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/72edbcd0abd9464947be283b92a7aa19c6d296ac
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/72eeadf44a356ec93da489f4c5dc1ce7eb46027a
@@ -5799,10 +5918,12 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7393f4d660a92ce5a6ab9eb9042a9aaabd4eef9e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/739a80f8e01a7aa60407a92c0ee6f59f0f8e1f0a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/73a24578bb00e27cd199785ec058d55a40a85e8e
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/73a456e8040fecd03070a3bc67017fb9a59e4be4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/73aa73830918b16dca09879c18cdc096c8d71602
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/73ae3aafd70425ef7a554b82cede6ba315e7304b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/73aea568d68c29ff913a0ecb0c42125f0599b89a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/73b025de7b3ded15e8633c7d5e8c0aeca54d7700
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/73b191372f15cd748baf9a2c3ee82c6d5e80832b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/73b2e08d80c7c09637d99c8e519cfd582e961ddf
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/73b59a0a41a90710383e9077cdf8afff1da821d2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/73bf9b6236936a11c637a754275b3e64aff2ff63
@@ -5820,6 +5941,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7409717c58733b62713493ff6ad30a7649b0923a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/74108130682d2565f07d8e389a0d3313ea250cc5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/741575cc0f79a6b771954a310a59ddddf5a26247
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/74218455f18743730c75bc4f23502398b7c168ef
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7427474634066bb5eaa288d05938cfd02811991d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/742a99dc2e03ef64e8b113369e80c2ed267133dd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/742c7c6f4599ce7025fe1722a8a78da1e6b927a4
@@ -5844,6 +5966,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/74b68d9bb3df9d187ee24a8c4b690f2e5d527e22
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/74c921dd9097d29d08a95545b9b7586ac956cf2a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/74cd2b26d17ec6091e763f03a1ecf5ce2860320d
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/74dae01c3fe460d7c51644445c329662e549a333
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/74e6e6e5892cae036e198a2093df45d0d9d5c16b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/74ec77f955f93821bd40fd3e66ffb5c6d40407c0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/74fde3c9cf7aaa0913da61f897783217d937e1a7
@@ -5874,6 +5997,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/76019699dec8cc4eb8bfd5823c2d435d9ddb4ed8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7605370eea35f926edbd5672c12ff6003d33d485
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/76064c702e27e20ddb2adadc73620d383bb5605d
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7607656d824fd023d4bbc040f931cee8564014d5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7608349784d4a60acbd8dcef4d25961dce8a9393
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7608d6716fa1eb10882ba6b260f1079eec659bac
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/76127a37d609e05e8c7ed90d9b87b186a89516f1
@@ -5903,6 +6027,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/767cde2edb6ac7edfe803b8b90188e54235bbd4e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/76833842498434c4c4692a23c08b63fd5ed59cae
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7696a38caac1cf266bd34778e2625e60b8e3eb81
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7697816abf3cc1d6e7c116b8bd1004928dd55b8c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/76996aa49ba483ce876558c4f9a398cb38a1b27e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/769b5bddc53685b5ed6e0155c65b8eb15c75437f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/76ce1ff9699733ad23ac849e95c23568770fedbd
@@ -5930,6 +6055,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7718a88787cb6572b260b2160d3781199f74d3c6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/771a731b33e9cb629ba7081ff28e038bd7a14776
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/771c0dbe0d4ef8f69abd21302157677155f9d72f
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/772622f874e7cd8d4f01ce2320398e646f24429b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/772915c945c82bd46536e99fcb16b1ab4d860897
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/772c25f3573a641e68f7d273a011a3ddb90ae3f6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7739356e376cc26a79e5720f8ea12500516fd3cb
@@ -5949,6 +6075,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/77816920bcdfdd219fa7e89cc11129000fb68dcf
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7783827cf501220ac518045bd0aafdf5008c7eb2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/778862dc690aec435139f88275e26c2f698fde15
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/779192b736f0dd7f4cdd8348917c382d11afac38
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7792d92900d2fbc80bce9b55e50b0a7853138325
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7793f538f12aab2d9413253e86b2c92a3151c815
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/779775afee280a4834bd27e79f88e1894190617a
@@ -5963,11 +6090,13 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/77dadb63f695f46cf193fa47f417554902a81b64
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/77dc56d3cda56c4719d493a3168c38c29f168a94
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/77e7a0852d62273676568729fa97c3c95c3b8bcd
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/77ea769cdf580ab7db554afd7a2f36c1e3a8f878
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/77f066d1ca57a97d29c06e473ee7a4cf52e030e4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/77f5f23016b5af961331cb71893672c57f42c056
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/77fccb147f0ce49eca5d890390db8280e1c2bb64
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/77fda12b8053b30c795694a24716b388018840d4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/77fde9e1ec2af4368715af32acc4582642a8842a
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7800311b78ed3103184c61f2a7192cf27e1fd2b7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/78026fd9b604f91b4a35e2a2890ed30d7deb2260
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7803119f120b776bfaedb025daf1a9ce1d22620e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/78152a252c47f0e82f6e46a4d370522af8295099
@@ -6003,6 +6132,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/78c982eb6924915c7b7f9a5b84ffd30439b9fb52
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/78d1b3ac55a71252174d563b05eb755f1de661c2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/78d3eda48c56ea85fd934603777e44e544285f9c
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/78e692ff1ead402d7fcbc571f9fe08d43840136a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/78e7f6571e3ff7eaba1f95ee0ef08b58facfa555
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/78f34e0e513b13701dd4b19d32aa1b7c5e3f0d88
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/78f4c193233e74f2132071d21192a5c0dc5505ff
@@ -6150,6 +6280,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7bb2241c79ad4bb6725c85eaf43877b1cfb5998d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7bb42683816c23916e547de7733539e3f3d52f6c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7bb9c3e7e6e872d9df2a074ee88392ad9348484a
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7bbdeb69c3167d73cada7c07f0480c82732e2c0e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7bc8c96536e7cb68cc47ea97d4c4510433865ab2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7bce54be13816c11baf58739b46e563b994b02cd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/7bd24aa3c30d6a1ba3e34d6e607036ac42125f8e
@@ -6442,6 +6573,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/81b4a78e988f9520c5a478e47ab54c5321f6ca8f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/81b69ab78d05882d8254b03d5a86a55e4a0de0d9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/81bf89e6745d5a892c3237aa7d3bfc84f93387ec
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/81d0edad4833026278ff2c51d566b6d7feab130b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/81d89a3ed5145ad6a52192e212b63727e574f631
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/81dee2700d3997a7cabb8b5124964f4115f1f256
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/81e387486f2f1108b7c7d3b10e43f08f1797cf64
@@ -6582,6 +6714,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/849510585c4b271fad02a78c429a5607645e5e27
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/849884c75f7fe6e9c6774742a2d3411e53b6cf6f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8498eb2276422fad56231401c9f71f66ba730ebe
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/84a8a735d1526e6c152b9e975141cbcce15a3b1c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/84abf2cbe6aa341c3da2423c325097f66d0771ee
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/84ae0f4e6f87da67a9af3e62cabb8a14daa94356
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/84d9f8b4aafdb6b0726463fe33648cca931eea76
@@ -6595,6 +6728,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/84fc3d663b8a77c3f1269acad54d386a44633ccb
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/84fdb552b56f272b574d7858025583011ab0b7c4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/85039242f2e5a09d4dd0b5a9211a9d0277ea0cd2
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/850573d6674d286eb1de2fd13ccab1529a4122c4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/85060e8e5135be2a75bbfe64863aadc420d3aa3f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/85074b44e40cc1aa3df62d64e1ca06dfd86c88b0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/850e2af4bfbdc1701d46354737d63fd1ba4f4e44
@@ -6720,7 +6854,9 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/879d83acfde8a412d412287c4db5577ab672ccbb
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/87a4490a55ef7b6c703bec68a8ccb48401a97031
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/87a6546187f0ef341dbe5c55ab014910f0d932c7
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/87a85235bb48cc06f25332d6187678b33f351311
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/87a8ee8ffb548aa176fbec2d9272dc85d662069c
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/87ac543f710acf54a3dfdaecaafe0b58a9b28972
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/87bbb818cfe58af9b83e9f770e660d4c898511e6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/87bd60b476ec7979b915851af70341454d746d1e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/87c5d05021c7eba823170376d643298969b9201c
@@ -6740,11 +6876,13 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/881f72e719a388019ccd62fe708a738d945bcf2c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/882069b6cb5e564683dbdae8fc3e61aaba1102f7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8820f51d481d34f7356054b4ab4a930c503c9f10
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/882b2dfe13310b2166b16ec3f35132c6a4d70a8b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/882ee14d753be75d21baea81f2ba4432ee61247a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8832ac0186dadfa9d20d83048c0cdcf11a07013b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8838eee57d9c18274985ddb59a2132a0e0d2e959
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8843c405977e6bb1653c9b9c87fb4c7fb62c53a8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/884bba48e43c11c41846ddd429db1617971dbd3c
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/88532d584ce9b87a4af8fb82895e231064754bb6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/88605f9715ce1aebb6af1037a3ef036f244ae47c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8864fc3819bd5d633a3b655df4695386bc0c77e8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8865e1366669ef42e06205d8d3ddbde5fef70287
@@ -6766,12 +6904,14 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/88ae6ab75879c4cd493ab025d9f9ab789dd5ec13
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/88b0543259b341eb3b320dcd67a04bebcafabce9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/88b9a26f8931cef8350d4a560bdb97ee89864c0b
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/88c8b726500a31bf5200985b87621dbf5ea50351
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/88cb68e58cdbb3c41d61daab59a1a14a3dc0c07f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/88d387ade46a095d210ed85ab6fc35cf3b1ac561
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/88d5a207128512e3686e674f17e7b014b795705f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/88d65c76f1278b63785597c183fcbb47f5ba1320
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/88de7056d215ae68f0793e56c2b94ef8767b9f66
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/88dfb6d7cb0d960a91e075e49e8a10d9597bd0e8
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/88e1aae282f32c0f6a0bf91d78d438fb33552551
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/88e83dcbb68acf1d46e7f24a7b2e74a2a99131c3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/88e964fcc53140b025410e97ad2582dd78ef9ec0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/88eec83f751d14b8ba7184452f05ef0359a0ec3d
@@ -6815,6 +6955,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/89ba456eb0383daf824d6cdbb3627490b34ea686
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/89bcc6fa9e9c217b12ca7d8de91f0b4af6ba1f96
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/89c6942072ba7d46f46d1fce64d4dad14571f703
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/89c8388052cccdabf2efb900a905a17e62d1ef6a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/89cd98d317c28c34ce1ede3d8803f895a374441a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/89e35615e145c7f78639832821db8a9ac0da1533
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/89e45dd92ae1b6cb232c03023e794fcacaf47e38
@@ -6824,6 +6965,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/89f017c4a5663166ae6c9be00a36f37cde54bb7e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/89f53e53e4d1b259b53cc17791c08c60ee487e13
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/89f6926f1278b24fc875933006907dd69dace043
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/89fb5e8d2a2ce6095d95d300205274af4f55519f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/89fdb534f8c7271e4505a170c57b83c89e8aca06
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8a0a8d6f0ed783b93e4263f35fd61b91a1fcad60
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8a0b2e199a5f468ba1d58bb11174ed9a7cd7fdb0
@@ -6865,6 +7007,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8ab83e6f11ae7eef61f2da9d3ad25bdf9b62d983
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8ac6907fe6bcd3d78f9a8e80f2f0ea06aeef0b52
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8ac84353e25c9879657183213150b35ba92e14f9
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8ac952266d49fcad8d1521b2db8550b06a13497a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8ae78b016a4bd7e54db1d31e796052cd0a003fe4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8ae8eaf6667b5eead708baebd7349ebb4651f431
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8af968a51ba0482a91b64eae8e9c07da5748af06
@@ -6888,6 +7031,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8b32692acccf553629e9748fe56a1cf375eedc37
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8b383507e4850a4e93676e9e0b9deece8a74807c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8b385fdffb10085d36721d83080d4b9d852e57f4
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8b3b1356b88daaab4f80179d9406d69a69fed502
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8b42507c3afec8b6c411351ab29a8ef6bd0b4e6a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8b47559be336d353af2b4c224e09cc4fa3228a92
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8b49e6017afcdf4756da41c42a4f086a75837962
@@ -6977,6 +7121,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8d25f9c4b92c71f3ab9b06bf9058bc608f3632fd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8d2e30e0e3b9840d60b99ddd8497c9778b26372b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8d35adf389b1ca3e737e6589a7e49821d91ee61f
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8d41dd656ae29399643f9e114f9fbd123a0c09d8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8d448d618f3e3707ae0ed08fdac95c012e9be360
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8d49a241fd1516ca80d716b362bdbefe926681b6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8d51d586458b36315207d2db39c84d709c2a0eca
@@ -6997,6 +7142,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8da58c694ec367b2d20a13ee25f030bd558a3959
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8da815875ae53be432f572620f54d273c165dd8f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8da8f8b0b1c01e676443f9a17364e90e9902272b
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8daa07023cdd8922a3007015a0e5b7301f883d45
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8dac0e9d1ea7f89df57baf8357c3d095567b929c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8daeedd5287630ff02abee735cdbe899b2af7f96
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8db024aac4415723cff251be979b80c3a757c17e
@@ -7099,6 +7245,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8fefbfa9d9f6c67772252f4e3b8e282d5d100c39
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/8fffb59e4969fd5658bc8760c82223d535ffa4fe
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9001a4f2b73e13053ee0081572dc4f14004cf11d
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9001afa423718a237dda44b84e4f19bd2e1988fe
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/90042811d57106e8dba55a3fb46fdee882e9d44c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/900b11a7399ef886c00c2e89b3d2f4bfeb6be51c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/90114cacbef9fbf3a6908de4805f5ba54a414eb2
@@ -7117,6 +7264,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/90603e426ccbc43b7069e85b6ee16e3948b79e90
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9066057d1231e6969ec217f05067dfa71fbcb70a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/90686ae0c434f98c25473a3ee2bec50710769fef
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/906d9ff16526bc2d78bc8af975d4244031e60edc
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9073968748eb55ad19ffad6496d7ff5ada40ecb8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9075db0a41034841f66988cf6ba11de2df731320
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9078d70ee3d18dc4468e9b18095007a449117841
@@ -7176,6 +7324,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/91b9bb41c6971bd2a3f7514288419b98f0a84371
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/91c67ddcb7d905b900b10381c571b1ff4112d13a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/91d1f0db20eb9c3d012d12fcd9377ab90cb6b4dc
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/91d4aeb341e26afab98663d085b47fbb592d990e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/91d80799e5f29f672bd2c15288896384f16d634e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/91d9be33822366bdde92d882f63e6d30e590345e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/91dff3f50d52ea968130f1e0f36b4d9861f2a1a4
@@ -7210,12 +7359,14 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/923bc56d83e013a60502fb72e58caf5c441a031f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/923e3c0f895906a9d02ff889b65f9ddac10626cf
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/923f264077b295ff9f92b8c2c69f7182036a6ea7
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/925587cfbc3e5c62284983920c47fcc4fa79a080
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/92562c3afeea93fd718f7945a918c49a1d499dc2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/925d82da70ab7cb17fb4171f8a5aa55da4ef86f9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9260eb0e4f864fd7720b4c3702da1eb39d2fdd92
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/926119a0004f2fde8e63790a23940d6eed343fa0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/92634d07079e2d5936d7717d53353cdcdb87cb6a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/926ab6ce79916e3f6e1946bb7530dd92694f5161
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/926c19f249c5632fd85b500205b57323214097cf
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9276613bf664dec6090703875d8a8b37f457a8d8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/927fd7f2328ddde5fdb1d0e06078402848a7903b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9284c3b129c402673c47d800d56600430a294d04
@@ -7233,6 +7384,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/92bd6bdd4b3eb2a911409e9adbe082fe4c793b88
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/92bfae2f47b026fa84e72b50a90c7619273fb0a8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/92d0ae0371eb99bc1ed06fa40a75d88e86ca3b40
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/92e1eb45e299f81155f2bcd0545fddd48ed7c30f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/92e38ae56698ccce184f4fabe6d5c2c20af47c78
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/92e948870814417e3a92139646e0dd09044c5dc5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/92edf7a8692039080d73a4812699ca7f3a984a77
@@ -7287,6 +7439,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/93ac8946882128457cd9e283b30ca851945e6690
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/93ae6c69551bad0ab9229a0b7e62e3c5cadecbcd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/93b0e050fe10535eebf1b8b88829ebc00e15e95a
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/93b6a7a600fffb2723a85811fc627785559442d9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/93b92c878b3b2f9e15f8c0ef9b5cd4586e0a7fb7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/93b988fe606d0ceec9f83ddd321a3af8891e008d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/93bc898c50f39577c7c26b01325e1c7bc004b316
@@ -7343,6 +7496,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/94cd3fd00d66df578db581ad8ce0c84aef768f3f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/94cd7af474b2c0bc5855611279f4af7bae0ad1ad
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/94cd7d4eb3a72c911900876e5d78ea80c87614a6
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/94cdb1eb4f63eea406defa197b61e245e049e9b1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/94db448071bf614c6607c5bba019ca3db8552d6f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/94e064d55a04c6fd4856c80a4f7752a35472ace1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/94e2a3dc3b52e7b4f452148f3d4e4fd22577fa43
@@ -7401,6 +7555,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/96162f635069d1e5697737454d9914f06d1aba7b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/961714394edf122b650da028cc38b64f33b678cd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/961772f91784a3f10e85c34c6103935e7cc42535
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/96188a3bf5282f1f3329a1f8e052013bfba2ca1e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/962258b2f0d57b4f9896127059ab8a5c60a42e60
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9629aabd4bb6d5ed877b7e2ea43853429146f3ae
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/962b56025d78808147d0d8a3f7e1e915167cedde
@@ -7412,6 +7567,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/96469b53b9d469bbb70f88d479fd418264dadb52
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/96512120bbc9606a0a85fca5bd0b610a73e9032d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/96562eed08e2b0019c89742d9058430a2d8d9320
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9666417c074baa39cfe0c35178b42b9a6931343f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9674ba6615351777c1f1ec3d855f48a4656d3140
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/967503d56e88269943ab6ea3691d4047ea78946f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/967a45ad9ba902c043adfaedc94cac3b7b951637
@@ -7535,9 +7691,11 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9907873bdcb1316ddbfaca803e8f30494abaed19
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/990ae145e6c25d91d762d306d1bb9da006eda604
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/991391273e03ca88f86adae4e4cfe0d99a90c4b9
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9915f3a74680755781877749512b4ece931fcf82
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/991c0e1bf35b2a372afdfa78a66e7b560ad63a71
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/99221a586e908500cf20341af4108ac6e26654ee
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/99221b83fc64b77d7ec8bceab0705c242ddb1382
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9922f6618d5937aca080d531bf171b79da1ff869
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9925af23ff5f04c32a54f39c7f9294ba27575d64
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/99289a87386395af854a75eeb61135d422b27f5f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/992dd7c70a104905ded8eed31f23faffe3615c65
@@ -7727,6 +7885,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9d0a6e81550bc479f8d47ced6ba674d8c884d374
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9d106879f1e44ad9471f708cdce7b017983c14a2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9d17fe7e6705beecd0dad4c68e3b729024bce146
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9d19bc173b0f3a9809d6e5cef2fcd818806c5b77
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9d1a872b03dd71e87a6d87ca553aa6258ff2aa32
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9d1c8da11fac283476214409762845f536761dda
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9d209557a70854c78a56ad82edaa9638e6879b9d
@@ -7764,6 +7923,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9dadf75506ee6b17861fab9f2d72b55733f3128c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9daee86a1133592b8baabd101dd353a38e68d73e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9daffed4423366f8607874d11091cbc91671c7ae
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9db0259842c2263cf7f0337af4061ce2096cadcb
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9db2c5b793f157c79e85de72e0104a8bb105adbe
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9db482e967227d14e6608f5390c243a0ad09615d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9db4e9c01c0181e5bd11c7b4f8a88b58cd10322c
@@ -7841,6 +8001,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9f4a391edd4563040f64727437e0d01c1baef0e4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9f4ecc481a6525cc00f7bf55f3d0eb6766867369
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9f503d91abdc7d49abaf14bef5c1646532eff1b7
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9f57c9417910923fb712e1ae3048bce9e263fa0c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9f5a306b8aa16365ba9135cd64cda19dcf69230b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9f659e5dc6d5a5fb5ccd55832c35fd244751e7bf
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/9f66afa46c16cc05039f89aea4bfbe271968d776
@@ -7890,6 +8051,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a01b3d03977bda3c3de819e21059b63705dca70b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a01bff59bb7c750bb998dbdda07fdb99ea059235
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a02eff868cb573f87ba93a218507c979656ae68d
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a033da1e644b8a93882fe781cbec7a95c5c783ab
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a03e11e8e96e14ed01e1b149c4df75d67c626320
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a0521d9824b8cf113a213417e2fe0cc464ab791c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a053f20dbc9ee281a40798188e23ef7dca742d06
@@ -7927,6 +8089,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a1282cb1d9e386eb59927f9fd627ce8ef7e7ad2a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a1286febd3253fd3ef0303af55020754a668b68f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a12d69a8688724a520317e7b011ec07637893fca
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a141167bb88027044e1d8019826cf3e3fa9f2db7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a146a64f7ffabf63b1b03ce00041e4e231da6a32
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a15029850bcf5ddf4786a30190632bca324c41f9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a151bd4ac09185235d25d4888567c91d0bb16ebd
@@ -8074,6 +8237,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a424616d833c2cc9d6a6c4bab7bb02cc7baa4d04
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a42cd728c61ae98bd1ebcd2eff7e15d9aa18096b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a43622d4f12a2327a5ca9df693e819f72c1ee734
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a43e133451e38cc618a7b4ad509b01a10bb15dc7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a4419674f803641455ea4ed185599918838b1c16
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a44477d1bea8135ea453467e14b3d988ac87c034
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a446a29a43e22e7d3b75fed1c0335a468a261d3c
@@ -8205,6 +8369,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a7583120f025ef10cf3598336b6d8262bb7c59e4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a75a24b65f7e9d102f3124c7a0686517b9698b09
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a75b74489b3ff6fdc23d8367ee021c645d1c3064
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a766f8e20bd6aec4c2b6f71660bf19be1ca1a885
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a76874ef40fc363eb9e918c2845d561b499ae874
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a76c235404fc20cd89e66b24eff8f56fd0ad0ddc
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a77d41c8158f36574e609f6eca576ff2c45ebff9
@@ -8239,6 +8404,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a81052a7c77c5321bc11337b2aa1b18f73509434
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a8130db3eb5fcd43748f5a116e97a518cd122451
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a8198b21147348ec7f503858172f29f9f8c89c59
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a81b492e768ceb6d4c17c0d2d55973a5e3f75033
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a81ddd7bd336ae89011ec8b17fe1a20c9ce835b7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a82338512f33dfae6758915121d27b683851128d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a8259dbba02d257934ab3e996d03464ad9ad1b72
@@ -8273,6 +8439,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a8afef59bd2b0bea9ea92c3aaa0004a129482487
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a8b052b0ea6ae25f225d4f83f1a3306209bbea5d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a8b059b0680c7b95a882a1a61d48b3cfe19fc4aa
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a8b4962b1ae21d6b2ee11f856d3e4a820196898b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a8bcf01ee49e11a8dd6e53b0bb0ecec0e308dd34
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a8c8709c707e9f7f967e0bb38825ac21f721e565
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a8ca1fa87e9750072d0a023a70579fa38a1a3c54
@@ -8287,6 +8454,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a8fa30a3acabf52cf04e95a59a93fa0fa44ffc74
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a8fa88e46db274761effa40e29234a0c39b8912a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a8fee2db3a583b4f26ed64357a1b8e2cd44747b3
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a9081d873eedb680cb21b0d824f0d34a7cec6193
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a90e174cfef1c28e618dc2af77f0c0a07eb34b59
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a915ada14a439f639f90d3528b76574c5ffe2c49
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a91c09dcaba27eb04ef362bd6da8abb71c0ef184
@@ -8298,6 +8466,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a930aa1edcf0041d33f464ea5e26be398f33efcc
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a931d2bdc560773e63819cc5b6f68236436e1352
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a934595fd0789995100f17b1ea781cf045ca7b88
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a9354d3fab815135dc3aaf2927c25e970dc77eec
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a935e2d9606ed6231609b4a428dde48812ad5b67
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a93a83a8fbed6ec340b1123265c93c6e9619140b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/a93dec8f6a9fcfab9be4fb2132f6d09a7e703185
@@ -8383,6 +8552,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ab7d4d308703e1d83e0b3878753649eb9d62585f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ab83e50cd8c7253102ffacfd495d5894b27c9826
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ab8e5f54d762d0df4015f1e6f9ebbec354255caa
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ab8e6661f6ca19abe7fb45127b8b619a82717506
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ab8e9b602abda61f7f67accfa0ff8bef39a36a8d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ab8f2fcefe02de71970668865bf60f46d3172287
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ab8fa1365d8e2334ba12d47c3b2842667bcb9850
@@ -8487,6 +8657,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ad4c6f78e408e0f0ddfa382099e13af9ca009dc1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ad4d2fd3f846f42859c997574096500072df198f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ad4e19901e02efc7d0828e1a2f55b78a30ecdf73
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ad4f9b81c5f98275c946dd510596953c39d6d171
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ad507fe8161c9bb801bdb43a2e105e560fc9ab0d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ad574788783613e2f42c1134b4f49a01719477e0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ad5c7e7227350255f93fad76eb437fa0a8a7c68e
@@ -8686,6 +8857,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b15b37b786b4b1237f23b3558c89550cd706d557
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b15c40e9e1f8c4ea15d91491d1bf36ea686251d9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b15f191028a3ef6007bdc3fa27a657161713d38d
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b165d56474d458c74b5e5419a3776300caecf1b8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b16f56168dec482dec0dac8c0654afbd6c5722ed
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b172f269a3eb44b1845a50be1f5eb0f082242073
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b17823def6f4c288d9c3bb50272ea9a9fa1d71ea
@@ -8700,6 +8872,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b19f2a693ce0dcc0217af50f77da71c37511a2e3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b1a0c33c308c0b9a26abca77047dcbc35b90b2f7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b1ae407862f35b605cb3f35141dd14a83f98c5ac
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b1b8f13a940d6ff6900532b4883a79711c184480
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b1c8799e6cbe5372acd8e55959eaebd8297c3bd1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b1c87a10cc6cd4d5286604e3c58b846e87d754d6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b1cb8de8a2366f13491fd142e8e09eb9e45d1597
@@ -8843,6 +9016,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b4bfa8a94dac7fd4886ba58779af48ad95b2e9c1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b4c4331a3341399b355fbf3ad71d812a84fca801
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b4c4df87217a6bb27bd4ab7021b4cb9b6a4edb05
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b4d8f2860b3030f35245355edc99ccb880f9bc15
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b4da084b1fed0f1ca35e8d6bb9a214abcefb32ea
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b4db9d118eef009c8bce644e32c3c8d67b83726c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b4dbabec7506fdd641a56c99b71dfc43f0f3c6b7
@@ -8989,6 +9163,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b7ddec3d1e5d3a5fa76b0a2faee286827d60c3d3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b7e122af3f8e81805d9351df059c58c31347cc0d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b7e1d4796ae66469ccb72e023e91e46a81386cf0
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b7e2a7bbb368fadecd6fc69abecf1fda636f69f3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b7e943eeabf3f735c99099b43a196d82d87bbc4c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b7ea84088b0a4aa9cdb35b99c944956bb8e1d523
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b7f1fae4af4fa367f5f84318a1450999bf518f9f
@@ -9016,10 +9191,12 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b876c2220d33106e1fe811ca0016cc8cfeda531d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b87fc09bb704932d7eb9d14b0a2796af38a3d696
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b8807b9523508e4c58827272a60298a56fd0b673
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b882ebb9638eb8aa2411a5c5776cfee1d3123ffd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b88acd1efe722afdf6e2045ccf0dc85c1fa7abfd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b8903ef412d9bb38ef9e27041486dcc9ba9baa4e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b8930f92794d96f88ade79d88c8fbb1da740e596
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b89f0fe8b9d9ff9bac6c570cbcaec7a33de17615
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b8a0e86c53f0d88da4d3750b1434bd21fdabc8a0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b8b8a914dda2d4d2deabbf488e825cc1749aee9e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b8c269cc8341279d5a17d31671970935726c6d65
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b8c7db38eb0f29848848c5d8f9abf2065f84dece
@@ -9069,6 +9246,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b990b964b8b7cbcc0589d9275e31b40a114d9417
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b997062c7a68483938e7e2277b77d189e648252b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b999947c8e0530000f225f4c241c8d848e990036
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b9afe2a5ea577e66710b2e1fd754abf52e56db8b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b9ba6fef4ba774fbd703a19b4d39c7ffa85f7eb9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b9bb764d0cf1d02a5d56bc720fbc9aea51c87168
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/b9bc9ba4be92f50cd3d6ad2a9719b3fe63382203
@@ -9246,6 +9424,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bcfeaee98ce05aa86b3872f6b12c7a811830652d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bcff1d2fa4789564d0346193590dd176d652aeef
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bcff416b64ecae77349d09efd350787c51d12fd4
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bcffd73d24ac85deb4fb21419de132ec618081ee
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bd06c74c96873c20cfda9ccf7e80d89452b20593
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bd09c6dd633a12766ab42ab1f937914ba71c5642
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bd0c23d5ca62db4bcd2c84ab5041925f248a0857
@@ -9265,6 +9444,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bd37ecb1e00ef45070fae3c4b81673b25167f452
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bd45df2da3d83e2b8294db82cabe0ec35cd88162
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bd49add3f9190a8558a81f1b32bb20581edfa170
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bd4ff1e814f566ad609509fd63ee00e490b611cc
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bd528f7d9d4e46138a33d050e13e4c085c3b09aa
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bd5c64530a31c4af6689e8ac788e5eec69c67be6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bd6305767975a9c6adb2553ee75ef3e4c0357c26
@@ -9277,6 +9457,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bd8366b4fcca53cca0112c4a2dbf93daafa37803
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bd8485a38e6d949ff2cd5648764f1e9cf413e9bd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bd8583842f00b644a2394e81d1606610e8a49149
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bd883d1365d00067f286b18e17bc487bd7b36e6d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bd88aa70befb958dbd2e0ac87a91b002b40b8302
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bd8c49bfe6c57685bb7813a599d1fa007e5c3457
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bd91c9d081dbcae5e0aa57d0ebe178ec924b014c
@@ -9348,6 +9529,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/beebc1f86d52e152c1a8e7aa14be94a994c2e187
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/beee8404f99f634cceee7d3084c05744b3b60945
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bef79bdd4b72bdeb86fe25e754ec0b2bdc243a56
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/befbd6aeef9edf7836c76a9ede526090c743d7b5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/beff6fd90c5f45919d80934bf07885321979942c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bf019212bc98976ccea0c36a1c1d60f99cae956f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/bf0244505890e6ea9404f88535de01ede7a34839
@@ -9465,6 +9647,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c10fb41414c3edabad487fd20f7171a61a61e17c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c113c95bd290b74f1b62eeb4295696af905f5468
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c119742c3307b93552a90f9d544676c2ca87b304
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c11a82c1be5a57dea0d240ae9e5149b52adf1ae2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c11d780b4b5c0feba24b4795be9446c13b9ce4f1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c11dd69c60f49265dfe4855a91043711468374b5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c12049a27e6cb2aafdea83105e02163483adc0b9
@@ -9520,6 +9703,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c262b007de525fa62e9686b250e684cbc09e3596
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c26737ebf84b20156947ca736b97dce60a4d179a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c270c736adc15c65f21c404415b6cf9e70c2848d
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c2739e4fb4267e4fe90973b5f286eb73179df5e0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c27a8d5885b051104d95ba1f49b14033b53b0def
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c27ab89c6c3bfe5bf2bf71f9c3a6ff74247862ba
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c27abbc99c5bf069c1188eb31111ecb00ec72edb
@@ -9550,6 +9734,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c30d9c13f0bb6e5947c3f75b85f70fe9d8765990
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c3120c84dafc4941f081d3aa74c68d7d5b7fc881
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c3229e6dd186a81ff2fde8304a61c8106ce01cd0
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c328006ce575874f61038a70fd7fc18a3237839e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c329de0f3f386f93d031d15c3743fb76001ac33e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c33940dab6162ec819c938f542bbf72c20be00ac
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c33ff4aa46a7593d7a59ab4d04cf8b5447c236dc
@@ -9572,6 +9757,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c38bffca11b3c5ae8114ec5264418294dd681fa9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c38f2d2f07af760bb2d73eb4619a481d4ac914a2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c3941a8a3a196daa72583356095d3a22c30357d9
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c39600538a7add65a4b8f77f6fdcd4187729c05d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c39fece85543828be8703d734a1ce4b1f825761a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c3a5bd276a2d05ed43e5086a4ee7350025f8a08c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c3a656cbd9629d91d363c3895aa1c9f5aaf6b99c
@@ -9583,6 +9769,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c3c4cf7b5746e191987d1e80ce79e242c0d5441a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c3c7b1401cfa8be0f5e98dbb96556c038ea764f1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c3ca0f5e3d2d7f161e1df65bc1b70d0a805db7cc
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c3d6ab4fa6acb462dc7504d94a34f2069bc7cdd4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c3d7e8f57be5af73799d5bf11e767aa18b3a4d26
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c3dc4bc0d5ca2b40998f62746d3ea9757f35ef41
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c3e2db68680867559fa7930cc187a7d392a69826
@@ -9626,6 +9813,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c4d8bae3258abf60af80a1ca95d1cd9ddc1c725a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c4daefe47c1ad727280d46c4c180aa92ddcaad63
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c4e073330ddbc988af721eb903c027e25f2ecc68
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c4e3060a8131644d246487677fd1c64d6e1f722b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c4eb95e1f3912446c2648bebc0f0e5414423323a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c4eea49ec2bcce2f997a253d4bb17ab7b22db168
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c4ef7ef43588d935861debff6655d2130fff23ea
@@ -9693,6 +9881,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c639fc2d19cf95084b16280511f8cbd87d402f5f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c63cb97233bbfb01061cd0a5fd86cd2d261877aa
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c642849ce8c1ff2170740d22c148ec3e2dbb3807
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c654c8052079adfa442420d2db6b249eebed04c1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c65ab9656effa765f2f8e9ce8683400459d5b509
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c6608d85764cdfbb811126febde493fd95787d0b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c664e4631662b502c08949d022a7fc1878c5def5
@@ -9714,6 +9903,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c6af02a2e91b7643a65e4a5e15a392370b29e9c2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c6afff4c45840319e76858aab10b53760bff0e8b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c6c8ff9cf3cf0ebf75972b2145ae7ffa026474b5
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c6cbbb5cb2bc30de1d09a38517d958e66c70cadb
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c6ce4ef8003cd541bf3b3952e7262df88c7c750e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c6cfb388521d56c9879bdfd6c6c2507e45b87083
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c6e2d53f12f02758b02c482f6be643314e7be1f6
@@ -9825,6 +10015,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c905208bdba823a6ff645b0f41f60638e37feab1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c90bbcac6a5d7d680f3f3ea5ce8faed6ab5b479e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c91b49937e6101bedfd4757f5dd3b01043934208
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c91da02f136bd0144a9352290a68edf4e8f91d1e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c91eebbad420da0279cc2f3c8c363f8de2217e45
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c922e4da2cafe345281b682809597a5786c99d19
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c926705acdfe6cdc07aba8f41737ce66d7e53b07
@@ -9844,6 +10035,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c970e83482e3f53906dd916b8c675b3cb8c54599
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c972e1d83342ee06e9aafab8c523e364f6989ad7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c9731843979535a15c7ef0bf5317332df273b6a7
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c9788466fc68e51f154e802874fc93b039c9fee2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c980d7495f4ab92c039fb830ad46191f9dd60896
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c985f495306f1bda0938462755a3349a797f1e74
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/c98984fede65f757474b5b2ce51921bb3b7a5238
@@ -9910,7 +10102,9 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cad5733ec8980c2c7ed0849314ee2fea379c19e0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cad7960792933cbeddeeb1f651c649231457adb1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cada07b809a45883769d8432a49befebad3b6a41
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cae9a23089beab54a152ab4174140750b1f905ec
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/caed96ed91895e4e0812addc74fa3d89e2ac1615
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/caf4b4e390fb1cb21e51b5fcfa0d1c7eec17c61e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/caf659e2802382fb47addce07146c65fb299a0e2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/caf7d6dad06d0184acd9f276239869a24de26ca8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cb086f4b1857c755a1e3639d5a4cb3bd9effe641
@@ -9994,6 +10188,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ccb86c1d2a544db2d44b7e282d77468e93d6153e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ccba0b41d9b4e2ad9981a1fced10bbb1b6f74366
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ccbaab560acb47ec2790544dc73341d9b6c705ac
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ccc037df04b71f0fd1578198c84fcf3e328d3978
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ccc39a051d70f93913dd85c4d2cd6c637cbb2794
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ccc8f94812a94bbef79659f4f560eb533eaa5d07
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ccd482a775e8c79a9bed794959c5ea735e70f690
@@ -10064,6 +10259,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ce1ee16b6705f97fd2fad2e5906504179a7ab2dc
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ce26fc54a9426aac6cf7610312197395c627a1ac
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ce2b264a08ae8aff54b869b71aa5c53fec250346
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ce2c31fc88d8e52efcce85f372142163b3f705bf
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ce34efbf93d4bd40fbbaeedfe02a03fb2e8f5ff3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ce3d1c68b81feaf46ea53db0a6a86e9734fd3faf
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ce4c8237b5d3ab6d328b46bfac8bfcd1a49ec2aa
@@ -10088,6 +10284,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cecdbd432c6a9118570f3178c12f95949222664b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ced6403779027a2722c729b2124d84837d6bd87c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ced7e4a7a0cd2420696a96b317400c3bae52e91a
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ced849f14d9465f527818ef8a1d0cbb0920739af
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cee02d8c0b6192d1745a439e669bd1ebd459b302
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cee115cd2a1c266d3df04c4fd62633ba12817267
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cee1da5892344d39495900f2bff5981b2db0d2c5
@@ -10122,6 +10319,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cf6a8316493c2ced07988f462e909898782f8580
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cf740868ee85c48dc8edac57d480a42459dfd5e7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cf89e0e100bc0369827d255ad3d5e94dd6425399
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cf932c52322876c58a89938ab461a37608667ebe
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cf9e174fd05e200f9b755eca12ffe9cfbdc62900
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cfa34e1193cadfae5543a6fd10896fb4cbe68c9b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cfa5d97ba20e153837cf70d9bc610fb37cbdd605
@@ -10130,6 +10328,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cfad242629acc6e261fd025133b7b2d82700b0c2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cfae3945808e7f95bf36b8a820a9060a5f183fb5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cfafdf0320d5aff522785e5bef16caf3cd8c6259
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cfb538e56fa1fbef224fb183fdd671deb7903f9f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cfc74919c124ffd7b3369a8e4714c20062a2944c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cfce1804cf16961981915ee952fe4e24b173e257
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/cfd3431d5fa344bed2f3d1c50424a43d88728f07
@@ -10174,6 +10373,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d09dcf42a8f6986c5dc9b1716dba28870aba4fe5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d09f0ba9aaf892d4f15b949480aacffd8f436510
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d0a0bfc28e389ad2b8b2e444d6e1320150190966
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d0a17d2996bd701a7f2dbab21fe4900efa804da5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d0a24ddb9b5b1f4032de0ffee14b33361515d3dc
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d0a8ba3fcbfae320a61f92bca090b143fc9600f1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d0aa92c32cd741448e6cd8c4a1690337f39fd3e9
@@ -10188,6 +10388,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d0daeb173ffcaff254f9232f455d832e0c53a1dd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d0e303edb95f7744252d8ccc67d9b86a9e8e37f7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d0e4a0963aa6080aba82709ada49e01323dc2335
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d0e86fd3c3f15b024ab8787e7255f7d92e32e8ef
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d0ea7d0785f4392b267734d579cbbc1925a453ea
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d0eb0b419c56cf792a9e3157cdd9a5e0cf1c7c03
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d0ec02e804bd20058441377e66d2f22099342a72
@@ -10326,6 +10527,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d3eb7ea4587dc09e019309404e79a43f9c526865
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d3f2b432df355b8cac85ceedfa80b9c6ea63b592
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d401ee2ce22126d24ebe5dc5b2665d05c40542f5
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d40585caf608381ccb63baf8dd8d5f25a3ef086f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d405d065f24c484a49cb974c3786aa78718545c6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d406c886adefaaafb7244cc87966bfcbcf327e42
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d40a10145328dab8d7e294b4b9b614771fb00895
@@ -10370,6 +10572,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d4c04d76dcbb61802169fd95915dfa1d111ef52a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d4c1d777ae7e55bcb4eb6eabaa1095ac0c5986a1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d4c53d87e2b9aa6dd01ff11d181d1c2cdf500f3f
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d4c671f40ea9ea9c99227fe4e783c165369bfad9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d4d00d9f8b2e9bf1fc9f164322cdb5fde9333ac5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d4d55d058cad1cbf88a29e57f0e2c87eff0d4a38
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d4d6975bd329306a6cba1e731c5635b38f669a62
@@ -10425,12 +10628,16 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d5edf1f90768075e2a9dd1b131789ee059764082
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d5f460e9a19a3d03d53d9d01aeb134a29c89c561
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d5f77d724480371b01773f00ec8ab560fef03818
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d5fbce0f979b2ea5c8d8c45ebef5557ee63593fa
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d60d707159338be63e8cbd13331d5a6fe7afda77
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d613ef56ede6c918cbe29c965a673ce53b599405
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d61743a3b8cd559a0ddf78399a93a7b8400b681e
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d619cdde21d8f2f769ae15576724ff7d7987eb37
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d61a0841bce31ced798426669361a28af36a0557
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d627aa8b3ab44bb948b52322f9faf3959e6908e7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d62909775454075c9856cf8b4bf4ba50a5f29d98
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d63486094907e1e3b18b114a50d6964cffe63552
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d639e4e140c8242bc3276ad34fb2de9e896eaabf
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d63e3c459f44c782b4d0bb1a99d03a3513d4bdf4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d64aaa00f8fa967de003e20668c0bd87ab231bb3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d64c42c2ce45bbda57de537c17ea66c2c2fe5f8f
@@ -10506,6 +10713,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d7f67a108b1fbbd36de7f12b5235c01a65d0f20f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d80bafd756fc6ff371a935d4bc5debbbe930519c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d812705b5cd4a1b43d7cb381e411298aef6dca35
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d816ec13856f054dabc465df8493d77633e09540
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d81c8b89437d259de65ce2f277c6b2b497542f49
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d81eb5429b5f22f5b637674fa65325d93f324b12
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d82d57a1d62a51d559ff3afd085dbb8e9b2005d4
@@ -10545,6 +10753,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d8d5567dbaf251e136ef47f412915515d1ab2977
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d8d60501781f7e4cc76f72a649f642612402c07a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d8e1c7e11f0cd6ece43a21931d9be5e65f56e58a
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d8e688984082f837ed10cc346ddf5192649da2fc
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d8eca665cebae62cf384c2dc4fe2bd8b5aa3e34c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d8ecade3ccad7ddb765deff31d2bbc631b1c2779
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d8ed3e906b0ea3e1096e33f9df9e9a0d77afee88
@@ -10585,6 +10794,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d9695bd967b1fe8afceeec564296ecea9f974e64
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d96fbdd685955c5c253b6931f62a734fe041d351
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d9716015d495fb638e19b5fcd49e640ff95f7a1f
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d97fe7252ebc843d9ec93eb361d23decf77f777f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d98a37de4a1a3d415ff6c49e608364a47995e178
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d994b71133844f2aa47056a5b01966525980261e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/d997ea3dc0ead8853b5b9cf7dd73eb924650fbb7
@@ -10610,6 +10820,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/da10171e2daa79022a28d05d29ddf4f405821f7b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/da15247f1de06bba37a1895a09ab4cb6ff7f0d8a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/da15540318ab6caedab0baa2eb01186a053f6213
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/da2085ddc38b97c37d1a0a7d74ecbcb8bacfef7c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/da22b6a46f812866dc0300bc0d4daf33d6d27956
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/da2880af8adccee15a255429146856e3856e47d8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/da2ebd09c3f5d05184ab70924b916800367ed58c
@@ -10617,6 +10828,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/da32f5da5fbb25fec48b4b9464e0ff4683583f00
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/da34e25aaddf2e5f1c256205faa2df6125f7ae48
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/da3627bba063591ee8524fb9a0d190e34923cb93
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/da457117a1365e03289477c2c56579c665483b5d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/da585ab7470960307eaa815ee0e80bb643aa1126
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/da598e1a6a2545584e793d705a1c50db9b596467
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/da6604c698b0708aa671add6b877386c683f91f1
@@ -10695,6 +10907,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dbd57a9480907222bc9d388326f6844477477399
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dbd7a01fe97fcaff02b7d31f54cba9f050651cfd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dbda751501453970e673571a23a6e94974d4885f
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dbdc29b299402db2fcd37a6d8b86fc38f8eda63e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dbdc78b094636a3900c9b2b5e2a0c0f2e2a5bc3a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dbde4a7abbb2f37036a3e8e25a9b8913a645726e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dbe7ea0af16429956657aa5bdc1355e827a5a4aa
@@ -10730,12 +10943,14 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dcbdb2df743ce709a9fee4c42c8c0e1be4e6b8ca
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dcbf6958ac27ca8f647f157f1a3c9b55a2a76b0b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dcc0e9cf2dd61d0b88da4b02975fc7602c131786
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dcc30ffa250554942436d763fe0c8e622a505d01
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dcc5037812f2e7fc0ae898a1af8587b866199b68
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dcc6a34cdfb1c69f46f11b5530ef3ac059963e9b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dcd0e44f3d4494a532525de562baae9539968d81
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dcd465f046c0384280f93ecfe9bd1c7d5edd2463
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dcd8fb6a4c57dbf57b905c21f3f372470cd2aa1f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dcdeb947efbb855f05dca3fc9c5c06dc476549a9
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dcece278af5a3aa1989cc3de12a1a40573819012
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dcef714158e214d3a7aa230d352273273badf1ec
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dcfa1cfd8e7733c55afba85023997876e5b4b86a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dcfd2a31056a0121d2698af7d411e644b5e4af4c
@@ -10743,6 +10958,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dd0983a719c6a7de16167706932c2c7b831612ee
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dd0dce0129efbae6a397810975b6c495cb1815cc
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dd0e5ffc22f370160752c276cb1b3734ea51a29d
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dd162c9505d6e72c5542c6dbdbd45b0f5d322da8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dd190c34d2c9fc2a31294524dc8d7e7ef47f9c04
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dd198f0762e64969b812906d9300e9795b0f3ab6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dd1b547bc7485bb2046208091fb1757cd1f8bd49
@@ -10837,6 +11053,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/df0c5a878949e2a8fa7c42dc11140eac5a19b34b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/df0e8d4ee608287309bb9a1981193f2b4eedbd14
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/df166face7a2560113a58af929e1cd2ba99c7ec6
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/df19a418cb9fbc71590978a7144c7dcfd2ef8a6b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/df19cc4e78a05c1b3038dc0ec07a91fe7f0729eb
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/df25a4073dff72c956a901d1d9271f4452a4a4d0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/df28dbb6ba87ac2aea9f9157c312880a7b8b13c7
@@ -10845,6 +11062,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/df33b5006639bd95145882a4109a88285d4a5aae
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/df370fb9460a1b849e86a7aa51ef31c21deafb57
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/df39d22a99272e1865ee696f11be20f0253c0d59
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/df480c72d53034a801ec1801e5c4915711debd37
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/df48389fe8a83bbdf88a8efff2270ba94592c125
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/df4cad6bfa2984e9ab363358b4f7208be612c9b6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/df5181fa30d2666803f3e102922d7223f4688433
@@ -10874,6 +11092,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/df9a796c3c8ad42d333ad3445b10fcae05f1d821
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dfa3f140b7e73d922703337661208abccb91f857
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dfb4692777fbe33c92bebb2c2a0864d606b2cbc2
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dfbabb98e786a9c13620f7ad411fc384c7f1a83c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dfbd00c6a5ab573b6952e7df316ceceee3fa71fe
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dfbd8fa43628d56980cffd07e99ed236a7932d08
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/dfbf94f5e2215f2873992672249848c4417d112a
@@ -10942,9 +11161,11 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e1040a084ed021454a4f9aac6036f17e1992a66d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e134cfd742bd6136379545dc351d8f91e77e9027
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e13804266f9680d059756b344e1fcf25c9d5b0e2
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e138199bfb9de56496456cb7436144206ee917e6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e139c991c8eb31946d7b12bb97f7f77592dcd096
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e13a472fc7af1a7a78dc983346d91ae5a2512e66
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e140c68badcee9ebe2e3b8c16e4acd53fda40521
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e14319a82a944183f60edfb102467ff868b0e8c8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e1432d067152dbb50f43855480fc7d33cedf75de
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e143e373c35b1f474639b0f992fafd1af988501c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e144021240c9c75374d52d32138d969bf915d721
@@ -10970,6 +11191,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e1d7f986b2fb86bea6e863c8177fb4365b44f602
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e1eb80f5c4721ca23bd137bc0e9045e61d738604
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e1f2826363cb33467ece3607ff45a327ba691744
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e1f3370067ea04abdf4e663658510993bf2c2bea
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e1f5df9f93e7003ff22d2004d0ea0ba85b4aecac
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e1f871be9490d788dcddbbf46050ecd8e5deb9f5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e1fa63baef07c77aea06b8dba267ceaf34a9a0ef
@@ -11018,6 +11240,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e2d32ac68e7c3a8dcee4919750e6ec905b1929a8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e2d3ac8576f8bbee062dd4affb2b13550239e5a5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e2d68642a356f745fcc6738a3c3ce6523638c4fc
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e2d7bd81ff279db9471214c891361a4c5cd4b149
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e2da183be3f21d72ebe69cba9f342618fb3757c7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e2db2875df6fb2485bfb1aab0a269e68e6452552
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e2e554bc0f0efe7cba4f1d1b292376b0287d9dc3
@@ -11054,6 +11277,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e3bbf697b961fcbc77289e61d251f7086f6b207d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e3c31ca4e8a6a17684757705419718b1e2ad0632
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e3c6d0a238ff5b1c668359d7411530dd911ab37b
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e3cb0609f315543db18504f31128689321178c1c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e3dbfaa09b0bf7c8fda914a9ebb14a450c807726
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e3e25cadf999cdd82b5aa601b4203e643a485e77
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e3e3d0c6aa55f3914678c685a46ba2e66fac41db
@@ -11086,6 +11310,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e48192c1080f5dba16ec3d254caa3ea9d1f65546
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e485d998948417e563557a3956a1c0ff363044ee
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e48e35f1a8b14b6ecc8b8fc6925c963ba1d68d4f
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e49b57bbf27e2d60138215b6f43bd25be2ebe58b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e49c41ff189db528c259cfb00c0c9375ad2bfb19
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e4a64f647fc17b8d827d51031fb27a5eac1227cd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e4a65eb30858d1f49e6679b7fec3431db4d6624b
@@ -11103,7 +11328,9 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e4d9437414d6dbafea704e0a64335580d2ed96b6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e4e06655e88fd1eb9ef4aed76525052ef892d994
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e4e18f2c507a1eb5bb7dc63bbfab2446afc5628c
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e4e81c7873a75f26feb03c7f6842fc0317006655
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e4ee7294f43ce1cbf12f990fb659fc5ffe7387f4
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e4eff9d8e34a7b0edb9e9a4507cf98be4337ac2e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e4f50723b0f26983a0416029331c5187344cd622
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e4feaab819320f40d892a1fb2eec88060344f608
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e509505577bbba7948ec256e5fec7a3b298fa43e
@@ -11146,6 +11373,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e598432c5130d2f0ccbceb3a64ecd142af81b0f0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e5a25793215ee53399fbae8e237b9649939bdb05
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e5a6109459116b71130c0d01d6cf5db807872d3b
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e5a7e55cadc0448af292c726e9c50bef4153ea7c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e5ac648ca94dc246a734772347f5bf1e96175c89
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e5ad9ebca1641a98b4f33253218014b5b6de6ea0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e5ae87ba3ded9ea04a1fa66dc494cd49782d0301
@@ -11183,6 +11411,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e61f3f9bd511f1d9697cc3a22f96aa873d85a74b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e621e55a12f825a550d0d2f874a7be8f27b18a2b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e623a7f4278e253c7aa1605580a1949c635d92f8
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e624486c624ed28927d2688a08d237faf0d90976
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e62959bbc1f6d0eb3cb88642baa7fd258033531d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e634cc1b1c39e7480853e2e84d610c04fee5fb60
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e635809ba1bb4513ad7fb97d1f1a278d1fda9c36
@@ -11213,6 +11442,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e6bb55ff3e0df9701ba299d5341fcb7acfeacb6b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e6bda6367f357dc655dd1fe41f3de5cf8091c4f7
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e6bf075a7fa32837d92178fa2f73131cb4c74337
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e6c4e41981670b4aa84f106fc967f29ad75fb8b6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e6ca46ab89b6195dd51c425e496c0e281001be0c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e6cb43512902d125a892b9352784247e9532bd53
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e6ccc6830cff597dd3e0c973f41d7650710872fc
@@ -11261,6 +11491,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e79aa4148342b68f0670aba2e44e4b8024e9e984
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e79e840108c17bb222bbf7db80e17caad92cc2fa
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e7a456b8cbd760819d4beb80455478ea05095077
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e7a4c844dc5236e10012cdc298de80ac4100d547
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e7a6c24e9350d6518a05bc127ff76fd8708aac26
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e7a7adc5c780370d3698c46e95a389fd54ec2bf0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e7b7976b46cb520b5c119e4dcce67ff103d24148
@@ -11383,6 +11614,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e9f2b3898b644e2d873d450b957cb2a8ae9cbb9d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/e9fb264a7367ed7af999c9ea0e4dd74fd08da0c8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ea0147a74988680113c03b292c3a38a1995d77bd
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ea030c8ef5b5afff8f83c124518b9933723d5096
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ea0389f2abc5071aa2b806b00f1c0eb6a888c402
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ea05eb8075b6d58ead0fcdd35a73801b0169defc
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ea0b69f345c0bd6faad9599b10abf9d1bb78cb7a
@@ -11395,6 +11627,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ea1cbde26a025649bec9004cb417b1468d43e46a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ea26279a833e40b01743124d0b1c565c2a50267c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ea2735ad1b96e91da9ef5377f75e4b2bdcc4a9f7
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ea2885907184d32c28fba305540da7bf06d4d600
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ea40dfabfb9303f3f7325f0155f2c75315c51c05
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ea4570708eac63fbffae4eb7eaa7f7c7dd30d4b2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ea46d664db556e1b06868af68ab10b000905656e
@@ -11413,6 +11646,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ea8bb691526b2fd33871bd31a7bf122bc2c6c38a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ea902d6a13710c27955da760336d977407651fe4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ea9381c8655f60c3f6e1681aabcdcdb3a87a0bf1
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ea96638dc2e7412cae17f9f0122610f0171bad9c
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ea981af763739115eac06deaecdb7bbe0f0880f9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ea99e08ea5e3c08146e3b49521aed26db7b3acbe
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ea9b6bcfb7514a1b92bbf7dcc1bbd98779136a56
@@ -11490,6 +11724,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ec01f27bdecc4eee3b5e53d31a7a133b6aac0d16
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ec01f9532fbbcfa99fb42050aafb6c759b1152f6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ec0521d0dd170d39d10881ea7a057336988b392e
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ec1963bd1cf8342ee0b76fe2eff146f75b98b971
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ec1f1b25c5f8da09c77713800c147e544288c81b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ec2b4e54d090afa2b12944e5803a1955a69a8c9e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ec331eace88228649356d80b2f8f7a68db86a879
@@ -11521,6 +11756,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ec9bd655317bfb65bfae0fc36c2269572abef065
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ecabc6abaaa6de825672ef2b92d245606524ce17
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ecb188302f2b774b8966554906d617e331b491d1
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ecb28d3b33f31584bc1e1e74f275315cd98fba17
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ecbb31f01694280d37cededbbbe0fa9fce21fcb0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ecbc3e3712a10b6f65b827957c769d5171b4c0f5
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ecc028952dbf10a206c0e23d45792085312c3976
@@ -11542,6 +11778,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ed032a40439c00620cd51e904b06d155cda296e9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ed170a81223c4fb1aec3f164622054c1c6fc771f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ed19b1767687f661de559075d7a982e46185f33b
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ed26169505e0daf9d6f2b842041a9e0ae50dfed9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ed27e1604f432cb4d69756c6f8f6cacb26267457
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ed282148dd73fe218f3c378526471a745645b984
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ed2c5c1b0d082fab3b190a8a0a3e880c6ddab2ff
@@ -11638,6 +11875,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/eeeb23676ca696391d6acd48837d7923042ef054
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/eeefa87edc2f4e2463983ab7b1c186095f62ed7d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/eef281d3fb0535bb50593ed7e4b974daa0c3368c
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/eef3a684d40805c44a49d00c90a68eed8e2203d2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/eef414b68275b481e0f30783f7732f6055177071
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/eef7f1fece16ffe7f19e082f2cb08e11cb0740bf
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/ef04677211ec03a928a3f58a3c49eb8aebf0e609
@@ -11707,6 +11945,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f06e0dae365d677cc55ba4f4994b5c0fe25de2bb
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f06f1d8702aee351bdcd3c649d2fde892165d75d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f0713baba047b4365e33853172d47af365f2d8f7
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f077aef222fcba77b6159a16a0b970f1f9bbffa9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f07bb640165b1f25b0ddd36c4c1522689c7d78be
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f07f09119da202a0949dfafbbf1c04f7593911fb
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f085cf8bb96d714ff4fbd2224e04be63c1f800db
@@ -11720,9 +11959,11 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f0b75f42174d3ea9e4d70d3994eee2dbcba52248
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f0bf187325aeba0931848974eb94ee2622f58802
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f0c4d38936515fc5b798b2ad34bea85dd5a07ba4
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f0cd0a310fc3ab9b80c5d656ef6e8452816f01cd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f0cf78a594009083f62378926c2f7def114e3a50
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f0d1b577f73760f611470741af1ed8b01a157f3d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f0d1d9ac80261f0620f3d5fd83fd591f5ab0b291
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f0d282f117cab37dabf954021a50b324c9478ad1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f0dcfebbf58a36f13cc00cd8208a7bef350bc256
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f0ded21e6ae1c0677662d1078ec99ca6910292b3
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f0e8c5c9d608a515d8ec16448655b94ee3fd7065
@@ -11819,6 +12060,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f27b021c3b7cbb3a76b3a3ed2da684e5ff7ad0bc
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f2836135fb4782bdda1873ac52cb494c50e1518b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f28b75b9fabc00253c94e634556d5eab77c1b69d
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f28cd7d0fb734069617fe10826b7c71ba7381818
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f29f44091d7abeef439e4a98ee7f62150e6e6b21
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f2a56fbfa23e699fe71dfa004d764b92c9508d6d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f2ae3b1e2964cd8e5111f4606705ca5f4db10374
@@ -11886,6 +12128,8 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f3de1440cfd08398fa98a2ec7f581a099d3d0291
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f3e32e7c4cf6a93c4a13f0f581e6b1df539bac78
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f3e899d1484b9643ac21bd7634a05dd941a6b3fb
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f3e91a23679314c876df86f91e3868eef7a75181
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f3ea67c49e7658f806b27b71ac97692a16aba24e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f3edb26a854d33bb10487761659eb146cd27b6ac
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f3f141628ee3fd3c87707f818a8d77e1d07770db
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f3f2edf18395ade763e4ca05816d1a1339e08fe7
@@ -11941,6 +12185,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f4fc01a7f85a1babc25d9bb21b50016e00d42387
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f500060cc54d87bb96f7df4acb73a6e633d18b23
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f5007dca7532d1bd377ee1af12ed3c243d173d34
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f5019622a3a724e73c0b1982f8a4753f3584c3de
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f50685001e5244ac7a37ca96e5d2a5b0c2816e1f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f50c7e5c0539d86ab73153de4443221e87f40b79
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f50d3a8f8223d74728e28af011e2d631d240b234
@@ -11954,9 +12199,11 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f52cdebe7ddaea672c6695b48b5cd16e3984ae48
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f52d509709f7a7dcfafe66e2b46db195bc517453
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f530d69dea770d7de17da9bf46fc4f3e4bc07f66
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f533e2a6e939a06d33bc126335a40c3bde30163e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f5386f182832efc089f97ffe35c59c2c5dc4f836
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f540cd1ede25073b20b862405fe4d921bf33b203
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f542dcb07c136921b3872435a337c36ea98d2004
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f543295aa1a96dada62b709cc86584a16f855ed6
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f54ee596446c2c850e2db7ba13c96fcd9e3ac5b4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f54f4712a717f01edc3c97a0bc3240fdaae0749d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f5548e49df62c772432ae1b301666f3c8ae2cf0c
@@ -12068,6 +12315,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f800f755d47862d75568f419a5f38cee92845f58
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f803b2f8acab0492337c1f6e0bdd40d86740bb50
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f80c56f0111af2d8c4e658308658515dc1fb9ce2
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f80fc2904f3ee6ce5603b61f5f980629db7a6841
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f812069d34f015b8fd7fa73f4d198a3076441a8d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f8121a26ade1e9b20160b43574766d43d189cd0d
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f8159649a3689082dfaf3c8800d0223d17833c66
@@ -12078,6 +12326,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f831f71ecb3d6d51e441f957be82d998b0147f39
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f8380e6a30851b1a39fae34d4aa7ace0b471a104
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f8430f6e1245aaee763606ef49c6824e20b2bf78
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f843fa6cfc8ac941a172dd0c83ba6146217db4d2
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f84b025111fd8c97d7caaa07e4118f31cbaae25f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f84d917b55ea9b5b4d27473dea98c57a09d0cc02
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f86a45937a730acf9a74ad5b3b4294704e033a01
@@ -12161,6 +12410,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f9bf6e55fd4f0fc64581a04a2371bc9b0b03aff0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f9bff17bfbf3c7941920a2b15672af4312459d30
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f9c782a556f4d288f2d16a80e52214d70fa434c0
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f9d45fdf73013f1a3ccb556f65c883f93af3e353
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f9d54ffc45779ad254e44b611b0937266dc1e014
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f9d8b6b77a2f9e52fba90cc040bec8ec42226cb1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f9d8e41816f7c5419b6f2ecf263146c3fa3c67d4
@@ -12173,6 +12423,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/f9f8f94bcf348b41c7acc7d6dc24b8e4eb2c7390
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fa0c7f5d341769db79928ba3f6f788da30d94bfb
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fa127f52dd21a8db8a6849c8ddc317481a53bdab
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fa1818096b7c489ae2e56cd59d53e63f9a695817
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fa2dc8fecb55510343b898673c7e3473c0659981
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fa2f9741ae4ed55427825b80afba70883d2b1123
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fa2ffa008f84fabeed4d055710c5f2e36cf50706
@@ -12270,6 +12521,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fc18b66071b5bbf91970d06ce8577f5d5b26c831
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fc1e24c80404e271f858a3ae2e9e413ba8127998
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fc1e7e82c6a500079c4cbc0f67f4d3636d1aa4d9
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fc1ea69ee3ee258cac7b812cd2130fae9a80daa9
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fc202472a9dc44279b87fba3dde320af867d27d8
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fc3024b27aa8ca9362d0311276a038b52c87040b
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fc366e607623f7d40d357a70847010ce772fcd88
@@ -12289,6 +12541,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fc8ec4585c1c7cf2ab3ac60e594ff2ea162c86f1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fc9724a874323772562ed54ddba0475c8340ff16
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fc9a9d9fb5af57ccf65c90216c4ecdad4843d7fa
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fca4b3ccbd00f0785a70aed8b6971dc0e17f332e
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fcadd5876a68f3e41f055869190b794f0ef7db35
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fcafff1f334fe8545ef141eac981b53c08d8f42f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fcc60042d528db8b69f4a21ba7269126eb3af6d1
@@ -12314,6 +12567,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fd296639f5a33ccf33608b44475d6a277682a586
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fd29a060f3f8bf9f7f274fe3c439c1078e13c681
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fd2d48ec70de3995c1c35f30e359bd069a0bc458
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fd314702027dd7927434e143d33a872279f5ab4f
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fd34f70204f62fbee38822d0684fa9035b0caba0
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fd351f0d8af299bc8f6b089a9145b35c04d49834
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fd3a46cfe14144cf5327a4c1d7c58275798db0b8
@@ -12343,6 +12597,7 @@
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fdbffb967f5cdd40b3c75ae5f972920f31cb720a
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fdc9ddbfe9ac7ecdca78bde3227b0d6d6732b7d1
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fdce8090680a1a385b76a1da6f22c1c6de0bf429
+/home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fdd7e77f944b52c18352d824bf17c71d0d5e65c4
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fdd99e2c04067860819880a8e1b01b2c66a188bd
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fdda5a2d60d4696caa411ebe36e3a075fd467c33
 /home/brianklam/Desktop/liminal/fuzz/corpus/canonical_round_trip/fddaba80e31fbf88fba90d90690ddf4e77c245f4

@@ -2,16 +2,16 @@
   {
     "target": "cst_parse",
     "seconds": 1800,
-    "elapsed_s": 1805,
+    "elapsed_s": 1802,
     "exit_code": 0,
-    "execs": 24362504,
+    "execs": 25341313,
     "artifacts": 0,
     "seed": 20260725,
-    "seed_count": 17486,
-    "seed_manifest_blake3": "185798a0669944b41e78b05e2521b1c76180ffbd47a4ff1d635a77722f1ba2a5",
+    "seed_count": 18233,
+    "seed_manifest_blake3": "a2ba7449a0bc094913860893ed096675b6841b936e2d0b40bb474a78cd26f0c0",
     "sanitizer": "address",
     "log": "conformance/haqp/evidence/logs/cst_parse.log",
-    "log_blake3": "2bf6d97af49c3df67bf6cd9fcc9f69931880795d3b73269384fe70ccfc0fbd38",
+    "log_blake3": "f9ade66cc5e9e82160fcdac8d4f4efae5f0c7d9fe98d462c26930ed12c658748",
     "sanitizer_proof": {
       "build_command": "cargo +nightly fuzz build -s address cst_parse",
       "binary": "conformance/haqp/evidence/binaries/cst_parse",
@@ -21,22 +21,27 @@
       "runtime_probe_exit_code": 0,
       "instrumentation_flags": [
         "-fsanitize=address"
-      ]
+      ],
+      "build_log": "conformance/haqp/evidence/build-logs/cst_parse.log",
+      "build_log_blake3": "38edc85cf8420ac1766ecb2d6b0d897208db9d28f593b8cce153bd693b7858fa",
+      "source_commit": "28933549f279cc07489a1fa6fd7089caaa374449",
+      "source_tree": "1bef1336f8ccfaac7d83a3d77c5b13d10442d3c0",
+      "build_result": "pass"
     }
   },
   {
     "target": "format_idempotent",
     "seconds": 1800,
-    "elapsed_s": 1801,
+    "elapsed_s": 1802,
     "exit_code": 0,
-    "execs": 89299,
+    "execs": 106196,
     "artifacts": 0,
     "seed": 20260725,
-    "seed_count": 9891,
-    "seed_manifest_blake3": "aeee632c64e39506d38463cd4559d550e5e0d2161e484629e34d8ac6e583061c",
+    "seed_count": 10338,
+    "seed_manifest_blake3": "70970004d56df0f4a0882750d9d6a796f3ace3181c0c93ec822169b0f9a9edce",
     "sanitizer": "address",
     "log": "conformance/haqp/evidence/logs/format_idempotent.log",
-    "log_blake3": "d23cfd609f12403d39d53fc5a90687f355b1281c385f80a7e011a685d9e0f596",
+    "log_blake3": "389f8b948768cd7b810c69023d18104a687dc085cbfed8983abefdd6430fe728",
     "sanitizer_proof": {
       "build_command": "cargo +nightly fuzz build -s address format_idempotent",
       "binary": "conformance/haqp/evidence/binaries/format_idempotent",
@@ -46,22 +51,27 @@
       "runtime_probe_exit_code": 0,
       "instrumentation_flags": [
         "-fsanitize=address"
-      ]
+      ],
+      "build_log": "conformance/haqp/evidence/build-logs/format_idempotent.log",
+      "build_log_blake3": "38edc85cf8420ac1766ecb2d6b0d897208db9d28f593b8cce153bd693b7858fa",
+      "source_commit": "28933549f279cc07489a1fa6fd7089caaa374449",
+      "source_tree": "1bef1336f8ccfaac7d83a3d77c5b13d10442d3c0",
+      "build_result": "pass"
     }
   },
   {
     "target": "canonical_round_trip",
     "seconds": 1800,
-    "elapsed_s": 1802,
+    "elapsed_s": 1803,
     "exit_code": 0,
-    "execs": 130002,
+    "execs": 133328,
     "artifacts": 0,
     "seed": 20260725,
-    "seed_count": 12110,
-    "seed_manifest_blake3": "931f4923f4af79eea08cdad6e937f04987fb144a06dcfbbcba8a5ee571a28b6e",
+    "seed_count": 12365,
+    "seed_manifest_blake3": "c4c55f6d365e8889e2ead50f9c7eddec607dd43f44aa237f3dc1fa4e1ec9c30a",
     "sanitizer": "address",
     "log": "conformance/haqp/evidence/logs/canonical_round_trip.log",
-    "log_blake3": "272c099300199621613123467e015df389fb29e0d0b3eb4704e29e4bf065c9b8",
+    "log_blake3": "9e4b9888bafd495ae0d65a9752ca990b2880b5784118b928829fba8ad770e346",
     "sanitizer_proof": {
       "build_command": "cargo +nightly fuzz build -s address canonical_round_trip",
       "binary": "conformance/haqp/evidence/binaries/canonical_round_trip",
@@ -71,47 +81,57 @@
       "runtime_probe_exit_code": 0,
       "instrumentation_flags": [
         "-fsanitize=address"
-      ]
+      ],
+      "build_log": "conformance/haqp/evidence/build-logs/canonical_round_trip.log",
+      "build_log_blake3": "bde264e374c1062639b901eab468bdcaaa1362bec74738f6085985fd4fa0fd3d",
+      "source_commit": "28933549f279cc07489a1fa6fd7089caaa374449",
+      "source_tree": "1bef1336f8ccfaac7d83a3d77c5b13d10442d3c0",
+      "build_result": "pass"
     }
   },
   {
     "target": "incremental_full_equivalence",
     "seconds": 1800,
-    "elapsed_s": 1801,
+    "elapsed_s": 1803,
     "exit_code": 0,
-    "execs": 776007,
+    "execs": 809523,
     "artifacts": 0,
     "seed": 20260725,
-    "seed_count": 4466,
-    "seed_manifest_blake3": "7f13ef7a8415134745d959e9a811d949cb99ce4077eda2d4b28aa0795fd8b4cd",
+    "seed_count": 4693,
+    "seed_manifest_blake3": "5991916c1e2c8e58acc6ada0534b72aff80d34f9b436c5e04b4ffcd00cd9d22e",
     "sanitizer": "address",
     "log": "conformance/haqp/evidence/logs/incremental_full_equivalence.log",
-    "log_blake3": "551bf3a69d03ee54d5c3be39be1c61e43da1144a90caa61fa5e7fde1af7a8b37",
+    "log_blake3": "216cf0e3520089f1d4414f3e2f5487c771c8cb9e82520658d60e603669c00e16",
     "sanitizer_proof": {
       "build_command": "cargo +nightly fuzz build -s address incremental_full_equivalence",
       "binary": "conformance/haqp/evidence/binaries/incremental_full_equivalence",
-      "binary_blake3": "a634dfe875bd005c4aab67f85261f01e8b2737bae92ed01ede3bd41dc54d5c94",
+      "binary_blake3": "098b065907ba1868a00c47469db1c0c2f55cc39634b6148b64cfa962613535c2",
       "runtime_probe": "conformance/haqp/evidence/probes/incremental_full_equivalence.log",
       "runtime_probe_blake3": "90993e9220e764247cd38524222b600f6c9f3787d7e5835e83f82642c8339d74",
       "runtime_probe_exit_code": 0,
       "instrumentation_flags": [
         "-fsanitize=address"
-      ]
+      ],
+      "build_log": "conformance/haqp/evidence/build-logs/incremental_full_equivalence.log",
+      "build_log_blake3": "8f83cd886e0b9a7e8e3c9febefc4e12c043d3a03dbcbd6e37ac2319d9ffb8970",
+      "source_commit": "28933549f279cc07489a1fa6fd7089caaa374449",
+      "source_tree": "1bef1336f8ccfaac7d83a3d77c5b13d10442d3c0",
+      "build_result": "pass"
     }
   },
   {
     "target": "html_render",
     "seconds": 1800,
-    "elapsed_s": 1801,
+    "elapsed_s": 1802,
     "exit_code": 0,
-    "execs": 1083040,
+    "execs": 1197719,
     "artifacts": 0,
     "seed": 20260725,
-    "seed_count": 5146,
-    "seed_manifest_blake3": "7999d42f48c7807082cc6f28756f6981f8a43d4cf883df64c4496ea786a58458",
+    "seed_count": 5304,
+    "seed_manifest_blake3": "51e9bdd6783ddfa0d708d1ee470b9feb69663f25a860bdbee912ee8237efad13",
     "sanitizer": "address",
     "log": "conformance/haqp/evidence/logs/html_render.log",
-    "log_blake3": "a449a664f2b648cfa34417b6c61056cac3ef81507db949e2083ea99a33e8fb59",
+    "log_blake3": "75a396aa3247e90f523973238aa929a802a4d1425213e777280c0f446d77ac5f",
     "sanitizer_proof": {
       "build_command": "cargo +nightly fuzz build -s address html_render",
       "binary": "conformance/haqp/evidence/binaries/html_render",
@@ -121,22 +141,27 @@
       "runtime_probe_exit_code": 0,
       "instrumentation_flags": [
         "-fsanitize=address"
-      ]
+      ],
+      "build_log": "conformance/haqp/evidence/build-logs/html_render.log",
+      "build_log_blake3": "3e704969bd31b7b80632374964f825c42e86791834a0185e3b10a10b01e0d8c8",
+      "source_commit": "28933549f279cc07489a1fa6fd7089caaa374449",
+      "source_tree": "1bef1336f8ccfaac7d83a3d77c5b13d10442d3c0",
+      "build_result": "pass"
     }
   },
   {
     "target": "graph_interchange_codec",
     "seconds": 1800,
-    "elapsed_s": 1801,
+    "elapsed_s": 1806,
     "exit_code": 0,
-    "execs": 86878702,
+    "execs": 127876834,
     "artifacts": 0,
     "seed": 20260725,
-    "seed_count": 42046,
-    "seed_manifest_blake3": "86bdc19c2e76d61e390dbcc2fcfe9fb79e2dec4b5e3cbf6dcc9327272a763302",
+    "seed_count": 47157,
+    "seed_manifest_blake3": "6233a0067aeb442e7a285e3f6bcdefed9b50e1f5a776447f672b8057ffec22ac",
     "sanitizer": "address",
     "log": "conformance/haqp/evidence/logs/graph_interchange_codec.log",
-    "log_blake3": "17f2597d2dc4c0b2328f85d7a75d992ce1cb1894eab3d16337d4d3edadaf1f4e",
+    "log_blake3": "667263df72d36405e396841c720f807cb2877b37269ddf3de04d19ef93e1bccd",
     "sanitizer_proof": {
       "build_command": "cargo +nightly fuzz build -s address graph_interchange_codec",
       "binary": "conformance/haqp/evidence/binaries/graph_interchange_codec",
@@ -146,22 +171,27 @@
       "runtime_probe_exit_code": 0,
       "instrumentation_flags": [
         "-fsanitize=address"
-      ]
+      ],
+      "build_log": "conformance/haqp/evidence/build-logs/graph_interchange_codec.log",
+      "build_log_blake3": "e0c202ff104522d06d94a4cc4ede0d4c881ccdb85701cb8c5b76387751fdd37d",
+      "source_commit": "28933549f279cc07489a1fa6fd7089caaa374449",
+      "source_tree": "1bef1336f8ccfaac7d83a3d77c5b13d10442d3c0",
+      "build_result": "pass"
     }
   },
   {
     "target": "ilrp_recovery",
     "seconds": 1800,
-    "elapsed_s": 1801,
+    "elapsed_s": 1803,
     "exit_code": 0,
-    "execs": 26025484,
+    "execs": 30456964,
     "artifacts": 0,
     "seed": 20260725,
     "seed_count": 133,
-    "seed_manifest_blake3": "992b502a5a44cf3f995d5cb3522f8dd16010021e370d27e7f87349155863d1a2",
+    "seed_manifest_blake3": "3a545fa2d17070b5ca996f137b42154eb4438a0106db2e1fd7b243ac7608a8b6",
     "sanitizer": "address",
     "log": "conformance/haqp/evidence/logs/ilrp_recovery.log",
-    "log_blake3": "922a6b82273bf333ee0da238f51902ba9191dd40d7aba8c335fd0fe7ac286ba5",
+    "log_blake3": "0cca125702242992d28c09b816e79cc9db2044f5d4f1074201ac37ec0dc2653b",
     "sanitizer_proof": {
       "build_command": "cargo +nightly fuzz build -s address ilrp_recovery",
       "binary": "conformance/haqp/evidence/binaries/ilrp_recovery",
@@ -171,7 +201,12 @@
       "runtime_probe_exit_code": 0,
       "instrumentation_flags": [
         "-fsanitize=address"
-      ]
+      ],
+      "build_log": "conformance/haqp/evidence/build-logs/ilrp_recovery.log",
+      "build_log_blake3": "ced1fcddf1f33e11003c6002d6fbd3aece13e0d6b91bd90b5f1c89a5b4a7ccda",
+      "source_commit": "28933549f279cc07489a1fa6fd7089caaa374449",
+      "source_tree": "1bef1336f8ccfaac7d83a3d77c5b13d10442d3c0",
+      "build_result": "pass"
     }
   }
 ]
