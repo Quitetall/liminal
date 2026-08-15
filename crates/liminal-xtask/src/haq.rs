@@ -4142,7 +4142,7 @@ fn verify_trace_corpus_resolution(
     {
         let local = trace_path_to_repo(root, trace_root, &lexical)
             .with_context(|| format!("{label}: cannot map traced corpus path to repository"))?;
-        let canonical = fs::canonicalize(&local)
+        let canonical = canonicalize_trace_path(local.as_std_path())
             .with_context(|| format!("{label}: traced corpus path cannot be resolved"))?;
         let relative = canonical
             .strip_prefix(&canonical_root)
@@ -4170,6 +4170,37 @@ fn verify_trace_corpus_resolution(
         expected_digest,
     )?;
     Ok(())
+}
+
+/// Canonicalize the existing prefix of a traced path, then append historical
+/// leaf components that libFuzzer may have deleted after opening them. This
+/// preserves symlink and root-boundary checks without requiring every path in
+/// a long-running trace to remain present at receipt time.
+fn canonicalize_trace_path(path: &Path) -> Result<std::path::PathBuf> {
+    let mut missing = Vec::new();
+    let mut cursor = path;
+    loop {
+        match fs::symlink_metadata(cursor) {
+            Ok(_) => break,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                missing.push(
+                    cursor
+                        .file_name()
+                        .context("traced path has no recoverable leaf")?
+                        .to_owned(),
+                );
+                cursor = cursor
+                    .parent()
+                    .context("traced path has no existing ancestor")?;
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+    let mut canonical = fs::canonicalize(cursor)?;
+    for component in missing.into_iter().rev() {
+        canonical.push(component);
+    }
+    Ok(canonical)
 }
 
 fn trace_path_to_repo(root: &Utf8Path, trace_root: &Path, lexical: &str) -> Result<Utf8PathBuf> {
@@ -10377,7 +10408,7 @@ mod tests {
             fs::write(
                 &trace_path,
                 format!(
-                    "2 openat(AT_FDCWD, \"{trace_root}/fuzz/target/x86_64-unknown-linux-gnu/release/{target}\", O_RDONLY) = 3\n2 openat(AT_FDCWD, \"{trace_root}/fuzz/corpus/{target}\", O_RDONLY) = 3\n1 --- SIGCHLD {{si_signo=SIGCHLD, si_pid=2, si_status=0}} ---\n1 +++ exited with 0 +++\n"
+                    "2 openat(AT_FDCWD, \"{trace_root}/fuzz/target/x86_64-unknown-linux-gnu/release/{target}\", O_RDONLY) = 3\n2 openat(AT_FDCWD, \"{trace_root}/fuzz/corpus/{target}\", O_RDONLY) = 3\n2 openat(AT_FDCWD, \"{trace_root}/fuzz/corpus/{target}/deleted-after-open\", O_RDONLY) = 3\n1 --- SIGCHLD {{si_signo=SIGCHLD, si_pid=2, si_status=0}} ---\n1 +++ exited with 0 +++\n"
                 ),
             )
             .expect("trace");
@@ -10411,7 +10442,10 @@ mod tests {
                 tracer_version_blake3: tracer_version_blake3.clone(),
                 trace_root: trace_root.clone(),
                 resolved_paths_blake3: blake3::hash(
-                    format!("{trace_root}/fuzz/corpus/{target}\0fuzz/corpus/{target}\n").as_bytes(),
+                    format!(
+                        "{trace_root}/fuzz/corpus/{target}\0fuzz/corpus/{target}\n{trace_root}/fuzz/corpus/{target}/deleted-after-open\0fuzz/corpus/{target}/deleted-after-open\n"
+                    )
+                    .as_bytes(),
                 )
                 .to_hex()
                 .to_string(),

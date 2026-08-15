@@ -68,7 +68,9 @@ resolve_corpus_paths() {
     else
       relative="$raw"
     fi
-    canonical=$(realpath -e -- "$relative" 2>/dev/null) || return 1
+    # Corpus entries can be deleted by libFuzzer after they were opened. Keep
+    # canonicalizing existing symlink prefixes while allowing missing leaves.
+    canonical=$(realpath -m -- "$relative" 2>/dev/null) || return 1
     case "$canonical" in
       "$trace_root"/*) relative="${canonical#"$trace_root"/}" ;;
       *) return 1 ;;
