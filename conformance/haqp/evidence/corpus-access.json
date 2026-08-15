@@ -1,6 +1,8 @@
 {
   "schema_version": "haqp-corpus-access-v1",
   "tracer": "strace-open-paths",
+  "source_commit": "20a352c4c389346940a84f11d41b4403498a7e3b",
+  "source_tree": "8a4fd546fdb6fa263666c6cc79d0ac70115a4c9e",
   "targets": [
     {
       "target": "cst_parse",

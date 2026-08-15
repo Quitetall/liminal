@@ -1,6 +1,6 @@
 {
   "schema_version": "haqp-generated-v3-negative-categories",
-  "artifact_blake3": "7bc9661ee2548b5de5de20738cd47e2c75a0280391d0ed17b23375021cc68ddb",
+  "artifact_blake3": "296eeb9a2b55194071f71fb351e6a1e4eb46eef7ed0def816708afe81301e6f0",
   "rows": [
     {
       "family": "source/CST/formatting",
@@ -200,27 +200,27 @@
     {
       "family": "Basis/revision/query invalidation",
       "accepted": 100000,
-      "attempts": 146193,
+      "attempts": 145569,
       "discards": 0,
-      "negatives": 46193,
+      "negatives": 45569,
       "seed": 11400719217369709273,
-      "evidence_hash": "3cb31eef6b278d458aeeec5e6a0d1f6b4c7b2cb1e562f0045c731cfb1770a716",
+      "evidence_hash": "f85ed05fbfb6f1d24ca21ac1ddc2947b400da234fbfb5ca28f6d3f4f2a65e7d0",
       "category_counts": {
-        "branch": 9098,
-        "client-scoped": 9104,
-        "durable-only": 9119,
-        "empty-basis": 9133,
-        "federated": 9129,
-        "fresh": 9207,
-        "hostile": 9236,
-        "invalid-token": 9009,
-        "large-frontier": 9346,
-        "merge": 8919,
-        "published": 9075,
+        "branch": 9006,
+        "client-scoped": 9016,
+        "durable-only": 9044,
+        "empty-basis": 9006,
+        "federated": 9128,
+        "fresh": 9209,
+        "hostile": 8980,
+        "invalid-token": 9119,
+        "large-frontier": 9258,
+        "merge": 9146,
+        "published": 9174,
         "reordered": 9065,
-        "single-revision": 9036,
-        "stale": 9158,
-        "truncated": 9267,
+        "single-revision": 9147,
+        "stale": 9072,
+        "truncated": 8907,
         "unknown-perspective": 9292
       },
       "relations": [
@@ -228,26 +228,26 @@
           "relation": "irrelevant_input_invariance",
           "oracle_id": "oracle:Basis_revision_query_invalidation",
           "result": "pass",
-          "artifact_blake3": "1236181da2ccaa00757ddf92343012fd97b3a2185d064014ff335a06bd7985d6"
+          "artifact_blake3": "c2c72a61329fdf73d89772925fe6b58acdabd85651ec3569161cbe9174466f0f"
         },
         {
           "relation": "monotonicity",
           "oracle_id": "oracle:Basis_revision_query_invalidation",
           "result": "pass",
-          "artifact_blake3": "7e38321277b024ae48027aadf4faff4939f9df1b9f523165a313fbf4ca7f5cef"
+          "artifact_blake3": "0c96302a60c2d120c98a11b079666026e156002a67ee0dc12824dd24fde67527"
         },
         {
           "relation": "independent_read_set_oracle",
           "oracle_id": "oracle:Basis_revision_query_invalidation",
           "result": "pass",
-          "artifact_blake3": "2c52b0e66659e487bccf271092854de4bbb55a1402b9aedf2ce900373c87afde"
+          "artifact_blake3": "53b8b3ff21c1f42463921272b614a185407711ee137b35909ab2fa8004500167"
         }
       ],
       "oracle": {
         "id": "oracle:Basis_revision_query_invalidation",
         "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_invalidation",
         "independent": true,
-        "relation_matrix_blake3": "c680a7477731d71e8beff0a3c39d084052c4947e628b1a3027574235cd0b08e4"
+        "relation_matrix_blake3": "b514356d68e4825aacc9b51af299d6a5ddace06cf030db023963ef953bbadfbf"
       }
     }
   ]

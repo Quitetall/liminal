@@ -1083,9 +1083,9 @@
   "id": "P1-M009",
   "family": "source/CST/formatting",
   "operator": "skipped-durable-transition",
-    "source": "crates/liminal-source/src/view.rs:69",
-   "requirement": "P1-R007",
-   "defect": "skip regression fixture write",
+    "source": "crates/liminal-cli/src/format.rs:31",
+   "requirement": "P1-R015",
+   "defect": "skip per-file atomic replacement checkpoint",
    "killing_tests": [
     "P1-T22",
     "P1-T01"
@@ -1655,7 +1655,7 @@
   "id": "P1-M053",
   "family": "Basis/revision/query invalidation",
   "operator": "predicate-deletion",
-    "source": "crates/liminal-revision/src/basis.rs:19",
+    "source": "crates/liminal-revision/src/deps.rs:27",
    "requirement": "P1-R017",
    "defect": "delete invalidation predicate",
    "killing_tests": [
@@ -1811,7 +1811,7 @@
   "id": "P1-M065",
   "family": "Basis/revision/query invalidation",
   "operator": "broadened-allow-list",
-    "source": "crates/liminal-revision/src/deps.rs:27",
+    "source": "crates/liminal-revision/src/inputs.rs:43",
    "requirement": "P1-R019",
    "defect": "allow unknown Basis perspective",
    "killing_tests": [
@@ -2160,11 +2160,11 @@
    }
   },
   {
-   "family": "Basis/revision/query invalidation",
-   "accepted": 100000,
-   "attempts": 146193,
-   "discards": 0,
-   "negatives": 46193,
+  "family": "Basis/revision/query invalidation",
+  "accepted": 100000,
+    "attempts": 145569,
+  "discards": 0,
+    "negatives": 45569,
    "seed_categories": [
     "empty-basis",
     "single-revision",
@@ -2185,7 +2185,7 @@
    ],
    "result": "planned",
    "seed": 11400719217369709273,
-   "evidence_hash": "3cb31eef6b278d458aeeec5e6a0d1f6b4c7b2cb1e562f0045c731cfb1770a716",
+    "evidence_hash": "f85ed05fbfb6f1d24ca21ac1ddc2947b400da234fbfb5ca28f6d3f4f2a65e7d0",
    "fuzz_targets": [
     "incremental_full_equivalence"
    ],

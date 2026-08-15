@@ -281,7 +281,19 @@ fn verify_generated_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         GENERATED_FAMILIES.iter().map(|family| (*family).to_owned()),
         "generated evidence family",
     )?;
-    verify_generated_rows(root, &packet.generated, &recorded.rows)
+    verify_generated_rows(root, &packet.generated, &recorded.rows)?;
+    // A committed packet and artifact are both attacker-controlled inputs to
+    // this verifier.  Once qualification claims completion, replay the fixed
+    // seeded generator and compare rows, rather than trusting a jointly edited
+    // digest pair (P1-A09).
+    if packet.qualification_state == "complete" {
+        let (replayed, _) = generate_evidence(100_000)?;
+        anyhow::ensure!(
+            replayed == recorded.rows,
+            "qualified generated evidence differs from deterministic 100000-case replay"
+        );
+    }
+    Ok(())
 }
 
 fn verify_generated_rows(
@@ -766,7 +778,7 @@ fn independent_oracle_source_repair(
 /// Independent invalidation oracle. It compares expected read membership to
 /// observed invalidation answers, including a negative witness.
 fn independent_oracle_source_invalidation(
-    deps: &liminal_revision::ComponentDeps,
+    deps: &mut liminal_revision::ComponentDeps,
     expected: &BTreeSet<liminal_id::JurisdictionKey>,
     unrelated: &liminal_id::JurisdictionKey,
     extra: &liminal_id::JurisdictionKey,
@@ -781,6 +793,13 @@ fn independent_oracle_source_invalidation(
         !deps.invalidated_by(unrelated),
         "an unread key invalidated the computation: {unrelated:?}"
     );
+    // Add a new dependency only between observations. This makes the second
+    // check a real monotonicity assertion instead of repeating the first one.
+    anyhow::ensure!(
+        !deps.invalidated_by(extra),
+        "extra dependency was already present before monotonicity probe: {extra:?}"
+    );
+    deps.record(extra.clone());
     for key in expected {
         // Re-check after recording `extra`: this is the monotonicity relation,
         // not a duplicate of the pre-record assertion.
@@ -826,6 +845,10 @@ fn generated_category_class(category: &str) -> &'static str {
 }
 
 fn verify_crash_rows(recorded: &CrashEvidence, declared: &BTreeSet<String>) -> Result<()> {
+    require_unique(
+        recorded.boundaries.iter().map(|row| row.boundary.as_str()),
+        "crash evidence boundary",
+    )?;
     let evidenced = recorded
         .boundaries
         .iter()
@@ -3089,6 +3112,20 @@ fn verify_corpus_access_audit(root: &Utf8Path, packet: &Packet) -> Result<()> {
         &audit.tracer,
         "strace-open-paths",
     )?;
+    require_git_object_id("corpus access source_commit", &audit.source_commit)?;
+    require_git_object_id("corpus access source_tree", &audit.source_tree)?;
+    if let Some(provenance) = &packet.provenance {
+        require_eq(
+            "corpus access source_commit/provenance",
+            &audit.source_commit,
+            &provenance.fixed_commit,
+        )?;
+        require_eq(
+            "corpus access source_tree/provenance",
+            &audit.source_tree,
+            &provenance.fixed_tree,
+        )?;
+    }
 
     let expected = packet
         .generated
@@ -3237,6 +3274,29 @@ fn verify_corpus_audit_campaign_binding(root: &Utf8Path, audit: &CorpusAccessAud
             );
         }
         let trace_lower = String::from_utf8_lossy(&trace_bytes).to_ascii_lowercase();
+        let trace_text = String::from_utf8_lossy(&trace_bytes);
+        let pid_prefix = format!("{} ", row.trace_pid);
+        anyhow::ensure!(
+            trace_text.lines().any(|line| line.starts_with(&pid_prefix)),
+            "{}: raw trace has no record emitted by traced process PID {}",
+            row.target,
+            row.trace_pid
+        );
+        anyhow::ensure!(
+            trace_text
+                .lines()
+                .any(|line| line == format!("{} +++ exited with 0 +++", row.trace_pid)),
+            "{}: raw trace has no successful exit record for tracer PID {}",
+            row.target,
+            row.trace_pid
+        );
+        let target_corpus_marker = format!("/fuzz/corpus/{}", row.target);
+        anyhow::ensure!(
+            trace_lower.contains(&target_corpus_marker),
+            "{}: raw trace is not bound to target corpus {}",
+            row.target,
+            target_corpus_marker
+        );
         for forbidden in ["heldout", "conformance/corpora"] {
             anyhow::ensure!(
                 !trace_lower.contains(forbidden),
@@ -4209,9 +4269,9 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ("crates/liminal-source/src/view.rs", 58, "pub fn basis("),
         ("crates/liminal-source/src/view.rs", 64, "pub fn len_bytes("),
         (
-            "crates/liminal-source/src/view.rs",
-            69,
-            "pub fn byte_slice(",
+            "crates/liminal-cli/src/format.rs",
+            31,
+            "pub fn format_workspace_with_failure_after(",
         ),
         (
             "crates/liminal-source/src/view.rs",
@@ -4389,9 +4449,9 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
     ];
     const BASIS: [(&str, usize, &str); 13] = [
         (
-            "crates/liminal-revision/src/basis.rs",
-            19,
-            "pub struct WorkspaceBasis",
+            "crates/liminal-revision/src/deps.rs",
+            27,
+            "pub fn invalidated_by(",
         ),
         (
             "crates/liminal-revision/src/basis.rs",
@@ -4449,9 +4509,9 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
             "pub fn resolve(",
         ),
         (
-            "crates/liminal-revision/src/deps.rs",
-            27,
-            "pub fn invalidated_by(",
+            "crates/liminal-revision/src/inputs.rs",
+            43,
+            "let components = match perspective",
         ),
     ];
     let number = id.strip_prefix("P1-M")?.parse::<usize>().ok()?;
@@ -4986,6 +5046,8 @@ struct SanitizerProof {
 struct CorpusAccessAudit {
     schema_version: String,
     tracer: String,
+    source_commit: String,
+    source_tree: String,
     targets: Vec<CorpusAccessAuditTarget>,
 }
 
@@ -6325,11 +6387,16 @@ fn case_invalidation(rng: &mut Rng) -> Result<Case> {
         })
         .find(|candidate| !expected.contains(candidate))
         .expect("finite generated read set leaves a negative witness");
-    let extra = liminal_id::JurisdictionKey::Path(liminal_id::PathId(
-        format!("{category}/{}", rng.word()).into(),
-    ));
-    deps.record(extra.clone());
-    let mut witness = independent_oracle_source_invalidation(&deps, &expected, &unrelated, &extra)?;
+    let extra = (0..u32::MAX)
+        .map(|index| {
+            liminal_id::JurisdictionKey::Path(liminal_id::PathId(
+                format!("extra/{category}/__haqp_{index}").into(),
+            ))
+        })
+        .find(|candidate| !expected.contains(candidate))
+        .expect("finite generated read set leaves an extra dependency");
+    let mut witness =
+        independent_oracle_source_invalidation(&mut deps, &expected, &unrelated, &extra)?;
     witness.extend_from_slice(&basis_witness);
     Ok(Case::Accepted { category, witness })
 }
@@ -8484,7 +8551,7 @@ mod tests {
             ),
             (
                 "Basis/revision/query invalidation",
-                "841d02140ec868daa069f45970c5e898b6fbf69e6fbdf3c76c4f4f19da26cd40",
+                "35745e1f6e7ef64b544c47a5e79c6512e8642f914f7e68dce3bcb3ceed68680e",
             ),
         ];
         // 3,000 rather than 64: `case_repair` closes a genuine cycle on
@@ -8601,7 +8668,13 @@ mod tests {
             fs::write(&path, format!("/workspace/fuzz/corpus/{target}\n")).expect("write");
             let trace = format!("conformance/haqp/evidence/access/{target}.trace");
             let trace_path = root.join(&trace);
-            fs::write(&trace_path, "+++ exited with 0 +++\n").expect("trace");
+            fs::write(
+                &trace_path,
+                format!(
+                    "1 openat(AT_FDCWD, \"/workspace/fuzz/corpus/{target}\", O_RDONLY) = 3\n1 +++ exited with 0 +++\n"
+                ),
+            )
+            .expect("trace");
             let trace_hash = blake3::hash(&fs::read(&trace_path).expect("read trace"))
                 .to_hex()
                 .to_string();
@@ -8654,6 +8727,8 @@ mod tests {
         let audit = CorpusAccessAudit {
             schema_version: "haqp-corpus-access-v1".to_owned(),
             tracer: "strace-open-paths".to_owned(),
+            source_commit: "a".repeat(40),
+            source_tree: "b".repeat(40),
             targets: rows,
         };
         let audit_path = root.join("conformance/haqp/evidence/corpus-access.json");

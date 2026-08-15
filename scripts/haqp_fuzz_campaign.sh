@@ -34,6 +34,8 @@ mkdir -p "$AUDIT_DIR"
 mkdir -p conformance/haqp/evidence/binaries conformance/haqp/evidence/probes
 audit_entries=""
 audit_tracer="strace-open-paths"
+source_commit=$(git rev-parse HEAD)
+source_tree=$(git rev-parse HEAD^{tree})
 
 # LeakSanitizer aborts under ptrace even when target code is clean. Keep ASan
 # memory checks enabled while disabling only leak detection for traced runs;
@@ -148,6 +150,6 @@ done
 
 echo "]" >> "$OUT"
 mkdir -p "$(dirname "$AUDIT_OUT")"
-printf '{"schema_version":"haqp-corpus-access-v1","tracer":"%s","targets":[%s]}\n' "$audit_tracer" "$audit_entries" >"$AUDIT_OUT"
+printf '{"schema_version":"haqp-corpus-access-v1","tracer":"%s","source_commit":"%s","source_tree":"%s","targets":[%s]}\n' "$audit_tracer" "$source_commit" "$source_tree" "$audit_entries" >"$AUDIT_OUT"
 echo "campaign complete; overall_exit=$overall; evidence=$OUT"
 exit "$overall"
