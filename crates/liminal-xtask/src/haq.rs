@@ -812,10 +812,10 @@ fn independent_oracle_source_transform(
         ours_multiset == merged_multiset,
         "identity merge dropped content: {ours:?} -> {merged:?}"
     );
-    // Token multisets alone permit an implementation to reorder every block.
-    // For inputs whose source order was unchanged, preserve the stronger
-    // ordered-marker relation too. Move cases intentionally exercise the
-    // merge's canonical base layout and therefore do not use this assertion.
+    // Token multisets alone permit an implementation to drop or duplicate
+    // durable markers. The merge contract keeps base slot order as its primary
+    // layout; a pure move is therefore intentionally not an order-preserving
+    // relation, but its marker set must still survive exactly.
     let marker_order = |text: &str| {
         text.split_whitespace()
             .filter(|token| token.starts_with("{#") && token.ends_with('}'))
@@ -824,6 +824,16 @@ fn independent_oracle_source_transform(
     };
     let base_markers = marker_order(base);
     let ours_markers = marker_order(ours);
+    if ours_markers != base_markers {
+        let mut expected = ours_markers.clone();
+        let mut actual = marker_order(merged);
+        expected.sort_unstable();
+        actual.sort_unstable();
+        anyhow::ensure!(
+            actual == expected,
+            "identity merge changed durable marker set under layout normalization"
+        );
+    }
     if ours_markers == base_markers {
         anyhow::ensure!(
             marker_order(merged) == ours_markers,
@@ -1068,22 +1078,14 @@ fn verify_crash_injection_bindings(packet: &Packet, recorded: &CrashEvidence) ->
         .map(|row| (row.boundary.as_str(), row.injected))
         .collect::<BTreeMap<_, _>>();
     for declaration in &packet.crash_boundaries {
-        let (prefix, suffix) = declaration.boundary.split_once('/').with_context(|| {
-            format!("crash boundary {:?} lacks namespace", declaration.boundary)
+        let (before, after) = crash_injection_pair(&declaration.boundary).with_context(|| {
+            format!(
+                "crash boundary {:?} lacks closed before/after pair",
+                declaration.boundary
+            )
         })?;
-        let suffix = suffix
-            .strip_prefix("before_")
-            .or_else(|| suffix.strip_prefix("after_"))
-            .with_context(|| {
-                format!(
-                    "crash boundary {:?} lacks before/after side",
-                    declaration.boundary
-                )
-            })?;
-        let before = format!("{prefix}/before_{suffix}");
-        let after = format!("{prefix}/after_{suffix}");
-        let measured_before = measured.get(before.as_str()).copied().unwrap_or(false);
-        let measured_after = measured.get(after.as_str()).copied().unwrap_or(false);
+        let measured_before = measured.get(before).copied().unwrap_or(false);
+        let measured_after = measured.get(after).copied().unwrap_or(false);
         anyhow::ensure!(
             declaration.before == measured_before,
             "crash boundary {} before injection claim differs from measured evidence",
@@ -1096,6 +1098,25 @@ fn verify_crash_injection_bindings(packet: &Packet, recorded: &CrashEvidence) ->
         );
     }
     Ok(())
+}
+
+/// Closed pair registry. `after_finalize_before_notify` is intentionally not
+/// a mechanical `after_finalize` spelling; reconstructing names from packet
+/// prose caused P1-A12 to evade the finalization-after side.
+fn crash_injection_pair(boundary: &str) -> Option<(&'static str, &'static str)> {
+    match boundary {
+        "ilrp/before_intent_commit" | "ilrp/after_intent_commit" => {
+            Some(("ilrp/before_intent_commit", "ilrp/after_intent_commit"))
+        }
+        "ilrp/before_external_apply" | "ilrp/after_external_apply" => {
+            Some(("ilrp/before_external_apply", "ilrp/after_external_apply"))
+        }
+        "ilrp/before_ack" | "ilrp/after_ack" => Some(("ilrp/before_ack", "ilrp/after_ack")),
+        "ilrp/before_finalize" | "ilrp/after_finalize_before_notify" => {
+            Some(("ilrp/before_finalize", "ilrp/after_finalize_before_notify"))
+        }
+        _ => None,
+    }
 }
 
 fn verify_crash_scenario_coverage(
@@ -4282,6 +4303,18 @@ fn verify_trace_corpus_resolution(
     let mut resolved = BTreeSet::new();
     for lexical in scope_trace_open_paths(bytes) {
         let lexical_path = Path::new(&lexical);
+        let lexical_lower = lexical_path.to_string_lossy().to_ascii_lowercase();
+        // Relative openat paths are interpreted against process cwd/dirfd, not
+        // necessarily trace_root. Without a cwd/dirfd receipt, resolving one
+        // as root-relative can hide a locked corpus behind a chdir or alias.
+        if !lexical_path.is_absolute()
+            && (lexical_lower.contains("/fuzz/corpus/")
+                || lexical_lower.starts_with("fuzz/corpus/"))
+        {
+            anyhow::bail!(
+                "{label}: relative fuzz corpus path lacks authenticated cwd/dirfd binding"
+            );
+        }
         let under_trace_root =
             !lexical_path.is_absolute() || lexical_path.strip_prefix(trace_root).is_ok();
         if !under_trace_root {
@@ -4302,7 +4335,6 @@ fn verify_trace_corpus_resolution(
                 "{label}: traced repository path resolves into forbidden data"
             );
         }
-        let lexical_lower = lexical_path.to_string_lossy().to_ascii_lowercase();
         if lexical_lower.contains("/fuzz/corpus/")
             || lexical_lower.starts_with("fuzz/corpus/")
             || lower.contains("/fuzz/corpus/")
@@ -5748,20 +5780,18 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
 }
 
 fn integer_delta(before: &str, after: &str) -> Option<i64> {
-    fn split_single_integer(text: &str) -> Option<(&str, i64, &str)> {
+    fn scan(text: &str) -> Option<(Vec<String>, Vec<i64>)> {
         let mut chars = text.char_indices().peekable();
-        let mut start = None;
-        let mut end = 0;
+        let mut parts = Vec::new();
+        let mut values = Vec::new();
+        let mut cursor = 0;
         while let Some((index, ch)) = chars.next() {
             let starts_integer = ch.is_ascii_digit()
                 || (ch == '-' && chars.peek().is_some_and(|(_, next)| next.is_ascii_digit()));
             if !starts_integer {
                 continue;
             }
-            if start.replace(index).is_some() {
-                return None;
-            }
-            end = index + ch.len_utf8();
+            let mut end = index + ch.len_utf8();
             while let Some((next_index, next)) = chars.peek().copied() {
                 if !next.is_ascii_digit() {
                     break;
@@ -5769,16 +5799,38 @@ fn integer_delta(before: &str, after: &str) -> Option<i64> {
                 chars.next();
                 end = next_index + next.len_utf8();
             }
+            parts.push(text[cursor..index].to_owned());
+            values.push(text[index..end].parse().ok()?);
+            cursor = end;
         }
-        let start = start?;
-        let value = text[start..end].parse().ok()?;
-        Some((&text[..start], value, &text[end..]))
+        parts.push(text[cursor..].to_owned());
+        Some((parts, values))
     }
 
-    let (before_prefix, before_value, before_suffix) = split_single_integer(before)?;
-    let (after_prefix, after_value, after_suffix) = split_single_integer(after)?;
-    (before_prefix == after_prefix && before_suffix == after_suffix)
-        .then_some(after_value - before_value)
+    if let Some(suffix) = after.strip_prefix(before).map(str::trim) {
+        if suffix == "+ 1" || suffix == "+1" {
+            return Some(1);
+        }
+        if suffix == "- 1" || suffix == "-1" {
+            return Some(-1);
+        }
+    }
+    let (before_parts, before_values) = scan(before)?;
+    let (after_parts, after_values) = scan(after)?;
+    if before_parts != after_parts || before_values.len() != after_values.len() {
+        return None;
+    }
+    let mut delta = None;
+    for (before, after) in before_values.into_iter().zip(after_values) {
+        let change = after - before;
+        if change == 0 {
+            continue;
+        }
+        if delta.replace(change).is_some() || !matches!(change, 1 | -1) {
+            return None;
+        }
+    }
+    delta
 }
 
 /// Closed M24 mutation-source registry. Each predeclared mutant owns one
@@ -5795,8 +5847,16 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
             "if !text.is_empty()",
         ),
         ("crates/liminal-cst/src/parser.rs", 196, "if !valid_close"),
-        ("crates/liminal-cst/src/parser.rs", 163, "pub fn errors("),
-        ("crates/liminal-cst/src/parser.rs", 169, "pub fn basis("),
+        (
+            "crates/liminal-cst/src/parser.rs",
+            201,
+            "offset + line.trim_end_matches",
+        ),
+        (
+            "crates/liminal-cst/src/parser.rs",
+            209,
+            ".map_or(marker..line.len(), |close| marker..marker + 2 + close + 1)",
+        ),
         ("crates/liminal-cst/src/parser.rs", 64, "match raw.0 {"),
         (
             "crates/liminal-source/src/view.rs",
@@ -11391,5 +11451,32 @@ mod tests {
         let mut empty = recorded;
         empty.scenarios.clear();
         verify_crash_rows(&empty, &declared).expect_err("an empty fault matrix proves nothing");
+    }
+
+    #[test]
+    fn crash_injection_binding_accepts_closed_finalize_pair() {
+        let root = repo_root();
+        let packet = read_packet(&root).expect("packet");
+        let bytes =
+            fs::read(root.join("conformance/haqp/evidence/crash.json")).expect("crash evidence");
+        let recorded: CrashEvidence = serde_json::from_slice(&bytes).expect("parse crash evidence");
+        verify_crash_injection_bindings(&packet, &recorded)
+            .expect("closed finalization before/after pair must bind");
+    }
+
+    #[test]
+    fn corpus_resolution_rejects_relative_paths_without_cwd_receipt() {
+        let root = repo_root();
+        let trace_root = root.as_str();
+        let trace = "1 openat(AT_FDCWD, \"fuzz/corpus/cst_parse\", O_RDONLY) = 3\n";
+        let err = verify_trace_corpus_resolution(
+            &root,
+            trace_root,
+            trace.as_bytes(),
+            &"0".repeat(64),
+            "relative-corpus-test",
+        )
+        .expect_err("relative corpus path must not be rebased on trace root");
+        assert!(err.to_string().contains("authenticated cwd/dirfd"), "{err}");
     }
 }

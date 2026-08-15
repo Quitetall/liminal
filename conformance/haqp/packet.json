@@ -1005,7 +1005,7 @@
   "id": "P1-M003",
   "family": "source/CST/formatting",
   "operator": "threshold-plus-one",
-    "source": "crates/liminal-cst/src/parser.rs:163",
+    "source": "crates/liminal-cst/src/parser.rs:201",
    "requirement": "P1-R002",
    "defect": "shift span end forward",
    "killing_tests": [
@@ -1018,7 +1018,7 @@
   "id": "P1-M004",
   "family": "source/CST/formatting",
   "operator": "threshold-minus-one",
-    "source": "crates/liminal-cst/src/parser.rs:169",
+    "source": "crates/liminal-cst/src/parser.rs:209",
    "requirement": "P1-R002",
    "defect": "shift span end backward",
    "killing_tests": [
