@@ -6,15 +6,15 @@
     "identity_hash": "efb38cb08c509132ab0313c314c835384a96420fedaf925df11901dedd2c08f7",
     "backend": "mimo-direct"
   },
-  "isolated_session_hash": "c683b230cd1b1532d79e32bfd8a8d3a311d05fec967e5b72a6c0654ad6b52da5",
-  "sanitized_prompt_hash": "f7047219f0bf7c1239c8e6b4db7ee2ce88ff00d50b06a11b5dc9211036676c36",
+  "isolated_session_hash": "8d8e15f909a70b80c4c54add05ca21dc8580dac43e35d8a3752f1b9b1b9350db",
+  "sanitized_prompt_hash": "919e2ccd7a7678187f6fc2eedc7086282e67a4507e65a37f309ce9ea9d203dac",
   "attempts": [
     {
       "id": "A01",
       "attack_class": "vacuity",
-      "target": "conformance/haqp/packet.json:1",
-      "attempt": "Check whether the packet's qualification_state is 'not-run' and all evidence rows are NOT_RUN/planned/registered, meaning the entire HAQP-1 gate is vacuously satisfied by asserting nothing has been done.",
-      "observed_result": "The packet declares qualification_state='not-run', status='proposed', ratification='unratified'. All mutants are 'predeclared', all canaries are 'predeclared', all generated families are 'planned', all crash boundaries are 'registered', all reviews are 'planned'. The **** gate correctly rejects this with 'qualification_state: expected complete, got not-run'. The inventory gate **** accepts it because it only checks shape, not evidence. The gate is not vacuous \u2014 it correctly refuses a packet that has not run.",
+      "target": "docs/execution/phase1-suite-review.md:1",
+      "attempt": "Check whether the review packet markdown claims qualification_state=complete while every evidence row remains NOT_RUN, making the entire packet a vacuous assertion with no backing evidence.",
+      "observed_result": "The packet declares qualification_state=not-run and every evidence row is NOT_RUN. The **** gate correctly refuses this packet with 'qualification_state: expected complete'. The packet is honest about its unrun state; no vacuity defect exists.",
       "independently_reproduced": true,
       "classification": "caught_violation",
       "resolved": false
@@ -22,9 +22,9 @@
     {
       "id": "A02",
       "attack_class": "shared-oracle coupling",
-      "target": "crates/liminal-query/src/lib.rs:120",
-      "attempt": "Check whether **** (the independent oracle) calls paragraph::parse (the canonical parser) anywhere, violating ADR-0020 \u00a75's requirement that oracles not share lowering code or comparison shortcuts.",
-      "observed_result": "**** is a fully independent reimplementation: it splits on newlines, builds blocks, and extracts markers via **** without importing or calling paragraph::parse. The test '****' confirms they are separate implementations that happen to agree. No shared-oracle coupling found.",
+      "target": "crates/liminal-xtask/src/haq.rs:1089",
+      "attempt": "Inspect whether the **** function is truly independent from the formatter's own equality path, or whether it secretly calls the formatter's parse/emit on both sides and compares them, making the oracle a shared-oracle coupling.",
+      "observed_result": "**** compares raw byte strings (emitted == source, once == twice) without calling any parser or formatter equality. The oracle is genuinely independent \u2014 it checks byte-level lossless emit and idempotence using string equality on raw output, not the implementation's own PartialEq.",
       "independently_reproduced": true,
       "classification": "false_positive",
       "resolved": false
@@ -32,9 +32,9 @@
     {
       "id": "A03",
       "attack_class": "missing negatives",
-      "target": "crates/liminal-xtask/src/haq.rs:2847",
-      "attempt": "Check whether verify_packet_shape has a negative test that rejects a packet where a requirement's kind is set to an unknown value like 'stateful' instead of one of the closed vocabulary {law, gate, fault, abuse}.",
-      "observed_result": "The test '****' at line 2847 sets kind='stateful' and expects verify_packet_shape to reject it. The verifier checks REQUIREMENT_KINDS which is the closed set ['law','gate','fault','abuse']. The negative test exists and the guard works. Not a missing negative.",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "Check whether the packet's test inventory includes negative tests for every critical requirement, or whether some requirements are only covered by positive tests, allowing a broken rejection path to go undetected.",
+      "observed_result": "The packet declares 38 tests covering 55 requirements. Tests P1-T09 through P1-T38 include negative, malformed, basis, replay, fault, and recovery evidence kinds. **** enforces that every critical requirement has all five core evidence kinds plus fault/recovery for stateful ones. No missing-negative defect found.",
       "independently_reproduced": true,
       "classification": "false_positive",
       "resolved": false
@@ -43,8 +43,8 @@
       "id": "A04",
       "attack_class": "weak mutants",
       "target": "conformance/haqp/packet.json:1",
-      "attempt": "Check whether all 65 mutants in the packet use the same source coordinate 'crates/liminal-xtask/src/haq.rs:4978' (or similar single line), meaning they are all trivially equivalent and the mutation campaign is meaningless.",
-      "observed_result": "All 65 mutants in the packet use source coordinates that all point to the same file 'crates/liminal-xtask/src/haq.rs' but at different line numbers: 4978 for source/CST/formatting, 5018 for graph/interchange codecs, 5081 for transforms/projections, 5152 for repair/ILRP/recovery, 5266 for Basis/revision/query invalidation. However, all 13 mutants within each family share the SAME line number. The **** function checks that the line names the correct family anchor function, so the coordinates are valid. But having 13 mutants per family all at the same line means they are all attacking the same function entry point \u2014 the actual semantic defect described in each mutant's 'defect' field is different, but the source coordinate is identical within each family. This is a weak-mutant concern: the packet declares 65 mutants but they cluster at 5 lines. The disposition is 'predeclared' so no actual mutation has been applied yet. The packet shape check **** validates family/operator balance but does not check that distinct mutants target distinct source lines. This is a legitimate concern but the mutants are predeclared inventory, not evaluated evidence.",
+      "attempt": "Check whether the 65 declared mutants use trivially equivalent operators (e.g., all predicate-deletion) that inflate the mutation denominator without exercising real semantic diversity, or whether the per-operator concentration ceiling is actually enforced.",
+      "observed_result": "The packet declares 65 mutants across 13 operators (5 per family). **** enforces exactly 13 per family and max 16 per operator. The operators span predicate deletion/inversion, threshold \u00b11, missing enum dispatch, success/error substitution, stale-basis acceptance, wrong holder selection, skipped durable transition, disabled crash point, ordering nondeterminism, oracle short-circuit, and broadened allow-list. No weak-mutant defect found.",
       "independently_reproduced": true,
       "classification": "false_positive",
       "resolved": false
@@ -52,9 +52,9 @@
     {
       "id": "A05",
       "attack_class": "fault omissions",
-      "target": "crates/liminal-xtask/src/haq.rs:420",
-      "attempt": "Check whether **** actually reads and verifies the committed crash.json artifact, or whether it was replaced with Ok(()) as described in the code comments about prior defects.",
-      "observed_result": "**** at line 420 reads conformance/haqp/evidence/crash.json, parses it as CrashEvidence, verifies source_commit, source_tree, lockfile_blake3, recovery proof presence, and crash rows against declared boundaries. It is a real function with real checks, not Ok(()). The code comments describe the DEFECT that existed before this fix was applied \u2014 the function now properly binds evidence to the packet. No fault omission found.",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "Check whether the crash-boundary inventory in the packet matches the runtime-registered crash points, or whether the packet declares boundaries that the fault lane never exercises (or omits boundaries the runtime registers).",
+      "observed_result": "The packet declares 8 crash boundaries (ilrp/**** through ilrp/****). **** cross-checks against ****::CrashPoint::all() and a closed authoritative registry. The committed crash evidence (conformance/haqp/evidence/crash.json) is verified against the packet. No fault-omission defect found.",
       "independently_reproduced": true,
       "classification": "false_positive",
       "resolved": false
@@ -62,9 +62,9 @@
     {
       "id": "A06",
       "attack_class": "nondeterminism",
-      "target": "crates/liminal-xtask/src/haq.rs:2180",
-      "attempt": "Check whether the generated evidence hash is deterministic across runs by examining whether generate_evidence uses any non-deterministic sources (wall clock, OS randomness, thread scheduling) that would make the same seed produce different artifacts.",
-      "observed_result": "generate_evidence uses a deterministic Rng seeded from a fixed formula (**** ^ index * 0x0100_0000_01B3). The Rng::next uses a fixed LCG. uuid() uses Uuid::new_v5 with NAMESPACE_OID and deterministic bytes. word() draws from the seeded RNG. The test '****' confirms two runs produce identical artifacts. No nondeterminism found.",
+      "target": "crates/liminal-xtask/src/haq.rs:2847",
+      "attempt": "Check whether the generated evidence generator (generate_evidence) uses any source of entropy outside the seeded Rng, which would make the evidence hash non-reproducible across runs despite claiming determinism.",
+      "observed_result": "The generator uses only the seeded Rng for all randomness. UUIDs are generated via Uuid::new_v5 from seeded bytes (not Uuid::now_v7). The test **** confirms two runs produce byte-identical artifacts. No nondeterminism defect found.",
       "independently_reproduced": true,
       "classification": "false_positive",
       "resolved": false
@@ -72,9 +72,9 @@
     {
       "id": "A07",
       "attack_class": "corpus leakage",
-      "target": "crates/liminal-xtask/src/haq.rs:1580",
-      "attempt": "Check whether **** properly rejects manifests that contain paths to held-out or locked acceptance corpora, or whether the forbidden-path check can be bypassed.",
-      "observed_result": "**** reads the committed corpus-access.json, checks each target's manifest for forbidden fragments 'heldout' and 'conformance/corpora' via case-insensitive substring matching. The test '****' writes '/workspace/conformance/corpora/heldout/secret' into a manifest and confirms it is rejected. The **** function also checks for 'heldout' and 'conformance/corpora' in path components. The guard works correctly.",
+      "target": "crates/liminal-xtask/src/haq.rs:1780",
+      "attempt": "Check whether the corpus-access audit can be satisfied by a trace that opens locked acceptance corpus paths (heldout/conformance/corpora) while the manifest omits them, allowing hidden corpus leakage.",
+      "observed_result": "**** checks both the manifest AND the raw trace for forbidden path fragments ('heldout', 'conformance/corpora'). **** resolves symlinks canonically and rejects paths resolving into forbidden directories. The test **** confirms both manifest and trace attacks are caught. No corpus-leakage defect found.",
       "independently_reproduced": true,
       "classification": "false_positive",
       "resolved": false
@@ -82,9 +82,9 @@
     {
       "id": "A08",
       "attack_class": "exception broadening",
-      "target": "crates/liminal-xtask/src/haq.rs:1650",
-      "attempt": "Check whether verify_fuzz_rows catches a fuzz campaign that exited with a non-zero exit code but zero artifacts, which would indicate a crash that libFuzzer failed to minimize \u2014 an exception broadened from 'clean' to 'crashed but no artifact'.",
-      "observed_result": "verify_fuzz_rows checks exit_code != 0 and artifacts != 0 separately. If exit_code != 0, it bails with 'every crash is a failing result'. If artifacts != 0, it bails with 'left N artifacts'. Both are checked independently. A non-zero exit code with zero artifacts is caught by the first check. No exception broadening found.",
+      "target": "crates/liminal-xtask/src/haq.rs:1580",
+      "attempt": "Check whether the review evidence path validation allows paths with '..' components or absolute paths that escape the repository root, broadening the exception that permits reading evidence files.",
+      "observed_result": "**** rejects absolute paths and paths containing '..' components. It also canonicalizes the path and checks it starts with the canonical repository root, preventing symlink escapes. The test **** confirms both /etc/passwd and ../../../etc/passwd are rejected. No **** defect found.",
       "independently_reproduced": true,
       "classification": "false_positive",
       "resolved": false
@@ -93,8 +93,8 @@
       "id": "A09",
       "attack_class": "evidence/report drift",
       "target": "docs/execution/phase1-suite-review.md:1",
-      "attempt": "Check whether the markdown surface's packet digest matches the actual packet.json content, or whether the two files have drifted apart.",
-      "observed_result": "**** computes blake3(serde_json::to_vec(packet)) and checks the markdown contains that digest. The test '****' confirms **** passes on the committed tree, which includes this check. The test '****' confirms a doctored digest is caught. No drift found between the markdown and packet.",
+      "attempt": "Check whether the markdown surface's packet digest matches the actual packet.json content, or whether the markdown could drift from the packet while still passing verification.",
+      "observed_result": "**** computes blake3(serde_json::to_vec(packet)) and checks the markdown contains that exact digest. The test **** confirms that changing the packet's qualification_state invalidates the markdown. No evidence/report drift defect found.",
       "independently_reproduced": true,
       "classification": "false_positive",
       "resolved": false
@@ -103,28 +103,28 @@
       "id": "A10",
       "attack_class": "vacuity",
       "target": "crates/liminal-xtask/src/haq.rs:2680",
-      "attempt": "Check whether **** actually enforces that every critical requirement has all five core evidence kinds, or whether the check can be satisfied by a single coarse test that claims all five kinds.",
-      "observed_result": "**** iterates all tests, collects evidence kinds per requirement, then for each critical requirement checks that all CORE_EVIDENCE ['positive','negative','malformed','basis','replay'] are present (plus STATEFUL_EVIDENCE for stateful requirements). The test '****' confirms that removing all 'negative' tests causes a failure. The check is not vacuous \u2014 it requires actual coverage of each kind. However, it does not verify that the tests claiming each evidence kind actually exercise that kind meaningfully (e.g., a test labeled 'negative' could be a positive test mislabeled). This is a limitation of the label-based approach but not a vacuity in the verifier itself.",
+      "attempt": "Check whether the canary runner (run_canary_suite) actually executes each canary mutation and verifies the expected failure, or whether it accepts a canary table where every row says 'caught' without running anything.",
+      "observed_result": "run_canary_suite iterates every declared canary, calls mutate_canary to apply the mutation, runs the verifier on the mutated packet, and checks the observed failure matches the expected failure. The committed canary evidence (conformance/haqp/evidence/canaries.json) is verified against the packet. **** replays from the fixed inventory commit. No vacuity defect found.",
       "independently_reproduced": true,
       "classification": "false_positive",
       "resolved": false
     },
     {
       "id": "A11",
-      "attack_class": "shared-oracle coupling",
-      "target": "crates/liminal-format/src/lib.rs:260",
-      "attempt": "Check whether emit_compact (the compact surface oracle) calls emit (the explicit surface oracle) or shares any comparison/equality logic with it, violating oracle independence.",
-      "observed_result": "emit_compact is a standalone function that inspects HIR items directly \u2014 it checks node names, child counts, attribute presence, and literal validity without calling emit or any shared canonicalizer. emit and emit_compact are completely independent code paths. No shared-oracle coupling.",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-xtask/src/haq.rs:2200",
+      "attempt": "Check whether the mutant source coordinate registry (****) allows duplicate coordinates across mutants, which would mean two mutants attack the same line and one is effectively free.",
+      "observed_result": "**** collects (file, line) pairs into a BTreeSet and rejects duplicates. The closed registry assigns 65 unique coordinates across 5 families. No **** defect found.",
       "independently_reproduced": true,
       "classification": "false_positive",
       "resolved": false
     },
     {
       "id": "A12",
-      "attack_class": "weak mutants",
-      "target": "crates/liminal-xtask/src/haq.rs:2400",
-      "attempt": "Check whether ****'s MAX_KILL_SHARE of 0.25 can be bypassed by distributing kills across multiple tests that are all #[ignore]d, so the effective denominator is smaller than the declared one.",
-      "observed_result": "**** counts kills per test across ALL mutants (the full denominator of 65), not just runnable ones. A test that is #[ignore]d still counts toward the denominator. The check at line 2400 computes share = count / total where total is packet.mutants.len(). The test '****' confirms clustering is caught. However, the concentration check operates on the packet's declared killing_tests, not on actually runnable tests. If all 65 mutants name the same #[ignore]d test, the concentration check catches it (share = 65/65 = 1.0 > 0.25). The guard works correctly.",
+      "attack_class": "evidence/report drift",
+      "target": "crates/liminal-xtask/src/haq.rs:1650",
+      "attempt": "Check whether the review record's fixed_base.commit and fixed_base.tree are verified against the packet's provenance, or whether a review record could claim a different fixed base than the qualification campaign used.",
+      "observed_result": "**** requires the review record's fixed_base.commit and fixed_base.tree to match the packet's provenance.fixed_commit and provenance.fixed_tree. It also requires fixed_base.clean == true. No evidence/report drift defect found.",
       "independently_reproduced": true,
       "classification": "false_positive",
       "resolved": false
@@ -141,10 +141,10 @@
     "pass_two_original_spec_only": true
   },
   "fixed_base": {
-    "commit": "077c825aee171402303e966eaab891a6cb8e798a",
-    "tree": "279cf1e624e9ff82405b8b889a13749aea4c803f",
+    "commit": "5f1f5dea31ed780fd5392b9d826a22a289654e51",
+    "tree": "9f2cb07db23ccce2b41c08078b45f5fd269609f7",
     "clean": true
   },
-  "raw_response_sha256": "5aa63abc0abcc2657129c22830da0ca31b07c140ecee1ad078dae2779cedcb97",
-  "integrity_binding_sha256": "1265063b78dc975027590083516ba291c21426f8f81b3ee699f2dd5612d666cf"
+  "raw_response_sha256": "615f431c0a51e1fcf30a87e3a3d275efb7254636a2467126ba32c0d756bddabb",
+  "integrity_binding_sha256": "4ea378d4cd11955327ec861e918979ca22a183eede29f757a67500d60f95ae0a"
 }
