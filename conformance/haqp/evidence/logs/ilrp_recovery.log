@@ -1,29 +1,27 @@
-   Compiling liminal-fuzz v0.0.0 (/home/brianklam/Desktop/liminal/fuzz)
-    Finished `release` profile [optimized + debuginfo] target(s) in 0.23s
-    Finished `release` profile [optimized + debuginfo] target(s) in 0.02s
-     Running `fuzz/target/x86_64-unknown-linux-gnu/release/ilrp_recovery -artifact_prefix=/home/brianklam/Desktop/liminal/fuzz/artifacts/ilrp_recovery/ -max_total_time=1860 -seed=20260725 -rss_limit_mb=4096 -print_final_stats=1 /home/brianklam/Desktop/liminal/fuzz/corpus/ilrp_recovery`
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.08s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.08s
+     Running `fuzz/target/x86_64-unknown-linux-gnu/release/ilrp_recovery -artifact_prefix=/home/brianklam/Desktop/liminal/fuzz/artifacts/ilrp_recovery/ -max_total_time=1800 -seed=20260725 -rss_limit_mb=4096 -print_final_stats=1 /home/brianklam/Desktop/liminal/fuzz/corpus/ilrp_recovery`
 INFO: Running with entropic power schedule (0xFF, 100).
 INFO: Seed: 20260725
-INFO: Loaded 1 modules   (416 inline 8-bit counters): 416 [0x5631ba81fb30, 0x5631ba81fcd0), 
-INFO: Loaded 1 PC tables (416 PCs): 416 [0x5631ba81fcd0,0x5631ba8216d0), 
+INFO: Loaded 1 modules   (416 inline 8-bit counters): 416 [0x55a02a6ceb30, 0x55a02a6cecd0), 
+INFO: Loaded 1 PC tables (416 PCs): 416 [0x55a02a6cecd0,0x55a02a6d06d0), 
 INFO:      133 files found in /home/brianklam/Desktop/liminal/fuzz/corpus/ilrp_recovery
 INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
 INFO: seed corpus: files: 133 min: 1b max: 244b total: 10585b rss: 38Mb
 #134	INITED cov: 77 ft: 388 corp: 73/2913b exec/s: 0 rss: 38Mb
-#65536	pulse  cov: 77 ft: 388 corp: 73/2913b lim: 854 exec/s: 32768 rss: 601Mb
-#131072	pulse  cov: 77 ft: 388 corp: 73/2913b lim: 1505 exec/s: 32768 rss: 948Mb
-#262144	pulse  cov: 77 ft: 388 corp: 73/2913b lim: 2814 exec/s: 32768 rss: 949Mb
-#524288	pulse  cov: 77 ft: 388 corp: 73/2913b lim: 4096 exec/s: 30840 rss: 949Mb
-#1048576	pulse  cov: 77 ft: 388 corp: 73/2913b lim: 4096 exec/s: 29127 rss: 949Mb
-#2097152	pulse  cov: 77 ft: 388 corp: 73/2913b lim: 4096 exec/s: 29127 rss: 950Mb
-#4194304	pulse  cov: 77 ft: 388 corp: 73/2913b lim: 4096 exec/s: 29330 rss: 950Mb
-#8388608	pulse  cov: 77 ft: 388 corp: 73/2913b lim: 4096 exec/s: 29127 rss: 950Mb
-#16777216	pulse  cov: 77 ft: 388 corp: 73/2913b lim: 4096 exec/s: 29127 rss: 951Mb
-#33554432	pulse  cov: 77 ft: 388 corp: 73/2913b lim: 4096 exec/s: 28951 rss: 951Mb
-#53755824	DONE   cov: 77 ft: 388 corp: 73/2913b lim: 4096 exec/s: 28885 rss: 951Mb
-Done 53755824 runs in 1861 second(s)
-stat::number_of_executed_units: 53755824
-stat::average_exec_per_sec:     28885
+#65536	pulse  cov: 77 ft: 388 corp: 73/2913b lim: 854 exec/s: 21845 rss: 601Mb
+#131072	pulse  cov: 77 ft: 388 corp: 73/2913b lim: 1505 exec/s: 16384 rss: 947Mb
+#262144	pulse  cov: 77 ft: 388 corp: 73/2913b lim: 2814 exec/s: 17476 rss: 948Mb
+#524288	pulse  cov: 77 ft: 388 corp: 73/2913b lim: 4096 exec/s: 15887 rss: 949Mb
+#1048576	pulse  cov: 77 ft: 388 corp: 73/2913b lim: 4096 exec/s: 15650 rss: 949Mb
+#2097152	pulse  cov: 77 ft: 388 corp: 73/2913b lim: 4096 exec/s: 14979 rss: 950Mb
+#4194304	pulse  cov: 77 ft: 388 corp: 73/2913b lim: 4096 exec/s: 15087 rss: 950Mb
+#8388608	pulse  cov: 77 ft: 388 corp: 73/2913b lim: 4096 exec/s: 14588 rss: 950Mb
+#16777216	pulse  cov: 77 ft: 388 corp: 73/2913b lim: 4096 exec/s: 14413 rss: 951Mb
+#26025484	DONE   cov: 77 ft: 388 corp: 73/2913b lim: 4096 exec/s: 14450 rss: 951Mb
+Done 26025484 runs in 1801 second(s)
+stat::number_of_executed_units: 26025484
+stat::average_exec_per_sec:     14450
 stat::new_units_added:          0
 stat::slowest_unit_time_sec:    0
 stat::peak_rss_mb:              951
