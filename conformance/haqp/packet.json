@@ -1226,9 +1226,9 @@
   "id": "P1-M020",
   "family": "graph/interchange codecs",
   "operator": "stale-basis-acceptance",
-    "source": "crates/liminal-graph/src/store/mod.rs:306",
+    "source": "crates/liminal-graph/src/store/mod.rs:319",
    "requirement": "P1-R010",
-   "defect": "decode against stale schema basis",
+   "defect": "accept a revision without its head basis check",
    "killing_tests": [
     "P1-T29",
     "P1-T04"
@@ -1239,7 +1239,7 @@
   "id": "P1-M021",
   "family": "graph/interchange codecs",
   "operator": "wrong-holder-selection",
-    "source": "crates/liminal-graph/src/store/mod.rs:316",
+    "source": "crates/liminal-graph/src/store/mod.rs:320",
    "requirement": "P1-R012",
    "defect": "resolve EXTERNAL_VALUE ungoverned",
    "killing_tests": [
@@ -1317,7 +1317,7 @@
   "id": "P1-M027",
   "family": "transforms/projections",
   "operator": "predicate-deletion",
-    "source": "crates/liminal-source/src/merge.rs:36",
+    "source": "crates/liminal-source/src/merge.rs:203",
    "requirement": "P1-R013",
    "defect": "skip transform equality law",
    "killing_tests": [

@@ -4383,6 +4383,10 @@ fn canonicalize_trace_path(path: &Path) -> Result<std::path::PathBuf> {
                 cursor = cursor
                     .parent()
                     .context("traced path has no existing ancestor")?;
+                anyhow::ensure!(
+                    cursor.file_name() != Some(std::ffi::OsStr::new("corpus")),
+                    "traced path is missing a corpus entry; symlink history is unavailable"
+                );
             }
             Err(error) => return Err(error.into()),
         }
@@ -5760,8 +5764,10 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
                     && !after.contains("let lines: Vec<"))
         }
         "stale-basis-acceptance" => {
-            before.to_ascii_lowercase().contains("basis")
-                && !after.to_ascii_lowercase().contains("basis")
+            (before.to_ascii_lowercase().contains("basis")
+                && !after.to_ascii_lowercase().contains("basis"))
+                || (before == "if rev == inner.state.head {"
+                    && matches!(after, "if true {" | "if false {"))
         }
         "skipped-durable-transition" => ["prepare", "ack", "finalize", "commit"]
             .iter()
@@ -5785,7 +5791,9 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
         }
         "wrong-holder-selection" => {
             // P1-M008: basis getter redirected to text; no generic self.* escape.
-            before == "&self.basis" && after == "&self.text"
+            (before == "&self.basis" && after == "&self.text")
+                || (before == "return Ok(inner.state.nodes.get(&id).cloned());"
+                    && after == "return Ok(inner.state.relations.get(&id).cloned());")
         }
         _ => false,
     };
@@ -5937,13 +5945,13 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
-            306,
-            "pub fn begin(",
+            319,
+            "if rev == inner.state.head {",
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
-            316,
-            "pub fn node_at(",
+            320,
+            "return Ok(inner.state.nodes.get(&id).cloned());",
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
@@ -5974,8 +5982,8 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
     const TRANSFORM: [(&str, usize, &str); 13] = [
         (
             "crates/liminal-source/src/merge.rs",
-            36,
-            "pub fn three_way(",
+            203,
+            "if !ours_changed.is_disjoint(&theirs_changed) {",
         ),
         (
             "crates/liminal-source/src/merge.rs",
@@ -11551,5 +11559,17 @@ mod tests {
         )
         .expect_err("relative corpus path must not be rebased on trace root");
         assert!(err.to_string().contains("authenticated cwd/dirfd"), "{err}");
+    }
+
+    #[test]
+    fn deleted_corpus_entry_fails_closed_without_symlink_history() {
+        let scratch =
+            liminal_scratch::ScratchDir::new("haq-deleted-corpus-entry").expect("scratch");
+        let corpus = scratch.join("fuzz/corpus");
+        fs::create_dir_all(&corpus).expect("corpus root");
+        let missing = corpus.join("target").join("deleted-after-open");
+        let err = canonicalize_trace_path(missing.as_std_path())
+            .expect_err("a deleted corpus entry cannot prove historical symlink target");
+        assert!(err.to_string().contains("symlink history"), "{err}");
     }
 }
