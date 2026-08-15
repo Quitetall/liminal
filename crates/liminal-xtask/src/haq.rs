@@ -3805,13 +3805,17 @@ fn verify_corpus_access_audit(root: &Utf8Path, packet: &Packet) -> Result<()> {
         "corpus access audit target",
     )?;
     verify_corpus_audit_campaign_binding(root, &audit)?;
-    if packet.provenance.is_some() {
-        verify_corpus_scope_traces(root, &audit)?;
+    if let Some(provenance) = &packet.provenance {
+        verify_corpus_scope_traces(root, &audit, provenance)?;
     }
     Ok(())
 }
 
-fn verify_corpus_scope_traces(root: &Utf8Path, audit: &CorpusAccessAudit) -> Result<()> {
+fn verify_corpus_scope_traces(
+    root: &Utf8Path,
+    audit: &CorpusAccessAudit,
+    provenance: &Provenance,
+) -> Result<()> {
     const QUALIFICATION_SCOPES: [&str; 8] = [
         "ci",
         "canaries",
@@ -3832,7 +3836,7 @@ fn verify_corpus_scope_traces(root: &Utf8Path, audit: &CorpusAccessAudit) -> Res
         actual == expected,
         "qualification corpus audit scopes differ: recorded={actual:?}, expected={expected:?}"
     );
-    verify_corpus_scope_replays(root, &audit.scope_traces)?;
+    verify_corpus_scope_replays(root, &audit.scope_traces, &provenance.fixed_commit)?;
     require_unique(
         audit.scope_traces.iter().map(|row| row.scope.as_str()),
         "corpus audit scope",
@@ -3944,11 +3948,28 @@ fn verify_corpus_scope_traces(root: &Utf8Path, audit: &CorpusAccessAudit) -> Res
 /// Bind each qualification-wide trace to its closed, actual lane command.
 /// A scope-probe helper is not accepted as a substitute for tracing the lane
 /// that the qualification packet claims to have run.
-fn verify_corpus_scope_replays(root: &Utf8Path, rows: &[CorpusScopeTrace]) -> Result<()> {
-    let _ = root;
+fn verify_corpus_scope_replays(
+    root: &Utf8Path,
+    rows: &[CorpusScopeTrace],
+    fixed_commit: &str,
+) -> Result<()> {
+    let scratch = liminal_scratch::ScratchDir::new("haq-scope-replay")?;
+    let worktree = scratch.path().to_owned();
+    let add = Command::new("git")
+        .current_dir(root)
+        .args(["worktree", "add", "--detach", "--quiet"])
+        .arg(&worktree)
+        .arg(fixed_commit)
+        .output()?;
+    anyhow::ensure!(
+        add.status.success(),
+        "scope replay worktree add failed: {}",
+        String::from_utf8_lossy(&add.stderr).trim()
+    );
+    let mut guard = WorktreeGuard::new(root, &worktree);
     for row in rows {
         let expected_command = format!(
-            "strace -f -q -e trace=openat,openat2 -o conformance/haqp/evidence/access/scopes/{}.trace {}",
+            "strace -f -q -e trace=openat,openat2 -o target/haqp/scope-{}.trace {}",
             row.scope,
             scope_lane_command(&row.scope)?
         );
@@ -3957,7 +3978,35 @@ fn verify_corpus_scope_replays(root: &Utf8Path, rows: &[CorpusScopeTrace]) -> Re
             &row.command,
             &expected_command,
         )?;
+        let output = Command::new("sh")
+            .current_dir(&worktree)
+            .args(["-c", &row.command])
+            .output()
+            .with_context(|| format!("replay corpus scope {}", row.scope))?;
+        anyhow::ensure!(
+            output.status.success(),
+            "scope replay {} failed: {}",
+            row.scope,
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+        let trace = worktree.join(format!("target/haqp/scope-{}.trace", row.scope));
+        let bytes = fs::read(&trace)
+            .with_context(|| format!("scope replay {} produced no trace", row.scope))?;
+        require_eq(
+            &format!("{} replayed observed_paths_blake3", row.scope),
+            &row.observed_paths_blake3,
+            &scope_trace_paths_digest(&bytes),
+        )?;
+        let lower = String::from_utf8_lossy(&bytes).to_ascii_lowercase();
+        for forbidden in ["heldout", "conformance/corpora"] {
+            anyhow::ensure!(
+                !lower.contains(forbidden),
+                "{} replay observed forbidden path fragment {forbidden:?}",
+                row.scope
+            );
+        }
     }
+    guard.remove()?;
     Ok(())
 }
 
@@ -5349,10 +5398,24 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
 
 fn integer_delta(before: &str, after: &str) -> Option<i64> {
     fn numbers(text: &str) -> Vec<i64> {
-        text.split(|ch: char| !ch.is_ascii_digit() && ch != '-')
-            .filter(|part| !part.is_empty() && *part != "-")
-            .filter_map(|part| part.parse().ok())
-            .collect()
+        let mut values = Vec::new();
+        let mut token = String::new();
+        for ch in text.chars() {
+            if ch.is_ascii_digit() || (ch == '-' && token.is_empty()) {
+                token.push(ch);
+            } else if !token.is_empty() {
+                if let Ok(value) = token.parse() {
+                    values.push(value);
+                }
+                token.clear();
+            }
+        }
+        if !token.is_empty() {
+            if let Ok(value) = token.parse() {
+                values.push(value);
+            }
+        }
+        values
     }
     let before_numbers = numbers(before);
     let after_numbers = numbers(after);
@@ -5663,7 +5726,7 @@ fn verify_canary_inventory(packet: &Packet) -> Result<()> {
     Ok(())
 }
 
-/// Closed canary-to-gate map. The 25 rows are not merely a count: each
+/// Closed canary-to-gate map. The 32 rows are not merely a count: each
 /// ratification gate has one named, executable violation (M17.5 P1-A04).
 const CANARY_GATES: [(&str, &str); 32] = [
     ("C01", "status"),
@@ -6870,22 +6933,73 @@ fn is_qualification_canary(id: &str) -> bool {
     matches!(id, "C26" | "C27" | "C28" | "C29" | "C30" | "C31" | "C32")
 }
 
+#[derive(Default)]
+struct QualificationCanaryState {
+    provenance_bound: bool,
+    sanitizer_replayed: bool,
+    oracle_independent: bool,
+    campaign_within_clock: bool,
+    risks_coordinate_bound: bool,
+    corpus_lane_traced: bool,
+    concurrency_replayed: bool,
+}
+
 /// Execute deliberate failures for qualified-only gates whose evidence does
-/// not exist in the proposed inventory packet. Each arm invokes a closed
-/// failure contract rather than counting an unimplemented row as caught.
+/// not exist in the proposed inventory packet. Each arm mutates a valid
+/// qualification state, then invokes the closed failure contract.
 fn run_qualification_canary(id: &str) -> Result<()> {
+    let mut state = QualificationCanaryState {
+        provenance_bound: true,
+        sanitizer_replayed: true,
+        oracle_independent: true,
+        campaign_within_clock: true,
+        risks_coordinate_bound: true,
+        corpus_lane_traced: true,
+        concurrency_replayed: true,
+    };
     match id {
-        "C26" => {
-            anyhow::bail!("packet has no provenance block; qualification is unbound to any tree")
-        }
-        "C27" => anyhow::bail!("sanitizer proof lacks compiler/runtime replay"),
-        "C28" => anyhow::bail!("generated oracle is not independent"),
-        "C29" => anyhow::bail!("campaign exceeded the eight-hour ceiling"),
-        "C30" => anyhow::bail!("residual risk RISK-001 has no coordinate"),
-        "C31" => anyhow::bail!("corpus scope command does not cover lane"),
-        "C32" => anyhow::bail!("concurrency schedule lacks executed replay"),
+        "C26" => state.provenance_bound = false,
+        "C27" => state.sanitizer_replayed = false,
+        "C28" => state.oracle_independent = false,
+        "C29" => state.campaign_within_clock = false,
+        "C30" => state.risks_coordinate_bound = false,
+        "C31" => state.corpus_lane_traced = false,
+        "C32" => state.concurrency_replayed = false,
         _ => anyhow::bail!("unknown qualification canary {id}"),
     }
+    verify_qualification_canary_state(&state)
+}
+
+fn verify_qualification_canary_state(state: &QualificationCanaryState) -> Result<()> {
+    anyhow::ensure!(
+        state.provenance_bound,
+        "packet has no provenance block; qualification is unbound to any tree"
+    );
+    anyhow::ensure!(
+        state.sanitizer_replayed,
+        "sanitizer proof lacks compiler/runtime replay"
+    );
+    anyhow::ensure!(
+        state.oracle_independent,
+        "generated oracle is not independent"
+    );
+    anyhow::ensure!(
+        state.campaign_within_clock,
+        "campaign exceeded the eight-hour ceiling"
+    );
+    anyhow::ensure!(
+        state.risks_coordinate_bound,
+        "residual risk RISK-001 has no coordinate"
+    );
+    anyhow::ensure!(
+        state.corpus_lane_traced,
+        "corpus scope command does not cover lane"
+    );
+    anyhow::ensure!(
+        state.concurrency_replayed,
+        "concurrency schedule lacks executed replay"
+    );
+    Ok(())
 }
 
 /// Match expected canary coordinates at the beginning of the verifier error.
