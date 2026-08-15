@@ -131,7 +131,9 @@ for t in "${TARGETS[@]}"; do
   done
   seed_manifest_blake3=$(cargo run -q -p liminal-xtask -- haq hash "$seed_manifest" 2>/dev/null || echo "")
   trace_prefix=""
-  [ -n "$asan_options" ] && trace_prefix="ASAN_OPTIONS=$asan_options "
+  if [ -n "$asan_options" ]; then
+    printf -v trace_prefix 'ASAN_OPTIONS=%q ' "$asan_options"
+  fi
   trace_command="$build_command && ${trace_prefix}strace -f -q -e trace=openat,openat2 -o $audit_raw cargo +nightly fuzz run -s $SANITIZER $t -- -max_total_time=$SECS -seed=$SEED -rss_limit_mb=4096 -print_final_stats=1"
   binding_input="target/haqp/process-binding-$t.txt"
   printf '%s\0%s\0%s\0%s' "$trace_command" "$trace_pid" "$trace_exit_code" "$trace_hash" >"$binding_input"
