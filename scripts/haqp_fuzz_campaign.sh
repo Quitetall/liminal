@@ -97,7 +97,9 @@ for t in "${TARGETS[@]}"; do
   # present in raw strace output, not the launcher process.
   trace_pid=${fuzz_pid:-0}
   if [ -s "$audit_raw" ]; then
-    traced_pid=$(awk '/\+\+\+ exited with 0 \+\+\+$/ { pid=$1 } END { print pid + 0 }' "$audit_raw")
+    # Capture tracer identity even on failing runs; verifier then rejects the
+    # nonzero trace_exit_code without losing which process emitted the trace.
+    traced_pid=$(awk '/\+\+\+ exited with [0-9]+ \+\+\+$/ { pid=$1 } END { print pid + 0 }' "$audit_raw")
     if [ "${traced_pid:-0}" -gt 0 ]; then
       trace_pid=$traced_pid
     fi
