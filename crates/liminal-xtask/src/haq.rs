@@ -1629,9 +1629,9 @@ fn verify_review_attempts(
         if !seen.insert(attempt.id.as_str()) {
             anyhow::bail!("{who}: attempt id {:?} appears twice", attempt.id);
         }
-        if attempt.classification == "false_positive" && attempt.independently_reproduced {
+        if attempt.classification == "false_positive" && !attempt.independently_reproduced {
             anyhow::bail!(
-                "{who}: false-positive attempt {:?} cannot be independently reproduced",
+                "{who}: false-positive attempt {:?} lacks independent reproduction evidence",
                 attempt.id
             );
         }
@@ -9513,16 +9513,16 @@ mod tests {
     }
 
     #[test]
-    fn review_record_rejects_reproduced_false_positives() {
+    fn review_record_requires_reproduction_for_false_positives() {
         let mut record = review_record(1, "openai", "codex");
         record.attempts[0].classification = "false_positive".to_owned();
         record.attempts[0].independently_reproduced = false;
-        verify_review_record(&repo_root(), &review_row(), &record)
-            .expect("an unreproduced false positive is admissible");
-        record.attempts[0].independently_reproduced = true;
         let err = verify_review_record(&repo_root(), &review_row(), &record)
-            .expect_err("a false positive cannot be independently reproduced");
+            .expect_err("false positives must retain reproduction evidence");
         assert!(err.to_string().contains("false-positive"), "{err}");
+        record.attempts[0].independently_reproduced = true;
+        verify_review_record(&repo_root(), &review_row(), &record)
+            .expect("a reproduced false positive is admissible");
     }
 
     #[test]

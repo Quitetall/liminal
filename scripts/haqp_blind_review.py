@@ -482,8 +482,8 @@ def parse_json(text: str) -> dict[str, Any]:
                 for field in ("commit", "coordinate", "evidence_path", "evidence_sha256")
             ):
                 raise ValueError(f"resolved verified attempt {identifier} needs resolution proof")
-        if attempt["classification"] == "false_positive" and attempt["independently_reproduced"]:
-            raise ValueError(f"false-positive attempt {identifier} cannot be independently reproduced")
+        if attempt["classification"] == "false_positive" and not attempt["independently_reproduced"]:
+            raise ValueError(f"false-positive attempt {identifier} lacks independent reproduction evidence")
         if attempt["classification"] == "caught_violation":
             caught += 1
     if caught == 0:
@@ -578,7 +578,7 @@ def run_pass(
         "For false_positive or caught_violation attempts, record the attempt only and emit NO finding object. "
         "Do not link findings to false_positive, caught_violation, or unknown attempts. "
         "Every attempt action and observation must be substantive (at least 24 characters and 4 words). "
-        "A false_positive attempt must set independently_reproduced=false. "
+        "A false_positive attempt must set independently_reproduced=true as reproduction evidence. "
         "A resolved verified_defect attempt must also carry resolution={commit,coordinate,evidence_path,evidence_sha256}; "
         "its evidence file must contain resolution_result: pass, verification_command:, and verification_exit_code: 0. "
         "leave resolved=false when no fix proof exists. "
