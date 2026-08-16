@@ -4941,6 +4941,10 @@ fn verify_provenance(root: &Utf8Path, packet: &Packet) -> Result<()> {
         ],
     )?;
     for path in changed.lines().filter(|path| !path.trim().is_empty()) {
+        if path == PHASE0_GATE_FILE {
+            verify_gate_unignore_only(root, &provenance.evidence_parent)?;
+            continue;
+        }
         anyhow::ensure!(
             qualification_metadata_path(path),
             "qualification metadata child changed non-metadata path {path:?}; source and gate code must remain at fixed commit"
@@ -4965,6 +4969,66 @@ fn verify_provenance(root: &Utf8Path, packet: &Packet) -> Result<()> {
         &digest,
     )?;
     Ok(())
+}
+
+/// The one gate whose `#[ignore]` the metadata child may lift (AM-17.5).
+const PHASE0_GATE_FILE: &str = "conformance/tests/phase0.rs";
+const PHASE0_GATE_IGNORE: &str =
+    r#"#[ignore = "Phase 0 M17: HAQP qualification evidence not yet complete"]"#;
+
+/// The metadata child may lift EXACTLY ONE `#[ignore]`, and change nothing else
+/// (AM-17.5).
+///
+/// `phase1_suite_packet_is_complete_and_unratified` is M17.5's stated exit gate,
+/// and it asserts that the packet is complete. It therefore cannot be live
+/// before the flip that completes the packet — un-ignoring it at the fixed base
+/// commits a red tree, and un-ignoring it after the flip moves HEAD and breaks
+/// `evidence_parent == HEAD^`. The child is the only place it can go.
+///
+/// Widening the path allowlist alone would let gate LOGIC change in the child,
+/// which is the whole thing `verify_provenance` exists to prevent. So the diff
+/// itself is checked: one removed line, no added lines, and the removed line is
+/// that attribute. Anything else in this file is refused exactly as before.
+fn verify_gate_unignore_only(root: &Utf8Path, evidence_parent: &str) -> Result<()> {
+    let diff = git_text(
+        root,
+        &[
+            "diff",
+            "--unified=0",
+            &format!("{evidence_parent}..HEAD"),
+            "--",
+            PHASE0_GATE_FILE,
+        ],
+    )?;
+    let mut removed = Vec::new();
+    let mut added = Vec::new();
+    for line in diff.lines() {
+        if line.starts_with("+++") || line.starts_with("---") {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix('-') {
+            removed.push(rest.trim().to_owned());
+        } else if let Some(rest) = line.strip_prefix('+') {
+            added.push(rest.trim().to_owned());
+        }
+    }
+    anyhow::ensure!(
+        added.is_empty(),
+        "the metadata child added {} line(s) to {PHASE0_GATE_FILE}; it may only lift the \
+         qualification gate's #[ignore], never add gate code: {added:?}",
+        added.len()
+    );
+    anyhow::ensure!(
+        removed.len() == 1,
+        "the metadata child removed {} line(s) from {PHASE0_GATE_FILE}; exactly one \
+         #[ignore] may be lifted: {removed:?}",
+        removed.len()
+    );
+    require_eq(
+        "metadata child's lifted attribute",
+        removed[0].as_str(),
+        PHASE0_GATE_IGNORE,
+    )
 }
 
 fn qualification_metadata_path(path: &str) -> bool {
@@ -11713,5 +11777,74 @@ mod tests {
         let err = canonicalize_trace_path(missing.as_std_path())
             .expect_err("a deleted corpus entry cannot prove historical symlink target");
         assert!(err.to_string().contains("symlink history"), "{err}");
+    }
+
+    // ── AM-17.5: the metadata child may lift ONE #[ignore] and nothing else ──
+    // Widening the path allowlist alone would let gate LOGIC change in the
+    // child, which is the whole thing verify_provenance exists to prevent.
+
+    fn gate_diff_verdict(diff: &str) -> Result<()> {
+        let mut removed = Vec::new();
+        let mut added = Vec::new();
+        for line in diff.lines() {
+            if line.starts_with("+++") || line.starts_with("---") {
+                continue;
+            }
+            if let Some(rest) = line.strip_prefix('-') {
+                removed.push(rest.trim().to_owned());
+            } else if let Some(rest) = line.strip_prefix('+') {
+                added.push(rest.trim().to_owned());
+            }
+        }
+        anyhow::ensure!(added.is_empty(), "added {} line(s): {added:?}", added.len());
+        anyhow::ensure!(
+            removed.len() == 1,
+            "removed {} line(s): {removed:?}",
+            removed.len()
+        );
+        require_eq(
+            "metadata child's lifted attribute",
+            removed[0].as_str(),
+            PHASE0_GATE_IGNORE,
+        )
+    }
+
+    #[test]
+    fn the_child_may_lift_exactly_the_qualification_gate() {
+        gate_diff_verdict(&format!("--- a\n+++ b\n-{PHASE0_GATE_IGNORE}\n"))
+            .expect("lifting exactly that attribute is the one permitted change");
+    }
+
+    #[test]
+    fn the_child_may_not_lift_a_different_ignore() {
+        gate_diff_verdict("--- a\n+++ b\n-#[ignore = \"Phase 1: something else\"]\n")
+            .expect_err("only the qualification gate's own attribute may be lifted");
+    }
+
+    #[test]
+    fn the_child_may_not_add_or_change_gate_code() {
+        gate_diff_verdict(&format!(
+            "--- a\n+++ b\n-{PHASE0_GATE_IGNORE}\n+assert!(true);\n"
+        ))
+        .expect_err("the child may not add gate code alongside the lift");
+        gate_diff_verdict(&format!(
+            "--- a\n+++ b\n-{PHASE0_GATE_IGNORE}\n-let packet = doctored();\n"
+        ))
+        .expect_err("the child may not remove gate code alongside the lift");
+        gate_diff_verdict("--- a\n+++ b\n")
+            .expect_err("a child that touches the file without lifting anything is unexplained");
+    }
+
+    /// The constant must match the attribute actually in the tree, or the
+    /// check passes vacuously against a file it no longer describes.
+    #[test]
+    fn the_expected_gate_attribute_exists_in_the_tree() {
+        let text = fs::read_to_string(repo_root().join(PHASE0_GATE_FILE))
+            .expect("the phase0 gate file must exist");
+        assert!(
+            text.contains(PHASE0_GATE_IGNORE),
+            "the qualification gate's #[ignore] is not the string AM-17.5 pins; \
+             either it was already lifted or its wording drifted"
+        );
     }
 }

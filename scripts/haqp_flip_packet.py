@@ -35,6 +35,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKET = ROOT / "conformance/haqp/packet.json"
+GATE_FILE = "conformance/tests/phase0.rs"
+GATE_IGNORE = '#[ignore = "Phase 0 M17: HAQP qualification evidence not yet complete"]'
 EVIDENCE = ROOT / "conformance/haqp/evidence"
 
 
@@ -155,14 +157,28 @@ def main() -> int:
     }
 
     PACKET.write_text(json.dumps(packet, indent=1) + "\n")
+
+    # AM-17.5: M17.5's exit gate asserts the packet is complete, so it cannot be
+    # live before this flip. The metadata child is the only place it can be
+    # lifted — at the fixed base it would fail, and after the flip HEAD moves and
+    # breaks `evidence_parent == HEAD^`. verify_gate_unignore_only checks that
+    # this is the ONLY thing the child changes in that file.
+    gate = ROOT / GATE_FILE
+    text = gate.read_text()
+    if GATE_IGNORE not in text:
+        fail(f"{GATE_FILE} does not carry the expected gate #[ignore]; refusing to guess")
+    gate.write_text(text.replace(GATE_IGNORE + "\n", "", 1))
+
     print(f"packet flipped to complete at fixed base {base[:12]}")
+    print(f"lifted the qualification gate's #[ignore] in {GATE_FILE}")
     print()
     print("Next, as ONE metadata-only commit (verify_provenance requires exactly one parent")
     print("and refuses any non-metadata path in the child):")
     print()
     print("  git add conformance/haqp/packet.json conformance/haqp/evidence \\")
     print("          docs/execution/phase1-suite-review.md \\")
-    print("          docs/execution/m17-5-adversarial-findings.md")
+    print("          docs/execution/m17-5-adversarial-findings.md \\")
+    print(f"          {GATE_FILE}")
     print("  git commit -m 'record HAQP-1a qualification evidence'")
     print("  just haq-verify")
     return 0
