@@ -21,6 +21,10 @@ use std::process::Command;
 
 use liminal_conformance::harness::{ToyRun, runnable_crash_scenarios};
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one crash-evidence lane, run end to end; the stages are sequential and share state"
+)]
 fn main() -> anyhow::Result<()> {
     let source_commit = git_rev_parse("HEAD")?;
     let source_tree = git_rev_parse("HEAD^{tree}")?;

@@ -1427,6 +1427,10 @@ fn verify_cross_pass_reproduction(records: &[(String, ReviewRecord)]) -> Result<
 /// record of twelve EMPTY objects satisfied it, and a record whose own `result`
 /// was `fail` satisfied a packet row claiming `pass`. Everything a reviewer
 /// actually concluded was unread.
+#[allow(
+    clippy::too_many_lines,
+    reason = "one review record's contract is one contract; splitting it by line count would scatter the checks a reader must see together"
+)]
 fn verify_review_record(root: &Utf8Path, review: &Review, record: &ReviewRecord) -> Result<()> {
     let who = &review.reviewer;
     require_eq(
@@ -1680,6 +1684,10 @@ fn verify_review_findings(
     Ok(())
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "each attempt field is checked once, in order; the length is the field count"
+)]
 fn verify_review_attempts(
     root: &Utf8Path,
     fixed_commit: &str,
@@ -7549,6 +7557,10 @@ fn is_qualification_canary(id: &str) -> bool {
 /// Execute deliberate failures for qualified-only gates whose evidence does
 /// not exist in the proposed inventory packet. Each arm mutates a valid
 /// qualification state, then invokes the closed failure contract.
+#[allow(
+    clippy::too_many_lines,
+    reason = "one match arm per canary; the length is the canary count"
+)]
 fn run_qualification_canary(root: &Utf8Path, packet: &Packet, id: &str) -> Result<()> {
     if id == "C27" {
         return run_sanitizer_canary(root);
@@ -9774,10 +9786,7 @@ mod tests {
             pass,
             reviewer: ReviewRecordReviewer {
                 model_family: family.to_owned(),
-                identity_hash: sha256_text(&format!(
-                    "pass{}:{}:haqp-blind-review-v1",
-                    pass, family
-                )),
+                identity_hash: sha256_text(&format!("pass{pass}:{family}:haqp-blind-review-v1")),
                 backend: backend.to_owned(),
             },
             attempts: (0..12).map(|i| attempt(&format!("A{i}"))).collect(),
@@ -9918,7 +9927,10 @@ mod tests {
             "status: expected",
             "status: expected value"
         ));
-        assert!(canary_expected_prefix("C01").expect("known canary") == "status: expected");
+        assert_eq!(
+            canary_expected_prefix("C01").expect("known canary"),
+            "status: expected"
+        );
         assert!(
             canary_expected_prefix("C01").expect("known canary") != "unrelated generic failure"
         );

@@ -367,8 +367,48 @@ def redact(text: str) -> str:
     return re.sub(r"[A-Za-z0-9_\-]{20,}", "****", text)
 
 
+# A credential is long, and it mixes cases and digits because it carries
+# entropy. Source identifiers do not: `verify_canonical_round_trip` is long and
+# all-lowercase, a commit SHA is long and all-hex, and neither is a secret.
+CREDENTIAL_SHAPED = re.compile(
+    r"""
+    (?: sk-|AIza|ghp_|gho_|xox[baprs]-|hf_ )[A-Za-z0-9_\-]{12,}   # known prefixes
+    |
+    (?=[A-Za-z0-9_\-]{24,})                    # long enough to be a key, AND
+    (?=[A-Za-z0-9_\-]*[a-z])                   # mixed case, AND
+    (?=[A-Za-z0-9_\-]*[A-Z])
+    (?=[A-Za-z0-9_\-]*[0-9])                   # carries digits
+    [A-Za-z0-9_\-]{24,}
+    """,
+    re.VERBOSE,
+)
+
+
+def redact_evidence(text: str) -> str:
+    """Mask credential-SHAPED strings in text a human has to read.
+
+    `redact` is deliberately blunt because it guards error messages, where the
+    cost of over-masking is a less useful post-mortem. Applying that same
+    bluntness to the persisted `attempts` and `findings` was a mistake I made in
+    F-23 and only saw at scale: the committed review records read
+    `The **** gate correctly refuses ...` because every identifier longer than
+    twenty characters vanished. The evidence a reviewer of the reviewers must
+    audit was partly unreadable, which defeats the point of committing it.
+
+    So this pattern discriminates on what actually distinguishes a secret from
+    an identifier: a credential is long AND mixes cases AND carries digits, or
+    announces itself with a known vendor prefix. `verify_canonical_round_trip`
+    is long and all-lowercase; a commit SHA is long and all-hex. Neither is a
+    key, and both are load-bearing in a review record.
+
+    The error path keeps `redact`. Narrowing there would trade a real secret for
+    a readable stack trace, which is the wrong way round.
+    """
+    return CREDENTIAL_SHAPED.sub("****", text)
+
+
 def redact_deep(value: Any) -> Any:
-    """Apply `redact` to every string inside a parsed review.
+    """Apply `redact_evidence` to every string inside a parsed review.
 
     `run_pass` persists the reviewer's `attempts` and `findings` verbatim, and
     those are model output — the same untrusted text the raw response is
@@ -378,7 +418,7 @@ def redact_deep(value: Any) -> Any:
     under `target/`.
     """
     if isinstance(value, str):
-        return redact(value)
+        return redact_evidence(value)
     if isinstance(value, list):
         return [redact_deep(item) for item in value]
     if isinstance(value, dict):
@@ -896,6 +936,23 @@ def self_test() -> int:
         failures.append("redact_deep left a credential inside a persisted attempt")
     if redact_deep({"n": 12, "ok": True, "none": None}) != {"n": 12, "ok": True, "none": None}:
         failures.append("redact_deep mangles non-string values")
+    # ...and a key that announces itself with no vendor prefix must still go.
+    if "AbC123XyZ789QrS456TuV012WxY345" in redact_evidence("token AbC123XyZ789QrS456TuV012WxY345"):
+        failures.append("redact_evidence kept a mixed-entropy credential")
+    # The narrowing is only correct if what it now KEEPS is genuinely not a
+    # secret. These are the shapes that made committed review records
+    # unreadable, and each must survive verbatim.
+    for readable in (
+        "the verify_canonical_round_trip gate refuses this packet",
+        "fixed base 5f1f5dea31ed780fd5392b9d826a22a289654e51",
+        "conformance/haqp/evidence/reviews/pass1-codex-gpt-5.6-sol.json",
+    ):
+        if readable != redact_evidence(readable):
+            failures.append(f"redact_evidence masked non-secret text: {readable!r}")
+    # The ERROR path stays blunt on purpose; narrowing it would trade a real
+    # secret for a readable stack trace.
+    if "0123456789abcdef0123456789" in redact("error: opaque 0123456789abcdef0123456789"):
+        failures.append("redact() was narrowed; the error path must stay blunt")
 
     # Redaction is the one guard whose failure is silent: an unmasked key would
     # still produce a correct-looking blocked.json.
