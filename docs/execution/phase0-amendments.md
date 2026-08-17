@@ -71,7 +71,7 @@ link only to `verified_defect` attempts; false-positive and caught-violation
 attempts remain attempt records without emitted findings, and malformed linkage
 blocks the pass. M10's Pandoc pin and golden move to installed 3.10.2.
 
-AM-17.5 (user-ratified 2026-08-16): the qualification metadata child may lift
+AM-17.6 (user-ratified 2026-08-16): the qualification metadata child may lift
 EXACTLY ONE `#[ignore]` — the one on
 `phase1_suite_packet_is_complete_and_unratified` in
 `conformance/tests/phase0.rs` — and change nothing else in that file.

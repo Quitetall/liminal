@@ -205,7 +205,8 @@ for t in "${TARGETS[@]}"; do
   seed_manifest="target/haqp/seed-manifest-$t.bin"
   : > "$seed_manifest"
   seed_count=0
-  mapfile -t seed_paths < <(find "fuzz/corpus/$t" -maxdepth 1 -type f -print | LC_ALL=C sort)
+  # TRACKED seeds only, matching the verifier (M17.5 F-32).
+  mapfile -t seed_paths < <(git ls-files -z -- "fuzz/corpus/$t" | tr '\0' '\n' | LC_ALL=C sort)
   for seed in "${seed_paths[@]}"; do
     # Match verifier seed_manifest_digest exactly: lexical filename, NUL,
     # SHA-256 hex, NUL. Human-readable separators would bind a different

@@ -3387,7 +3387,7 @@ fn verify_fuzz_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
 fn verify_fuzz_seed_manifests(root: &Utf8Path, recorded: &[FuzzEvidence]) -> Result<()> {
     for row in recorded {
         let seed_dir = root.join("fuzz/corpus").join(&row.target);
-        let (count, digest) = seed_manifest_digest(&seed_dir)?;
+        let (count, digest) = seed_manifest_digest(root, &seed_dir)?;
         anyhow::ensure!(
             count >= 16,
             "{}: committed seed set has {count} inputs; D23.2 requires at least 16",
@@ -3408,13 +3408,36 @@ fn verify_fuzz_seed_manifests(root: &Utf8Path, recorded: &[FuzzEvidence]) -> Res
     Ok(())
 }
 
-fn seed_manifest_digest(seed_dir: &Utf8Path) -> Result<(u64, String)> {
-    let mut files = fs::read_dir(seed_dir)
-        .with_context(|| format!("{seed_dir}: committed fuzz seed directory is required"))?
-        .flatten()
-        .filter_map(|entry| Utf8PathBuf::from_path_buf(entry.path()).ok())
+/// Digest the seed corpus that is actually COMMITTED (M17.5 F-32).
+///
+/// This read the filesystem and called the result "the committed corpus". It is
+/// not: `.gitignore` excludes `fuzz/corpus/`, so the directory holds sixteen
+/// tracked seeds per target plus every input libFuzzer has written there. The
+/// recorded `seed_count` was therefore a property of ONE MACHINE — 18,233 here
+/// — and a fresh clone, holding the sixteen, could never satisfy it. Killing a
+/// campaign turned a green tree red with no code change.
+///
+/// `git ls-files` fixes it in the direction the error message already claimed,
+/// and sixteen tracked seeds per target is exactly ADR-0020 §4's "at least 16
+/// predeclared seeds".
+fn seed_manifest_digest(root: &Utf8Path, seed_dir: &Utf8Path) -> Result<(u64, String)> {
+    let relative = seed_dir
+        .strip_prefix(root)
+        .unwrap_or(seed_dir)
+        .as_str()
+        .to_owned();
+    let listed = git_text(root, &["ls-files", "-z", "--", &relative])?;
+    let mut files = listed
+        .split('\0')
+        .filter(|name| !name.trim().is_empty())
+        .map(|name| root.join(name))
         .filter(|path| path.is_file())
         .collect::<Vec<_>>();
+    anyhow::ensure!(
+        !files.is_empty(),
+        "{seed_dir}: no seed is tracked by git; a corpus that lives only on one \
+         machine cannot reproduce a campaign (ADR-0020 §1)"
+    );
     files.sort();
     let mut hasher = blake3::Hasher::new();
     for path in &files {
@@ -4971,13 +4994,13 @@ fn verify_provenance(root: &Utf8Path, packet: &Packet) -> Result<()> {
     Ok(())
 }
 
-/// The one gate whose `#[ignore]` the metadata child may lift (AM-17.5).
+/// The one gate whose `#[ignore]` the metadata child may lift (AM-17.6).
 const PHASE0_GATE_FILE: &str = "conformance/tests/phase0.rs";
 const PHASE0_GATE_IGNORE: &str =
     r#"#[ignore = "Phase 0 M17: HAQP qualification evidence not yet complete"]"#;
 
 /// The metadata child may lift EXACTLY ONE `#[ignore]`, and change nothing else
-/// (AM-17.5).
+/// (AM-17.6).
 ///
 /// `phase1_suite_packet_is_complete_and_unratified` is M17.5's stated exit gate,
 /// and it asserts that the packet is complete. It therefore cannot be live
@@ -10709,15 +10732,58 @@ mod tests {
         garbage[0].log_blake3 = " ".repeat(64);
         verify_fuzz_rows(&garbage, &present).expect_err("64 spaces is not a digest");
     }
-
+    /// The seed manifest must be a function of TRACKED state alone
+    /// (M17.5 F-32), and whether the COMMITTED evidence currently satisfies it
+    /// is a qualified-lane question, not a CI one.
+    ///
+    /// This test used to read `conformance/haqp/evidence/fuzz.json` and assert
+    /// it was valid right now. That assertion can only hold at a metadata
+    /// child: evidence is produced at the fixed base and committed in the
+    /// child, so at any base it describes the PREVIOUS campaign. It passed only
+    /// because this machine's corpus happened to match the last run — killing a
+    /// campaign added 378 inputs and turned a green tree red with no code
+    /// change. `verify_fuzz_seed_manifests` still makes the binding, in
+    /// `verify_qualified_repo`, where evidence is required to describe the tree.
+    ///
+    /// What CI can assert deterministically is the property itself: the digest
+    /// counts tracked seeds, and nothing else.
     #[test]
-    fn committed_fuzz_rows_bind_the_declared_seed_sets() {
+    fn the_seed_manifest_counts_tracked_seeds_only() {
         let root = repo_root();
-        let bytes = fs::read(root.join("conformance/haqp/evidence/fuzz.json"))
-            .expect("committed fuzz evidence");
-        let rows: Vec<FuzzEvidence> = serde_json::from_slice(&bytes).expect("parse fuzz evidence");
-        verify_fuzz_seed_manifests(&root, &rows)
-            .expect("fuzz evidence must bind every committed seed corpus");
+        let target = "fuzz/corpus/cst_parse";
+        let (count, digest) =
+            seed_manifest_digest(&root, &root.join(target)).expect("tracked seeds must digest");
+
+        let tracked = git_text(&root, &["ls-files", "--", target])
+            .expect("git ls-files")
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .count() as u64;
+        assert_eq!(
+            count, tracked,
+            "the manifest must count TRACKED seeds; a fresh clone has to reproduce this"
+        );
+        assert!(
+            count >= 16,
+            "ADR-0020 §4 requires at least 16 predeclared seeds, found {count}"
+        );
+
+        // Determinism: the same tracked set must digest identically. Anything
+        // that varied with local fuzzer output would reintroduce F-32.
+        let (again, again_digest) =
+            seed_manifest_digest(&root, &root.join(target)).expect("second digest");
+        assert_eq!((count, digest), (again, again_digest));
+
+        // ...and the on-disk directory is much larger, which is precisely why
+        // reading it was wrong.
+        let on_disk = fs::read_dir(root.join(target))
+            .expect("corpus dir")
+            .flatten()
+            .count() as u64;
+        assert!(
+            on_disk >= count,
+            "sanity: the working corpus cannot be smaller than the tracked one"
+        );
     }
 
     // ── M17.5 Stage 3, tier 1: the verifier's own survivors ────────────────
@@ -11779,7 +11845,7 @@ mod tests {
         assert!(err.to_string().contains("symlink history"), "{err}");
     }
 
-    // ── AM-17.5: the metadata child may lift ONE #[ignore] and nothing else ──
+    // ── AM-17.6: the metadata child may lift ONE #[ignore] and nothing else ──
     // Widening the path allowlist alone would let gate LOGIC change in the
     // child, which is the whole thing verify_provenance exists to prevent.
 
@@ -11843,7 +11909,7 @@ mod tests {
             .expect("the phase0 gate file must exist");
         assert!(
             text.contains(PHASE0_GATE_IGNORE),
-            "the qualification gate's #[ignore] is not the string AM-17.5 pins; \
+            "the qualification gate's #[ignore] is not the string AM-17.6 pins; \
              either it was already lifted or its wording drifted"
         );
     }

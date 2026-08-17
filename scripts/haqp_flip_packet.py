@@ -40,6 +40,21 @@ GATE_IGNORE = '#[ignore = "Phase 0 M17: HAQP qualification evidence not yet comp
 EVIDENCE = ROOT / "conformance/haqp/evidence"
 
 
+def metadata_path(path: str) -> bool:
+    """Mirror of `qualification_metadata_path` plus AM-17.6's single exception.
+
+    Kept in step with `crates/liminal-xtask/src/haq.rs` by hand, and checked by
+    the verifier immediately afterwards — if these two ever disagree, the
+    verifier is right and this script is wrong.
+    """
+    return path in {
+        "conformance/haqp/packet.json",
+        "docs/execution/phase1-suite-review.md",
+        "docs/execution/m17-5-adversarial-findings.md",
+        GATE_FILE,
+    } or path.startswith("conformance/haqp/evidence/")
+
+
 def git(*args: str) -> str:
     return subprocess.check_output(["git", *args], cwd=ROOT, text=True).strip()
 
@@ -66,8 +81,23 @@ def load(name: str) -> object:
 
 
 def main() -> int:
-    if git("status", "--porcelain"):
-        fail("the tree is dirty; the fixed base must be clean (ADR-0020 §1)")
+    # §1 wants the SOURCE tree fixed and clean. It does not want the evidence
+    # tree clean — this script runs immediately after the lanes, whose entire
+    # job is to write into `conformance/haqp/evidence/`. The first version
+    # rejected any dirt at all and would therefore have refused its own inputs
+    # after a 3.5-hour campaign. What must be clean is everything the child may
+    # not carry.
+    dirty = [
+        line[3:].strip()
+        for line in git("status", "--porcelain").splitlines()
+        if line.strip()
+    ]
+    trespass = [path for path in dirty if not metadata_path(path)]
+    if trespass:
+        fail(
+            "source or gate code is modified; the fixed base must be clean "
+            "(ADR-0020 §1):\n  - " + "\n  - ".join(trespass)
+        )
 
     base = git("rev-parse", "HEAD")
     packet = json.loads(PACKET.read_text())
@@ -158,7 +188,7 @@ def main() -> int:
 
     PACKET.write_text(json.dumps(packet, indent=1) + "\n")
 
-    # AM-17.5: M17.5's exit gate asserts the packet is complete, so it cannot be
+    # AM-17.6: M17.5's exit gate asserts the packet is complete, so it cannot be
     # live before this flip. The metadata child is the only place it can be
     # lifted — at the fixed base it would fail, and after the flip HEAD moves and
     # breaks `evidence_parent == HEAD^`. verify_gate_unignore_only checks that

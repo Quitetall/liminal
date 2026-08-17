@@ -2083,3 +2083,71 @@ from the prior rerun remain open: mutation infrastructure-failure semantics,
 Pass-1 attack-class coverage, mutant concurrence identity binding, generated
 category policy, mutant source-coordinate schema, and the oracle-independence
 packet contract.
+
+## F-32 — MAJOR. **RESOLVED.** The fuzz seed evidence was bound to one machine's scratch directory.
+
+`.gitignore:15` excludes `fuzz/corpus/`, and sixteen seeds per target are tracked
+anyway (force-added before the rule). `verify_fuzz_seed_manifests` then reads the
+**filesystem** and calls the result *"the committed corpus"*:
+
+```
+fuzz evidence must bind every committed seed corpus:
+cst_parse: evidence records 18233 seeds but committed corpus has 18611
+```
+
+It is not the committed corpus. It is sixteen tracked seeds plus every input
+libFuzzer has ever written into that directory. On this machine `cst_parse` holds
+**18,611** files against 16 tracked; `format_idempotent` holds 10,488.
+
+So the recorded `seed_count` describes one machine's scratch state. Three
+consequences:
+
+- **A fresh clone cannot satisfy the check at all** — it has the sixteen, and the
+  committed evidence claims 18,233.
+- **Any fuzz run changes the answer.** Killing the 2026-08-16 campaign added 378
+  inputs to `cst_parse` and turned a green tree red without a line of code
+  changing.
+- ADR-0020 §1 requires a reproducible campaign. This binds the evidence to a
+  directory nobody else can reproduce, and §4 asks for "at least 16 predeclared
+  seeds" — which is exactly what IS tracked.
+
+### Fixed — bound to tracked state, and the misplaced assertion moved
+
+`seed_manifest_digest` and the campaign script now both enumerate via
+`git ls-files`, in the direction the error message already claimed. Sixteen
+tracked seeds per target is exactly ADR-0020 §4's "at least 16 predeclared
+seeds", and fuzzer output no longer perturbs the evidence. A corpus with nothing
+tracked is refused outright, because it cannot reproduce a campaign anywhere.
+
+### The structural question underneath, for Brian
+
+This is not only a wrong `read_dir`. Unit tests now assert that **committed
+evidence is coherent**, and evidence is produced at the fixed base but committed
+in the metadata child. So at any fixed base, those tests see the PREVIOUS
+campaign's artifacts. Today they pass because this machine's corpus happens to
+match the last run — coincidence, not correctness.
+
+That means the qualification lane and the CI suite disagree about when evidence
+is supposed to be valid, and the disagreement is currently hidden by local state.
+**Brian's ruling: do both (1) and (2).** Bind evidence to tracked state so it
+is deterministic and reproducible, and move the misplaced assertion into the
+lane.
+
+The distinction that makes this tractable is that the evidence-reading tests are
+two different kinds, and only one was misplaced:
+
+- **Fixtures.** Most read a committed artifact, doctor a row, and assert the
+  verifier rejects it. They assert nothing about whether the artifact is
+  currently valid, so they hold at any commit and stay in CI. They are the
+  reason a real artifact is worth committing at all.
+- **Current-validity claims.** `committed_fuzz_rows_bind_the_declared_seed_sets`
+  asserted the committed evidence satisfied the seed binding *right now*. That
+  can only be true at a metadata child. It has been replaced by
+  `the_seed_manifest_counts_tracked_seeds_only`, which asserts the property CI
+  can actually own — the digest counts tracked seeds, deterministically — while
+  `verify_fuzz_seed_manifests` keeps the binding inside `verify_qualified_repo`,
+  where evidence is required to describe the tree.
+
+So CI now asserts what is true of every commit, and the lane asserts what is
+true only of a qualified one. The two no longer disagree, and neither depends on
+a machine's scratch directory.
