@@ -13,7 +13,7 @@ jobs:
     name: cargo-deny advisories
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check advisories
@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true # early warning for the next toolchain bump, never a gate
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: rustup toolchain install beta --profile minimal
       - uses: Swatinem/rust-cache@v2
       - run: cargo +beta check --workspace --all-targets
