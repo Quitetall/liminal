@@ -622,4 +622,106 @@ mod tests {
         let counts = count(&events);
         assert_eq!(counts.ops, 1);
     }
+
+    // ── M17.5 Stage 3 tier 2 (F-30 continued) ─────────────────────────────
+    // Four survivors in this file, all in span arithmetic. A session boundary
+    // wrong by one event silently changes every denominator the M11 scorecard
+    // divides by, and `denominator_counts_golden` would re-snapshot the new
+    // numbers as if they were correct.
+
+    fn edit_at(at: u64, session: &str) -> TraceEvent {
+        TraceEvent::BufferEdit {
+            at,
+            session: session.into(),
+            buffer: "b1".into(),
+            range: crate::trace::EditRange { start: 0, end: 0 },
+            insert: "x".into(),
+        }
+    }
+
+    /// Kills `contains -> true` and `&&` -> `||`: the span is a CLOSED
+    /// interval, and each bound must reject from its own side.
+    #[test]
+    fn a_span_contains_exactly_its_closed_interval() {
+        let span = SessionSpan {
+            id: "s".to_owned(),
+            start: 100,
+            end: 200,
+        };
+        assert!(span.contains(100), "the start is inclusive");
+        assert!(span.contains(200), "the end is inclusive");
+        assert!(!span.contains(99), "one before the start is outside");
+        assert!(!span.contains(201), "one after the end is outside");
+        // `-> true` and `||` both survive a test that only samples the inside.
+        let empty = SessionSpan {
+            id: "e".to_owned(),
+            start: 5,
+            end: 5,
+        };
+        assert!(empty.contains(5));
+        assert!(!empty.contains(4));
+        assert!(!empty.contains(6));
+    }
+
+    /// Kills `+=` -> `*=` on the split counter in `resolve_sessions`.
+    ///
+    /// The sequence number is the observable: `*=` leaves it at zero, so every
+    /// split after the first collides on one id, and a scorecard keyed by span
+    /// id would silently merge sessions the trace kept apart.
+    #[test]
+    fn timeout_splits_are_numbered_sequentially() {
+        let gap = SESSION_TIMEOUT_MS + 1;
+        let events = vec![edit_at(0, "s"), edit_at(gap, "s"), edit_at(gap * 2, "s")];
+        let spans = resolve_sessions(&events);
+
+        assert_eq!(spans.len(), 3, "two timeouts must produce three spans");
+        let ids: BTreeSet<&str> = spans.iter().map(|span| span.id.as_str()).collect();
+        assert_eq!(
+            ids.len(),
+            3,
+            "each split needs its OWN id; a counter stuck at zero collides: {ids:?}"
+        );
+    }
+
+    /// Kills `&&` -> `||` on the open/close pairing: only a session with BOTH
+    /// an explicit open and close spans its whole declared range.
+    #[test]
+    fn an_explicitly_bounded_session_is_never_split() {
+        let gap = SESSION_TIMEOUT_MS + 1;
+        let bounded = vec![
+            TraceEvent::SessionOpen {
+                at: 0,
+                session: "s".into(),
+                client: "dev".into(),
+            },
+            edit_at(gap, "s"),
+            TraceEvent::SessionClose {
+                at: gap * 2,
+                session: "s".into(),
+            },
+        ];
+        let spans = resolve_sessions(&bounded);
+        assert_eq!(
+            spans.len(),
+            1,
+            "an explicitly opened AND closed session spans its declared range"
+        );
+        assert_eq!((spans[0].start, spans[0].end), (0, gap * 2));
+
+        // With only ONE of the two, the timeout logic must apply again — which
+        // is exactly what `||` would wrongly skip.
+        let open_only = vec![
+            TraceEvent::SessionOpen {
+                at: 0,
+                session: "s".into(),
+                client: "dev".into(),
+            },
+            edit_at(gap, "s"),
+            edit_at(gap * 2, "s"),
+        ];
+        assert!(
+            resolve_sessions(&open_only).len() > 1,
+            "an unclosed session still splits on timeout"
+        );
+    }
 }

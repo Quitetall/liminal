@@ -198,4 +198,150 @@ mod tests {
             report.ignored_by_phase
         );
     }
+
+    // ── M17.5 Stage 3 tier 2 (F-30 continued) ─────────────────────────────
+    // Five survivors here. `render` is the SPEC-DEBT METER — the artifact
+    // M17.8 reconciles the Phase 0 ADR against — and both whole-function
+    // replacements survived, so a meter that printed nothing at all would have
+    // passed every test in the tree.
+
+    /// Kills `render -> String::new()` and `-> "xyzzy".into()`.
+    ///
+    /// The meter's numbers are the point, not its prose: a reader reconciling
+    /// M17.8 needs the per-phase counts, the active total and the backlog to
+    /// appear, and to be the numbers the report actually holds.
+    #[test]
+    fn the_meter_renders_the_numbers_it_holds() {
+        let mut report = DebtReport {
+            active_tests: 477,
+            ..DebtReport::default()
+        };
+        report.ignored_by_phase.insert("Phase 4".to_owned(), 4);
+        report.ignored_by_phase.insert("Phase 7".to_owned(), 2);
+
+        let rendered = report.render();
+        assert!(
+            rendered.contains("Phase 4") && rendered.contains("4 deferred"),
+            "each phase and its count must appear: {rendered}"
+        );
+        assert!(rendered.contains("Phase 7"), "every phase, not just one");
+        assert!(
+            rendered.contains("477"),
+            "the active total must appear: {rendered}"
+        );
+        assert!(
+            rendered.contains("total backlog: 6"),
+            "the backlog must be the SUM of the phases, not a constant: {rendered}"
+        );
+
+        // ...and it must track the data, or it is a fixed string that happens
+        // to contain the right digits once.
+        report.active_tests = 1;
+        let changed = report.render();
+        assert_ne!(
+            rendered, changed,
+            "the meter must be a function of the report, not a constant"
+        );
+        assert!(changed.contains(" 1 active") || changed.contains("1 active"));
+    }
+
+    /// Kills the three `&&` -> `||` mutants in the directory and attribute
+    /// walks: each excluded directory must be excluded for its OWN reason, and
+    /// an ignored test must need BOTH `#[test]` and `#[ignore]`.
+    #[test]
+    fn the_scanner_excludes_each_directory_on_its_own_merit() {
+        let scratch = liminal_scratch::ScratchDir::new("debt-scan").expect("scratch");
+        let root: &Utf8Path = &scratch;
+
+        // A live ignored test at the root.
+        fs::write(
+            root.join("live.rs"),
+            "#[test]\n#[ignore = \"Phase 9: deferred\"]\nfn deferred() {}\n#[test]\nfn active() {}\n",
+        )
+        .expect("write");
+
+        // Each excluded directory holds a test that must NOT be counted. With
+        // `||` the exclusion widens and real source stops being scanned; the
+        // counts below pin both directions.
+        for skipped in ["target", ".git", "spec"] {
+            fs::create_dir_all(root.join(skipped)).expect("mkdir");
+            fs::write(
+                root.join(skipped).join("hidden.rs"),
+                "#[test]\n#[ignore = \"Phase 9: hidden\"]\nfn hidden() {}\n",
+            )
+            .expect("write");
+        }
+        // ...and a directory that is NOT excluded must still be walked.
+        fs::create_dir_all(root.join("src")).expect("mkdir");
+        fs::write(
+            root.join("src").join("nested.rs"),
+            "#[test]\nfn nested_active() {}\n",
+        )
+        .expect("write");
+
+        let report = scan_workspace_debt(root).expect("scan");
+        assert_eq!(
+            report.total_ignored(),
+            1,
+            "only the root's deferred test counts; target/.git/spec are excluded"
+        );
+        assert_eq!(
+            report.active_tests, 2,
+            "the root's active test AND the nested one, so exclusion did not widen"
+        );
+    }
+
+    /// Kills `starts_with("fn ") && contains('(')` -> `||` at the declaration
+    /// test.
+    ///
+    /// Under `||` any line holding a paren reads as a function declaration, so
+    /// an attribute between `#[test]` and `fn` — `#[cfg(unix)]`, and every
+    /// `#[should_panic(expected = ...)]` in this repo — consumes the pending
+    /// state and the real `fn` two lines later counts as nothing. The meter
+    /// would silently under-report the surface it exists to measure.
+    #[test]
+    fn an_attribute_containing_a_paren_is_not_a_function_declaration() {
+        let scratch = liminal_scratch::ScratchDir::new("debt-paren").expect("scratch");
+        let root: &Utf8Path = &scratch;
+        fs::write(
+            root.join("attrs.rs"),
+            "#[test]\n#[cfg(unix)]\n#[ignore = \"Phase 9: deferred\"]\nfn deferred() {}\n\
+             #[test]\n#[should_panic(expected = \"boom\")]\nfn active() {}\n",
+        )
+        .expect("write");
+
+        let report = scan_workspace_debt(root).expect("scan");
+        assert_eq!(
+            report.total_ignored(),
+            1,
+            "the deferred test must survive an intervening #[cfg(...)] attribute"
+        );
+        assert_eq!(
+            report.active_tests, 1,
+            "the active test must survive an intervening #[should_panic(...)]"
+        );
+    }
+
+    /// An `#[ignore]` with no `#[test]` above it is not a deferred test, and a
+    /// `#[test]` with no `#[ignore]` is not deferred either — the `&&` in
+    /// `scan_file` decides both.
+    #[test]
+    fn deferral_requires_both_attributes() {
+        let scratch = liminal_scratch::ScratchDir::new("debt-attrs").expect("scratch");
+        let root: &Utf8Path = &scratch;
+        fs::write(
+            root.join("mixed.rs"),
+            "#[ignore = \"Phase 9: not a test\"]\nfn bare_function() {}\n\
+             #[test]\nfn plain_test() {}\n",
+        )
+        .expect("write");
+
+        let report = scan_workspace_debt(root).expect("scan");
+        assert_eq!(
+            report.total_ignored(),
+            0,
+            "an #[ignore] without #[test] defers nothing"
+        );
+        assert_eq!(report.active_tests, 1, "the plain test is active");
+    }
 }
