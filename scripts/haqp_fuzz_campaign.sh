@@ -24,6 +24,11 @@ TARGETS=(
 SEED=20260725   # fixed so the campaign is reproducible (ADR-0020 §1)
 
 mkdir -p "$(dirname "$OUT")"
+# The resolver writes one transient lexical/canonical pair file per target.
+# Keep this scratch directory explicit: a clean checkout may have no prior
+# target/haqp output, and failing to create it turns a clean fuzz run into a
+# harness failure during evidence materialization.
+mkdir -p target/haqp
 SANITIZER="${SANITIZER:-address}"
 # Opt-in: committing every libFuzzer log bloats the repo permanently, and the
 # digest is enough unless you actually want to read them.
