@@ -1,9 +1,6 @@
-//! M20 exit-gate tests: the canonical formatter.
+//! M20 exit-gate tests: the canonical formatter and `lim fmt`.
 //!
-//! Phase 1 tests run in the qualified source-to-HTML lane.
-//!
-//! The CLI pipeline is exercised through the shared formatter API so tests can
-//! inject a deterministic interruption without process-signal timing.
+//! **All `#[ignore]`d under AM-17.2** — see the note in `m18.rs`.
 
 use std::fs;
 
@@ -41,6 +38,7 @@ use liminal_id::ContentHash;
 /// bookkeeping (ADR-0020 §5): two sources that differ must not format to the
 /// same bytes, or the output cannot name its input at all.
 #[test]
+#[ignore = "Phase 1: M20 canonical formatter (AM-17.2 quarantine)"]
 fn formatted_output_records_the_basis_it_formatted_at() {
     let formatter = MarkdownFormatter::default();
     let left = "alpha {#a}";
@@ -77,6 +75,7 @@ fn formatted_output_records_the_basis_it_formatted_at() {
 /// back is always available because the explicit surface can express every
 /// form.
 #[test]
+#[ignore = "Phase 1: M20 canonical formatter (AM-17.2 quarantine)"]
 fn formatter_refuses_unrepresentable_documents_instead_of_lossy_emission() {
     let formatter = MarkdownFormatter::default();
     // Richer than the compact surface can spell: a relation and an ordered
@@ -109,6 +108,7 @@ fn formatter_refuses_unrepresentable_documents_instead_of_lossy_emission() {
 /// A failure after one replacement leaves no staged sibling and preserves the
 /// already-completed file as durable partial progress.
 #[test]
+#[ignore = "Phase 1: M20 canonical formatter (AM-17.2 quarantine)"]
 fn lim_fmt_interrupted_mid_write_leaves_no_partial_file() {
     let root = fixture();
     let before_b = bytes(&root, "b.md");
@@ -134,6 +134,7 @@ fn lim_fmt_interrupted_mid_write_leaves_no_partial_file() {
 /// Rerunning after partial failure completes remaining files and a third run
 /// is byte-idempotent.
 #[test]
+#[ignore = "Phase 1: M20 canonical formatter (AM-17.2 quarantine)"]
 fn lim_fmt_rerun_after_interruption_is_idempotent() {
     let root = fixture();
     let _ = format_workspace_with_failure_after(&root, Some(1));
@@ -149,6 +150,7 @@ fn lim_fmt_rerun_after_interruption_is_idempotent() {
 /// Malformed syntax remains recoverable and does not cause data loss during
 /// formatting.
 #[test]
+#[ignore = "Phase 1: M20 canonical formatter (AM-17.2 quarantine)"]
 fn lim_fmt_survives_malformed_input_without_data_loss() {
     let root = ScratchDir::new("m20-malformed").expect("scratch root");
     let source = "#!liminal-explicit-v1\nnode broken { literal \"unterminated;\n";

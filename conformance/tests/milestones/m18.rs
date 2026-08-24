@@ -1,6 +1,14 @@
 //! M18 exit-gate tests: the lossless CST frontend over a declared Holder view.
 //!
-//! M18 tests exercise the real CST frontend in the Phase 1 qualified lane.
+//! **All `#[ignore]`d under AM-17.2.** M18 is authored but unauthorized, and
+//! ADR-0020 §1 plus finding F-02 make pre-greening a Phase 1 exit gate the
+//! specific failure this milestone exists to prevent. Un-ignoring is Phase 1
+//! AUTHORIZATION, which M17.6's GO/NO-GO grants — not a housekeeping step.
+//!
+//! The quarantine was lifted without an amendment in `ee3d382` and restored on
+//! Brian's ruling of 2026-08-20. The tests themselves are real and all pass
+//! under `--ignored`; what was wrong was their being live before the decision
+//! that authorizes them.
 
 use liminal_id::{ContentHash, SourceId};
 use liminal_source::{SourceBasis, Utf8HolderView};
@@ -21,6 +29,7 @@ fn view(bytes: &[u8]) -> Utf8HolderView {
 /// rather than a diagnostic. A frontend that panics on hostile input cannot be
 /// fuzzed, so it cannot be qualified.
 #[test]
+#[ignore = "Phase 1: M18 CST frontend (AM-17.2 quarantine)"]
 fn cst_parses_truncated_and_hostile_bytes_without_panic() {
     let hostile: [&[u8]; 8] = [
         b"",
@@ -52,6 +61,7 @@ fn cst_parses_truncated_and_hostile_bytes_without_panic() {
 /// span carrying someone else's basis is worse — it points confidently at the
 /// wrong document. Both are the class of defect §112's basis rules exist for.
 #[test]
+#[ignore = "Phase 1: M18 CST frontend (AM-17.2 quarantine)"]
 fn cst_spans_resolve_against_the_declared_source_basis() {
     let source = b"alpha {#a}\n\nbeta {#malformed id!}\n";
     let held = view(source);
@@ -87,6 +97,7 @@ fn cst_spans_resolve_against_the_declared_source_basis() {
 /// instead of an error. The same argument applies at both ends and to an
 /// inverted range, so all three are pinned.
 #[test]
+#[ignore = "Phase 1: M18 CST frontend (AM-17.2 quarantine)"]
 fn rope_edit_outside_bounds_is_rejected() {
     let source = b"alpha beta";
     let held = view(source);

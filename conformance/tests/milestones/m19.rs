@@ -1,7 +1,6 @@
 //! M19 exit-gate tests: HIR lowering and the source map.
 //!
-//! M19 tests exercise HIR lowering and source-map provenance in the Phase 1
-//! qualified lane.
+//! **All `#[ignore]`d under AM-17.2** — see the note in `m18.rs`.
 
 use liminal_hir::{HirDiagnosticCode, HirItemKind, SourceDialect, lower};
 use liminal_id::{ContentHash, SourceId};
@@ -25,6 +24,7 @@ fn lowered(source: &str) -> liminal_hir::LoweredHir {
 /// as something else round-trips fine and means the wrong thing. M17.5's F-09,
 /// F-21 and F-22 were all this defect in the emitter; this is the parser's half.
 #[test]
+#[ignore = "Phase 1: M19 HIR lowering (AM-17.2 quarantine)"]
 fn explicit_syntax_rejects_unknown_forms_with_exact_diagnostics() {
     let result = lowered("#!liminal-explicit-v1\nsummon paragraph { literal \"x\"; }\n");
     assert!(
@@ -51,6 +51,7 @@ fn explicit_syntax_rejects_unknown_forms_with_exact_diagnostics() {
 /// kill unreproducible — a suite that cannot reproduce cannot qualify
 /// (ADR-0020 §1).
 #[test]
+#[ignore = "Phase 1: M19 HIR lowering (AM-17.2 quarantine)"]
 fn hir_lowering_is_deterministic_across_runs() {
     let source = concat!(
         "#!liminal-explicit-v1\n",
@@ -81,6 +82,7 @@ fn hir_lowering_is_deterministic_across_runs() {
 /// produced — unbalanced quotes beside `=`, `\r` and `,` (F-09), and bare
 /// identifiers outside the grammar (F-22).
 #[test]
+#[ignore = "Phase 1: M19 HIR lowering (AM-17.2 quarantine)"]
 fn hir_lowering_survives_malformed_markers_without_panic() {
     let hostile = [
         "#!liminal-explicit-v1\nnode paragraph (a\"=\r,b = 1) { literal \"x\"; }\n",
@@ -109,6 +111,7 @@ fn hir_lowering_survives_malformed_markers_without_panic() {
 /// An entry without its basis is a span pointing at "some document", which is
 /// exactly what §112's provenance rules forbid.
 #[test]
+#[ignore = "Phase 1: M19 HIR lowering (AM-17.2 quarantine)"]
 fn source_map_entries_carry_their_source_basis() {
     let source = "#!liminal-explicit-v1\nnode paragraph { literal \"x\"; }\n";
     let bytes = source.as_bytes();

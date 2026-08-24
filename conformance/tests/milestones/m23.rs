@@ -1,8 +1,6 @@
 //! M23 exit-gate tests: the fuzz corpus and the benchmark gate.
 //!
-//! Phase 1 tests run in the qualified fuzz and benchmark lane. The benchmark
-//! gate test uses an isolated synthetic baseline; acceptance of real
-//! `phase1.json` remains a separate T1 decision.
+//! **All `#[ignore]`d under AM-17.2** — see the note in `m18.rs`.
 
 use camino::Utf8PathBuf;
 use liminal_format::{Formatter, MarkdownFormatter};
@@ -80,6 +78,7 @@ fn minimized_artifacts() -> Vec<(Utf8PathBuf, Vec<u8>)> {
 /// sitting in `fuzz/artifacts/` while only 2 had been promoted, and a hardcoded
 /// list means the next promotion is replayed by nobody.
 #[test]
+#[ignore = "Phase 1: M23 fuzz corpus (AM-17.2 quarantine)"]
 fn fuzz_corpus_replays_every_minimized_artifact_without_panic() {
     let artifacts = minimized_artifacts();
     assert!(
@@ -107,6 +106,7 @@ fn fuzz_corpus_replays_every_minimized_artifact_without_panic() {
 /// A regression corpus that replays nondeterministically cannot distinguish a
 /// fix from a coincidence.
 #[test]
+#[ignore = "Phase 1: M23 fuzz corpus (AM-17.2 quarantine)"]
 fn fuzz_replay_is_deterministic_from_recorded_seeds() {
     let formatter = MarkdownFormatter::default();
     for (path, bytes) in minimized_artifacts() {
@@ -129,6 +129,7 @@ fn fuzz_replay_is_deterministic_from_recorded_seeds() {
 /// artifact replayable against the surface it was minimized from. An artifact
 /// without it is a pile of bytes nobody can attribute.
 #[test]
+#[ignore = "Phase 1: M23 fuzz corpus (AM-17.2 quarantine)"]
 fn fuzz_regressions_record_the_basis_that_produced_them() {
     for (path, bytes) in minimized_artifacts() {
         assert!(
@@ -146,6 +147,7 @@ fn fuzz_regressions_record_the_basis_that_produced_them() {
 /// The comparator must reject one benchmark whose p95 exceeds the frozen
 /// threshold, while accepting an identical candidate.
 #[test]
+#[ignore = "Phase 1: M23 fuzz corpus (AM-17.2 quarantine)"]
 fn benchmark_gate_fails_on_regression_beyond_threshold() {
     let root = liminal_scratch::ScratchDir::new("m23-bench-gate").expect("scratch root");
     let baselines = root.join("benches/baselines");

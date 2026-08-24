@@ -22,6 +22,9 @@ extend-exclude = [
   "conformance/fixtures/**",
   "conformance/haqp/evidence/logs/**",
   "conformance/haqp/evidence/probes/**",
+  # strace output, not prose: it captures truncated argv like
+  # `profile.release.debug="line-tabl...` and every path on this machine.
+  "conformance/haqp/evidence/access/**",
   "conformance/corpora/**",
   "conformance/golden/**",
   "**/snapshots/*.snap",

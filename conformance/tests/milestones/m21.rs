@@ -1,11 +1,13 @@
 //! M21 exit-gate tests: incremental recompilation.
 //!
-//! M21 tests exercise incremental compilation in the Phase 1 qualified lane.
+//! **All `#[ignore]`d under AM-17.2** — see the note in `m18.rs`.
 //!
 //! The §112 law itself (`incremental(x, edits) == full(apply(x, edits))`) is
 //! checked generically by `laws::incremental_equals_full_compile_law_holds`.
-//! These are the finer-grained properties that law does not reach: determinism,
-//! basis provenance, staleness refusal, and totality under malformed edits.
+//! DG21.1: that law is VACUOUS against the Phase 0 `ParagraphCompiler`, which
+//! implements `incremental` as `full(apply(x, edits))` and satisfies it by
+//! construction. These tests inherit that vacuity and must be re-examined when
+//! subtree reuse lands.
 
 use std::collections::BTreeMap;
 
@@ -32,6 +34,7 @@ fn source() -> String {
 /// nondeterministic one can satisfy the §112 law on the run that is observed
 /// and violate it on the run that matters.
 #[test]
+#[ignore = "Phase 1: M21 incremental compilation (AM-17.2 quarantine)"]
 fn incremental_recompilation_is_deterministic_across_runs() {
     let compiler = ParagraphCompiler;
     let basis = basis();
@@ -56,6 +59,7 @@ fn incremental_recompilation_is_deterministic_across_runs() {
 /// same basis, because that is the only statement about the output that does
 /// not route through the implementation's own bookkeeping (ADR-0020 §5).
 #[test]
+#[ignore = "Phase 1: M21 incremental compilation (AM-17.2 quarantine)"]
 fn incremental_outputs_name_their_governing_basis() {
     let compiler = ParagraphCompiler;
     let edits = [SourceEdit {
@@ -82,6 +86,7 @@ fn incremental_outputs_name_their_governing_basis() {
 /// compiler does, `incremental` and `full` must agree — a divergence here is a
 /// §112 violation that the happy-path law would never sample.
 #[test]
+#[ignore = "Phase 1: M21 incremental compilation (AM-17.2 quarantine)"]
 fn incremental_rejects_edits_against_a_stale_basis() {
     let compiler = ParagraphCompiler;
     let basis = basis();
@@ -104,6 +109,7 @@ fn incremental_rejects_edits_against_a_stale_basis() {
 /// These are the shapes an editor actually emits when its own state is wrong,
 /// so the compiler sees them in production, not only under fuzzing.
 #[test]
+#[ignore = "Phase 1: M21 incremental compilation (AM-17.2 quarantine)"]
 fn incremental_survives_malformed_edit_sequences() {
     let compiler = ParagraphCompiler;
     let basis = basis();

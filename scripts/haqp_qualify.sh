@@ -15,6 +15,12 @@
 # Everything else is minutes.
 set -euo pipefail
 
+# Kill the whole process group on interrupt. Killing this script alone leaves
+# `strace` and `cargo-fuzz` children writing into committed evidence paths after
+# the operator thinks the run has stopped — that is how the 2026-08-16 kill left
+# six trace files dirty and `fuzz.json` as invalid JSON.
+trap 'echo "haqp: interrupted, stopping campaign children" >&2; kill 0' INT TERM
+
 cd "$(dirname "$0")/.."
 
 if [ -n "$(git status --porcelain)" ]; then
