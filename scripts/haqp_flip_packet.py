@@ -33,26 +33,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import haqp_paths  # noqa: E402  (sibling module, not a package)
+
 ROOT = Path(__file__).resolve().parents[1]
 PACKET = ROOT / "conformance/haqp/packet.json"
 GATE_FILE = "conformance/tests/phase0.rs"
 GATE_IGNORE = '#[ignore = "Phase 0 M17: HAQP qualification evidence not yet complete"]'
 EVIDENCE = ROOT / "conformance/haqp/evidence"
-
-
-def metadata_path(path: str) -> bool:
-    """Mirror of `qualification_metadata_path` plus AM-17.6's single exception.
-
-    Kept in step with `crates/liminal-xtask/src/haq.rs` by hand, and checked by
-    the verifier immediately afterwards — if these two ever disagree, the
-    verifier is right and this script is wrong.
-    """
-    return path in {
-        "conformance/haqp/packet.json",
-        "docs/execution/phase1-suite-review.md",
-        "docs/execution/m17-5-adversarial-findings.md",
-        GATE_FILE,
-    } or path.startswith("conformance/haqp/evidence/")
 
 
 def git(*args: str) -> str:
@@ -92,7 +80,7 @@ def main() -> int:
         for line in git("status", "--porcelain").splitlines()
         if line.strip()
     ]
-    trespass = [path for path in dirty if not metadata_path(path)]
+    trespass = [path for path in dirty if not haqp_paths.metadata_path(path)]
     if trespass:
         fail(
             "source or gate code is modified; the fixed base must be clean "

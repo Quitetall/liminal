@@ -24,6 +24,9 @@ import time
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import haqp_paths  # noqa: E402  (sibling module, not a package)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -51,8 +54,10 @@ def run(*args: str) -> str:
 
 def base_context() -> tuple[str, bool, dict[str, Any]]:
     commit = run("git", "rev-parse", "HEAD").strip()
-    status = run("git", "status", "--porcelain=v1").strip()
-    clean = not status
+    # §1 fixes the SOURCE tree; the evidence tree is what the lanes before this
+    # one just wrote. A blanket `git status` check blocked this lane at the END
+    # of a completed 4-hour run (2026-08-25) — see scripts/haqp_paths.py.
+    clean = not haqp_paths.source_dirt(ROOT)
     tree = run("git", "rev-parse", "HEAD^{tree}").strip()
     files = [
         "docs/adr/0020-require-high-assurance-phase-1-suite-qualification.md",

@@ -22,8 +22,11 @@ COMMAND=$(printf '%q ' "$@")
 CODE=$?
 FINISHED=$(date +%s)
 ELAPSED=$(( FINISHED - STARTED ))
+# SOURCE-clean, not tree-clean: the lanes this wraps write evidence, and
+# verify_campaign_clock requires run.clean — so a blanket `git status` check
+# marked every legitimate campaign unclean. See scripts/haqp_paths.py.
 CLEAN=1
-if [ -n "$(git status --porcelain=v1)" ]; then CLEAN=0; fi
+if ! python3 scripts/haqp_paths.py >/dev/null; then CLEAN=0; fi
 WRAPPER="scripts/haqp_campaign_clock.sh"
 WRAPPER_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 WRAPPER_SHA256=$(sha256sum "$WRAPPER_FILE" | cut -d' ' -f1)
