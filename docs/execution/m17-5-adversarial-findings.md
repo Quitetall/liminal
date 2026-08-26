@@ -2295,3 +2295,79 @@ is Brian's:
    it implicit.
 
 Until then the registry claims exhaustiveness it has never demonstrated.
+
+## F-35 — my own pre-launch pass: five defects, one of them a guaranteed lane-killer.
+
+Brian asked for the next rerun to be hardened before launch, after two four-hour
+lanes died on bugs a static pass would have caught. This is that pass, run
+against this session's own failure taxonomy.
+
+### 1. The lane would have failed at `haq-verify`, guaranteed. **FIXED.**
+
+`verify_campaign_clock` reads `conformance/haqp/evidence/campaign.json`.
+**That file does not exist**, and `haqp_qualify.sh` never invoked
+`scripts/haqp_campaign_clock.sh`, which is the only thing that writes it. So the
+next lane would have run four hours, flipped, and failed on a missing artifact.
+
+The unit test passes because it builds its own fixtures in a `ScratchDir` — the
+same fixture-versus-current-validity split as F-32. The logic was proven; the
+artifact's existence never was.
+
+Fixed structurally rather than by adding a call: the clock now exports
+`HAQP_CAMPAIGN_CLOCK`, the lane **refuses to start without it**, and
+`just haq-lane` is the one correct invocation. Forgetting it is no longer
+possible.
+
+### 2. The whole tail of `verify_qualified_repo` had never executed. **PARTLY FIXED.**
+
+`just haq-verify` has always failed on `qualification_state: expected complete`,
+which sits near the top — so every check after it has never run against a real
+packet. Mutation confirms: `verify_recovery_proof_presence`, `verify_crash_replay`
+and `verify_canary_evidence_replay` all survive replacement with `Ok(())`.
+
+Two are now driven directly. Same shape as F-30's repo-level gates, one layer
+deeper, and the lesson repeats: **a gate that has only ever been observed
+refusing has not been observed working.**
+
+### 3. A failed sanitizer build passed the "successful build" assertion. **FIXED.**
+
+`build_log_text.contains("Finished") || contains("finished")`. cargo prints
+`Finished` for the dependency graph and then `error: could not compile` for the
+final binary, so a failed build satisfied it — demonstrated by appending one
+error line to a real committed log. Hard-error markers are now refused.
+
+### 4. The lane was not re-runnable. **FIXED.**
+
+§1 makes every verified fix invalidate eligibility until the lane reruns, so
+rerunning must be possible. But the blind lane refuses unless the packet is
+`proposed`/`not-run`, so the SECOND run would have died at the reviews. The
+orchestrator now resets the packet loudly instead of leaving a hand-edit as an
+undocumented prerequisite.
+
+### 5. `just haq-mutants || echo` swallowed every failure. **FIXED.**
+
+Only the expected `not-ready` was meant to be tolerated; the `||` tolerated
+everything, including a real mutant-lane failure. The F-19 family — masking an
+exit code — for the third time this milestone. Now only `not-ready` passes.
+
+### Also noted, not fixed
+
+- `fuzz/fuzz_targets` is enumerated from the FILESYSTEM, so an untracked scratch
+  `.rs` there would demand coverage and break the lane. F-32's class, milder
+  because the directory is tracked.
+- Review-resolution evidence is matched with `contains` on three strings, so any
+  file mentioning all three satisfies it — the findings ledger would.
+
+### A correction to my own reporting
+
+I first reported this audit as "10 survivors, 3 in `verify_qualified_repo`". That
+was a partial run read through `head`. The real figure at the time of writing is
+**74 survivors across 1062 mutants**, led by `verify_recovery_pairs` (11),
+`generated_category_class` (10), `verify_review_findings` (6). Two errors
+compounded: reading an unfinished run, and truncating the list I read from.
+
+And one test I wrote here was wrong: I asserted `verify_recovery_proof_presence`
+should reject a boundary with zero recovery pairs. It should not — it iterates
+pairs and checks their digests, and `verify_recovery_pairs` owns the count.
+Corrected to pin both functions against their own contracts rather than
+"fixing" one to cover the other.

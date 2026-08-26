@@ -131,6 +131,12 @@ mutants *ARGS:
     mkdir -p {{ mutants-dir }}
     TMPDIR={{ mutants-dir }} cargo mutants {{ ARGS }}
 
+# The full HAQP-1a lane, wall-clocked. ADR-0020 §7 bounds the campaign, and
+# verify_campaign_clock requires conformance/haqp/evidence/campaign.json — which
+# only this wrapper writes. haqp_qualify.sh refuses to run outside it (F-35).
+haq-lane run="run-1":
+    scripts/haqp_campaign_clock.sh {{ run }} conformance/haqp/evidence/campaign.json -- ./scripts/haqp_qualify.sh
+
 # Everything CI runs, locally, in CI order
 ci: fmt-check lint
     cargo nextest run --workspace --all-features --profile ci

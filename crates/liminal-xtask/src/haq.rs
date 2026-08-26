@@ -3670,11 +3670,23 @@ fn verify_sanitizer_proof(
     // records stdout only. The exact command is closed by `build_command`,
     // artifact digests, and fixed-base replay; this log only proves successful
     // build completion.
+    // M17.5 F-35: "Finished" alone is not success. cargo prints it for the
+    // dependency graph and then reports `error: could not compile` on the final
+    // binary, so a FAILED sanitizer build satisfied the success assertion —
+    // demonstrated by appending one error line to a real log.
     anyhow::ensure!(
         build_log_text.contains("Finished") || build_log_text.contains("finished"),
         "{} sanitizer build log does not show successful build",
         row.target
     );
+    for failure in ["error: could not compile", "error: aborting", "error[E"] {
+        anyhow::ensure!(
+            !build_log_text.contains(failure),
+            "{} sanitizer build log reports {failure:?}; a log that finished the \
+             dependency graph and then failed is not a successful build",
+            row.target
+        );
+    }
     require_hex_digest(
         &format!("{} binary_blake3", row.target),
         &proof.binary_blake3,
@@ -12228,5 +12240,59 @@ mod tests {
     fn the_locked_corpus_has_no_second_name() {
         verify_locked_corpus_has_no_aliases(&repo_root())
             .expect("no alias may reach conformance/corpora/heldout");
+    }
+
+    // ── M17.5 F-35: verifiers that had never executed ─────────────────────
+    // Mutation found `verify_recovery_proof_presence`, `verify_crash_replay`
+    // and `verify_canary_evidence_replay` all surviving replacement with
+    // `Ok(())`. They sit in verify_qualified_repo AFTER the
+    // `qualification_state` check, which has always bailed first — so the whole
+    // tail of the qualified gate was dead code to the suite. Same shape as
+    // F-30's repo-level gates, one layer deeper.
+
+    #[test]
+    fn recovery_proof_presence_reads_the_committed_matrix() {
+        let (recorded, _) = crash_evidence_from_repo();
+        verify_recovery_proof_presence(&recorded)
+            .expect("the committed crash matrix must carry recovery proofs");
+
+        // Emptiness is NOT this function's job — it iterates the pairs and
+        // checks each one's digests, so zero pairs is vacuously fine here.
+        // `verify_recovery_pairs` owns that, requiring one pair per exercised
+        // occurrence. Asserting it against the wrong function was my error;
+        // both are pinned below rather than one being "fixed" to cover the
+        // other.
+        let mut hollow = recorded.clone();
+        for row in &mut hollow.boundaries {
+            for pair in &mut row.recovery_pairs {
+                pair.second_effect_digest.clear();
+            }
+        }
+        verify_recovery_proof_presence(&hollow)
+            .expect_err("a recovery pair missing a digest proves no duplicate recovery");
+
+        let mut stripped = recorded;
+        for row in &mut stripped.boundaries {
+            row.recovery_pairs.clear();
+        }
+        for row in &stripped.boundaries {
+            verify_recovery_pairs(row)
+                .expect_err("zero pairs for an exercised boundary proves no recovery");
+        }
+    }
+
+    #[test]
+    fn crash_replay_reads_the_committed_evidence() {
+        let root = repo_root();
+        let packet = read_packet(&root).expect("packet");
+        // Whatever the verdict, it must REACH one rather than be dead code.
+        let verdict = verify_crash_replay(&root, &packet);
+        if let Err(error) = verdict {
+            let message = error.to_string();
+            assert!(
+                !message.contains("No such file"),
+                "crash replay must find its inputs, not vanish: {message}"
+            );
+        }
     }
 }

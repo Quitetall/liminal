@@ -28,7 +28,35 @@ if [ -n "$(git status --porcelain)" ]; then
   exit 2
 fi
 
+if [ -z "${HAQP_CAMPAIGN_CLOCK:-}" ]; then
+  echo "refusing to start: run this under the campaign clock, or ADR-0020 §7's" >&2
+  echo "evidence is never written and the lane fails at haq-verify:" >&2
+  echo "    just haq-lane" >&2
+  exit 2
+fi
+
 BASE="$(git rev-parse HEAD)"
+# §1 makes every verified fix invalidate eligibility until the lane reruns — so
+# rerunning must be possible. The blind lane refuses unless the packet is
+# `proposed`/`not-run`, so after a successful qualification the SECOND run died
+# at the reviews with "packet is not proposed/not-run" (M17.5 F-35). Reset here,
+# loudly, rather than leaving a hand-edit as an undocumented prerequisite.
+if ! python3 - <<'RESET'
+import json, pathlib, sys
+p = pathlib.Path("conformance/haqp/packet.json")
+d = json.loads(p.read_text())
+if d["qualification_state"] == "not-run" and d.get("provenance") is None:
+    sys.exit(0)
+print("re-qualifying: resetting packet to not-run and dropping stale provenance")
+d["qualification_state"] = "not-run"
+d.pop("provenance", None)
+p.write_text(json.dumps(d, indent=1) + "\n")
+RESET
+then
+  echo "could not reset the packet for re-qualification" >&2
+  exit 2
+fi
+
 echo "=== HAQP-1a lane at fixed base ${BASE:0:12} ==="
 echo "Nothing may commit source or gate code until this finishes and the packet"
 echo "is flipped — any such commit invalidates every artifact below."
@@ -39,7 +67,15 @@ echo "--- canaries ---";  just haq-canaries
 echo "--- generated ---"; just haq-generated
 echo "--- crash ---";     just haq-crash
 echo "--- mutants (stage 1b machinery; recorded, not claimed) ---"
-just haq-mutants || echo "mutant lane reported not-ready, which is expected for stage 1a"
+# `|| echo` swallowed every failure, not only the expected not-ready one — the
+# F-19 family, masking an exit code (M17.5 F-35). Only not-ready is tolerated.
+if ! just haq-mutants; then
+  if ! grep -q '"status": *"not-ready"' conformance/haqp/evidence/mutants.json 2>/dev/null; then
+    echo "mutant lane failed for a reason other than not-ready" >&2
+    exit 2
+  fi
+  echo "mutant lane reported not-ready, which is expected for stage 1a"
+fi
 
 # The long one. Writes fuzz.json and corpus-access.json.
 echo "--- fuzz campaign: 7 targets x 1800s (~3.5h) ---"

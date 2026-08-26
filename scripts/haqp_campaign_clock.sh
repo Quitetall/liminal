@@ -18,6 +18,11 @@ STARTED=$(date +%s)
 COMMIT=$(git rev-parse HEAD)
 TREE=$(git rev-parse "${COMMIT}^{tree}")
 COMMAND=$(printf '%q ' "$@")
+# The lane refuses to run unwrapped (M17.5 F-35): campaign.json and its receipt
+# are required by verify_campaign_clock, nothing else writes them, and the
+# orchestrator never called this wrapper — so a completed lane would have failed
+# at `just haq-verify` on a missing artifact after four hours.
+export HAQP_CAMPAIGN_CLOCK="$RUN_ID"
 "$@"
 CODE=$?
 FINISHED=$(date +%s)
