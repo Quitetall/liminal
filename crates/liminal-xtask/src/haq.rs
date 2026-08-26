@@ -12427,6 +12427,200 @@ mod tests {
         );
     }
 
+    // ── M17.5 F-36: gates no test proves do anything ──────────────────────
+    //
+    // The completed verifier mutation campaign found 27 functions in this file
+    // that survive being replaced wholesale with `Ok(())`. 26 had no reject
+    // assertion anywhere and 17 were never called by a test at all. The cause
+    // is structural, not 27 separate oversights: `verify_qualified_repo`
+    // checks `qualification_state == "complete"` first, and the committed
+    // packet is `not-run`, so every downstream verifier is unreachable through
+    // the gate. They are reached here directly.
+
+    /// `require_hex_digest` is the length/alphabet guard under every digest
+    /// binding in the packet. Replacing it with `Ok(())` survived, so nothing
+    /// proved a digest had to be a digest.
+    #[test]
+    fn a_digest_that_is_not_64_hex_is_refused() {
+        require_hex_digest("label", &"a".repeat(64)).expect("64 hex digits is a digest");
+        for bad in [
+            "a".repeat(63),
+            "a".repeat(65),
+            String::new(),
+            format!("{}g", "a".repeat(63)),
+            format!("{} ", "a".repeat(63)),
+        ] {
+            assert!(
+                require_hex_digest("label", &bad).is_err(),
+                "{bad:?} is not a 64-hex digest"
+            );
+        }
+    }
+
+    /// `require_git_object_id` admits exactly SHA-1 and SHA-256 widths. The
+    /// `matches!(len, 40 | 64)` arm is what stops a truncated id passing, and
+    /// nothing exercised it.
+    #[test]
+    fn a_git_object_id_must_be_40_or_64_hex() {
+        require_git_object_id("label", &"0".repeat(40)).expect("SHA-1 width");
+        require_git_object_id("label", &"0".repeat(64)).expect("SHA-256 width");
+        for bad in [
+            "0".repeat(39),
+            "0".repeat(41),
+            "0".repeat(63),
+            "0".repeat(65),
+            format!("{}z", "0".repeat(39)),
+        ] {
+            assert!(
+                require_git_object_id("label", &bad).is_err(),
+                "{bad:?} is not a Git object id"
+            );
+        }
+    }
+
+    /// ADR-0020 §2 traceability rests on requirement coordinates resolving to
+    /// committed source. This runs in BOTH gates and still survived deletion:
+    /// the doctored-tree test only ever doctored `ratification`, so the path
+    /// safety and anchor checks were never exercised negatively.
+    #[test]
+    fn a_requirement_source_that_does_not_resolve_is_refused() {
+        let root = repo_root();
+        let packet = read_packet(&root).expect("packet");
+        verify_requirement_sources(&root, &packet).expect("the committed packet must resolve");
+
+        for (bad, why) in [
+            ("docs/execution/M17.md", "source without a coordinate"),
+            ("/etc/passwd:D1.1", "absolute path"),
+            ("docs/../../etc/passwd:D1.1", "parent traversal"),
+            ("conformance/corpora/heldout/x.md:D1.1", "locked corpus"),
+            ("docs/execution/NoSuchFile.md:D1.1", "missing file"),
+            (
+                "docs/execution/M17.md:D99.999",
+                "coordinate absent from the file",
+            ),
+        ] {
+            let mut doctored = packet.clone();
+            doctored.requirements[0].source = bad.to_owned();
+            assert!(
+                verify_requirement_sources(&root, &doctored).is_err(),
+                "{why} must be refused, but {bad:?} was accepted"
+            );
+        }
+    }
+
+    /// §5 oracle independence names an exact coordinate. Deleting the whole
+    /// check survived, so neither the registry comparison nor the anchor
+    /// lookup was pinned.
+    #[test]
+    fn an_oracle_source_off_its_registered_coordinate_is_refused() {
+        let root = repo_root();
+        let family = "source/CST/formatting";
+        let registered = generated_oracle_source(family);
+        assert!(
+            !registered.is_empty(),
+            "the fixture family must be a known oracle family"
+        );
+        verify_oracle_source_coordinate(&root, registered, family)
+            .expect("the registered coordinate must verify");
+
+        verify_oracle_source_coordinate(&root, registered, "no/such/family")
+            .expect_err("an unknown oracle family must be refused");
+
+        let (file, _) = registered.split_once(':').expect("registered coordinate");
+        for bad in [
+            file.to_owned(),
+            format!("{file}:no_such_anchor"),
+            format!("{file}:"),
+        ] {
+            assert!(
+                verify_oracle_source_coordinate(&root, &bad, family).is_err(),
+                "{bad:?} is not the registered oracle coordinate"
+            );
+        }
+    }
+
+    /// §6 requires Pass 1 to cover every declared attack class. Deleting the
+    /// whole check survived: nothing proved an unknown class was refused, and
+    /// nothing proved Pass 1 had to be complete.
+    #[test]
+    fn a_review_pass_with_a_bad_or_missing_attack_class_is_refused() {
+        let record = review_record(1, "openai", "codex");
+        verify_review_attack_classes(&record, "pass1")
+            .expect("the fixture covers every attack class");
+
+        let mut unknown = review_record(1, "openai", "codex");
+        unknown.attempts[0].attack_class = "creative-thinking".to_owned();
+        let error = verify_review_attack_classes(&unknown, "pass1")
+            .expect_err("an attack class outside the closed registry must be refused");
+        assert!(
+            error.to_string().contains("unknown attack class"),
+            "must refuse for the stated reason: {error}"
+        );
+
+        // Pass 1 must be exhaustive; dropping one class leaves a gap.
+        let mut incomplete = review_record(1, "openai", "codex");
+        let dropped = incomplete.attempts[0].attack_class.clone();
+        incomplete
+            .attempts
+            .retain(|attempt| attempt.attack_class != dropped);
+        let error = verify_review_attack_classes(&incomplete, "pass1")
+            .expect_err("Pass 1 must cover every attack class");
+        assert!(
+            error.to_string().contains("missing attack classes"),
+            "must name the gap: {error}"
+        );
+
+        // Pass 2 carries no exhaustiveness duty, so the same record is fine.
+        let mut pass_two = incomplete;
+        pass_two.pass = 2;
+        verify_review_attack_classes(&pass_two, "pass2")
+            .expect("only Pass 1 must cover every class");
+    }
+
+    /// §6's independence claim: a finding marked reproduced must correspond to
+    /// EXACTLY ONE matching verified defect in the other pass. Deleting the
+    /// check survived, so "independently reproduced" was self-asserted.
+    #[test]
+    fn a_reproduced_finding_without_a_match_in_the_other_pass_is_refused() {
+        fn paired(link: bool) -> Vec<(String, ReviewRecord)> {
+            let mut one = review_record(1, "openai", "codex");
+            let mut two = review_record(2, "mimo", "lamu");
+            for record in [&mut one, &mut two] {
+                record.attempts[0].classification = "verified_defect".to_owned();
+                record.attempts[0].independently_reproduced = true;
+                record.findings = vec![serde_json::json!({
+                    "id": "F-01",
+                    "attempt_id": record.attempts[0].id,
+                })];
+                record.unresolved_verified_findings = 1;
+                record.result = "fail".to_owned();
+            }
+            if link {
+                one.independently_reproduced = vec!["F-01".to_owned()];
+            }
+            vec![("pass1".to_owned(), one), ("pass2".to_owned(), two)]
+        }
+
+        verify_cross_pass_reproduction(&paired(true))
+            .expect("a finding matched one-for-one across passes is reproduced");
+
+        // The other pass no longer carries the matching defect.
+        let mut orphaned = paired(true);
+        orphaned[1].1.attempts[0].attack_class = "nondeterminism".to_owned();
+        orphaned[1].1.attempts[1].attack_class = "vacuity".to_owned();
+        let error = verify_cross_pass_reproduction(&orphaned)
+            .expect_err("a reproduced finding needs a match in the other pass");
+        assert!(
+            error.to_string().contains("exactly one"),
+            "must refuse for the stated reason: {error}"
+        );
+
+        // One record alone cannot establish cross-pass reproduction.
+        let single = vec![paired(true).remove(0)];
+        verify_cross_pass_reproduction(&single)
+            .expect_err("cross-pass reproduction requires two records");
+    }
+
     /// M17.5 F-31 / P1-A08: the scenarios block was written by the fault lane
     /// and read by nothing.
     #[test]

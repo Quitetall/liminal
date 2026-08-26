@@ -2382,6 +2382,54 @@ Only the expected `not-ready` was meant to be tolerated; the `||` tolerated
 everything, including a real mutant-lane failure. The F-19 family — masking an
 exit code — for the third time this milestone. Now only `not-ready` passes.
 
+## F-36 — 27 gates in the verifier that no test proves do anything
+
+The completed verifier mutation campaign's most serious result. **27 functions
+in `crates/liminal-xtask/src/haq.rs` survive being replaced wholesale with
+`Ok(())`.** Measured against the test module:
+
+| | count |
+|---|---|
+| survive `-> Ok(())` | 27 |
+| of those, with **no** reject assertion anywhere | **26** |
+| of those, never called by any test at all | **17** |
+
+Among them: `verify_requirement_sources` (§2 traceability),
+`verify_gate_unignore_only` (AM-17.6's guard on the metadata child),
+`verify_locked_corpus_has_no_aliases`, `verify_crash_replay`,
+`verify_crash_injection_bindings`, `verify_cross_pass_reproduction` (§6
+independence), and the three `verify_corpus_scope_*` checks.
+
+**The cause is structural, not 27 oversights.** `verify_qualified_repo` checks
+`qualification_state == "complete"` and returns before anything else. The
+committed packet is `not-run` — correctly, the gate is honestly closed — so
+every downstream verifier is unreachable *through the gate*, and the only way to
+exercise them is to call them directly. Almost nothing did. The codebase had
+already met this once: `every_evidence_binder_rejects_a_claim_its_artifact_contradicts`
+exists precisely because "the qualified gate's `qualification_state` check fires
+first and they were never reached" — but it covers a handful of binders, not the
+surface.
+
+This is the highest-stakes instance of the session's recurring species. These
+are the checks the lane relies on **after** the flip sets the state to
+`complete`. Until now, nothing established that any of them does anything at
+all, and a lane that passed would have proved nothing about them.
+
+**Discipline for closing it:** a passing test is not evidence the mutant dies.
+Each function is closed by writing reject cases *and* re-running
+`cargo mutants --re <fn>` to watch the survivor turn caught. Killed so far, all
+verified that way:
+
+| function | mutants | result |
+|---|---|---|
+| `require_hex_digest` | 1 | caught |
+| `require_git_object_id` | 1 | caught |
+| `verify_requirement_sources` | 1 | caught |
+| `verify_oracle_source_coordinate` | 1 | caught |
+| `verify_review_attack_classes` + `verify_cross_pass_reproduction` | 17 | 12 caught, 5 timeout, **0 missed** |
+
+The five timeouts are recorded as timeouts, not claimed as kills.
+
 ### A fixture that names a count must read it
 
 Adding canary C33 turned `markdown_surface_rejects_a_stale_qualification_state`
