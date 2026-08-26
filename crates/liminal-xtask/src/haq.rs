@@ -28,6 +28,7 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     let packet = read_packet(root)?;
     verify_packet_shape(&packet)?;
     verify_requirement_sources(root, &packet)?;
+    verify_crash_boundary_scope(root, &packet)?;
     verify_markdown_surface(root, &packet)?;
     require_eq(
         "qualification_state",
@@ -5290,6 +5291,7 @@ fn verify_packet_shape(packet: &Packet) -> Result<()> {
     verify_generated_inventory(packet)?;
     verify_reviews_inventory(packet)?;
     verify_crash_boundary_inventory(packet)?;
+    verify_crash_boundary_scope_shape(packet)?;
     Ok(())
 }
 
@@ -6511,7 +6513,7 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
 fn verify_canary_inventory(packet: &Packet) -> Result<()> {
     require_exact_ids(
         packet.canaries.iter().map(|row| row.id.as_str()),
-        (1..=32).map(|idx| format!("C{idx:02}")),
+        (1..=33).map(|idx| format!("C{idx:02}")),
         "canary",
     )?;
     for canary in &packet.canaries {
@@ -6527,9 +6529,9 @@ fn verify_canary_inventory(packet: &Packet) -> Result<()> {
     Ok(())
 }
 
-/// Closed canary-to-gate map. The 32 rows are not merely a count: each
+/// Closed canary-to-gate map. The 33 rows are not merely a count: each
 /// ratification gate has one named, executable violation (M17.5 P1-A04).
-const CANARY_GATES: [(&str, &str); 32] = [
+const CANARY_GATES: [(&str, &str); 33] = [
     ("C01", "status"),
     ("C02", "ratification"),
     ("C03", "locked corpus"),
@@ -6562,6 +6564,7 @@ const CANARY_GATES: [(&str, &str); 32] = [
     ("C30", "residual risk"),
     ("C31", "corpus access"),
     ("C32", "concurrency"),
+    ("C33", "crash boundary scope"),
 ];
 
 #[allow(
@@ -7142,6 +7145,165 @@ fn verify_crash_boundary_inventory(packet: &Packet) -> Result<()> {
     Ok(())
 }
 
+/// Durable-transition call sites in tracked runtime source, by path.
+///
+/// Markers are call-shaped for the reason F-34 established for the
+/// `skipped-durable-transition` operator: a durable transition is a CALL, and
+/// matching bare words lets a rename satisfy the check.
+///
+/// Enumerated from `git ls-files`, never the filesystem (F-32): a scan that
+/// reads the working directory reports a different durable surface on a dirty
+/// tree than a fresh clone does, and the clone is the one that has to reproduce
+/// this.
+///
+/// `liminal-xtask` is excluded — the verifier is not runtime code, and its
+/// operator table contains the marker as a string literal, so including it
+/// would make this count self-referential. `tests/` is excluded: an integration
+/// test's commit is not a transition the product performs.
+///
+/// This is a TRIPWIRE, not a semantic census. It counts call sites textually,
+/// including any inside `#[cfg(test)]` modules, and its only job is to fail
+/// loudly when the durable surface moves under a disclosure that claims to have
+/// surveyed it.
+fn durable_transition_sites(root: &Utf8Path) -> Result<BTreeMap<String, usize>> {
+    const MARKERS: [&str; 2] = [".commit(", ".commit_if("];
+    let listed = git_text(root, &["ls-files", "-z", "--", "crates"])?;
+    let mut sites = BTreeMap::new();
+    for name in listed.split('\0').filter(|name| !name.trim().is_empty()) {
+        if Utf8Path::new(name).extension() != Some("rs")
+            || name.starts_with("crates/liminal-xtask/")
+            || name.contains("/tests/")
+        {
+            continue;
+        }
+        let path = root.join(name);
+        let Ok(text) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let count = text
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("//"))
+            .map(|line| {
+                MARKERS
+                    .iter()
+                    .filter(|marker| line.contains(**marker))
+                    .count()
+            })
+            .sum::<usize>();
+        if count > 0 {
+            sites.insert(name.to_owned(), count);
+        }
+    }
+    Ok(sites)
+}
+
+/// The half of the scope claim that reads only the packet, returning the
+/// declared surface keyed by path.
+///
+/// Split from the source-measured half deliberately: `verify_inventory_repo` is
+/// exercised against synthetic trees that hold a packet and nothing else, and a
+/// check must read only inputs its caller actually has. Measuring source there
+/// would either fail on a tree that is not at fault or — the worse outcome —
+/// invite a "skip when there is no source" branch, which is how a gate silently
+/// degrades into passing everything.
+fn verify_crash_boundary_scope_shape(packet: &Packet) -> Result<BTreeMap<&str, usize>> {
+    let scope = &packet.crash_boundary_scope;
+    anyhow::ensure!(
+        !scope.in_scope.is_empty(),
+        "crash_boundary_scope.in_scope is empty: §5 exhaustiveness must be claimed over at \
+         least one subsystem, or the packet claims nothing"
+    );
+    anyhow::ensure!(
+        !scope.deferred_to.trim().is_empty(),
+        "crash_boundary_scope.deferred_to must name who closes the deferral"
+    );
+    anyhow::ensure!(
+        !scope.rationale.trim().is_empty(),
+        "crash_boundary_scope.rationale must state why the claim is bounded"
+    );
+
+    // A registered boundary outside every declared subsystem means the packet
+    // registers boundaries it has not claimed scope over.
+    for row in &packet.crash_boundaries {
+        let subsystem = row.boundary.split('/').next().unwrap_or_default();
+        anyhow::ensure!(
+            scope
+                .in_scope
+                .iter()
+                .any(|entry| entry.subsystem == subsystem),
+            "crash boundary {} is outside every declared in-scope subsystem",
+            row.boundary
+        );
+    }
+
+    let mut declared: BTreeMap<&str, usize> = BTreeMap::new();
+    for entry in &scope.in_scope {
+        anyhow::ensure!(
+            declared.insert(entry.path.as_str(), entry.sites).is_none(),
+            "{} is declared twice in crash_boundary_scope",
+            entry.path
+        );
+    }
+    for entry in &scope.deferred {
+        anyhow::ensure!(
+            !entry.reason.trim().is_empty(),
+            "{}: a deferred durable surface must say why it is deferred",
+            entry.path
+        );
+        anyhow::ensure!(
+            declared.insert(entry.path.as_str(), entry.sites).is_none(),
+            "{} is declared both in scope and deferred",
+            entry.path
+        );
+    }
+    Ok(declared)
+}
+
+/// Hold the §5 exhaustiveness claim to the surface it actually covers.
+///
+/// Ruling of 2026-08-26 (M17.5 A05): for HAQP-1a, exhaustiveness is claimed
+/// over ILRP alone, every other durable transition is deferred to M17.9, and
+/// the split is declared in the packet rather than left implicit. Deciding
+/// which of the runtime's transitions are *registrable* boundaries is runtime
+/// design work; doing it here would either block 1a on Phase 1 or pass by
+/// picking a convenient definition, and ADR-0020 §3 forbids improvising
+/// qualification semantics.
+///
+/// What is enforced instead is that the disclosure stays true. A prose scope
+/// note rots the first time somebody adds a commit site — which is exactly the
+/// defect A05 found in the original unscoped claim — so every durable
+/// transition in tracked source must fall inside a declared in-scope subsystem
+/// or a declared deferred surface, with counts matching exactly. A new
+/// `txn.commit()` anywhere turns the packet red until it is either registered
+/// or disclosed.
+fn verify_crash_boundary_scope(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    let declared = verify_crash_boundary_scope_shape(packet)?;
+    let measured = durable_transition_sites(root)?;
+    for (path, count) in &measured {
+        let Some(expected) = declared.get(path.as_str()) else {
+            anyhow::bail!(
+                "{path} performs {count} durable transition(s) and is in neither the in-scope \
+                 nor the deferred surface: ADR-0020 §5 exhaustiveness cannot be claimed over a \
+                 surface the packet has not surveyed. Register its boundaries or disclose it."
+            );
+        };
+        anyhow::ensure!(
+            expected == count,
+            "{path}: crash_boundary_scope declares {expected} durable transition(s), source has \
+             {count}. The disclosure is stale — a durable surface moved under a claim that says \
+             it was surveyed."
+        );
+    }
+    for path in declared.keys() {
+        anyhow::ensure!(
+            measured.contains_key(*path),
+            "{path}: crash_boundary_scope declares durable transitions that no longer exist in \
+             tracked source"
+        );
+    }
+    Ok(())
+}
+
 fn require_eq(field: &str, actual: &str, expected: &str) -> Result<()> {
     if actual == expected {
         Ok(())
@@ -7198,6 +7360,12 @@ struct Packet {
     canaries: Vec<Canary>,
     generated: Vec<Generated>,
     crash_boundaries: Vec<CrashBoundary>,
+    /// What ADR-0020 §5's "exhaustive" is exhaustive OVER (M17.5 A05).
+    ///
+    /// Required rather than defaulted, for the same reason as
+    /// `qualification_stage`: a packet that did not say which durable surface
+    /// it claims would let a reader assume all of them.
+    crash_boundary_scope: CrashBoundaryScope,
     reviews: Vec<Review>,
     /// Residual-risk coordinates are populated at qualification time; the
     /// proposed inventory may leave this empty while no campaign has run.
@@ -7610,6 +7778,43 @@ struct CrashBoundary {
     result: String,
 }
 
+/// The declared reach of ADR-0020 §5's crash-boundary exhaustiveness claim.
+///
+/// §5 says "exhaustive registered crash boundaries" without saying exhaustive
+/// over what. M17.5 A05 measured it and the honest answer is: over ILRP, and
+/// nothing else. The registry holds eight `ilrp/*` boundaries while
+/// `txn.commit()` — which `liminal-graph/src/store/mod.rs` documents as
+/// "Durable boundary: the record is fsynced before the commit returns" — occurs
+/// 35 more times in runtime source with no boundary at all.
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct CrashBoundaryScope {
+    in_scope: Vec<ScopedSubsystem>,
+    deferred: Vec<DeferredDurableSurface>,
+    /// Who closes the deferral, so the disclosure names an owner.
+    deferred_to: String,
+    rationale: String,
+}
+
+/// One subsystem whose durable transitions §5's claim covers.
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct ScopedSubsystem {
+    /// Boundary-name prefix, e.g. `ilrp` for `ilrp/before_ack`.
+    subsystem: String,
+    path: String,
+    sites: usize,
+}
+
+/// One durable surface deliberately left outside §5 for this stage.
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct DeferredDurableSurface {
+    path: String,
+    sites: usize,
+    reason: String,
+}
+
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct Review {
     reviewer: String,
@@ -7870,7 +8075,10 @@ fn run_canary_suite(
 }
 
 fn is_qualification_canary(id: &str) -> bool {
-    matches!(id, "C26" | "C27" | "C28" | "C29" | "C30" | "C31" | "C32")
+    matches!(
+        id,
+        "C26" | "C27" | "C28" | "C29" | "C30" | "C31" | "C32" | "C33"
+    )
 }
 
 /// Execute deliberate failures for qualified-only gates whose evidence does
@@ -7883,6 +8091,24 @@ fn is_qualification_canary(id: &str) -> bool {
 fn run_qualification_canary(root: &Utf8Path, packet: &Packet, id: &str) -> Result<()> {
     if id == "C27" {
         return run_sanitizer_canary(root);
+    }
+    if id == "C33" {
+        // A05: understating the deferred surface by ONE site is the realistic
+        // way this disclosure goes wrong — someone adds a `txn.commit()` and
+        // does not revisit the packet. The canary proves the tripwire fires on
+        // exactly that, rather than only on a wholesale deletion.
+        let mut candidate = packet.clone();
+        let surface = candidate
+            .crash_boundary_scope
+            .deferred
+            .first_mut()
+            .context("C33 needs at least one deferred durable surface to understate")?;
+        surface.sites -= 1;
+        verify_crash_boundary_scope(root, &candidate)
+            .expect_err("crash-boundary scope canary must fail closed");
+        anyhow::bail!(
+            "crash_boundary_scope declares a durable surface smaller than tracked source"
+        );
     }
     if id == "C32" {
         let path = root.join("conformance/haqp/evidence/concurrency.json");
@@ -8118,6 +8344,7 @@ fn canary_expected_prefix(id: &str) -> Result<&'static str> {
         "C30" => "risk RISK-001 has empty evidence",
         "C31" => "corpus scope command does not cover lane",
         "C32" => "concurrency provenance does not match committed tree",
+        "C33" => "crash_boundary_scope declares",
         _ => anyhow::bail!("unknown canary {id}"),
     })
 }
@@ -8279,6 +8506,7 @@ fn mutate_canary(
         "C30" => "omit residual-risk coordinate",
         "C31" => "trace only scope probe",
         "C32" => "replace not-applicable concurrency source_tree with unrelated Git object",
+        "C33" => "understate the deferred durable surface by one site",
         _ => anyhow::bail!(
             "unknown canary {id}: the packet declares a canary with no implemented \
              mutation, so it would otherwise be counted as caught without running"
@@ -8335,6 +8563,7 @@ fn canary_mutation_semantics(id: &str) -> Result<&'static str> {
         "C30" => Ok("residual_risk.evidence := empty"),
         "C31" => Ok("scope trace command := scope-probe only"),
         "C32" => Ok("replace not-applicable concurrency source_tree with unrelated Git object"),
+        "C33" => Ok("crash_boundary_scope.deferred[0].sites -= 1"),
         _ => anyhow::bail!("unknown canary {id}"),
     }
 }
@@ -9784,17 +10013,17 @@ mod tests {
     ///
     /// This exercises `mutate_canary` directly because the guard is
     /// defence-in-depth: `verify_canary_inventory` pins the id set to exactly
-    /// C01–C32, so a C33 row is rejected before `run_canary_suite` ever sees it.
+    /// C01–C33, so a C34 row is rejected before `run_canary_suite` ever sees it.
     /// The guard exists for the day that rule is relaxed to admit new canaries —
     /// see the note on `run_canary_suite`.
     #[test]
     fn canary_runner_refuses_a_declared_canary_it_cannot_execute() {
         let mut packet = packet_from_repo();
         let mut markdown = String::new();
-        let err = mutate_canary("C33", &mut packet, &mut markdown, "")
+        let err = mutate_canary("C34", &mut packet, &mut markdown, "")
             .expect_err("a canary with no arm must not be counted as caught");
         assert!(
-            err.to_string().contains("unknown canary C33"),
+            err.to_string().contains("unknown canary C34"),
             "unexpected error: {err}"
         );
     }
@@ -11218,9 +11447,20 @@ mod tests {
             .expect_err("completed packet may not retain NOT_RUN markdown");
         assert!(err.to_string().contains("qualification state"), "{err}");
 
+        // Derived from the packet, not pinned to a literal: adding canary C33
+        // made the old hardcoded "32" a no-op replace, so this test silently
+        // stopped exercising the canary-target check and failed on the previous
+        // assertion instead. A fixture that names a count must read it.
         let stale_count = markdown.replace(
-            "Target: exactly **32 predeclared canaries**",
+            &format!(
+                "Target: exactly **{} predeclared canaries**",
+                packet.canaries.len()
+            ),
             "Target: exactly **16 predeclared canaries**",
+        );
+        assert_ne!(
+            stale_count, markdown,
+            "the doctored markdown must differ, or the check below proves nothing"
         );
         let err = verify_markdown_surface_text(&stale_count, &packet)
             .expect_err("markdown cannot report a stale canary inventory count");
@@ -11990,6 +12230,162 @@ mod tests {
             verify_crash_boundary_inventory(&packet)
                 .expect_err("a boundary must be injected on BOTH sides");
         }
+    }
+
+    /// M17.5 A05 accept case. Every reject case below is worthless without it:
+    /// a scope check that refuses everything would pass them all.
+    #[test]
+    fn the_committed_packet_surveys_every_durable_surface_in_tracked_source() {
+        let packet = read_packet(&repo_root()).expect("packet");
+        verify_crash_boundary_scope(&repo_root(), &packet)
+            .expect("the committed disclosure must account for every durable transition");
+    }
+
+    /// The defect A05 found: §5 claims exhaustiveness over a surface nobody
+    /// surveyed. A durable transition in no declared surface must be refused,
+    /// which is what makes a NEW `txn.commit()` turn the packet red.
+    #[test]
+    fn a_durable_surface_missing_from_the_disclosure_is_refused() {
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        let dropped = packet.crash_boundary_scope.deferred.remove(0);
+        let error = verify_crash_boundary_scope(&repo_root(), &packet)
+            .expect_err("an unsurveyed durable surface must be refused");
+        let message = error.to_string();
+        assert!(
+            message.contains(&dropped.path) && message.contains("neither the in-scope"),
+            "the error must name the unsurveyed surface, got: {message}"
+        );
+    }
+
+    /// A prose disclosure rots silently; this one must not. Drift is checked in
+    /// BOTH directions so `==` cannot weaken to `>=` or `<=` and survive.
+    #[test]
+    fn a_stale_site_count_is_refused_in_either_direction() {
+        for delta in [1usize, 2] {
+            let mut packet = read_packet(&repo_root()).expect("packet");
+            packet.crash_boundary_scope.deferred[0].sites += delta;
+            verify_crash_boundary_scope(&repo_root(), &packet)
+                .expect_err("a count above the measured surface is stale");
+
+            let mut packet = read_packet(&repo_root()).expect("packet");
+            packet.crash_boundary_scope.deferred[0].sites -= delta;
+            verify_crash_boundary_scope(&repo_root(), &packet)
+                .expect_err("a count below the measured surface is stale");
+        }
+    }
+
+    /// The in-scope side is measured too. Scoping §5 to ILRP is only honest if
+    /// ILRP's own declared surface is checked against source like the rest.
+    #[test]
+    fn a_stale_in_scope_site_count_is_refused() {
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        packet.crash_boundary_scope.in_scope[0].sites += 1;
+        verify_crash_boundary_scope(&repo_root(), &packet)
+            .expect_err("the in-scope surface is pinned to source, not asserted");
+    }
+
+    /// A declaration for a surface that no longer exists is the same staleness
+    /// pointing the other way, and would otherwise let a deleted file's count
+    /// keep vouching for the disclosure.
+    #[test]
+    fn a_disclosure_for_a_vanished_surface_is_refused() {
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        packet
+            .crash_boundary_scope
+            .deferred
+            .push(DeferredDurableSurface {
+                path: "crates/liminal-daemon/src/no_such_file.rs".to_owned(),
+                sites: 3,
+                reason: "fabricated".to_owned(),
+            });
+        verify_crash_boundary_scope(&repo_root(), &packet)
+            .expect_err("a disclosure naming source that does not exist must be refused");
+    }
+
+    /// Registering `ilrp/*` while claiming scope over something else would make
+    /// the declaration decorative.
+    #[test]
+    fn a_registered_boundary_outside_the_declared_scope_is_refused() {
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        packet.crash_boundary_scope.in_scope[0].subsystem = "daemon".to_owned();
+        let error = verify_crash_boundary_scope(&repo_root(), &packet)
+            .expect_err("boundaries must sit inside a declared subsystem");
+        assert!(
+            error.to_string().contains("ilrp/"),
+            "the error must name the out-of-scope boundary, got: {error}"
+        );
+    }
+
+    /// An empty scope claims nothing while still reading as a disclosure.
+    #[test]
+    fn an_empty_scope_is_refused() {
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        packet.crash_boundary_scope.in_scope.clear();
+        verify_crash_boundary_scope(&repo_root(), &packet)
+            .expect_err("a packet claiming no scope at all must be refused");
+    }
+
+    /// Declaring one surface twice would let a real count and a convenient one
+    /// coexist, with whichever landed last deciding the verdict.
+    #[test]
+    fn a_surface_declared_both_in_scope_and_deferred_is_refused() {
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        let path = packet.crash_boundary_scope.in_scope[0].path.clone();
+        packet
+            .crash_boundary_scope
+            .deferred
+            .push(DeferredDurableSurface {
+                path,
+                sites: 3,
+                reason: "duplicate".to_owned(),
+            });
+        verify_crash_boundary_scope(&repo_root(), &packet)
+            .expect_err("a surface cannot be both in scope and deferred");
+    }
+
+    /// The deferral has to name an owner and a reason, or it is an excuse
+    /// rather than a disclosure.
+    #[test]
+    fn a_deferral_without_owner_or_reason_is_refused() {
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        packet.crash_boundary_scope.deferred_to = "  ".to_owned();
+        verify_crash_boundary_scope(&repo_root(), &packet)
+            .expect_err("a deferral must name who closes it");
+
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        packet.crash_boundary_scope.rationale = String::new();
+        verify_crash_boundary_scope(&repo_root(), &packet)
+            .expect_err("a bounded claim must say why it is bounded");
+
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        packet.crash_boundary_scope.deferred[0].reason = "   ".to_owned();
+        verify_crash_boundary_scope(&repo_root(), &packet)
+            .expect_err("each deferred surface must say why it is deferred");
+    }
+
+    /// The scan reads `git ls-files`, not the working directory (F-32). An
+    /// untracked file with durable transitions must not enter the surface — on
+    /// a dirty tree it would, and a fresh clone could then never reproduce the
+    /// verdict.
+    #[test]
+    fn the_durable_surface_is_read_from_tracked_state_not_the_filesystem() {
+        let root = repo_root();
+        let measured = durable_transition_sites(&root).expect("scan");
+        let tracked = git_text(&root, &["ls-files", "-z", "--", "crates"]).expect("ls-files");
+        let tracked: BTreeSet<&str> = tracked
+            .split('\0')
+            .filter(|name| !name.trim().is_empty())
+            .collect();
+        for path in measured.keys() {
+            assert!(
+                tracked.contains(path.as_str()),
+                "{path} entered the durable surface without being tracked"
+            );
+        }
+        assert!(
+            !measured.is_empty(),
+            "a scan that found nothing would make every disclosure vacuous"
+        );
     }
 
     /// M17.5 F-31 / P1-A08: the scenarios block was written by the fault lane

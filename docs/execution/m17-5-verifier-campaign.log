@@ -1,28 +1,320 @@
 mkdir -p /home/brianklam/.cache/liminal-mutants
 TMPDIR=/home/brianklam/.cache/liminal-mutants cargo mutants -f crates/liminal-xtask/src/haq.rs -j 6
-Found 307 mutants to test
-ok       Unmutated baseline in 14s build + 0s test
- INFO Auto-set test timeout to 20s
-MISSED   crates/liminal-xtask/src/haq.rs:41:51: replace == with != in verify_qualified_repo in 57s build + 1s test
-MISSED   crates/liminal-xtask/src/haq.rs:59:35: replace == with != in verify_qualified_repo in 57s build + 0s test
-MISSED   crates/liminal-xtask/src/haq.rs:452:22: replace < with > in verify_reviewer_independence in 0s build + 1s test
-MISSED   crates/liminal-xtask/src/haq.rs:653:40: replace == with != in verify_test_names_exist in 0s build + 0s test
-MISSED   crates/liminal-xtask/src/haq.rs:650:37: replace != with == in verify_test_names_exist in 2s build + 1s test
-MISSED   crates/liminal-xtask/src/haq.rs:670:12: delete ! in verify_test_names_exist in 1s build + 1s test
-MISSED   crates/liminal-xtask/src/haq.rs:714:29: replace == with != in verify_fuzz_evidence in 0s build + 1s test
-MISSED   crates/liminal-xtask/src/haq.rs:898:34: replace < with == in verify_packet_shape in 1s build + 1s test
-MISSED   crates/liminal-xtask/src/haq.rs:898:34: replace < with <= in verify_packet_shape in 1s build + 0s test
-MISSED   crates/liminal-xtask/src/haq.rs:1060:18: replace > with >= in verify_kill_concentration in 2s build + 0s test
-MISSED   crates/liminal-xtask/src/haq.rs:1236:34: replace > with >= in verify_generated_inventory in 0s build + 1s test
-MISSED   crates/liminal-xtask/src/haq.rs:1715:5: replace run_canaries_repo -> Result<()> with Ok(()) in 1s build + 0s test
-MISSED   crates/liminal-xtask/src/haq.rs:1830:46: replace != with == in mutate_canary in 1s build + 1s test
-MISSED   crates/liminal-xtask/src/haq.rs:1888:44: replace != with == in mutate_canary in 1s build + 0s test
-MISSED   crates/liminal-xtask/src/haq.rs:1860:49: replace != with == in mutate_canary in 1s build + 1s test
-MISSED   crates/liminal-xtask/src/haq.rs:2320:8: delete ! in case_invalidation in 0s build + 1s test
-MISSED   crates/liminal-xtask/src/haq.rs:2357:5: replace run_generated_repo -> Result<()> with Ok(()) in 1s build + 0s test
-MISSED   crates/liminal-xtask/src/haq.rs:2364:48: replace / with % in run_generated_repo in 0s build + 1s test
-MISSED   crates/liminal-xtask/src/haq.rs:2364:40: replace * with + in run_generated_repo in 0s build + 1s test
-MISSED   crates/liminal-xtask/src/haq.rs:2364:48: replace / with * in run_generated_repo in 0s build + 1s test
-MISSED   crates/liminal-xtask/src/haq.rs:2364:40: replace * with / in run_generated_repo in 0s build + 1s test
-307 mutants tested in 3m: 21 missed, 271 caught, 15 unviable
-error: recipe `mutants` failed on line 126 with exit code 2
+Found 1062 mutants to test
+ok       Unmutated baseline in 14s build + 20s test
+ INFO Auto-set test timeout to 104s
+MISSED   crates/liminal-xtask/src/haq.rs:162:5: replace verify_crash_replay -> Result<()> with Ok(()) in 17s build + 3s test
+MISSED   crates/liminal-xtask/src/haq.rs:259:5: replace verify_canary_evidence_replay -> Result<()> with Ok(()) in 19s build + 15s test
+MISSED   crates/liminal-xtask/src/haq.rs:48:51: replace == with != in verify_qualified_repo in 58s build + 74s test
+MISSED   crates/liminal-xtask/src/haq.rs:94:35: replace == with != in verify_qualified_repo in 56s build + 77s test
+MISSED   crates/liminal-xtask/src/haq.rs:76:35: replace == with != in verify_qualified_repo in 58s build + 76s test
+MISSED   crates/liminal-xtask/src/haq.rs:724:5: replace generated_oracle_source -> &'static str with "xyzzy" in 4s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:724:5: replace generated_oracle_source -> &'static str with "" in 4s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:725:9: delete match arm "source/CST/formatting" in generated_oracle_source in 1s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:726:9: delete match arm "graph/interchange codecs" in generated_oracle_source in 2s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:729:9: delete match arm "transforms/projections" in generated_oracle_source in 4s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:732:9: delete match arm "repair/ILRP/recovery" in generated_oracle_source in 3s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:743:5: replace verify_oracle_source_coordinate -> Result<()> with Ok(()) in 3s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:735:9: delete match arm "Basis/revision/query invalidation" in generated_oracle_source in 4s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:828:53: replace && with || in independent_oracle_source_transform in 4s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:834:21: replace != with == in independent_oracle_source_transform in 4s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:868:5: replace ordered_block_contents -> BTreeMap<String, Vec<String>> with BTreeMap::new() in 5s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:868:5: replace ordered_block_contents -> BTreeMap<String, Vec<String>> with BTreeMap::from_iter([(String::new(), vec![])]) in 3s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:868:5: replace ordered_block_contents -> BTreeMap<String, Vec<String>> with BTreeMap::from_iter([(String::new(), vec![String::new()])]) in 4s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:868:5: replace ordered_block_contents -> BTreeMap<String, Vec<String>> with BTreeMap::from_iter([(String::new(), vec!["xyzzy".into()])]) in 4s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:868:5: replace ordered_block_contents -> BTreeMap<String, Vec<String>> with BTreeMap::from_iter([("xyzzy".into(), vec!["xyzzy".into()])]) in 3s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:868:5: replace ordered_block_contents -> BTreeMap<String, Vec<String>> with BTreeMap::from_iter([("xyzzy".into(), vec![])]) in 5s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:868:5: replace ordered_block_contents -> BTreeMap<String, Vec<String>> with BTreeMap::from_iter([("xyzzy".into(), vec![String::new()])]) in 6s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:873:51: replace && with || in ordered_block_contents in 3s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:884:54: replace || with && in ordered_block_contents in 5s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:877:31: replace += with *= in ordered_block_contents in 5s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:889:12: delete ! in ordered_block_contents in 2s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:884:29: delete ! in ordered_block_contents in 6s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:884:57: delete ! in ordered_block_contents in 6s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:981:9: replace || with && in generated_category_class in 7s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:980:9: replace || with && in generated_category_class in 7s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:979:9: replace || with && in generated_category_class in 7s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:978:9: replace || with && in generated_category_class in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:977:9: replace || with && in generated_category_class in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:989:9: replace || with && in generated_category_class in 2s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:988:9: replace || with && in generated_category_class in 2s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:990:9: replace || with && in generated_category_class in 2s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:987:9: replace || with && in generated_category_class in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:986:9: replace || with && in generated_category_class in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:1082:5: replace verify_crash_injection_bindings -> Result<()> with Ok(()) in 4s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:1219:13: replace || with && in verify_recovery_pairs in 2s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:1220:13: replace || with && in verify_recovery_pairs in 4s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:1218:13: replace || with && in verify_recovery_pairs in 4s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:1217:13: replace || with && in verify_recovery_pairs in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:1216:13: replace || with && in verify_recovery_pairs in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:1216:16: delete ! in verify_recovery_pairs in 2s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:1217:16: delete ! in verify_recovery_pairs in 2s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:1215:24: delete ! in verify_recovery_pairs in 4s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:1218:16: delete ! in verify_recovery_pairs in 2s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:1219:16: delete ! in verify_recovery_pairs in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:1220:16: delete ! in verify_recovery_pairs in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:1391:5: replace verify_cross_pass_reproduction -> Result<()> with Ok(()) in 4s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:1418:25: replace && with || in verify_cross_pass_reproduction in 2s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:1419:25: replace && with || in verify_cross_pass_reproduction in 2s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:1417:25: replace && with || in verify_cross_pass_reproduction in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:1416:25: replace && with || in verify_cross_pass_reproduction in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:1415:25: replace && with || in verify_cross_pass_reproduction in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:1578:20: replace == with != in verify_review_attack_classes in 2s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:1521:28: delete ! in verify_review_record in 4s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:1568:5: replace verify_review_attack_classes -> Result<()> with Ok(()) in 4s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:1658:56: replace == with != in verify_review_findings in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:1681:21: replace && with || in verify_review_findings in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:1680:21: replace && with || in verify_review_findings in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:1679:28: replace == with != in verify_review_findings in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:1680:47: replace == with != in verify_review_findings in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:1681:24: delete ! in verify_review_findings in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:1959:5: replace git_blob -> Result<Vec<u8>> with Ok(vec![]) in 3s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:1959:5: replace git_blob -> Result<Vec<u8>> with Ok(vec![0]) in 4s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:1959:5: replace git_blob -> Result<Vec<u8>> with Ok(vec![1]) in 3s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:1980:5: replace verify_resolution_coordinate_changed -> Result<()> with Ok(()) in 4s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2037:5: replace require_hex_digest -> Result<()> with Ok(()) in 4s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:2045:5: replace require_git_object_id -> Result<()> with Ok(()) in 5s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:2053:5: replace git_is_ancestor -> Result<()> with Ok(()) in 5s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2122:19: replace > with >= in diff_contains_added_line in 3s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2305:5: replace verify_mutant_evidence -> Result<()> with Ok(()) in 4s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2349:45: replace != with == in verify_mutant_evidence in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:2366:45: replace == with != in verify_mutant_evidence_replay in 2s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2402:32: replace == with != in verify_mutant_evidence_replay in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:2363:5: replace verify_mutant_evidence_replay -> Result<()> with Ok(()) in 3s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2425:5: replace verify_mutant_evidence_row -> Result<()> with Ok(()) in 4s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2516:43: replace == with != in verify_mutant_evidence_row in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2465:19: replace == with != in verify_mutant_evidence_row in 4s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2647:27: replace == with != in validate_disposition in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:2662:5: replace verify_mutant_concurrence -> Result<()> with Ok(()) in 3s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2662:8: delete ! in verify_mutant_concurrence in 3s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2729:44: replace == with != in verify_mutant_concurrence in 3s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2772:5: replace regex_literal -> String with String::new() in 4s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:2772:5: replace regex_literal -> String with "xyzzy".into() in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((0, vec![], vec![])) in 3s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((0, vec![], vec![0])) in 4s build + 15s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((0, vec![], vec![1])) in 5s build + 15s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((0, vec![0], vec![0])) in 4s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((0, vec![0], vec![])) in 6s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((0, vec![0], vec![1])) in 5s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((0, vec![1], vec![])) in 2s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((0, vec![1], vec![0])) in 1s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((0, vec![1], vec![1])) in 1s build + 15s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((1, vec![], vec![])) in 3s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((1, vec![], vec![0])) in 3s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((1, vec![], vec![1])) in 3s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((1, vec![0], vec![])) in 2s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((1, vec![0], vec![0])) in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((1, vec![0], vec![1])) in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((1, vec![1], vec![])) in 1s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((1, vec![1], vec![0])) in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((1, vec![1], vec![1])) in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((-1, vec![], vec![])) in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((-1, vec![], vec![0])) in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((-1, vec![], vec![1])) in 1s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((-1, vec![0], vec![])) in 1s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((-1, vec![0], vec![0])) in 1s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((-1, vec![0], vec![1])) in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((-1, vec![1], vec![])) in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((-1, vec![1], vec![0])) in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2788:5: replace run_one_mutant_test -> Result<(i32, Vec<u8>, Vec<u8>)> with Ok((-1, vec![1], vec![1])) in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2811:47: delete - in run_one_mutant_test in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:2835:65: replace && with || in is_semantic_test_failure in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:2869:72: replace == with != in run_mutant_row in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2872:17: replace || with && in run_mutant_row in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:2872:20: delete ! in run_mutant_row in 3s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2901:34: replace != with == in run_mutant_row in 3s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2947:22: replace && with || in run_mutant_row in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:2947:17: replace != with == in run_mutant_row in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:2965:22: replace && with || in run_mutant_row in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:2965:25: delete ! in run_mutant_row in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:2965:17: replace != with == in run_mutant_row in 2s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:2983:17: replace != with == in run_mutant_row in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:3009:5: replace reset_mutant_worktree -> Result<()> with Ok(()) in 2s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:3038:9: replace WorktreeGuard::remove -> Result<()> with Ok(()) in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:3038:12: delete ! in WorktreeGuard::remove in 1s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:3126:25: replace == with != in run_mutants_repo in 2s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:3071:5: replace run_mutants_repo -> Result<()> with Ok(()) in 4s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:3058:9: replace <impl Drop for WorktreeGuard>::drop with () in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:3225:37: replace != with == in verify_test_names_exist in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:3259:12: delete ! in verify_test_names_exist in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:3228:40: replace == with != in verify_test_names_exist in 3s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:3261:52: replace != with == in verify_test_names_exist in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:3286:52: replace && with || in collect_runnable_test_functions in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:3332:16: replace == with != in cfg_attribute_excludes in 1s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:3333:16: delete ! in cfg_attribute_excludes in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:3336:16: delete ! in cfg_attribute_excludes in 1s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:3339:16: delete ! in cfg_attribute_excludes in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:3373:29: replace == with != in verify_fuzz_evidence in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:3395:5: replace verify_fuzz_seed_manifests -> Result<()> with Ok(()) in 4s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:3740:28: replace == with != in verify_sanitizer_proof in 1s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:3757:9: delete match arm "memory" in verify_sanitizer_proof in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:3758:9: delete match arm "thread" in verify_sanitizer_proof in 1s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:3812:5: replace verify_sanitizer_build_replay -> Result<()> with Ok(()) in 3s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:3846:39: replace == with != in verify_sanitizer_build_replay in 3s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:3879:5: replace find_named_files -> Result<Vec<Utf8PathBuf>> with Ok(vec![]) in 3s build + 45s test
+MISSED   crates/liminal-xtask/src/haq.rs:3879:5: replace find_named_files -> Result<Vec<Utf8PathBuf>> with Ok(vec![Default::default()]) in 4s build + 44s test
+MISSED   crates/liminal-xtask/src/haq.rs:3880:8: delete ! in find_named_files in 2s build + 45s test
+MISSED   crates/liminal-xtask/src/haq.rs:3890:36: replace == with != in find_named_files in 2s build + 45s test
+MISSED   crates/liminal-xtask/src/haq.rs:3901:5: replace verify_fuzz_logs -> Result<()> with Ok(()) in 34s build + 18s test
+MISSED   crates/liminal-xtask/src/haq.rs:3920:5: replace verify_fuzz_log_metrics -> Result<()> with Ok(()) in 4s build + 17s test
+MISSED   crates/liminal-xtask/src/haq.rs:4044:5: replace verify_corpus_scope_traces -> Result<()> with Ok(()) in 6s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:4078:5: replace verify_corpus_scope_rows -> Result<()> with Ok(()) in 6s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:4202:5: replace verify_corpus_scope_replays -> Result<()> with Ok(()) in 3s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:4269:5: replace scope_lane_command -> Result<&'static str> with Ok("") in 3s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:4270:9: delete match arm "ci" in scope_lane_command in 4s build + 15s test
+MISSED   crates/liminal-xtask/src/haq.rs:4269:5: replace scope_lane_command -> Result<&'static str> with Ok("xyzzy") in 5s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:4271:9: delete match arm "canaries" in scope_lane_command in 4s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:4272:9: delete match arm "generated" in scope_lane_command in 4s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:4273:9: delete match arm "crash" in scope_lane_command in 3s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:4274:9: delete match arm "replay" in scope_lane_command in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:4275:9: delete match arm "mutation" in scope_lane_command in 2s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:4277:9: delete match arm "fuzz" in scope_lane_command in 2s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:4276:9: delete match arm "reviews" in scope_lane_command in 4s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:4285:5: replace run_scope_probe_repo -> Result<()> with Ok(()) in 3s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:4286:9: delete match arm "ci" in run_scope_probe_repo in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:4287:9: delete match arm "canaries" in run_scope_probe_repo in 2s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:4295:9: delete match arm "crash" in run_scope_probe_repo in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:4299:9: delete match arm "replay" | "reviews" in run_scope_probe_repo in 2s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:4291:9: delete match arm "generated" | "mutation" in run_scope_probe_repo in 3s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:4300:9: delete match arm "fuzz" in run_scope_probe_repo in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:4313:5: replace scope_trace_paths_digest -> String with String::new() in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:4313:5: replace scope_trace_paths_digest -> String with "xyzzy".into() in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:4375:5: replace normalize_scope_trace_path -> String with String::new() in 2s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:4375:5: replace normalize_scope_trace_path -> String with "xyzzy".into() in 3s build + 18s test
+MISSED   crates/liminal-xtask/src/haq.rs:4377:31: replace + with * in normalize_scope_trace_path in 2s build + 19s test
+MISSED   crates/liminal-xtask/src/haq.rs:4420:13: delete ! in verify_trace_corpus_resolution in 2s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:4442:13: replace || with && in verify_trace_corpus_resolution in 3s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:4441:13: replace || with && in verify_trace_corpus_resolution in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:4440:13: replace || with && in verify_trace_corpus_resolution in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:4472:27: replace match guard error.kind() == std::io::ErrorKind::NotFound with true in canonicalize_trace_path in 2s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:4704:21: replace && with || in verify_corpus_audit_campaign_binding in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:4847:37: replace > with >= in verify_campaign_clock_budget in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:4847:41: replace * with + in verify_campaign_clock_budget in 1s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:4847:46: replace * with / in verify_campaign_clock_budget in 4s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:4847:46: replace * with + in verify_campaign_clock_budget in 4s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:4847:41: replace * with / in verify_campaign_clock_budget in 3s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:4985:47: delete ! in verify_provenance in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:4986:17: replace == with != in verify_provenance in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:5048:36: replace || with && in verify_gate_unignore_only in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:5035:5: replace verify_gate_unignore_only -> Result<()> with Ok(()) in 3s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:5077:5: replace qualification_metadata_path -> bool with true in 2s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:5077:5: replace qualification_metadata_path -> bool with false in 2s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:5082:7: replace || with && in qualification_metadata_path in 1s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:5089:5: replace verify_requirement_sources -> Result<()> with Ok(()) in 2s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:5242:47: replace || with && in verify_packet_shape in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:5356:33: replace || with && in verify_evidence_coverage in 4s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:5409:58: replace || with && in contains_exact_coordinate in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:5721:12: delete ! in verify_mutant_inventory in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:5753:31: replace == with != in verify_mutant_inventory in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:5833:46: replace && with || in verify_mutant_source_coordinates in 1s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:5909:55: replace - with + in verify_mutant_source_coordinates in 1s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:5909:55: replace - with / in verify_mutant_source_coordinates in 2s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:5914:30: delete ! in verify_mutant_source_coordinates in 4s build + 45s test
+MISSED   crates/liminal-xtask/src/haq.rs:5960:5: replace verify_locked_corpus_has_no_aliases -> Result<()> with Ok(()) in 3s build + 46s test
+MISSED   crates/liminal-xtask/src/haq.rs:5961:8: delete ! in verify_locked_corpus_has_no_aliases in 1s build + 45s test
+MISSED   crates/liminal-xtask/src/haq.rs:5977:31: replace || with && in verify_locked_corpus_has_no_aliases in 2s build + 46s test
+MISSED   crates/liminal-xtask/src/haq.rs:5977:21: replace == with != in verify_locked_corpus_has_no_aliases in 33s build + 15s test
+MISSED   crates/liminal-xtask/src/haq.rs:5977:39: replace == with != in verify_locked_corpus_has_no_aliases in 33s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:5986:47: replace || with && in verify_locked_corpus_has_no_aliases in 1s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:5986:34: replace == with != in verify_locked_corpus_has_no_aliases in 4s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:5987:29: replace != with == in verify_locked_corpus_has_no_aliases in 2s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:6060:9: delete match arm "predicate-inversion" in verify_mutant_operator_patch in 3s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:6066:9: delete match arm "predicate-deletion" in verify_mutant_operator_patch in 2s build + 18s test
+MISSED   crates/liminal-xtask/src/haq.rs:6068:9: delete match arm "threshold-minus-one" in verify_mutant_operator_patch in 1s build + 19s test
+MISSED   crates/liminal-xtask/src/haq.rs:6070:9: delete match arm "success-error-substitution" in verify_mutant_operator_patch in 3s build + 24s test
+MISSED   crates/liminal-xtask/src/haq.rs:6090:9: delete match arm "stale-basis-acceptance" in verify_mutant_operator_patch in 6s build + 20s test
+MISSED   crates/liminal-xtask/src/haq.rs:6115:9: delete match arm "disabled-crash-point" in verify_mutant_operator_patch in 5s build + 17s test
+MISSED   crates/liminal-xtask/src/haq.rs:6122:9: delete match arm "broadened-allow-list" in verify_mutant_operator_patch in 6s build + 16s test
+MISSED   crates/liminal-xtask/src/haq.rs:6064:17: replace && with || in verify_mutant_operator_patch in 4s build + 15s test
+MISSED   crates/liminal-xtask/src/haq.rs:6063:17: replace && with || in verify_mutant_operator_patch in 4s build + 16s test
+MISSED   crates/liminal-xtask/src/haq.rs:6062:17: replace && with || in verify_mutant_operator_patch in 3s build + 15s test
+MISSED   crates/liminal-xtask/src/haq.rs:6062:26: replace == with != in verify_mutant_operator_patch in 2s build + 17s test
+MISSED   crates/liminal-xtask/src/haq.rs:6063:49: replace == with != in verify_mutant_operator_patch in 3s build + 16s test
+MISSED   crates/liminal-xtask/src/haq.rs:6064:46: replace >= with < in verify_mutant_operator_patch in 2s build + 18s test
+MISSED   crates/liminal-xtask/src/haq.rs:6066:54: replace && with || in verify_mutant_operator_patch in 2s build + 15s test
+MISSED   crates/liminal-xtask/src/haq.rs:6066:63: replace == with != in verify_mutant_operator_patch in 2s build + 16s test
+MISSED   crates/liminal-xtask/src/haq.rs:6068:63: replace == with != in verify_mutant_operator_patch in 2s build + 15s test
+MISSED   crates/liminal-xtask/src/haq.rs:6068:71: delete - in verify_mutant_operator_patch in 2s build + 16s test
+MISSED   crates/liminal-xtask/src/haq.rs:6069:61: replace && with || in verify_mutant_operator_patch in 2s build + 16s test
+MISSED   crates/liminal-xtask/src/haq.rs:6072:17: replace || with && in verify_mutant_operator_patch in 1s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:6071:37: replace && with || in verify_mutant_operator_patch in 1s build + 15s test
+MISSED   crates/liminal-xtask/src/haq.rs:6072:45: replace && with || in verify_mutant_operator_patch in 2s build + 16s test
+MISSED   crates/liminal-xtask/src/haq.rs:6076:17: replace && with || in verify_mutant_operator_patch in 1s build + 16s test
+MISSED   crates/liminal-xtask/src/haq.rs:6076:46: replace || with && in verify_mutant_operator_patch in 1s build + 16s test
+MISSED   crates/liminal-xtask/src/haq.rs:6075:37: replace || with && in verify_mutant_operator_patch in 2s build + 16s test
+MISSED   crates/liminal-xtask/src/haq.rs:6083:45: replace || with && in verify_mutant_operator_patch in 2s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:6082:39: replace || with && in verify_mutant_operator_patch in 2s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:6083:21: delete ! in verify_mutant_operator_patch in 2s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:6093:17: replace || with && in verify_mutant_operator_patch in 2s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:6092:17: replace && with || in verify_mutant_operator_patch in 2s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:6092:20: delete ! in verify_mutant_operator_patch in 2s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:6094:21: replace && with || in verify_mutant_operator_patch in 1s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:6093:28: replace == with != in verify_mutant_operator_patch in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:6119:17: replace || with && in verify_mutant_operator_patch in 1s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:6117:17: replace && with || in verify_mutant_operator_patch in 2s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:6117:20: delete ! in verify_mutant_operator_patch in 1s build + 15s test
+MISSED   crates/liminal-xtask/src/haq.rs:6119:28: replace == with != in verify_mutant_operator_patch in 2s build + 15s test
+MISSED   crates/liminal-xtask/src/haq.rs:6120:21: replace && with || in verify_mutant_operator_patch in 2s build + 15s test
+MISSED   crates/liminal-xtask/src/haq.rs:6120:30: replace == with != in verify_mutant_operator_patch in 2s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:6126:17: replace || with && in verify_mutant_operator_patch in 1s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:6127:17: replace || with && in verify_mutant_operator_patch in 1s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:6124:17: replace || with && in verify_mutant_operator_patch in 1s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:6123:36: replace && with || in verify_mutant_operator_patch in 1s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:6123:14: delete ! in verify_mutant_operator_patch in 2s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:6124:48: replace && with || in verify_mutant_operator_patch in 2s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:6124:51: delete ! in verify_mutant_operator_patch in 2s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:6126:54: replace && with || in verify_mutant_operator_patch in 1s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:6126:28: replace == with != in verify_mutant_operator_patch in 2s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:6129:21: replace && with || in verify_mutant_operator_patch in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:6126:63: replace == with != in verify_mutant_operator_patch in 1s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:6130:21: replace && with || in verify_mutant_operator_patch in 2s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:6128:21: replace && with || in verify_mutant_operator_patch in 1s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:6127:28: replace == with != in verify_mutant_operator_patch in 2s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:6128:31: replace != with == in verify_mutant_operator_patch in 1s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:6129:24: delete ! in verify_mutant_operator_patch in 2s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:6136:21: replace && with || in verify_mutant_operator_patch in 1s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:6135:28: replace == with != in verify_mutant_operator_patch in 1s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:6136:30: replace == with != in verify_mutant_operator_patch in 2s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:6159:33: replace + with - in integer_delta::scan in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:6159:33: replace + with * in integer_delta::scan in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:6176:28: replace || with && in integer_delta in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:6176:19: replace == with != in integer_delta in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:6176:38: replace == with != in integer_delta in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:6179:28: replace || with && in integer_delta in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:6179:19: replace == with != in integer_delta in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:6179:38: replace == with != in integer_delta in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:6180:25: delete - in integer_delta in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:6190:28: replace - with / in integer_delta in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:6194:44: replace || with && in integer_delta in 1s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:6502:9: delete match arm 14..= 26 in mutant_source_coordinate in 2s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:6503:9: delete match arm 27..= 39 in mutant_source_coordinate in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:6504:9: delete match arm 40..= 52 in mutant_source_coordinate in 4s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:6505:9: delete match arm 53..= 65 in mutant_source_coordinate in 3s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:6596:28: replace > with >= in verify_generated_inventory in 4s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:6640:12: delete ! in verify_generated_inventory in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:6948:5: replace verify_concurrency_evidence -> Result<()> with Ok(()) in 3s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:6962:45: replace == with != in verify_concurrency_evidence_record in 2s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:6973:8: delete ! in verify_concurrency_evidence_record in 2s build + 14s test
+MISSED   crates/liminal-xtask/src/haq.rs:7776:5: replace run_canaries_repo -> Result<()> with Ok(()) in 3s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:7912:46: replace == with != in run_qualification_canary in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:7917:40: replace == with != in run_qualification_canary in 2s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:8040:9: delete match arm "thread" in run_sanitizer_canary in 2s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:8039:9: delete match arm "memory" in run_sanitizer_canary in 2s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:8045:51: replace == with != in run_sanitizer_canary in 1s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:8168:46: replace != with == in mutate_canary in 2s build + 44s test
+MISSED   crates/liminal-xtask/src/haq.rs:8198:49: replace != with == in mutate_canary in 1s build + 43s test
+MISSED   crates/liminal-xtask/src/haq.rs:8226:44: replace != with == in mutate_canary in 31s build + 13s test
+MISSED   crates/liminal-xtask/src/haq.rs:8829:9: delete match arm liminal_jurisdiction::IntentState::Finalizing in case_repair in 2s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:9064:5: replace run_generated_repo -> Result<()> with Ok(()) in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:9076:48: replace / with % in run_generated_repo in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:9076:48: replace / with * in run_generated_repo in 2s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:9076:40: replace * with + in run_generated_repo in 1s build + 12s test
+MISSED   crates/liminal-xtask/src/haq.rs:9076:40: replace * with / in run_generated_repo in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:9161:78: replace += with *= in generate_evidence in 1s build + 11s test
+MISSED   crates/liminal-xtask/src/haq.rs:9173:78: replace += with *= in generate_evidence in 1s build + 10s test
+MISSED   crates/liminal-xtask/src/haq.rs:9173:78: replace += with -= in generate_evidence in 1s build + 11s test
+TIMEOUT  crates/liminal-xtask/src/haq.rs:9038:27: delete ! in case_invalidation in 1s build + 117s test
+TIMEOUT  crates/liminal-xtask/src/haq.rs:9184:78: replace += with -= in generate_evidence in 1s build + 130s test
+TIMEOUT  crates/liminal-xtask/src/haq.rs:9184:78: replace += with *= in generate_evidence in 32s build + 125s test
+1062 mutants tested in 57m: 310 missed, 728 caught, 21 unviable, 3 timeouts
+error: recipe `mutants` failed on line 132 with exit code 3

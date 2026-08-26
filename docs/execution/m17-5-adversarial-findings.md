@@ -2264,37 +2264,69 @@ lucky.
 (No alias exists today. That was the point: the check turns a coincidence into
 an invariant.)
 
-### A05 — **CONFIRMED. Needs a ruling; not fixed.**
+### A05 — **CONFIRMED, but my first survey was wrong in both directions. RESOLVED by ruling (2026-08-26): scope to ILRP, disclose in the packet, defer the rest to M17.9.**
 
-`crates/liminal-cli/src/format.rs:73` is `pending.commit_if(...)`, a durable
-atomic replacement, with an injected crash point immediately above it. The
-authoritative registry contains **eight boundaries, all `ilrp/*`**. The
-formatter's transition is not among them, so ADR-0020 §5's "exhaustive
-registered crash boundaries" is asserted and never checked.
+The conclusion holds and hardens: ADR-0020 §5's "exhaustive registered crash
+boundaries" is asserted and never checked, and read literally it is **false
+today**. But the table I first published was wrong in every row, and the real gap
+is somewhere else entirely. Both versions are kept here because the error is the
+instructive part.
 
-Surveying the tree makes it larger than the formatter:
+**What I first reported — wrong:**
 
-| file | injection sites | registered boundaries |
+| file | injection sites | registered |
 |---|---|---|
 | `liminal-jurisdiction/src/ilrp.rs` | 14 | 8 (`ilrp/*`) |
-| **`liminal-daemon/src/crash.rs`** | **9** | **0** |
-| **`liminal-daemon/src/main.rs`** | **2** | **0** |
-| `liminal-cli/src/format.rs` | 4 | 0 (Phase 1 / M20) |
+| `liminal-daemon/src/crash.rs` | 9 | 0 |
+| `liminal-daemon/src/main.rs` | 2 | 0 |
+| `liminal-cli/src/format.rs` | 4 | 0 |
 
-**Why not fixed here.** Checking exhaustiveness requires deciding *which
-injection points are registrable boundaries* — a `CrashPoint` helper is not a
-boundary, and the formatter's belongs to quarantined M20 code. Writing a check
-that guesses would either block 1a on Phase 1 work or pass by picking a
-convenient definition. §3 forbids improvising qualification semantics, so this
-is Brian's:
+**What is actually there — verified by reading each file:**
 
-1. define which subsystems own registrable boundaries and register the daemon's
-   (the largest gap, and Phase 0 code that could be exercised now);
-2. or record that §5's exhaustiveness is scoped to ILRP for HAQP-1a, with the
-   daemon and formatter deferred — and say so in the packet rather than leaving
-   it implicit.
+| file | what it is | unregistered durable transitions |
+|---|---|---|
+| `liminal-jurisdiction/src/ilrp.rs` | the 8 protocol boundaries, at 8 call sites | **0** — fully registered |
+| `liminal-daemon/src/crash.rs` | the injector *implementation*; 5 of the 9 "sites" are calls inside one `#[cfg(test)]` unit test, all naming registered points | **0** |
+| `liminal-daemon/src/main.rs` | a `Fire` debug subcommand that resolves its point from `CrashPoint::all()` and errors on unknown names — closed over the registry by construction | **0** |
 
-Until then the registry claims exhaustiveness it has never demonstrated.
+My 14 for `ilrp.rs` counted the trait declaration, the no-op impl and the blanket
+impl as injection sites. My 11 for the daemon — the finding's headline — was
+**entirely phantom**: that code is the injector and its own test.
+
+**The gap the survey missed.** `liminal-graph/src/store/mod.rs:473` documents
+itself: *"Durable boundary: the record is fsynced before the commit returns."*
+`store/log.rs:100` says the return of `append` **is** a durable boundary. So
+every `txn.commit()` is one, and they are unregistered en masse:
+
+| surface | durable transitions | registered |
+|---|---|---|
+| `liminal-jurisdiction/src/ilrp.rs` | 8 | **8** ✓ |
+| `liminal-daemon/src/runner.rs` | 24 `txn.commit` | 0 |
+| `liminal-daemon` executor/session/workspace/reactor | 6 `txn.commit` / `commit_if` | 0 |
+| `liminal-source/src/file.rs` | atomic replace + dir fsync (122, 165) | 0 |
+| `liminal-graph` store log/snapshot | the fsync boundaries themselves | 0 |
+| `liminal-cli/src/format.rs:73` | 1 `commit_if`, M20, and its injection *unwinds* rather than aborting — strictly weaker than a crash boundary | 0 |
+
+The registry covers **8 of roughly 40** durable transitions.
+
+**Ruling (Brian, 2026-08-26): option 2 for 1a; option 1 to M17.9.** §5's
+exhaustiveness is scoped to the ILRP protocol boundaries, recorded explicitly in
+the packet rather than left implicit, with every other durable transition out of
+scope for 1a. Registering the rest requires deciding which of ~40 transitions are
+registrable boundaries — runtime design work, not qualification work, and it
+would block 1a on Phase 1.
+
+Note that option 1 as originally written ("register the daemon's") was mostly
+phantom. What M17.9 actually inherits is the larger question: **which durable
+transitions across the runtime are registrable crash boundaries.**
+
+**How the disclosure is kept honest.** A scope declaration that is only prose
+rots the moment someone adds a durable transition. `verify_crash_boundary_scope`
+binds it: the declared in-scope subsystem must contain every `crash_if_armed`
+call site in the tree, every such site must name a registered `CrashPoint`
+variant, and the deferred surface is pinned to a measured count so a new
+`txn.commit` turns the packet red until the disclosure is updated or the
+boundary registered.
 
 ## F-35 — my own pre-launch pass: five defects, one of them a guaranteed lane-killer.
 
@@ -2350,6 +2382,26 @@ Only the expected `not-ready` was meant to be tolerated; the `||` tolerated
 everything, including a real mutant-lane failure. The F-19 family — masking an
 exit code — for the third time this milestone. Now only `not-ready` passes.
 
+### A fixture that names a count must read it
+
+Adding canary C33 turned `markdown_surface_rejects_a_stale_qualification_state`
+red, and the reason is more interesting than the fix. The test doctored its
+fixture with a hardcoded `markdown.replace("Target: exactly **32 predeclared
+canaries**", ...)`. With 33 canaries the replace matched nothing, so the
+"doctored" markdown was byte-identical to the real one and the test was no longer
+testing the canary-target check at all.
+
+It only went red because an *earlier* assertion in the same test happened to
+fail. Had that assertion not been there, the test would have gone on passing
+while exercising nothing — a green test whose name still described the check it
+had stopped performing. That is the session's recurring species (F-11, F-31,
+P2-F05) reached from a new direction: not a check that never worked, but a
+working check quietly detached from its fixture by an unrelated edit.
+
+Fixed by deriving the count from `packet.canaries.len()` and asserting the
+doctored text actually differs from the original, so a no-op mutation fails
+loudly instead of passing silently.
+
 ### Also noted, not fixed
 
 - `fuzz/fuzz_targets` is enumerated from the FILESYSTEM, so an untracked scratch
@@ -2360,11 +2412,29 @@ exit code — for the third time this milestone. Now only `not-ready` passes.
 
 ### A correction to my own reporting
 
-I first reported this audit as "10 survivors, 3 in `verify_qualified_repo`". That
-was a partial run read through `head`. The real figure at the time of writing is
-**74 survivors across 1062 mutants**, led by `verify_recovery_pairs` (11),
-`generated_category_class` (10), `verify_review_findings` (6). Two errors
-compounded: reading an unfinished run, and truncating the list I read from.
+I reported this audit three times before getting it right, and the first two
+figures are both in the git history:
+
+| reported | actually | why it was wrong |
+|---|---|---|
+| "10 survivors, 3 in `verify_qualified_repo`" | — | an unfinished run, read through `head` |
+| "74 survivors across 1062 mutants" | — | a *different* unfinished run, whose log I then deleted with `rm -f` during commit cleanup while it was still being written |
+| **310 survivors across 1062 mutants** | **the completed run** | 57m, `-j 6`, recorded at `docs/execution/m17-5-verifier-campaign.log` |
+
+The completed campaign: **728 caught, 310 missed, 21 unviable, 3 timeouts** — a
+**69.9% kill rate** on the file that judges every other piece of qualification
+evidence. 131 of the 310 sit in mutation machinery deferred to 1b
+(`verify_mutant_operator_patch` alone has 57); **179 are in 1a-critical paths**,
+led by `ordered_block_contents` (13), `verify_recovery_pairs` (11),
+`generated_category_class` (10), `integer_delta` (9),
+`verify_locked_corpus_has_no_aliases` (8).
+
+The 74 figure was low by 4×, and I had committed it. The lesson is not "read the
+whole file" — I knew that after the first miss. It is that **a measurement
+written only to an untracked path is not a measurement**, which is the same
+finding as F-29 and F-32, arrived at a third time by destroying the evidence
+myself during cleanup of the very finding that says so. The campaign log is now
+a tracked artifact so the number has a source that outlives the session.
 
 And one test I wrote here was wrong: I asserted `verify_recovery_proof_presence`
 should reject a boundary with zero recovery pairs. It should not — it iterates

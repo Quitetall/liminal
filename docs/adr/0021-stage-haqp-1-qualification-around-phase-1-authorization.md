@@ -110,6 +110,16 @@ legitimately un-ignored. Phase 1 suite ratification requires **both** stages.
   inside the `1b` branch so the gap cannot be rediscovered after Phase 1 is
   built, and a canary asserts the count is still exactly 36.
 
+- **Disclosed limitation (M17.5 A05, AM-17.7, added 2026-08-26):** §5's
+  "exhaustive registered crash boundaries" is, in a 1a packet, exhaustive over
+  **ILRP only** — 8 of the runtime's 38 durable transitions. Every `txn.commit()`
+  is a durable boundary by `liminal-graph`'s own documentation and none is
+  registered. A reader must not read a complete 1a packet as evidence that the
+  runtime's crash behaviour has been exhaustively probed; it evidences the ILRP
+  protocol's. `packet.crash_boundary_scope` states the bound, and
+  `verify_crash_boundary_scope` pins it to tracked source so it cannot silently
+  widen or rot.
+
 - **Disclosed limitation:** between M17.6 and M24, Phase 1 proceeds on a suite
   whose defect-detection power has been argued but not measured. That is a real
   risk and it is accepted deliberately, because the alternative — building

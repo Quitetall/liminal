@@ -85,7 +85,7 @@
     "gate": "canaries",
     "violation": "remove C16",
     "expected_failure": "canary ids differ",
-    "observed_failure": "canary ids differ: actual={\"C01\", \"C02\", \"C03\", \"C04\", \"C05\", \"C06\", \"C07\", \"C08\", \"C09\", \"C10\", \"C11\", \"C12\", \"C13\", \"C14\", \"C15\", \"C17\", \"C18\", \"C19\", \"C20\", \"C21\", \"C22\", \"C23\", \"C24\", \"C25\", \"C26\", \"C27\", \"C28\", \"C29\", \"C30\", \"C31\", \"C32\"}, expected={\"C01\", \"C02\", \"C03\", \"C04\", \"C05\", \"C06\", \"C07\", \"C08\", \"C09\", \"C10\", \"C11\", \"C12\", \"C13\", \"C14\", \"C15\", \"C16\", \"C17\", \"C18\", \"C19\", \"C20\", \"C21\", \"C22\", \"C23\", \"C24\", \"C25\", \"C26\", \"C27\", \"C28\", \"C29\", \"C30\", \"C31\", \"C32\"}",
+    "observed_failure": "canary ids differ: actual={\"C01\", \"C02\", \"C03\", \"C04\", \"C05\", \"C06\", \"C07\", \"C08\", \"C09\", \"C10\", \"C11\", \"C12\", \"C13\", \"C14\", \"C15\", \"C17\", \"C18\", \"C19\", \"C20\", \"C21\", \"C22\", \"C23\", \"C24\", \"C25\", \"C26\", \"C27\", \"C28\", \"C29\", \"C30\", \"C31\", \"C32\", \"C33\"}, expected={\"C01\", \"C02\", \"C03\", \"C04\", \"C05\", \"C06\", \"C07\", \"C08\", \"C09\", \"C10\", \"C11\", \"C12\", \"C13\", \"C14\", \"C15\", \"C16\", \"C17\", \"C18\", \"C19\", \"C20\", \"C21\", \"C22\", \"C23\", \"C24\", \"C25\", \"C26\", \"C27\", \"C28\", \"C29\", \"C30\", \"C31\", \"C32\", \"C33\"}",
     "caught": true,
     "mutation_semantics": "remove canary C16"
   },
@@ -139,7 +139,7 @@
     "gate": "markdown",
     "violation": "remove packet digest",
     "expected_failure": "review packet markdown missing packet digest",
-    "observed_failure": "review packet markdown missing packet digest d4a0fe7d7f6dddaed4787568715e9f6cfa8430d19e93fcc2b22a0536b0f0d168",
+    "observed_failure": "review packet markdown missing packet digest 779094fa4e87fa0d4e20cba72778a8317d888870b9ba1eac812c0d90ea659754",
     "caught": true,
     "mutation_semantics": "remove baseline packet digest from markdown"
   },
@@ -286,5 +286,14 @@
     "observed_failure": "concurrency provenance does not match committed tree",
     "caught": true,
     "mutation_semantics": "replace not-applicable concurrency source_tree with unrelated Git object"
+  },
+  {
+    "id": "C33",
+    "gate": "crash boundary scope",
+    "violation": "understate the deferred durable surface by one site",
+    "expected_failure": "crash_boundary_scope declares",
+    "observed_failure": "crash_boundary_scope declares a durable surface smaller than tracked source",
+    "caught": true,
+    "mutation_semantics": "crash_boundary_scope.deferred[0].sites -= 1"
   }
 ]

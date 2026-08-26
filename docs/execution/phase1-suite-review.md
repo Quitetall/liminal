@@ -26,8 +26,8 @@ authorization, suite ratification, or access to locked acceptance inputs.
 | complete post-fix qualification rerun | NOT_RUN |
 | machine inventory | `conformance/haqp/packet.json` (`cargo run -p liminal-xtask -- haq verify-inventory`) |
 | machine inventory BLAKE3 | `d527a7804a4370629d1cdd294012dfce8c4d9b384cbe98b2e9816a6518379b28` |
-| packet digest | `d4a0fe7d7f6dddaed4787568715e9f6cfa8430d19e93fcc2b22a0536b0f0d168` |
-| machine status tuple | qualification_state=not-run; qualification_stage=1a; requirements=55; tests=38; mutants=65; canaries=32; generated=5; crash_boundaries=8; reviews=2 |
+| packet digest | `779094fa4e87fa0d4e20cba72778a8317d888870b9ba1eac812c0d90ea659754` |
+| machine status tuple | qualification_state=not-run; qualification_stage=1a; requirements=55; tests=38; mutants=65; canaries=33; generated=5; crash_boundaries=8; reviews=2 |
 
 ## Execution lanes
 
@@ -155,7 +155,7 @@ require proof plus concurrence in both independent review records.
 
 ## Disposable gate-canary campaign
 
-Target: exactly **32 predeclared canaries** covering every ratification gate and
+Target: exactly **33 predeclared canaries** covering every ratification gate and
 every M17 Level-3 measurement conjunct. Execution occurs outside working tree and
 restores fixed review base after each attempt.
 
@@ -193,6 +193,7 @@ restores fixed review base after each attempt.
 | C30 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
 | C31 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
 | C32 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+| C33 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
 
 ## Generated, metamorphic, and fuzz evidence
 
@@ -342,7 +343,7 @@ hashed by this packet.
 | fixed clean review base | one commit/tree, full provenance | NOT_RUN | NOT_RUN |
 | bidirectional traceability | no duplicates, orphans, unknown IDs, or missing critical rows | NOT_RUN | NOT_RUN |
 | semantic mutation | 65 declared; 100% applicable kill; no survivor | NOT_RUN | NOT_RUN |
-| disposable canaries | 32 declared; exact expected gates fail | NOT_RUN | NOT_RUN |
+| disposable canaries | 33 declared; exact expected gates fail | NOT_RUN | NOT_RUN |
 | deterministic generation | five families × at least 100,000 accepted cases | NOT_RUN | NOT_RUN |
 | sanitizer fuzzing | five families × 30 minutes; at least 150 target-minutes | NOT_RUN | NOT_RUN |
 | oracle independence | no forbidden shared implementation paths | NOT_RUN | NOT_RUN |
