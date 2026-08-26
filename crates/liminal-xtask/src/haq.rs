@@ -12712,6 +12712,210 @@ mod tests {
         }
     }
 
+    /// A throwaway Git repository, so the ancestry and diff checks can be
+    /// exercised against a history this test owns.
+    ///
+    /// The alternative — asserting against the real repo's HEAD — pins tests
+    /// to whatever was committed last, which is how a check ends up passing
+    /// for a reason nobody chose.
+    fn scratch_git_repo(label: &str) -> (liminal_scratch::ScratchDir, Utf8PathBuf) {
+        let scratch = liminal_scratch::ScratchDir::new(label).expect("scratch dir");
+        let root = scratch.path().to_owned();
+        let run = |args: &[&str]| {
+            let status = Command::new("git")
+                .current_dir(&root)
+                .args(args)
+                .status()
+                .unwrap_or_else(|error| panic!("git {args:?}: {error}"));
+            assert!(status.success(), "git {args:?} failed");
+        };
+        run(&["init", "--quiet"]);
+        run(&["config", "user.email", "test@example.invalid"]);
+        run(&["config", "user.name", "haqp test"]);
+        run(&["config", "commit.gpgsign", "false"]);
+        (scratch, root)
+    }
+
+    fn scratch_commit(root: &Utf8Path, file: &str, body: &str, message: &str) -> String {
+        fs::write(root.join(file), body).expect("write fixture file");
+        for args in [vec!["add", file], vec!["commit", "--quiet", "-m", message]] {
+            let status = Command::new("git")
+                .current_dir(root)
+                .args(&args)
+                .status()
+                .expect("git");
+            assert!(status.success(), "git {args:?} failed");
+        }
+        git_text(root, &["rev-parse", "HEAD"]).expect("rev-parse")
+    }
+
+    /// `git_is_ancestor` guards provenance: the fixed base must actually
+    /// precede the metadata child. Deleting it survived, so ancestry was
+    /// asserted and never checked.
+    #[test]
+    fn a_commit_that_is_not_an_ancestor_is_refused() {
+        let (_scratch, root) = scratch_git_repo("haq-ancestry");
+        let first = scratch_commit(&root, "a.txt", "one\n", "first");
+        let second = scratch_commit(&root, "a.txt", "two\n", "second");
+
+        git_is_ancestor(&root, &first, &second).expect("the parent precedes its child");
+        git_is_ancestor(&root, &second, &first)
+            .expect_err("a child does not precede its own parent");
+        git_is_ancestor(&root, &"0".repeat(40), &second)
+            .expect_err("an unknown commit is not an ancestor of anything");
+    }
+
+    /// §6 requires a resolution to have actually touched the coordinate it
+    /// claims to fix. Deleting the check survived, so "resolved at file:line"
+    /// was prose.
+    #[test]
+    fn a_resolution_that_missed_its_coordinate_is_refused() {
+        let (_scratch, root) = scratch_git_repo("haq-resolution");
+        let base = scratch_commit(&root, "src.rs", "one\ntwo\nthree\n", "base");
+        scratch_commit(&root, "other.rs", "untouched\n", "unrelated");
+        let fixed = git_text(&root, &["rev-parse", "HEAD"]).expect("rev-parse");
+        let resolution = scratch_commit(&root, "src.rs", "one\nCHANGED\nthree\n", "fix line 2");
+
+        verify_resolution_coordinate_changed(&root, &fixed, &resolution, "pass1", "src.rs", 2)
+            .expect("the resolution changed line 2 of the file it names");
+
+        verify_resolution_coordinate_changed(&root, &fixed, &resolution, "pass1", "other.rs", 1)
+            .expect_err("a file the resolution never touched must be refused");
+
+        verify_resolution_coordinate_changed(&root, &fixed, &resolution, "pass1", "src.rs", 3)
+            .expect_err("a line outside the changed hunk must be refused");
+
+        // The base..base range changes nothing at all.
+        verify_resolution_coordinate_changed(&root, &base, &base, "pass1", "src.rs", 2)
+            .expect_err("an empty range cannot evidence a resolution");
+    }
+
+    /// AM-17.6's whole guarantee. The metadata child may lift exactly one
+    /// `#[ignore]` and change nothing else in the gate file; this is the check
+    /// that enforces it, and deleting it entirely survived — so the one commit
+    /// permitted to touch gate code was policed by nothing.
+    ///
+    /// Exercised against a scratch history rather than the real one: the real
+    /// HEAD has no metadata child, so every assertion here would be about a
+    /// diff that does not exist.
+    #[test]
+    fn a_metadata_child_that_does_more_than_lift_one_ignore_is_refused() {
+        let (_scratch, root) = scratch_git_repo("haq-gate-unignore");
+        let gate = PHASE0_GATE_FILE;
+        fs::create_dir_all(root.join(gate).parent().expect("gate parent")).expect("mkdir");
+
+        let with_ignore = format!("{PHASE0_GATE_IGNORE}\nfn gate() {{}}\n");
+        let parent = scratch_commit(&root, gate, &with_ignore, "base");
+
+        // The permitted child: exactly the one attribute line removed.
+        scratch_commit(&root, gate, "fn gate() {}\n", "lift the ignore");
+        verify_gate_unignore_only(&root, &parent)
+            .expect("lifting exactly one #[ignore] is allowed");
+
+        // Adding anything at all, even alongside a legitimate lift.
+        let (_s2, root2) = scratch_git_repo("haq-gate-added");
+        fs::create_dir_all(root2.join(gate).parent().expect("gate parent")).expect("mkdir");
+        let parent2 = scratch_commit(&root2, gate, &with_ignore, "base");
+        scratch_commit(
+            &root2,
+            gate,
+            "fn gate() {}\nfn snuck_in() {}\n",
+            "lift and add",
+        );
+        let error = verify_gate_unignore_only(&root2, &parent2)
+            .expect_err("the child may never add gate code");
+        assert!(
+            error.to_string().contains("added"),
+            "must refuse for the stated reason: {error}"
+        );
+
+        // Removing more than one line.
+        let (_s3, root3) = scratch_git_repo("haq-gate-multi");
+        fs::create_dir_all(root3.join(gate).parent().expect("gate parent")).expect("mkdir");
+        let parent3 = scratch_commit(
+            &root3,
+            gate,
+            &format!("{PHASE0_GATE_IGNORE}\nfn gate() {{}}\nfn extra() {{}}\n"),
+            "base",
+        );
+        scratch_commit(&root3, gate, "fn gate() {}\n", "lift and delete");
+        verify_gate_unignore_only(&root3, &parent3)
+            .expect_err("exactly one line may be removed, not two");
+
+        // Removing one line that is NOT the qualification gate's attribute.
+        let (_s4, root4) = scratch_git_repo("haq-gate-wrong-line");
+        fs::create_dir_all(root4.join(gate).parent().expect("gate parent")).expect("mkdir");
+        let parent4 = scratch_commit(
+            &root4,
+            gate,
+            &format!("{PHASE0_GATE_IGNORE}\nfn gate() {{}}\nfn extra() {{}}\n"),
+            "base",
+        );
+        scratch_commit(
+            &root4,
+            gate,
+            &format!("{PHASE0_GATE_IGNORE}\nfn gate() {{}}\n"),
+            "delete something else",
+        );
+        let error = verify_gate_unignore_only(&root4, &parent4)
+            .expect_err("only the qualification gate's own attribute may be lifted");
+        assert!(
+            error.to_string().contains("lifted attribute"),
+            "must refuse for the stated reason: {error}"
+        );
+    }
+
+    /// A second name for the locked corpus lets a traced path read it without
+    /// naming it, which is how corpus-access evidence goes quietly false.
+    /// Deleting the check survived: the existing test only proved the real tree
+    /// has no alias, which a function returning `Ok(())` also proves.
+    ///
+    /// Built entirely inside a scratch tree. The real
+    /// `conformance/corpora/heldout` is never read, listed, or resolved here —
+    /// only a fixture directory standing in the same relative position.
+    #[test]
+    fn a_second_name_for_the_locked_corpus_is_refused() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-corpus-alias").expect("scratch dir");
+        let root = scratch.path().to_owned();
+        let locked = root.join("conformance/corpora/heldout");
+        fs::create_dir_all(&locked).expect("fixture corpus");
+        fs::write(locked.join("case.md"), "fixture, not the real corpus\n").expect("fixture case");
+
+        verify_locked_corpus_has_no_aliases(&root)
+            .expect("a corpus with exactly one name is not aliased");
+
+        // A symlink pointing INTO the locked tree gives its bytes a second name.
+        let alias = root.join("shortcut");
+        std::os::unix::fs::symlink(locked.as_std_path(), alias.as_std_path())
+            .expect("create alias");
+        let error = verify_locked_corpus_has_no_aliases(&root)
+            .expect_err("a symlink into the locked corpus must be refused");
+        assert!(
+            error.to_string().contains("alias"),
+            "must refuse for the stated reason: {error}"
+        );
+        fs::remove_file(alias.as_std_path()).expect("remove alias");
+
+        // A link to a file INSIDE the corpus is the same leak, one level down.
+        let deep = root.join("deep-link.md");
+        std::os::unix::fs::symlink(locked.join("case.md").as_std_path(), deep.as_std_path())
+            .expect("create deep alias");
+        verify_locked_corpus_has_no_aliases(&root)
+            .expect_err("a symlink to a file inside the locked corpus must be refused");
+        fs::remove_file(deep.as_std_path()).expect("remove deep alias");
+
+        // A symlink that resolves somewhere else entirely is not an alias.
+        let elsewhere = root.join("unrelated");
+        fs::create_dir_all(&elsewhere).expect("unrelated dir");
+        std::os::unix::fs::symlink(
+            elsewhere.as_std_path(),
+            root.join("innocent-link").as_std_path(),
+        )
+        .expect("create unrelated link");
+        verify_locked_corpus_has_no_aliases(&root)
+            .expect("a link outside the locked tree is not an alias");
+    }
+
     /// M17.5 F-31 / P1-A08: the scenarios block was written by the fault lane
     /// and read by nothing.
     #[test]
