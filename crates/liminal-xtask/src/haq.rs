@@ -12916,6 +12916,110 @@ mod tests {
             .expect("a link outside the locked tree is not an alias");
     }
 
+    /// §4's fuzz rows are only evidence if the retained log is the bytes the
+    /// campaign produced. Deleting the check survived, so `log_blake3` bound
+    /// nothing and a row could name a log that was never written.
+    #[test]
+    fn a_fuzz_row_whose_retained_log_is_missing_or_altered_is_refused() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-fuzz-logs").expect("scratch dir");
+        let root = scratch.path().to_owned();
+        let logs = root.join("conformance/haqp/evidence/logs");
+        fs::create_dir_all(&logs).expect("log dir");
+
+        let mut row = fuzz_row("cst_parse", 1800);
+        row.elapsed_s = 1800;
+        row.execs = 4096;
+        row.seed = 7;
+        row.log = "conformance/haqp/evidence/logs/cst_parse.log".to_owned();
+        let body = "Running with -max_total_time=1800 -seed=7\n\
+                    stat::number_of_executed_units: 4096\n\
+                    Done 4096 runs in 1800 second(s)\n";
+        fs::write(logs.join("cst_parse.log"), body).expect("write log");
+        row.log_blake3 = blake3::hash(body.as_bytes()).to_hex().to_string();
+
+        verify_fuzz_logs(&root, std::slice::from_ref(&row))
+            .expect("a row bound to the bytes on disk must verify");
+
+        let mut wrong_path = row.clone();
+        wrong_path.log = "target/haqp/fuzz-cst_parse.log".to_owned();
+        verify_fuzz_logs(&root, std::slice::from_ref(&wrong_path))
+            .expect_err("the log must live at the committed evidence path");
+
+        let mut wrong_digest = row.clone();
+        wrong_digest.log_blake3 = "c".repeat(64);
+        verify_fuzz_logs(&root, std::slice::from_ref(&wrong_digest))
+            .expect_err("a digest that is not the file's must be refused");
+
+        // The bytes changed after the digest was recorded.
+        fs::write(logs.join("cst_parse.log"), format!("{body}tampered\n")).expect("rewrite log");
+        verify_fuzz_logs(&root, std::slice::from_ref(&row))
+            .expect_err("an altered log must no longer match its recorded digest");
+
+        // The log is absent entirely.
+        fs::remove_file(logs.join("cst_parse.log")).expect("remove log");
+        verify_fuzz_logs(&root, std::slice::from_ref(&row))
+            .expect_err("a row naming a log that does not exist must be refused");
+    }
+
+    /// §3 requires equivalent/duplicate dispositions to carry concurring
+    /// verification in both adversarial passes. The check returns early when no
+    /// mutant claims one — which the committed packet does not — so `Ok(())`
+    /// was indistinguishable on the real packet and the whole rule was
+    /// untested. Reached here by giving a mutant the disposition that triggers
+    /// it.
+    #[test]
+    fn an_equivalent_disposition_without_concurring_reviews_is_refused() {
+        let root = repo_root();
+        let packet = read_packet(&root).expect("packet");
+        verify_mutant_concurrence(&root, &packet)
+            .expect("a packet claiming no equivalences has nothing to concur on");
+
+        for disposition in ["equivalent", "duplicate"] {
+            let mut claimed = packet.clone();
+            claimed.mutants[0].disposition = disposition.to_owned();
+            assert!(
+                verify_mutant_concurrence(&root, &claimed).is_err(),
+                "a {disposition} disposition over not-run reviews must be refused"
+            );
+        }
+    }
+
+    /// F-32's rule, enforced: a fuzz row's seed claim must match the TRACKED
+    /// corpus, not a number the row carries. Deleting the check survived, so
+    /// `seed_count` and `seed_manifest_blake3` were self-asserted.
+    #[test]
+    fn a_seed_claim_the_committed_corpus_contradicts_is_refused() {
+        let root = repo_root();
+        let target = "cst_parse";
+        let (count, digest) = seed_manifest_digest(&root, &root.join("fuzz/corpus").join(target))
+            .expect("the committed corpus must digest");
+
+        let mut row = fuzz_row(target, 1800);
+        row.seed_count = count;
+        row.seed_manifest_blake3 = digest.clone();
+        verify_fuzz_seed_manifests(&root, std::slice::from_ref(&row))
+            .expect("a row matching the tracked corpus must verify");
+
+        let mut miscounted = row.clone();
+        miscounted.seed_count = count + 1;
+        let error = verify_fuzz_seed_manifests(&root, std::slice::from_ref(&miscounted))
+            .expect_err("a seed count the corpus contradicts must be refused");
+        assert!(
+            error.to_string().contains("committed corpus has"),
+            "must refuse for the stated reason: {error}"
+        );
+
+        let mut wrong_digest = row.clone();
+        wrong_digest.seed_manifest_blake3 = "d".repeat(64);
+        verify_fuzz_seed_manifests(&root, std::slice::from_ref(&wrong_digest))
+            .expect_err("a manifest digest that is not the corpus's must be refused");
+
+        let mut unknown_target = row;
+        unknown_target.target = "no_such_target".to_owned();
+        verify_fuzz_seed_manifests(&root, std::slice::from_ref(&unknown_target))
+            .expect_err("a target with no tracked seed corpus must be refused");
+    }
+
     /// M17.5 F-31 / P1-A08: the scenarios block was written by the fault lane
     /// and read by nothing.
     #[test]
