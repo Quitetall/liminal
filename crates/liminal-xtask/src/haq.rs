@@ -7165,6 +7165,13 @@ fn verify_crash_boundary_inventory(packet: &Packet) -> Result<()> {
 /// including any inside `#[cfg(test)]` modules, and its only job is to fail
 /// loudly when the durable surface moves under a disclosure that claims to have
 /// surveyed it.
+///
+/// Known imprecision, and its direction: line comments (`//`, and `///` with
+/// them) are skipped, but a marker inside a block comment or a string literal
+/// still counts. That errs toward REJECTION — a spurious match fails a packet
+/// that was honest, which a human then corrects. The opposite error, silently
+/// undercounting, would let a real durable transition hide, so the bias is the
+/// one worth having.
 fn durable_transition_sites(root: &Utf8Path) -> Result<BTreeMap<String, usize>> {
     const MARKERS: [&str; 2] = [".commit(", ".commit_if("];
     let listed = git_text(root, &["ls-files", "-z", "--", "crates"])?;
@@ -7177,9 +7184,16 @@ fn durable_transition_sites(root: &Utf8Path) -> Result<BTreeMap<String, usize>> 
             continue;
         }
         let path = root.join(name);
-        let Ok(text) = fs::read_to_string(&path) else {
-            continue;
-        };
+        // Never skip a tracked file we cannot read. Dropping it would delete
+        // its transitions from the measured surface, and the disclosure would
+        // then pass by describing a tree nobody managed to look at — the exact
+        // vacuity this check exists to prevent.
+        let text = fs::read_to_string(&path).with_context(|| {
+            format!(
+                "{name} is tracked but unreadable; the durable surface cannot be measured, and \
+                 a scope claim over a surface that was not read is worth nothing"
+            )
+        })?;
         let count = text
             .lines()
             .filter(|line| !line.trim_start().starts_with("//"))
@@ -7238,6 +7252,13 @@ fn verify_crash_boundary_scope_shape(packet: &Packet) -> Result<BTreeMap<&str, u
 
     let mut declared: BTreeMap<&str, usize> = BTreeMap::new();
     for entry in &scope.in_scope {
+        // A blank subsystem would match no boundary while still reading as a
+        // claim; a blank path would name no surface. Checked on this side too,
+        // not only on `deferred`, so the two halves cannot drift apart.
+        anyhow::ensure!(
+            !entry.subsystem.trim().is_empty() && !entry.path.trim().is_empty(),
+            "an in-scope subsystem must name both a boundary prefix and a path"
+        );
         anyhow::ensure!(
             declared.insert(entry.path.as_str(), entry.sites).is_none(),
             "{} is declared twice in crash_boundary_scope",
@@ -12314,6 +12335,24 @@ mod tests {
             error.to_string().contains("ilrp/"),
             "the error must name the out-of-scope boundary, got: {error}"
         );
+    }
+
+    /// A blank subsystem matches no boundary while still reading as a claim.
+    /// Raised by the HEAD review as an asymmetry: `deferred` entries were
+    /// checked for a blank reason, `in_scope` entries for nothing at all.
+    #[test]
+    fn a_blank_in_scope_subsystem_or_path_is_refused() {
+        for blank in ["", "   "] {
+            let mut packet = read_packet(&repo_root()).expect("packet");
+            packet.crash_boundary_scope.in_scope[0].subsystem = blank.to_owned();
+            verify_crash_boundary_scope(&repo_root(), &packet)
+                .expect_err("a blank subsystem names no boundary prefix");
+
+            let mut packet = read_packet(&repo_root()).expect("packet");
+            packet.crash_boundary_scope.in_scope[0].path = blank.to_owned();
+            verify_crash_boundary_scope(&repo_root(), &packet)
+                .expect_err("a blank path names no surface");
+        }
     }
 
     /// An empty scope claims nothing while still reading as a disclosure.
