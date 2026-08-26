@@ -70,17 +70,16 @@ def load(name: str) -> object:
 
 def main() -> int:
     # §1 wants the SOURCE tree fixed and clean. It does not want the evidence
-    # tree clean — this script runs immediately after the lanes, whose entire
-    # job is to write into `conformance/haqp/evidence/`. The first version
-    # rejected any dirt at all and would therefore have refused its own inputs
-    # after a 3.5-hour campaign. What must be clean is everything the child may
-    # not carry.
-    dirty = [
-        line[3:].strip()
-        for line in git("status", "--porcelain").splitlines()
-        if line.strip()
-    ]
-    trespass = [path for path in dirty if not haqp_paths.metadata_path(path)]
+    # tree clean — this runs immediately after the lanes, whose whole job is to
+    # write into `conformance/haqp/evidence/`.
+    #
+    # This computed its own dirty list, and `git()` strips the WHOLE porcelain
+    # output — which ate the leading space of the FIRST line only, shifting it
+    # one character. `conformance/...` became `onformance/...`, matched no
+    # metadata prefix, and the flip refused after a completed 4-hour lane
+    # (2026-08-26). Third variant of one bug, each time from keeping a local
+    # copy. There is no local copy now.
+    trespass = haqp_paths.source_dirt(ROOT)
     if trespass:
         fail(
             "source or gate code is modified; the fixed base must be clean "

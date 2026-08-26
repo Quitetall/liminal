@@ -2151,3 +2151,78 @@ two different kinds, and only one was misplaced:
 So CI now asserts what is true of every commit, and the lane asserts what is
 true only of a qualified one. The two no longer disagree, and neither depends on
 a machine's scratch directory.
+
+## F-33 — CRITICAL. **DEFERRED TO 1b, and disclosed.** More than half the mutation plan cannot be applied.
+
+Found by the debiased blind pass 1 (A04, A06, A10) and confirmed by adding an
+anchor check: **36 of the packet's 65 declared mutants are anchored to
+DECLARATIONS** — `pub fn relations_from(`, `pub fn overlap_slots(`,
+`fn slot_map(`, `Federated {` — lines that hold a name and no behaviour.
+
+A function signature has no predicate to invert, no threshold to shift, no crash
+point to disable and no ordering to perturb. Whatever the declared operator, the
+mutation cannot be applied there. **A mutant that cannot be applied can never be
+killed, while still counting toward §3's denominator.**
+
+It is systematic rather than incidental — spread across every operator family
+(4 `oracle-short-circuit`, 4 `disabled-crash-point`, 3 each of six others), which
+is the signature of anchors pointing at enclosing signatures rather than the
+mutable lines inside them.
+
+### The arithmetic, which is the part that matters
+
+ADR-0020 §3 requires **at least 64 semantic mutants**. 65 declared − 36
+inapplicable = **29**. `verify_mutant_inventory` counts rows and passes, because
+counting rows is not counting mutants.
+
+So 1b is not "re-point some anchors". It is re-anchoring 36 AND authoring
+roughly 35 more real ones. That is the same job as F-06's risk-weighted
+selection and it belongs with it.
+
+### Why deferred rather than fixed
+
+Blocking 1a on this would contradict ADR-0021, which deferred §3's mutation
+clauses to 1b precisely so 1a could complete. And Phase 1's real code does not
+exist yet: mutants anchored to today's substrate are guesses about tomorrow's,
+so re-anchoring now means authoring the plan twice.
+
+The check therefore runs inside `verify_qualified_repo`'s `1b` branch. It
+refuses there, so M24 cannot rediscover this after Phase 1 is built.
+
+### Pinned
+
+Three canaries: declarations are refused; real mutation sites are ACCEPTED; and
+the committed plan's inapplicable count is asserted at exactly 36, so
+re-anchoring the plan without updating this finding turns a test red.
+
+**A correction to my own first attempt.** The check originally matched operators
+to line tokens and falsely accused three legitimate anchors —
+`NodeFlags(self.0 | other.0)` is a real inversion site, `if rev ==
+inner.state.head` a real staleness comparison, `for entry in entries.flatten()`
+a real ordering site. Guessing which token an operator needs produces false
+accusations against a mutation plan; "is this a declaration" does not. The
+narrower check is worth more than the broader one it replaced.
+
+### Also fixed here, from the same blind pass
+
+- **A08 (confirmed).** The markdown's `status` was checked with
+  `contains("status: proposed")`, so the frontmatter could read
+  `status: ratified` and pass as long as the literal survived anywhere in the
+  file — one sentence of prose suffices. Now parsed as a header.
+- **A09 (confirmed).** `fixed_review_base` appeared **only in docs**; no Rust
+  file read it. The markdown declared which tree was reviewed and nothing bound
+  that to provenance. Now bound, with `NOT_RUN` required while unqualified.
+- **The flip's off-by-one.** `git()` stripped the whole porcelain output, eating
+  the leading space of the FIRST line only and shifting it one character, so
+  `conformance/...` became `onformance/...` and matched no metadata prefix. It
+  refused a completed 4-hour lane. Third variant of one bug, each time from
+  keeping a local copy; the local copy is gone.
+
+### Remaining, unfixed
+
+- **A07 (plausible)** — the locked-corpus check is substring matching on trace
+  text. It catches direct access; a symlink or rename evades it.
+- **A11 (plausible)**, **A05 (unverified)**.
+- **P2-A02, P2-A11 (not actionable as stated)** — both ask the verifier to
+  statically inspect an oracle's body for coupling. That is undecidable in
+  general, and F-03 already records the limit.

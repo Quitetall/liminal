@@ -96,6 +96,20 @@ legitimately un-ignored. Phase 1 suite ratification requires **both** stages.
   predeclared names.
 - A reader of a `complete` packet must check which stage completed. The stage is
   a required field precisely so that check cannot be skipped.
+- **Disclosed limitation (M17.5 F-33, added 2026-08-26):** the deferred plan is
+  not merely unevaluated, it is currently **inapplicable**. 36 of the 65
+  declared mutants are anchored to declarations — function signatures and enum
+  variants — which no operator can mutate, so they can never be killed while
+  still counting toward §3's denominator. 65 − 36 = **29**, against a floor of
+  64. HAQP-1b is therefore not "evaluate the existing plan" but "author most of
+  one": re-anchor 36 and add roughly 35 more, which is the same work as F-06's
+  risk-weighted selection.
+
+  A 1a packet may complete over this plan, and a reader must not mistake that
+  for the plan being sound. `verify_mutant_anchors_support_operators` refuses
+  inside the `1b` branch so the gap cannot be rediscovered after Phase 1 is
+  built, and a canary asserts the count is still exactly 36.
+
 - **Disclosed limitation:** between M17.6 and M24, Phase 1 proceeds on a suite
   whose defect-detection power has been argued but not measured. That is a real
   risk and it is accepted deliberately, because the alternative — building

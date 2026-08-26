@@ -73,6 +73,12 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     verify_residual_risks(root, &packet)?;
     verify_qualification_stage(&packet)?;
     if packet.qualification_stage == "1b" {
+        // M17.5 F-33: 36 of the 65 declared mutants are anchored to
+        // declarations and cannot be applied. ADR-0021 defers §3's mutation
+        // clauses to 1b, so this refuses there rather than blocking 1a on work
+        // that milestone already deferred — but it MUST refuse, or M24
+        // rediscovers it after Phase 1 is built.
+        verify_mutant_anchors_support_operators(root, &packet)?;
         verify_mutant_killing_tests(root, &packet)?;
         verify_mutant_evidence(root, &packet)?;
         verify_mutant_evidence_replay(root, &packet)?;
@@ -5749,6 +5755,63 @@ fn verify_mutant_inventory(packet: &Packet) -> Result<()> {
 }
 
 #[allow(clippy::too_many_lines)]
+/// Whether a declared anchor line contains anything a mutation can change
+/// (M17.5 F-33 / blind pass 1 A04, A06, A10).
+///
+/// Operator rules already existed, but only over a mutation's before/after text
+/// — i.e. only at stage 1b, where evidence exists. At 1a the packet's declared
+/// anchors were checked for POSITION and never for whether the line held any
+/// behaviour. Blind pass 1 walked in and found operators anchored to function
+/// signatures and enum variants.
+///
+/// This rejects exactly one thing: a line that DECLARES rather than does. A
+/// signature has no predicate to invert, no threshold to shift, no crash point
+/// to disable, and no ordering to perturb; whatever the operator, the mutation
+/// cannot be applied there, and a mutant that cannot be applied can never be
+/// killed while still inflating the denominator §3 counts.
+///
+/// It deliberately does NOT try to match operators to line contents. A first
+/// version did, and rejected three legitimate anchors: `NodeFlags(self.0 |
+/// other.0)` is a real inversion site, `if rev == inner.state.head` is a real
+/// staleness comparison, and `for entry in entries.flatten()` is a real
+/// ordering site. Guessing which token an operator needs produces false
+/// accusations against a mutation plan; "is this a declaration" does not.
+/// Whether a mutant is GOOD is the 1b runner's question.
+fn anchor_is_mutable_line(line: &str) -> bool {
+    let trimmed = line.trim();
+    let declares_item = [
+        "fn ",
+        "pub fn ",
+        "pub(crate) fn ",
+        "async fn ",
+        "pub async fn ",
+        "struct ",
+        "pub struct ",
+        "enum ",
+        "pub enum ",
+        "trait ",
+        "pub trait ",
+        "impl ",
+        "mod ",
+        "pub mod ",
+        "type ",
+        "pub type ",
+        "use ",
+    ]
+    .iter()
+    .any(|kw| trimmed.starts_with(kw));
+    // A bare `Variant {` / `Variant,` inside an enum body.
+    let declares_variant = trimmed.chars().next().is_some_and(char::is_uppercase)
+        && (trimmed.ends_with('{') || trimmed.ends_with(','))
+        && !trimmed.contains('=')
+        && !trimmed.contains('(');
+    !(declares_item || declares_variant)
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one mutant's coordinate contract is one contract; the length is the field count"
+)]
 fn verify_mutant_source_coordinates(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let mut seen = BTreeSet::new();
     for mutant in &packet.mutants {
@@ -5860,6 +5923,44 @@ fn verify_mutant_source_coordinates(root: &Utf8Path, packet: &Packet) -> Result<
             verify_mutant_operator_patch(&mutant.operator, patch)?;
         }
     }
+    Ok(())
+}
+
+/// Every declared mutant's anchor line must be able to CARRY its operator
+/// (M17.5 F-33). Runs at every layer, including stage 1a, because an
+/// inapplicable mutant is a defect in the inventory, not in the evidence.
+fn verify_mutant_anchors_support_operators(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    let mut inapplicable = Vec::new();
+    for mutant in &packet.mutants {
+        let Some((file, line)) = mutant.source.rsplit_once(':') else {
+            anyhow::bail!("{} source {:?} is not file:line", mutant.id, mutant.source);
+        };
+        let line: usize = line
+            .parse()
+            .with_context(|| format!("{} source line {line:?} is not a number", mutant.id))?;
+        let text = fs::read_to_string(root.join(file))
+            .with_context(|| format!("{}: read anchor file {file}", mutant.id))?;
+        let anchor = text
+            .lines()
+            .nth(line.saturating_sub(1))
+            .with_context(|| format!("{} anchors {file}:{line}, past end of file", mutant.id))?;
+        if !anchor_is_mutable_line(anchor) {
+            inapplicable.push(format!(
+                "{} declares {:?} at {file}:{line}, which is a declaration, not \
+                 behaviour: {:?}",
+                mutant.id,
+                mutant.operator,
+                anchor.trim()
+            ));
+        }
+    }
+    anyhow::ensure!(
+        inapplicable.is_empty(),
+        "{} declared mutant(s) cannot be applied, so they can never be killed and \
+         inflate the denominator ADR-0020 §3 counts:\n  - {}",
+        inapplicable.len(),
+        inapplicable.join("\n  - ")
+    );
     Ok(())
 }
 
@@ -6615,10 +6716,28 @@ fn verify_markdown_surface(root: &Utf8Path, packet: &Packet) -> Result<()> {
     verify_markdown_surface_text(&text, packet)
 }
 
+/// Read one `key: value` line from the packet markdown's frontmatter.
+///
+/// M17.5 F-33 / blind pass 1 A08: the status was checked with
+/// `text.contains("status: proposed")`, so the frontmatter could read
+/// `status: ratified` and the check still passed as long as the literal
+/// survived ANYWHERE in the file — one sentence of prose is enough. The header
+/// is a declaration, not a substring, so it is parsed as one.
+fn markdown_header<'a>(text: &'a str, key: &str) -> Option<&'a str> {
+    text.lines()
+        .take_while(|line| !line.starts_with('#') || line.starts_with("# "))
+        .find_map(|line| line.strip_prefix(&format!("{key}: ")))
+        .map(str::trim)
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one check per declared header and table claim, in document order"
+)]
 fn verify_markdown_surface_text(text: &str, packet: &Packet) -> Result<()> {
-    if !text.contains("status: proposed") {
-        anyhow::bail!("review packet markdown must stay proposed");
-    }
+    let status = markdown_header(text, "status")
+        .context("review packet markdown has no `status:` header")?;
+    require_eq("review packet markdown status", status, "proposed")?;
     if !text.contains("ratification decision | unratified") {
         anyhow::bail!("review packet markdown must record unratified status");
     }
@@ -6642,6 +6761,30 @@ fn verify_markdown_surface_text(text: &str, packet: &Packet) -> Result<()> {
             packet.qualification_state
         );
     }
+    // M17.5 F-33 / blind pass 1 A09: `fixed_review_base` appeared ONLY in docs
+    // — no Rust file read it. The markdown declared which tree was reviewed and
+    // nothing bound that declaration to the tree the packet points at, so the
+    // two could name different commits and every check still passed.
+    let declared_base = markdown_header(text, "fixed_review_base")
+        .context("review packet markdown has no `fixed_review_base:` header")?;
+    match packet.provenance.as_ref() {
+        Some(provenance) => require_eq(
+            "review packet markdown fixed_review_base",
+            declared_base,
+            &provenance.fixed_commit,
+        )?,
+        // Before qualification there is no provenance to bind to, and the
+        // placeholder is the honest value — but it may not be a plausible
+        // commit, or a reader cannot tell a predeclared packet from a
+        // qualified one.
+        None => anyhow::ensure!(
+            declared_base == "NOT_RUN",
+            "review packet markdown declares fixed_review_base {declared_base:?} \
+             while the packet carries no provenance; an unqualified packet must \
+             say NOT_RUN"
+        ),
+    }
+
     if packet.qualification_state != "not-run" && text.contains("| NOT_RUN |") {
         anyhow::bail!(
             "review packet markdown retains NOT_RUN placeholders for qualification state {:?}",
@@ -11911,6 +12054,70 @@ mod tests {
             text.contains(PHASE0_GATE_IGNORE),
             "the qualification gate's #[ignore] is not the string AM-17.6 pins; \
              either it was already lifted or its wording drifted"
+        );
+    }
+
+    // ── M17.5 F-33: inapplicable mutants ──────────────────────────────────
+    // 36 of the packet's 65 mutants are anchored to declarations. ADR-0021
+    // defers §3 to 1b, so this refuses THERE — but it must refuse, or M24
+    // rediscovers it after Phase 1 is built.
+
+    #[test]
+    fn a_declaration_line_can_hold_no_mutation() {
+        for declaration in [
+            "pub fn relations_from(",
+            "    fn slot_map(input: &str) -> BTreeMap<String, String> {",
+            "pub struct NodeFlags(pub u16);",
+            "    Federated {",
+            "impl Formatter for MarkdownFormatter {",
+            "use std::collections::BTreeMap;",
+        ] {
+            assert!(
+                !anchor_is_mutable_line(declaration),
+                "{declaration:?} declares a name; there is nothing on it to mutate"
+            );
+        }
+    }
+
+    /// The narrowing is only correct if what it now ACCEPTS is genuinely
+    /// mutable. A first version matched operators to line tokens and falsely
+    /// accused all three of these.
+    #[test]
+    fn real_mutation_sites_are_accepted() {
+        for site in [
+            "        NodeFlags(self.0 | other.0)",
+            "        if rev == inner.state.head {",
+            "        for entry in entries.flatten() {",
+            "            if fail_after.is_some_and(|limit| committed >= limit) {",
+            "        let mut sorted = items.clone(); sorted.sort();",
+        ] {
+            assert!(
+                anchor_is_mutable_line(site),
+                "{site:?} is a real mutation site and must not be refused"
+            );
+        }
+    }
+
+    /// The committed packet's anchors are known-broken (F-33), and the check
+    /// must SAY so rather than pass. This pins the deferral: if someone
+    /// re-anchors the plan, this test tells them the count changed.
+    #[test]
+    fn the_committed_mutation_plan_is_still_inapplicable() {
+        let root = repo_root();
+        let packet = read_packet(&root).expect("packet");
+        let err = verify_mutant_anchors_support_operators(&root, &packet)
+            .expect_err("36 declared mutants are anchored to declarations");
+        let message = err.to_string();
+        assert!(
+            message.contains("cannot be applied"),
+            "the refusal must name the reason: {message}"
+        );
+        // §3 wants at least 64 applicable mutants. 65 - 36 = 29.
+        let inapplicable = message.matches("which is a declaration").count();
+        assert_eq!(
+            inapplicable, 36,
+            "F-33 recorded 36 inapplicable mutants; the plan changed without the \
+             finding being updated"
         );
     }
 }
