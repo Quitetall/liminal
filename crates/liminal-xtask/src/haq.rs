@@ -62,6 +62,7 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     verify_provenance(root, &packet)?;
     verify_concurrency_evidence(root, &packet)?;
     verify_fuzz_evidence(root, &packet)?;
+    verify_locked_corpus_has_no_aliases(root)?;
     verify_corpus_access_audit(root, &packet)?;
     verify_crash_evidence(root, &packet)?;
     verify_crash_replay(root, &packet)?;
@@ -5929,6 +5930,66 @@ fn verify_mutant_source_coordinates(root: &Utf8Path, packet: &Packet) -> Result<
 /// Every declared mutant's anchor line must be able to CARRY its operator
 /// (M17.5 F-33). Runs at every layer, including stage 1a, because an
 /// inapplicable mutant is a defect in the inventory, not in the evidence.
+/// The locked corpus must be reachable by exactly one name (M17.5 F-34 /
+/// blind pass 1 A07).
+///
+/// The corpus-access audit refuses a traced path containing `heldout` or
+/// `conformance/corpora`. That is substring matching on what the process SAW,
+/// so it catches direct access and nothing else: a symlink or a rename gives
+/// the same bytes a path the filter does not recognise, and the audit reports
+/// clean while the locked corpus was read.
+///
+/// Rather than try to canonicalize strace output after the fact — the symlink
+/// may not exist by verification time — the aliasing itself is made
+/// impossible. If the locked corpus has exactly one name, then matching that
+/// name is sufficient, and the existing filter becomes sound rather than
+/// lucky.
+fn verify_locked_corpus_has_no_aliases(root: &Utf8Path) -> Result<()> {
+    let locked = root.join("conformance/corpora/heldout");
+    if !locked.exists() {
+        return Ok(());
+    }
+    let canonical = fs::canonicalize(&locked)
+        .with_context(|| format!("{locked}: locked corpus must resolve"))?;
+    let mut aliases = Vec::new();
+    let mut stack = vec![root.to_owned()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let Ok(path) = Utf8PathBuf::from_path_buf(entry.path()) else {
+                continue;
+            };
+            let name = path.file_name().unwrap_or_default();
+            if name == ".git" || name == "target" {
+                continue;
+            }
+            let Ok(meta) = entry.path().symlink_metadata() else {
+                continue;
+            };
+            if meta.file_type().is_symlink() {
+                // A link INTO the locked tree gives its bytes a second name.
+                if let Ok(resolved) = fs::canonicalize(entry.path())
+                    && (resolved == canonical || resolved.starts_with(&canonical))
+                    && path != locked
+                {
+                    aliases.push(path.to_string());
+                }
+            } else if meta.is_dir() {
+                stack.push(path);
+            }
+        }
+    }
+    anyhow::ensure!(
+        aliases.is_empty(),
+        "the locked acceptance corpus is reachable under {} alias(es), so a traced \
+         path can read it without naming it: {aliases:?}",
+        aliases.len()
+    );
+    Ok(())
+}
+
 fn verify_mutant_anchors_support_operators(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let mut inapplicable = Vec::new();
     for mutant in &packet.mutants {
@@ -6020,9 +6081,25 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
                 || (before == "if rev == inner.state.head {"
                     && matches!(after, "if true {" | "if false {"))
         }
-        "skipped-durable-transition" => ["prepare", "ack", "finalize", "commit"]
-            .iter()
-            .any(|token| before.contains(token) && !after.contains(token)),
+        // M17.5 F-34 / blind pass 1 A11: this matched bare WORDS, so deleting
+        // the token from a label satisfied it. The anchored site is
+        // `self.commit_intent(id, intent, &format!("ack:{step_id}"), origin)?;`
+        // — renaming the label from `ack:` to anything else "skipped a durable
+        // transition" while commit_intent still ran and persistence was intact.
+        //
+        // Skipping a transition means the CALL stops happening, so the markers
+        // are call-shaped and the call must be gone from the after-text.
+        "skipped-durable-transition" => [
+            "commit_intent(",
+            "prepare(",
+            "finalize(",
+            "persist(",
+            "ack(",
+            ".commit(",
+            "write(",
+        ]
+        .iter()
+        .any(|call| before.contains(call) && !after.contains(call)),
         "disabled-crash-point" => {
             (before.to_ascii_lowercase().contains("crash")
                 && !after.to_ascii_lowercase().contains("crash"))
@@ -12119,5 +12196,37 @@ mod tests {
             "F-33 recorded 36 inapplicable mutants; the plan changed without the \
              finding being updated"
         );
+    }
+
+    // ── M17.5 F-34: blind pass 1 A07 and A11 ──────────────────────────────
+
+    /// A11: renaming a LABEL is not skipping a durable transition.
+    #[test]
+    fn a_label_rename_is_not_a_skipped_durable_transition() {
+        let before = r#"self.commit_intent(id, intent, &format!("ack:{step_id}"), origin)?;"#;
+        let patch = |after: &str| MutantPatch {
+            file: "crates/liminal-jurisdiction/src/ilrp.rs".to_owned(),
+            before: before.to_owned(),
+            after: after.to_owned(),
+        };
+        verify_mutant_operator_patch(
+            "skipped-durable-transition",
+            &patch(r#"self.commit_intent(id, intent, &format!("step:{step_id}"), origin)?;"#),
+        )
+        .expect_err("the call still runs and persistence is intact; only the label moved");
+        // Removing the CALL is the real thing, and must still be accepted.
+        verify_mutant_operator_patch(
+            "skipped-durable-transition",
+            &patch("// durable commit removed"),
+        )
+        .expect("deleting the durable call IS a skipped transition");
+    }
+
+    /// A07: the locked corpus must have exactly one name, or the audit's
+    /// substring filter is sound only by luck.
+    #[test]
+    fn the_locked_corpus_has_no_second_name() {
+        verify_locked_corpus_has_no_aliases(&repo_root())
+            .expect("no alias may reach conformance/corpora/heldout");
     }
 }

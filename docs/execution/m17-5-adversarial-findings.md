@@ -2226,3 +2226,72 @@ narrower check is worth more than the broader one it replaced.
 - **P2-A02, P2-A11 (not actionable as stated)** — both ask the verifier to
   statically inspect an oracle's body for coupling. That is undecidable in
   general, and F-03 already records the limit.
+
+## F-34 — the last three blind-pass findings: two fixed, one needs a ruling.
+
+### A11 — **CONFIRMED, FIXED.** A label rename counted as skipping a durable transition.
+
+`verify_mutant_operator_patch`'s `skipped-durable-transition` arm matched bare
+WORDS: `["prepare", "ack", "finalize", "commit"].any(|t| before.contains(t) &&
+!after.contains(t))`. The anchored site is
+
+```rust
+self.commit_intent(id, intent, &format!("ack:{step_id}"), origin)?;
+```
+
+so renaming the label from `ack:` to anything else satisfied "a durable
+transition was skipped" — while `commit_intent(...)` still ran and persistence
+was intact. The operator validated a substring, not a behaviour.
+
+The markers are now call-shaped (`commit_intent(`, `prepare(`, `persist(`, …)
+and the call must be ABSENT from the after-text. Canaried both ways: a relabel
+is refused, deleting the call is accepted.
+
+### A07 — **CONFIRMED, HARDENED.** The locked-corpus filter was sound only by luck.
+
+The corpus audit refuses a traced path containing `heldout` or
+`conformance/corpora`. That is substring matching on what the process SAW, so a
+symlink or rename gives the same bytes a name the filter does not recognise and
+the audit reports clean.
+
+Canonicalizing strace output after the fact is unreliable — the symlink need not
+survive to verification time. So the aliasing is made impossible instead:
+`verify_locked_corpus_has_no_aliases` walks the tree and refuses any symlink
+resolving into `conformance/corpora/heldout`. With exactly one name, matching
+that name is sufficient, and the existing filter becomes sound rather than
+lucky.
+
+(No alias exists today. That was the point: the check turns a coincidence into
+an invariant.)
+
+### A05 — **CONFIRMED. Needs a ruling; not fixed.**
+
+`crates/liminal-cli/src/format.rs:73` is `pending.commit_if(...)`, a durable
+atomic replacement, with an injected crash point immediately above it. The
+authoritative registry contains **eight boundaries, all `ilrp/*`**. The
+formatter's transition is not among them, so ADR-0020 §5's "exhaustive
+registered crash boundaries" is asserted and never checked.
+
+Surveying the tree makes it larger than the formatter:
+
+| file | injection sites | registered boundaries |
+|---|---|---|
+| `liminal-jurisdiction/src/ilrp.rs` | 14 | 8 (`ilrp/*`) |
+| **`liminal-daemon/src/crash.rs`** | **9** | **0** |
+| **`liminal-daemon/src/main.rs`** | **2** | **0** |
+| `liminal-cli/src/format.rs` | 4 | 0 (Phase 1 / M20) |
+
+**Why not fixed here.** Checking exhaustiveness requires deciding *which
+injection points are registrable boundaries* — a `CrashPoint` helper is not a
+boundary, and the formatter's belongs to quarantined M20 code. Writing a check
+that guesses would either block 1a on Phase 1 work or pass by picking a
+convenient definition. §3 forbids improvising qualification semantics, so this
+is Brian's:
+
+1. define which subsystems own registrable boundaries and register the daemon's
+   (the largest gap, and Phase 0 code that could be exercised now);
+2. or record that §5's exhaustiveness is scoped to ILRP for HAQP-1a, with the
+   daemon and formatter deferred — and say so in the packet rather than leaving
+   it implicit.
+
+Until then the registry claims exhaustiveness it has never demonstrated.
