@@ -12563,6 +12563,11 @@ mod tests {
         incomplete
             .attempts
             .retain(|attempt| attempt.attack_class != dropped);
+        assert!(
+            !incomplete.attempts.is_empty(),
+            "dropping one class must leave a record that is incomplete, not empty — \
+             an empty record would fail for a different reason than the gap"
+        );
         let error = verify_review_attack_classes(&incomplete, "pass1")
             .expect_err("Pass 1 must cover every attack class");
         assert!(
@@ -12606,6 +12611,11 @@ mod tests {
 
         // The other pass no longer carries the matching defect.
         let mut orphaned = paired(true);
+        assert!(
+            orphaned[1].1.attempts.len() >= 2,
+            "the fixture must supply at least two attempts, or the orphaning below \
+             indexes out of bounds instead of asserting"
+        );
         orphaned[1].1.attempts[0].attack_class = "nondeterminism".to_owned();
         orphaned[1].1.attempts[1].attack_class = "vacuity".to_owned();
         let error = verify_cross_pass_reproduction(&orphaned)
@@ -12619,6 +12629,87 @@ mod tests {
         let single = vec![paired(true).remove(0)];
         verify_cross_pass_reproduction(&single)
             .expect_err("cross-pass reproduction requires two records");
+    }
+
+    /// §5 binds each packet before/after boolean to the measured injection
+    /// receipt. Deleting the whole binding survived, so the packet's claim that
+    /// a boundary was injected on both sides rested on the packet saying so.
+    #[test]
+    fn a_crash_claim_the_receipt_contradicts_is_refused() {
+        let root = repo_root();
+        let packet = read_packet(&root).expect("packet");
+        let bytes =
+            fs::read(root.join("conformance/haqp/evidence/crash.json")).expect("crash evidence");
+        let recorded: CrashEvidence = serde_json::from_slice(&bytes).expect("parse crash evidence");
+        verify_crash_injection_bindings(&packet, &recorded)
+            .expect("the committed packet must match its own receipt");
+
+        // Claim an injection the receipt does not record.
+        let mut thinned = recorded.clone();
+        thinned
+            .boundaries
+            .iter_mut()
+            .for_each(|row| row.injected = false);
+        let error = verify_crash_injection_bindings(&packet, &thinned)
+            .expect_err("a claimed injection with no measured receipt must be refused");
+        assert!(
+            error.to_string().contains("injection claim differs"),
+            "must refuse for the stated reason: {error}"
+        );
+
+        // An unpaired boundary name has no closed before/after registry entry.
+        let mut invented = packet.clone();
+        invented.crash_boundaries[0].boundary = "ilrp/invented".to_owned();
+        let error = verify_crash_injection_bindings(&invented, &recorded)
+            .expect_err("a boundary outside the closed pair registry must be refused");
+        assert!(
+            error.to_string().contains("closed before/after pair"),
+            "must refuse for the stated reason: {error}"
+        );
+    }
+
+    /// §4's fuzz rows are bound to the retained log's own footers. Deleting the
+    /// check survived, so `execs`, `elapsed_s`, `seconds` and `seed` were four
+    /// numbers the packet asserted about itself.
+    #[test]
+    fn a_fuzz_row_that_its_own_log_contradicts_is_refused() {
+        let mut row = fuzz_row("cst_parse", 1800);
+        row.elapsed_s = 1802;
+        row.execs = 4096;
+        row.seed = 7;
+        let log = |execs: u64, elapsed: u64, budget: u64, seed: u64| {
+            format!(
+                "Running with -max_total_time={budget} -seed={seed}\n\
+                 stat::number_of_executed_units: {execs}\n\
+                 Done {execs} runs in {elapsed} second(s)\n"
+            )
+        };
+
+        verify_fuzz_log_metrics(&row, log(4096, 1800, 1800, 7).as_bytes())
+            .expect("a log agreeing with its row must verify");
+
+        for (bytes, why) in [
+            (
+                log(4095, 1800, 1800, 7),
+                "execution count differs from the row",
+            ),
+            (log(4096, 1600, 1800, 7), "elapsed is not bound to the row"),
+            (log(4096, 1800, 900, 7), "budget is not the recorded one"),
+            (log(4096, 1800, 1800, 8), "seed is not the recorded one"),
+            (
+                "stat::number_of_executed_units: 4096\n".to_owned(),
+                "no Done footer at all",
+            ),
+            (
+                "Done 4096 runs in 1800 second(s)\n".to_owned(),
+                "no execution-count footer at all",
+            ),
+        ] {
+            assert!(
+                verify_fuzz_log_metrics(&row, bytes.as_bytes()).is_err(),
+                "a log whose {why} must be refused"
+            );
+        }
     }
 
     /// M17.5 F-31 / P1-A08: the scenarios block was written by the fault lane
