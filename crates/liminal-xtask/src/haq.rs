@@ -12920,6 +12920,12 @@ mod tests {
         // walking them turns a scan into a crawl. The skip is pinned here
         // because without a fixture that HAS those directories, breaking it
         // changes nothing observable — the campaign found exactly that gap.
+        //
+        // This depends on the walk skipping by NAME before it resolves the
+        // entry: `verify_locked_corpus_has_no_aliases` hits its `continue`
+        // ahead of `symlink_metadata`/`canonicalize`. If that order ever
+        // inverts, these links resolve into the corpus and the assertion below
+        // flips meaning rather than failing loudly.
         for skipped in [".git", "target"] {
             let dir = root.join(skipped);
             fs::create_dir_all(&dir).expect("skipped dir");
@@ -12994,8 +13000,9 @@ mod tests {
         for disposition in ["equivalent", "duplicate"] {
             let mut claimed = packet.clone();
             claimed.mutants[0].disposition = disposition.to_owned();
-            let error = verify_mutant_concurrence(&root, &claimed)
-                .expect_err("a {disposition} disposition over planned reviews must be refused");
+            let Err(error) = verify_mutant_concurrence(&root, &claimed) else {
+                panic!("a {disposition} disposition over planned reviews must be refused")
+            };
             // Asserting only `is_err()` here let a mutant survive: the packet's
             // reviews are `planned`, so inverting the `== "pass"` comparison
             // still failed, just further down and for an unrelated reason. A
