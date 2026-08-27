@@ -2430,6 +2430,54 @@ verified that way:
 
 The five timeouts are recorded as timeouts, not claimed as kills.
 
+### Measured result
+
+A second full campaign, run after the four batches, against the same file:
+
+| | before | after |
+|---|---|---|
+| mutants | 1062 | 1087 |
+| caught | 728 | **785** |
+| **missed** | **310** | **280** |
+| unviable | 21 | 21 |
+| timeouts | 3 | 1 |
+| kill rate | 69.9% | **73.6%** |
+
+Of the 15 functions targeted, **13 came back with zero surviving mutants**, and
+every one of the 15 wholesale-`Ok(())` mutants died. Functions surviving
+wholesale replacement fell from 39 to 16.
+
+**Two survivors remained, and both were my tests passing for the wrong reason —
+the very species this finding is about.**
+
+1. `verify_locked_corpus_has_no_aliases` kept a live `||`, and it was not the
+   one I assumed. The condition that survived was
+   `name == ".git" || name == "target"` — the walk's skip list. My fixture
+   contained neither directory, so breaking the skip changed nothing
+   observable. Fixed by giving the fixture a `.git/` and a `target/`, each
+   holding a link into the corpus, and asserting both are still accepted. Now
+   fully clean.
+
+2. `verify_mutant_concurrence` kept a live `==`, and again not the one I
+   assumed. My first fix asserted only `is_err()`; the packet's reviews are
+   `planned`, so inverting `review.result == "pass"` still failed — further
+   down and for an unrelated reason — and a reject test that does not name its
+   reason accepts any refusal. Tightened to assert the message. That killed the
+   comparison I had aimed at, and exposed a second one beneath it.
+
+**Deferred to HAQP-1b (M24), with reason:** the residual survivor is
+`attempt.id == *attempt_id` at `haq.rs:2730`, inside the concurrence walk. That
+code runs only when a packet declares an `equivalent`/`duplicate` disposition
+**and** carries passing committed review records. Dispositions belong to the
+mutation stage, which ADR-0021 defers to M24, so the state that reaches this
+line does not exist in a 1a packet. Killing it means authoring a full 1b
+fixture, which is the same work as HAQP-1b itself.
+
+The general lesson is sharper than "write reject cases". **Twice I predicted
+which operator a test would kill and was wrong both times.** The campaign, not
+the reasoning, found the live one. A reject case is a hypothesis about which
+branch matters; only the mutation run tests the hypothesis.
+
 ### A fixture that names a count must read it
 
 Adding canary C33 turned `markdown_surface_rejects_a_stale_qualification_state`

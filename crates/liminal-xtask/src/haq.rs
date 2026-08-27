@@ -12914,6 +12914,23 @@ mod tests {
         .expect("create unrelated link");
         verify_locked_corpus_has_no_aliases(&root)
             .expect("a link outside the locked tree is not an alias");
+
+        // `.git` and `target` are skipped deliberately: Git's object store and
+        // the build directory both hold links that are not corpus aliases, and
+        // walking them turns a scan into a crawl. The skip is pinned here
+        // because without a fixture that HAS those directories, breaking it
+        // changes nothing observable — the campaign found exactly that gap.
+        for skipped in [".git", "target"] {
+            let dir = root.join(skipped);
+            fs::create_dir_all(&dir).expect("skipped dir");
+            std::os::unix::fs::symlink(
+                locked.as_std_path(),
+                dir.join("link-into-corpus").as_std_path(),
+            )
+            .expect("create link inside skipped dir");
+        }
+        verify_locked_corpus_has_no_aliases(&root)
+            .expect("links inside .git and target are not corpus aliases");
     }
 
     /// §4's fuzz rows are only evidence if the retained log is the bytes the
@@ -12977,9 +12994,17 @@ mod tests {
         for disposition in ["equivalent", "duplicate"] {
             let mut claimed = packet.clone();
             claimed.mutants[0].disposition = disposition.to_owned();
+            let error = verify_mutant_concurrence(&root, &claimed)
+                .expect_err("a {disposition} disposition over planned reviews must be refused");
+            // Asserting only `is_err()` here let a mutant survive: the packet's
+            // reviews are `planned`, so inverting the `== "pass"` comparison
+            // still failed, just further down and for an unrelated reason. A
+            // reject test that does not name its reason accepts any refusal.
             assert!(
-                verify_mutant_concurrence(&root, &claimed).is_err(),
-                "a {disposition} disposition over not-run reviews must be refused"
+                error
+                    .to_string()
+                    .contains("requires passing committed review record"),
+                "must refuse because concurrence needs passing reviews, got: {error}"
             );
         }
     }
