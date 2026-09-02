@@ -2478,6 +2478,99 @@ which operator a test would kill and was wrong both times.** The campaign, not
 the reasoning, found the live one. A reject case is a hypothesis about which
 branch matters; only the mutation run tests the hypothesis.
 
+## F-37 — the pre-flight: five lane-killers, all at the end of four hours
+
+Brian cleared a pre-flight before launching the lane again. Method: a throwaway
+`git worktree` at HEAD, flip the packet against the committed evidence, make the
+metadata child, run the qualified gate. Minutes instead of four hours, and main
+never touched.
+
+It found five guaranteed failures. Every one of them fires only at the END of
+the lane, after the 3.5-hour fuzz campaign.
+
+**1. The flip crashed outright.** `{row["family"] for row in load("generated.json")}`
+iterated a dict and got its KEYS, so `row["family"]` raised
+`TypeError: string indices must be integers`. `generated.json` is
+`{schema_version, artifact_blake3, rows}`. `crash.json` and `mutants.json` are
+dicts too, but the flip indexes those directly, so they were never wrong.
+
+**2. The flip never copied `negatives`.** It copies `seed`, `evidence_hash`,
+`accepted`, `attempts` and `discards`, so the packet kept a stale value and
+`verify_generated_rows` refused: *accepted 100000 + discards 0 + negatives 45569
+!= attempts 145876*. Four of five families matched by luck.
+
+**3. The flip never wrote the review markdown at all** — it only printed a
+`git add` line naming it. The qualified gate cross-checks EIGHT things between
+packet and surface (state marker, status tuple, `fixed_review_base`, `status`
+header, packet digest, all 33 canary rows, the conclusion, and an explicit
+refusal of leftover placeholders). The file carried **136 `NOT_RUN` cells**. The
+flip's entire job is to make packet and surface agree, and it did the packet
+only.
+
+**4. The lane never verified its own result.** `haqp_qualify.sh` ended at the
+flip. Every gate downstream of `qualification_state == "complete"` is
+unreachable until that moment, so a dozen verifiers ran for the first time after
+the lane had already reported success — surfacing later at the un-ignored gate
+test, with the flipped packet committed.
+
+**5. The canary section described a method that is not used.** It claimed
+*"Execution occurs outside working tree and restores fixed review base after
+each attempt"* and carried columns for an isolated command, a base-restored flag
+and a per-canary raw hash. `run_canary_suite` mutates an in-memory CLONE of the
+parsed packet. Nothing is ever written to the tree, so there is no base to
+restore and no such evidence exists. The in-memory approach is *stronger* — a
+clone cannot dirty the tree even on a crash — but three columns existed for
+evidence nothing produces. Same species as F-28.
+
+### What the renderer does, and the property that makes it safe
+
+The flip now renders the surface from the artifacts: canary rows, generated and
+fuzz rows, crash boundaries, both review passes, the falsification-attempt
+table, residual risks, the raw-artifact manifest, and the campaign-conclusion
+verdicts. The lane records a per-stage manifest (`evidence/lanes.json`:
+command, exit code, elapsed, artifact digest) because ADR-0020 asks the report
+for per-command exit statuses and artifact hashes that **no lane recorded** —
+those cells could previously only have been filled by inventing values.
+
+`assert_rendered` then refuses to hand back a document that still carries a
+placeholder, naming every one. That is the load-bearing part: a cell with no
+evidence behind it stops the flip in seconds instead of being filled with
+something plausible. It fired repeatedly while the renderer was being written,
+and each time it was pointing at a real gap.
+
+Three more template/artifact mismatches surfaced that way, each the same
+species as finding 5 — the report asking for something nobody records:
+
+- the metamorphic table hard-coded ten relation columns
+  (`Canonical reparse`, `Inverse/undo`, …) while the generator records a LIST of
+  `{relation, oracle_id, result, artifact_blake3}` whose names differ per
+  family. Every cell could only have been filled by mapping a recorded result
+  onto a column it did not belong to. Header corrected to the artifact's shape.
+- the Phase 1 test and coverage tables have no result to report at all: AM-17.2
+  keeps those gates `#[ignore]`d. `NOT_RUN` reads as "the lane forgot"; they now
+  render `QUARANTINED (AM-17.2)`, which is the honest third value.
+- `packet.requirements` has no `stateful` or normative-hash key (serde defaults
+  them), and `tests` use `name`, not `test`.
+
+### What the pre-flight proved, and what it could not
+
+**Proved:** the flip runs to completion; the packet and the full markdown
+surface are rendered consistently and **accepted by the qualified gate**, which
+previously refused at the very first markdown check.
+
+**Could not prove:** the per-artifact provenance binders (sanitizer proof, fuzz
+rows, corpus scope). The committed evidence was produced at older commits, and
+each binder checks its artifact's own `source_commit`/`source_tree` against the
+base. Restamping them further would only be testing my own simulation. Those
+bind for real only when a lane regenerates evidence at the fixed base — which is
+exactly what the next launch does.
+
+One note on method: the digest the markdown must carry is computed by shelling
+out to a new `haq packet-digest` subcommand rather than reimplemented in Python.
+The gate hashes `serde_json::to_vec(packet)`, which serializes in STRUCT field
+order, not the order the keys occupy in the file. A reimplementation would have
+agreed until someone reordered a field, then disagreed silently.
+
 ### A fixture that names a count must read it
 
 Adding canary C33 turned `markdown_surface_rejects_a_stale_qualification_state`

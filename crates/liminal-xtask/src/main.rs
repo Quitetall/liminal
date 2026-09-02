@@ -16,6 +16,12 @@ fn main() -> Result<()> {
             HaqCommand::RunCanaries => {
                 liminal_xtask::haq::run_canaries_repo(&liminal_xtask::repo_root()?)?;
             }
+            HaqCommand::PacketDigest => {
+                println!(
+                    "{}",
+                    liminal_xtask::haq::packet_digest_repo(&liminal_xtask::repo_root()?)?
+                );
+            }
             HaqCommand::Hash { path } => {
                 let bytes = std::fs::read(&path)?;
                 println!("{}", blake3::hash(&bytes).to_hex());
@@ -87,6 +93,14 @@ enum HaqCommand {
         /// File to digest.
         path: camino::Utf8PathBuf,
     },
+    /// The packet digest the markdown surface must carry.
+    ///
+    /// The flip shells out here rather than recomputing it: the gate hashes
+    /// `serde_json::to_vec(packet)`, which serializes in STRUCT field order,
+    /// not the order the keys happen to sit in the file. A reimplementation
+    /// that got that wrong would disagree only sometimes, which is worse than
+    /// disagreeing always.
+    PacketDigest,
     /// Run deterministic generated evidence for all five HAQP families.
     Generate {
         /// Accepted cases per family (qualification uses 100000).

@@ -62,10 +62,38 @@ echo "Nothing may commit source or gate code until this finishes and the packet"
 echo "is flipped — any such commit invalidates every artifact below."
 echo
 
+# ADR-0020 requires the report to carry per-command exit statuses and raw
+# artifact hashes. No lane recorded them, so those cells could only ever be
+# filled by inventing values (M17.5 pre-flight). Every stage now runs through
+# `stage`, which records command, exit code, elapsed seconds and the BLAKE3 of
+# the artifact it produced into a manifest the flip renders from.
+LANES="conformance/haqp/evidence/lanes.json"
+: > "${LANES}.parts"
+
+stage() {
+  local label="$1" artifact="$2"; shift 2
+  echo "--- ${label} ---"
+  local started exit_code elapsed digest
+  started=$(date +%s)
+  set +e
+  "$@"
+  exit_code=$?
+  set -e
+  elapsed=$(( $(date +%s) - started ))
+  digest="absent"
+  if [ -n "$artifact" ] && [ -f "$artifact" ]; then
+    digest=$(cargo run -q -p liminal-xtask -- haq hash "$artifact")
+  fi
+  printf '{"stage":"%s","command":"%s","exit_code":%s,"elapsed_s":%s,"artifact":"%s","artifact_blake3":"%s"}\n' \
+    "$label" "$(printf '%q ' "$@" | sed 's/"/\\"/g')" "$exit_code" "$elapsed" "${artifact:-none}" "$digest" \
+    >> "${LANES}.parts"
+  return "$exit_code"
+}
+
 # Cheap lanes first: a failure here should not cost 3.5 hours to discover.
-echo "--- canaries ---";  just haq-canaries
-echo "--- generated ---"; just haq-generated
-echo "--- crash ---";     just haq-crash
+stage canaries  conformance/haqp/evidence/canaries.json  just haq-canaries
+stage generated conformance/haqp/evidence/generated.json just haq-generated
+stage crash     conformance/haqp/evidence/crash.json     just haq-crash
 echo "--- mutants (stage 1b machinery; recorded, not claimed) ---"
 # `|| echo` swallowed every failure, not only the expected not-ready one — the
 # F-19 family, masking an exit code (M17.5 F-35). Only not-ready is tolerated.
@@ -78,12 +106,22 @@ if ! just haq-mutants; then
 fi
 
 # The long one. Writes fuzz.json and corpus-access.json.
-echo "--- fuzz campaign: 7 targets x 1800s (~3.5h) ---"
-scripts/haqp_fuzz_campaign.sh 1800 conformance/haqp/evidence/fuzz.json
+stage fuzz conformance/haqp/evidence/fuzz.json \
+  scripts/haqp_fuzz_campaign.sh 1800 conformance/haqp/evidence/fuzz.json
 
 # ADR-0020 §6: two blinded reviews, distinct model families. Last, because it
 # reads the tree the other lanes just described.
-echo "--- blind reviews ---"; just haq-blind-review
+stage reviews "" just haq-blind-review
+
+# One manifest, written once, so a partial lane cannot leave half a file behind.
+python3 - "$LANES" <<'MANIFEST'
+import json, sys, pathlib
+out = pathlib.Path(sys.argv[1])
+parts = out.with_suffix(".json.parts")
+rows = [json.loads(line) for line in parts.read_text().splitlines() if line.strip()]
+out.write_text(json.dumps({"schema_version": "haqp-lane-manifest-v1", "stages": rows}, indent=1) + "\n")
+parts.unlink()
+MANIFEST
 
 echo
 echo "=== every lane ran at ${BASE:0:12} ==="

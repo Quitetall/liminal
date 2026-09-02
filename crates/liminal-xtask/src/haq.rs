@@ -12,6 +12,11 @@ use liminal_format::Formatter;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
+/// The digest `verify_markdown_surface` requires the review markdown to carry.
+pub fn packet_digest_repo(root: &Utf8Path) -> Result<String> {
+    packet_digest(&read_packet(root)?)
+}
+
 /// Verify committed HAQP inventories, packet status, and crash-boundary registry.
 pub fn verify_inventory_repo(root: &Utf8Path) -> Result<()> {
     let packet = read_packet(root)?;

@@ -156,11 +156,19 @@ require proof plus concurrence in both independent review records.
 ## Disposable gate-canary campaign
 
 Target: exactly **33 predeclared canaries** covering every ratification gate and
-every M17 Level-3 measurement conjunct. Execution occurs outside working tree and
-restores fixed review base after each attempt.
+every M17 Level-3 measurement conjunct.
 
-| Canary ID | Gate/conjunct | Deliberate violation | Exact expected failure | Isolated command | Failure observed | Base restored | Raw hash | Result |
-|---|---|---|---|---|---|---|---|---|
+Execution is in-memory: `run_canary_suite` mutates a CLONE of the parsed packet
+and runs the verifiers against it, so the working tree is never written and
+there is no base to restore. This is stronger than the out-of-tree protocol this
+section used to describe — a clone cannot dirty the tree even on a crash — but
+it was described here and never implemented, so the columns that asked for an
+isolated command, a base-restored flag and a per-canary raw hash were asking for
+evidence nothing produces (M17.5 pre-flight). They are replaced by the mutation
+semantics and the observed failure, which the runner does record.
+
+| Canary ID | Gate/conjunct | Deliberate violation | Mutation semantics | Exact expected failure | Failure observed | Result |
+|---|---|---|---|---|---|---|
 | C01 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
 | C02 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
 | C03 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
@@ -213,8 +221,15 @@ post-failure filtering or domain shrinking fails qualification.
 
 ### Metamorphic relation records
 
-| Family | Canonical reparse | Idempotent replay | Inverse/undo | Irrelevant-input invariance | Commuting independent transactions | Incremental/full equivalence | Deterministic permutation | Independent oracle proof | Result |
-|---|---|---|---|---|---|---|---|---|---|
+The columns follow what the generator records: `relations` is a list of
+`{relation, oracle_id, result, artifact_blake3}` per family, and the relation
+set differs between families. The previous fixed ten-column header named
+relations no family reports under those names, so every cell could only have
+been filled by mapping a recorded result onto a column it did not belong to
+(M17.5 pre-flight).
+
+| Family | Relations and results | Relation-matrix hash | Result |
+|---|---|---|---|
 | source/CST/formatting | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
 | graph/interchange codecs | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
 | transforms/projections | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
