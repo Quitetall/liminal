@@ -118,7 +118,7 @@ def main() -> int:
         fail("evidence does not describe one fixed tree:\n  - " + "\n  - ".join(stale))
 
     # ---- copy claims from the artifacts ------------------------------------
-    generated = {row["family"]: row for row in load("generated.json")}
+    generated = {row["family"]: row for row in load("generated.json")["rows"]}
     for family in packet["generated"]:
         row = generated.get(family["family"])
         if row is None:
@@ -129,6 +129,7 @@ def main() -> int:
         family["accepted"] = row["accepted"]
         family["attempts"] = row["attempts"]
         family["discards"] = row["discards"]
+        family["negatives"] = row["negatives"]
 
     caught = {row["id"] for row in load("canaries.json") if row.get("caught")}
     for canary in packet["canaries"]:

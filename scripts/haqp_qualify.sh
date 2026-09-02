@@ -94,3 +94,34 @@ if [ "$(git rev-parse HEAD)" != "$BASE" ]; then
 fi
 
 python3 scripts/haqp_flip_packet.py
+
+# The lane used to END at the flip, so it reported success without ever
+# checking the packet it had just written. Every gate downstream of
+# `qualification_state == "complete"` is unreachable until this point, which
+# means the first run of a dozen verifiers happened after the lane had already
+# said it was done, and a failure surfaced later at the un-ignored gate test
+# with the flipped packet already committed.
+#
+# The commit is made here rather than by hand: leaving five commands for a
+# human after a four-hour lane is where transcription errors enter, and the
+# flip already prints the exact commit it wants.
+echo
+echo "--- metadata child ---"
+git add conformance/haqp/packet.json conformance/haqp/evidence \
+        docs/execution/phase1-suite-review.md \
+        docs/execution/m17-5-adversarial-findings.md \
+        conformance/tests/phase0.rs
+git commit --quiet -m 'record HAQP-1a qualification evidence'
+
+echo "--- verifying the packet this lane just wrote ---"
+if ! just haq-verify; then
+  # Reversible: --soft keeps every artifact staged, so nothing the campaign
+  # produced is lost and the failure can be inspected in place.
+  git reset --soft HEAD^
+  echo >&2
+  echo "the qualified gate refused the packet this lane produced." >&2
+  echo "the metadata commit was rolled back (--soft); artifacts are staged." >&2
+  exit 2
+fi
+echo
+echo "=== HAQP-1a qualified at ${BASE:0:12} ==="
