@@ -13,6 +13,11 @@ fuzz/artifacts/
 # TRACKED and stay tracked — gitignore does not untrack them. Crash artifacts
 # are promoted to conformance/corpora/regression/ by name (ADR-0020 §4).
 fuzz/corpus/
+# Corpus accumulated by earlier local campaigns, moved aside so each run starts
+# from the TRACKED seeds. Keeping it made every campaign start by replaying
+# ~115k local inputs: slow, and not reproducible from the tree, since a fresh
+# clone has only the 16 committed seeds per target (M17.5).
+fuzz/corpus-accumulated/
 fuzz/coverage/
 fuzz/target/
 mutants.out/

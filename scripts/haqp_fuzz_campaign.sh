@@ -116,9 +116,7 @@ first=1
 overall=0
 
 for t in "${TARGETS[@]}"; do
-  echo "=== fuzzing $t for ${SECS}s (ASan, seed=$SEED) ==="
-  started=$(date +%s)
-  fuzz_pid=0
+  echo "=== building $t (${SANITIZER}) ==="
   log="target/haqp/fuzz-$t.log"
   build_log="target/haqp/build-$t.log"
   build_log_evidence="conformance/haqp/evidence/build-logs/$t.log"
@@ -142,28 +140,114 @@ for t in "${TARGETS[@]}"; do
   build_log_hash=$(hash_file "$build_log_evidence")
   # -s is explicit rather than relying on cargo-fuzz's default: ADR-0020 §4
   # requires a SANITIZER-ENABLED campaign, and a requirement satisfied by a
-  # tool default is one a tool update can silently withdraw.
-  audit_raw="$AUDIT_DIR/$t.trace"
-  if [ "$AUDIT_ACCESS" = "1" ] && command -v strace >/dev/null 2>&1; then
-    ASAN_OPTIONS="$asan_options" strace -f -q -e trace=%file -o "$audit_raw" \
-      cargo +nightly fuzz run -s "$SANITIZER" "$t" -- \
-        -max_total_time="$SECS" -seed="$SEED" -rss_limit_mb=4096 -print_final_stats=1 \
-        >"$log" 2>&1 &
-    fuzz_pid=$!
-    wait "$fuzz_pid"
-    code=$?
-  else
-    echo "corpus access audit unavailable: AUDIT_ACCESS=$AUDIT_ACCESS strace=$(command -v strace || echo missing)" >"$audit_raw"
-    overall=1
-    cargo +nightly fuzz run -s "$SANITIZER" "$t" -- \
-      -max_total_time="$SECS" -seed="$SEED" -rss_limit_mb=4096 -print_final_stats=1 \
-      >"$log" 2>&1
-    code=$?
-    audit_tracer="unavailable"
+  printf '%s\0%s\0%s\0%s\0%s\0%s\0' \
+    "$build_code" "$probe_code" "$binary_hash" "$probe_hash" "$build_log_hash" "$build_command" \
+    >"target/haqp/buildmeta-$t"
+done
+
+# ── fuzz runs, in parallel ────────────────────────────────────────────────
+#
+# Each libFuzzer instance is single-threaded and its targets are independent:
+# separate corpus, artifacts, log and strace file. Running them one at a time
+# left 13 of this machine's 14 cores idle for three and a half hours.
+#
+# What does NOT change: every target still gets its own full `-max_total_time`
+# budget on its own core, so ADR-0020 §4's floor (30 min per family, 150
+# target-minutes) is satisfied exactly as before. What DOES change is
+# executions per target -- concurrent ASan runs share memory bandwidth and pull
+# all-core clocks down. §4's requirement is denominated in time, but exec depth
+# is the substance of the evidence, so the default is deliberately conservative
+# rather than "all seven at once".
+#
+# Builds above are serial on purpose: they share one `fuzz/target`, so cargo
+# would serialize them on its package lock regardless.
+JOBS="${HAQP_FUZZ_JOBS:-4}"
+echo "=== fuzzing ${#TARGETS[@]} targets for ${SECS}s each, ${JOBS} at a time ==="
+running=0
+for t in "${TARGETS[@]}"; do
+  (
+    started=$(date +%s)
+    log="target/haqp/fuzz-$t.log"
+    audit_raw="$AUDIT_DIR/$t.trace"
+    # The BUILT BINARY is run directly rather than through `cargo fuzz run`.
+    #
+    # cargo rebuilds and takes a global package-cache/build-directory lock, so
+    # four concurrent `cargo fuzz run` invocations serialize on it: measured,
+    # one target spent 220 of its 228 seconds printing "Blocking waiting for
+    # file lock" against a FIVE second budget, and that wait landed inside
+    # elapsed_s. Running the binary is what cargo fuzz run does anyway once the
+    # build phase above is done -- 6s instead of 228s, and 90k executions
+    # instead of 62k on the same budget.
+    #
+    # Two things cargo fuzz run supplied that must now be supplied explicitly,
+    # or the evidence quietly changes meaning:
+    #   -artifact_prefix, or a crash lands in the cwd and `arts` counts zero;
+    #   the echoed command line, which verify_fuzz_log_metrics binds the log to
+    #   via `-max_total_time=` and `-seed=`. libFuzzer prints "INFO: Seed:" but
+    #   never its own flags, so the campaign records the invocation itself. The
+    #   line is true by construction: it is the command being run on the line
+    #   below it.
+    binary_run="fuzz/target/$(rustc -vV | sed -n 's/^host: //p')/release/$t"
+    mkdir -p "fuzz/artifacts/$t"
+    # ABSOLUTE, as cargo fuzz run passed it. resolve_corpus_paths filters
+    # traced paths on "/fuzz/corpus/$target" -- with a leading slash -- so a
+    # relative corpus argument makes every one of the ~20k traced opens fail
+    # the filter and the resolver return empty. trace_root is recorded in the
+    # audit row and stripped back off, so absolute here is the shape the
+    # corpus-access evidence already expects.
+    fuzz_argv=(
+      "$trace_root/fuzz/corpus/$t"
+      -artifact_prefix="fuzz/artifacts/$t/"
+      -max_total_time="$SECS" -seed="$SEED" -rss_limit_mb=4096 -print_final_stats=1
+    )
+    printf 'Running: %s %s\n' "$binary_run" "${fuzz_argv[*]}" >"$log"
+    if [ "$AUDIT_ACCESS" = "1" ] && command -v strace >/dev/null 2>&1; then
+      ASAN_OPTIONS="$asan_options" strace -f -q -e trace=%file -o "$audit_raw" \
+        "$binary_run" "${fuzz_argv[@]}" >>"$log" 2>&1 &
+      fuzz_pid=$!
+      wait "$fuzz_pid"
+      code=$?
+      tracer="strace-open-paths"
+    else
+      echo "corpus access audit unavailable: AUDIT_ACCESS=$AUDIT_ACCESS strace=$(command -v strace || echo missing)" >"$audit_raw"
+      ASAN_OPTIONS="$asan_options" "$binary_run" "${fuzz_argv[@]}" >>"$log" 2>&1
+      code=$?
+      fuzz_pid=0
+      tracer="unavailable"
+    fi
+    # elapsed now measures ONLY the fuzz run. It used to start before
+    # `cargo fuzz build`, so a cold cache pushed elapsed_s past
+    # verify_fuzz_log_metrics' `done_elapsed + 60` tolerance and failed the
+    # campaign after 3.5 hours. Warm builds hid it: the committed evidence
+    # shows 2-3s of slack against a 60s allowance.
+    printf '%s\0%s\0%s\0%s\0' \
+      "$code" "$(( $(date +%s) - started ))" "$fuzz_pid" "$tracer" \
+      >"target/haqp/runmeta-$t"
+    echo "--- $t finished: exit=$code"
+  ) &
+  running=$((running + 1))
+  if [ "$running" -ge "$JOBS" ]; then
+    wait -n
+    running=$((running - 1))
   fi
-  # The shell background PID can differ from strace's final tracer PID when
-  # env-assignment/exec wrappers fork. Bind evidence to the PID actually
-  # present in raw strace output, not the launcher process.
+done
+wait
+
+for t in "${TARGETS[@]}"; do
+  # Serial and in TARGETS order: the JSON rows below are appended with manual
+  # comma handling, and the evidence must not depend on which target finished
+  # first.
+  log="target/haqp/fuzz-$t.log"
+  build_log_evidence="conformance/haqp/evidence/build-logs/$t.log"
+  binary="conformance/haqp/evidence/binaries/$t"
+  probe="conformance/haqp/evidence/probes/$t.log"
+  audit_raw="$AUDIT_DIR/$t.trace"
+  mapfile -d '' -t bm <"target/haqp/buildmeta-$t"
+  build_code="${bm[0]}"; probe_code="${bm[1]}"; binary_hash="${bm[2]}"
+  probe_hash="${bm[3]}"; build_log_hash="${bm[4]}"; build_command="${bm[5]}"
+  mapfile -d '' -t rm <"target/haqp/runmeta-$t"
+  code="${rm[0]}"; elapsed="${rm[1]}"; fuzz_pid="${rm[2]}"; audit_tracer="${rm[3]}"
+  [ "$audit_tracer" = "unavailable" ] && overall=1
   trace_pid=${fuzz_pid:-0}
   if [ -s "$audit_raw" ]; then
     # Capture tracer identity even on failing runs; verifier then rejects the
@@ -179,7 +263,6 @@ for t in "${TARGETS[@]}"; do
     trace_complete=true
   fi
   trace_hash=$(hash_file "$audit_raw")
-  elapsed=$(( $(date +%s) - started ))
   arts=$(ls "fuzz/artifacts/$t" 2>/dev/null | wc -l)
   execs=$(grep -oP 'stat::number_of_executed_units:\s*\K[0-9]+' "$log" | tail -1)
   execs=${execs:-0}
@@ -224,7 +307,9 @@ for t in "${TARGETS[@]}"; do
   if [ -n "$asan_options" ]; then
     printf -v trace_prefix 'ASAN_OPTIONS=%q ' "$asan_options"
   fi
-  trace_command="$build_command && ${trace_prefix}strace -f -q -e trace=%file -o $audit_raw cargo +nightly fuzz run -s $SANITIZER $t -- -max_total_time=$SECS -seed=$SEED -rss_limit_mb=4096 -print_final_stats=1"
+  # Must describe what actually ran: the build, then the traced BINARY.
+  binary_run="fuzz/target/$(rustc -vV | sed -n 's/^host: //p')/release/$t"
+  trace_command="$build_command && ${trace_prefix}strace -f -q -e trace=%file -o $audit_raw $binary_run $trace_root/fuzz/corpus/$t -artifact_prefix=fuzz/artifacts/$t/ -max_total_time=$SECS -seed=$SEED -rss_limit_mb=4096 -print_final_stats=1"
   binding_input="target/haqp/process-binding-$t.txt"
   printf '%s\0%s\0%s\0%s' "$trace_command" "$trace_pid" "$trace_exit_code" "$trace_hash" >"$binding_input"
   process_binding=$(hash_file "$binding_input")
