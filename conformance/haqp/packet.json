@@ -6,7 +6,44 @@
  "qualification_stage": "1a",
  "concurrent_code": "not_applicable",
  "locked_acceptance_corpora_touched": false,
- "residual_risks": [],
+ "residual_risks": [
+  {
+   "id": "RISK-001",
+   "owner": "Brian",
+   "severity": "disclosed",
+   "trigger": "mutation evidence deferred to HAQP-1b",
+   "requirement": "P1-R001",
+   "evidence": "docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md:99",
+   "planned_phase": "M24",
+   "mitigation": "HAQP-1b re-qualification at M24 with the mutation requirement intact",
+   "authority": "ADR-0021",
+   "state": "accepted"
+  },
+  {
+   "id": "RISK-002",
+   "owner": "Brian",
+   "severity": "disclosed",
+   "trigger": "\u00a75 crash-boundary exhaustiveness scoped to ILRP",
+   "requirement": "P1-R001",
+   "evidence": "docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md:113",
+   "planned_phase": "M17.9",
+   "mitigation": "packet.crash_boundary_scope declares the bound and verify_crash_boundary_scope pins it to tracked source",
+   "authority": "ADR-0021",
+   "state": "accepted"
+  },
+  {
+   "id": "RISK-003",
+   "owner": "Brian",
+   "severity": "disclosed",
+   "trigger": "declared mutants anchored to declarations",
+   "requirement": "P1-R001",
+   "evidence": "docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md:123",
+   "planned_phase": "M24",
+   "mitigation": "re-anchor during HAQP-1b authoring; a canary pins the count at exactly 36",
+   "authority": "ADR-0021",
+   "state": "accepted"
+  }
+ ],
  "requirements": [
   {
    "id": "P1-R001",

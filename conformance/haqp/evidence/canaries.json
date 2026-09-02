@@ -139,7 +139,7 @@
     "gate": "markdown",
     "violation": "remove packet digest",
     "expected_failure": "review packet markdown missing packet digest",
-    "observed_failure": "review packet markdown missing packet digest 779094fa4e87fa0d4e20cba72778a8317d888870b9ba1eac812c0d90ea659754",
+    "observed_failure": "review packet markdown missing packet digest 51374da5bcdc033aa582ebd2ba13a9c5c13ec156b51e8a84ae7a3efcf0dced16",
     "caught": true,
     "mutation_semantics": "remove baseline packet digest from markdown"
   },

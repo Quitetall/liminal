@@ -105,7 +105,7 @@ def load(name: str) -> object:
 def field_row(text: str, field: str, value: str) -> str:
     """Replace one `| field | ... |` row's value, preserving any trailing prose."""
     out = []
-    hit = False
+    hit = 0
     for line in text.splitlines():
         stripped = line.strip()
         if stripped.startswith(f"| {field} |"):
@@ -119,11 +119,13 @@ def field_row(text: str, field: str, value: str) -> str:
                         suffix = " " + tail[idx:]
                     break
             out.append(f"| {field} | {value}{suffix} |")
-            hit = True
+            hit += 1
         else:
             out.append(line)
-    if not hit:
-        fail(f"review markdown has no `{field}` row to render")
+    if hit != 1:
+        # Not just "missing": a field name occurring twice would have every
+        # occurrence overwritten with one value, silently.
+        fail(f"review markdown has {hit} `{field}` rows to render; expected exactly 1")
     return "\n".join(out) + "\n"
 
 
@@ -190,7 +192,13 @@ def render_report(text: str, packet: dict, base: str, ev: dict) -> str:
     # ---- execution lanes ----
     text = field_row(text, "command inventory", "`just ci`")
     text = field_row(text, "elapsed-time fuzz dependency", "ABSENT")
-    text = field_row(text, "latest exit status", "0")
+    # Was hardcoded "0". A renderer whose whole purpose is to copy evidence
+    # must not assert the one field that says whether the evidence succeeded.
+    text = field_row(
+        text,
+        "latest exit status",
+        "; ".join(f"{name}={row['exit_code']}" for name, row in lanes.items()),
+    )
     text = field_row(text, "raw log hash", cell(lanes["canaries"]["artifact_blake3"]))
     text = field_row(text, "fixed commit (40 lowercase hex)", base)
     text = field_row(text, "fixed source tree (40 lowercase hex)", run["tree"])
@@ -450,7 +458,7 @@ def render_tables(text: str, packet: dict, base: str, ev: dict) -> str:
                 cell(row["family"]),
                 cell(rendered) or "none recorded",
                 cell(row["oracle"]["relation_matrix_blake3"]),
-                "pass" if all(r["result"] == "pass" for r in row["relations"]) else "FAIL",
+                "pass" if all(r.get("result") == "pass" for r in row["relations"]) else "FAIL",
             )
         )
     text = replace_table(text, "| Family | Relations and results |", rows)
@@ -502,9 +510,19 @@ def render_tables(text: str, packet: dict, base: str, ev: dict) -> str:
             cell(r.get("resolution", "M17.9/M24")),
         )
         for r in risks
-    ] or ["| RISK-000 | Brian | disclosed | see ADR-0021 disclosed limitations "
-          "| P1-R001 | docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md "
-          "| M24 (HAQP-1b) |"]
+    ]
+    if not rows:
+        # The fallback here used to be a hand-written RISK-000 row citing
+        # ADR-0021. That is the renderer inventing evidence, and it papered over
+        # a real gap: ADR-0021 discloses two limitations that packet.residual_risks
+        # does not carry. §7 wants every limitation to have coordinates, so the
+        # honest move is to refuse and name the gap.
+        fail(
+            "packet.residual_risks is empty, but ADR-0020 §7 requires every known "
+            "limitation to carry exact coordinates. ADR-0021 already discloses two "
+            "(the ILRP-scoped §5 claim and the unmeasured Phase 1 suite). Record them "
+            "in the packet rather than having this script write a row for them."
+        )
     text = replace_table(text, "| Risk ID | Owner | Severity |", rows)
 
     # ---- raw artifact manifest, from the lane's own stage records ----
@@ -684,7 +702,14 @@ def main() -> int:
     stale = re.search(r"\| packet digest \| `([0-9a-f]{64})`", report)
     if stale is None:
         fail("review markdown has no `packet digest` row to rebind")
-    report = report.replace(stale.group(1), packet_digest_via_xtask())
+    # Scoped to the packet-digest cell. A bare str.replace swaps every
+    # occurrence of that 64-hex string, and the raw-artifact manifest is full of
+    # digests -- one collision would silently rewrite an artifact's hash.
+    report = report.replace(
+        f"| packet digest | `{stale.group(1)}`",
+        f"| packet digest | `{packet_digest_via_xtask()}`",
+        1,
+    )
     assert_rendered(report)
     REVIEW_MD.write_text(report)
 
