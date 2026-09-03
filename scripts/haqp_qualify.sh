@@ -94,10 +94,24 @@ stage() {
 stage canaries  conformance/haqp/evidence/canaries.json  just haq-canaries
 stage generated conformance/haqp/evidence/generated.json just haq-generated
 stage crash     conformance/haqp/evidence/crash.json     just haq-crash
+stage concurrency conformance/haqp/evidence/concurrency.json just haq-concurrency
 echo "--- mutants (stage 1b machinery; recorded, not claimed) ---"
 # `|| echo` swallowed every failure, not only the expected not-ready one — the
 # F-19 family, masking an exit code (M17.5 F-35). Only not-ready is tolerated.
+# The tolerance must judge THIS run's output. It used to grep the existing
+# mutants.json for "not-ready", so a stage that died before writing anything --
+# which is what happened on 2026-09-01, when the runner's blanket clean check
+# refused a tree the earlier lanes had legitimately dirtied -- was excused by a
+# file from three weeks earlier, and the stale source_commit rode through to the
+# flip. Requiring the file to be REWRITTEN at this base closes that.
+mutants_before=$(cargo run -q -p liminal-xtask -- haq hash conformance/haqp/evidence/mutants.json 2>/dev/null || echo none)
 if ! just haq-mutants; then
+  mutants_after=$(cargo run -q -p liminal-xtask -- haq hash conformance/haqp/evidence/mutants.json 2>/dev/null || echo none)
+  if [ "$mutants_after" = "$mutants_before" ]; then
+    echo "mutant lane failed WITHOUT writing evidence; the not-ready tolerance may" >&2
+    echo "not be granted by a pre-existing file (M17.5)" >&2
+    exit 2
+  fi
   if ! grep -q '"status": *"not-ready"' conformance/haqp/evidence/mutants.json 2>/dev/null; then
     echo "mutant lane failed for a reason other than not-ready" >&2
     exit 2

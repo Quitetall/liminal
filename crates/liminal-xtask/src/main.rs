@@ -16,6 +16,9 @@ fn main() -> Result<()> {
             HaqCommand::RunCanaries => {
                 liminal_xtask::haq::run_canaries_repo(&liminal_xtask::repo_root()?)?;
             }
+            HaqCommand::Concurrency => {
+                liminal_xtask::haq::run_concurrency_repo(&liminal_xtask::repo_root()?)?;
+            }
             HaqCommand::PacketDigest => {
                 println!(
                     "{}",
@@ -93,6 +96,8 @@ enum HaqCommand {
         /// File to digest.
         path: camino::Utf8PathBuf,
     },
+    /// Re-attest the not-applicable concurrency declaration at this base.
+    Concurrency,
     /// The packet digest the markdown surface must carry.
     ///
     /// The flip shells out here rather than recomputing it: the gate hashes

@@ -42,6 +42,9 @@ ATTACK_CLASSES = {
     "evidence/report drift",
 }
 OUT = ROOT / "target" / "haqp" / "blind-review"
+# The durable half. OUT is scratch; this is what the flip reads and what a
+# fresh clone gets.
+EVIDENCE_REVIEWS = ROOT / "conformance" / "haqp" / "evidence" / "reviews"
 
 
 def digest(data: bytes) -> str:
@@ -727,7 +730,24 @@ def run_pass(
     }
     record["integrity_binding_sha256"] = record_integrity_hash(record=record)
     # Do not persist raw model output; it is untrusted and may contain secrets.
+    #
+    # Written to the COMMITTED evidence path, not only to OUT. OUT is
+    # target/haqp/blind-review/, which .gitignore excludes and `cargo clean`
+    # deletes -- so on 2026-09-01 the lane ran two real reviews, bound them
+    # correctly to the fixed base, printed {"result": "recorded"}, and left
+    # conformance/haqp/evidence/reviews/ holding records from three weeks and
+    # several commits earlier. The flip then refused the whole campaign as
+    # stale. §6 evidence that lives only in a scratch directory is the F-29 and
+    # F-32 species at the most expensive point in the lane.
+    #
+    # The colon in a backend-qualified model id ("codex:gpt-5.6-sol") is not a
+    # portable filename character and the committed records already use a
+    # hyphen, so the two spellings are reconciled here rather than left to
+    # diverge.
     (OUT / f"{name}.json").write_text(json.dumps(record, indent=2) + "\n")
+    committed = EVIDENCE_REVIEWS / f"{name.replace(':', '-')}.json"
+    committed.parent.mkdir(parents=True, exist_ok=True)
+    committed.write_text(json.dumps(record, indent=2) + "\n")
     return record
 
 

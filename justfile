@@ -51,6 +51,12 @@ haq-canaries:
 haq-generated cases="100000":
     cargo run -p liminal-xtask -- haq generate --cases {{ cases }}
 
+# Re-attest the not-applicable concurrency declaration at the current base.
+# Nothing produced conformance/haqp/evidence/concurrency.json before this, so
+# it carried an August source_commit into every later lane (M17.5).
+haq-concurrency:
+    cargo run -p liminal-xtask -- haq concurrency
+
 haq-mutants *ARGS:
     cargo run -p liminal-xtask -- haq mutants {{ ARGS }}
 

@@ -12,6 +12,54 @@ use liminal_format::Formatter;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
+/// Re-attest concurrency evidence at the current base (ADR-0020 §4).
+///
+/// Nothing produced this artifact. `haqp_qualify.sh` had no concurrency stage
+/// and the justfile no recipe, so `concurrency.json` was hand-written once in
+/// August and every later lane inherited its stale `source_commit` -- the flip
+/// refused the 2026-09-01 campaign partly on this file. A required artifact
+/// with no producer cannot survive a rule that says evidence must describe ONE
+/// fixed tree.
+///
+/// The record is built from the packet and the closed constants
+/// `verify_concurrency_evidence_record` checks against, not by re-stamping the
+/// previous output: regenerating a file from itself would carry a wrong
+/// declaration forward untouched, which is the failure mode this replaces.
+pub fn run_concurrency_repo(root: &Utf8Path) -> Result<()> {
+    let packet = read_packet(root)?;
+    anyhow::ensure!(
+        packet.concurrent_code == "not_applicable",
+        "concurrency generation covers the not-applicable declaration only; \
+         packet declares {:?} and an executed schedule campaign must record its \
+         own runs",
+        packet.concurrent_code
+    );
+    let commit = git_text(root, &["rev-parse", "HEAD"])?;
+    let tree = git_text(root, &["rev-parse", "HEAD^{tree}"])?;
+    let evidence = ConcurrentEvidence {
+        schema_version: "haqp-concurrency-v1".to_owned(),
+        implementation: packet.concurrent_code.clone(),
+        mode: "not_applicable".to_owned(),
+        reason: "no concurrent implementation exists; deterministic schedule \
+                 exploration is reserved for Phase 6"
+            .to_owned(),
+        source_anchor: "docs/execution/M21.md:13".to_owned(),
+        runner: String::new(),
+        source_commit: commit,
+        source_tree: tree,
+        oracle_id: "not_applicable".to_owned(),
+        schedules: Vec::new(),
+    };
+    // Fail here rather than at the gate: the record is checked by the same code
+    // that will judge it, so a generator that drifts from the verifier is
+    // caught when it is written, not after a four-hour lane.
+    verify_concurrency_evidence_record(root, &packet, &evidence)?;
+    let path = root.join("conformance/haqp/evidence/concurrency.json");
+    fs::write(&path, serde_json::to_vec_pretty(&evidence)?)?;
+    println!("concurrency evidence written to {path}");
+    Ok(())
+}
+
 /// The digest `verify_markdown_surface` requires the review markdown to carry.
 pub fn packet_digest_repo(root: &Utf8Path) -> Result<String> {
     packet_digest(&read_packet(root)?)
@@ -3076,9 +3124,10 @@ impl Drop for WorktreeGuard {
 pub fn run_mutants_repo(root: &Utf8Path, ids: &[String], run_ignored: bool) -> Result<()> {
     let packet = read_packet(root)?;
     verify_packet_shape(&packet)?;
+    let dirt = source_dirt(root)?;
     anyhow::ensure!(
-        git_text(root, &["status", "--porcelain"])?.is_empty(),
-        "mutant runner requires a clean source tree"
+        dirt.is_empty(),
+        "mutant runner requires a clean SOURCE tree; dirty: {dirt:?}"
     );
     let source_commit = git_text(root, &["rev-parse", "HEAD"])?;
     let lockfile_blake3 = hex_digest(&fs::read(root.join("Cargo.lock"))?);
@@ -5077,6 +5126,52 @@ fn verify_gate_unignore_only(root: &Utf8Path, evidence_parent: &str) -> Result<(
         removed[0].as_str(),
         PHASE0_GATE_IGNORE,
     )
+}
+
+/// Working-tree paths that are neither qualification metadata nor evidence.
+///
+/// A blanket `git status --porcelain` check is wrong here and has now been wrong
+/// four times: once each in haqp_flip_packet.py, haqp_blind_review.py and
+/// haqp_campaign_clock.sh, and here. The lanes WRITE evidence as they run, so by
+/// the time the mutant stage starts, `canaries.json`, `generated.json` and
+/// `crash.json` are already modified. The blanket check then refused a tree that
+/// was doing exactly what the lane asked of it -- and the qualify script's
+/// "not-ready is tolerated" branch read the STALE file, so the failure passed
+/// silently and mutants.json kept an August commit.
+///
+/// `scripts/haqp_paths.py` is the sibling rule for the shell lanes. They agree
+/// except on `conformance/tests/phase0.rs`, deliberately: the Python side runs
+/// at FLIP time, after AM-17.6 has lifted the gate's `#[ignore]`, so that file
+/// is legitimately modified by then. Here the check runs mid-campaign, before
+/// the flip, where a modified gate file means someone edited gate code while
+/// evidence was being produced -- which must invalidate the run.
+fn source_dirt(root: &Utf8Path) -> Result<Vec<String>> {
+    Ok(git_text(root, &["status", "--porcelain=v1"])?
+        .lines()
+        .filter_map(porcelain_path)
+        .filter(|path| !qualification_metadata_path(path))
+        .collect())
+}
+
+/// The path out of one `git status --porcelain=v1` line.
+///
+/// Not `line[3..]`. `git_text` trims its output, so the FIRST line loses the
+/// leading space of a " M path" status and a fixed three-character slice eats
+/// the first character of its path -- which is how this function first reported
+/// `onformance/haqp/...`. That is the third appearance of this exact off-by-one:
+/// `haqp_flip_packet.py` had it, its local copy in `haqp_blind_review.py` had
+/// it, and it came back here in new code written by someone who knew about both.
+/// Trimming first and splitting on the status field is immune to it.
+fn porcelain_path(line: &str) -> Option<String> {
+    let (_status, rest) = line.trim_start().split_once(' ')?;
+    let path = rest.trim();
+    // Rename and copy entries read "old -> new"; the destination is what is
+    // present in the working tree.
+    let path = path.rsplit(" -> ").next().unwrap_or(path);
+    // Paths containing spaces or non-ASCII come back quoted; the quotes are not
+    // part of the path.
+    let path = path.trim_matches('"');
+    (!path.is_empty()).then(|| path.to_owned())
 }
 
 fn qualification_metadata_path(path: &str) -> bool {
@@ -13055,6 +13150,69 @@ mod tests {
         unknown_target.target = "no_such_target".to_owned();
         verify_fuzz_seed_manifests(&root, std::slice::from_ref(&unknown_target))
             .expect_err("a target with no tracked seed corpus must be refused");
+    }
+
+    /// The off-by-one that has now shipped three times: `git_text` trims, so
+    /// the FIRST porcelain line arrives without its leading space and a fixed
+    /// `line[3..]` slice eats a character of the path.
+    #[test]
+    fn a_trimmed_first_porcelain_line_keeps_its_whole_path() {
+        // As `git status --porcelain=v1` emits it, and as it arrives after trim.
+        assert_eq!(
+            porcelain_path(" M conformance/haqp/packet.json").as_deref(),
+            Some("conformance/haqp/packet.json")
+        );
+        assert_eq!(
+            porcelain_path("M conformance/haqp/packet.json").as_deref(),
+            Some("conformance/haqp/packet.json"),
+            "a trimmed leading space must not cost the path its first character"
+        );
+        for (line, want) in [
+            ("?? scripts/new.sh", "scripts/new.sh"),
+            (
+                "MM crates/liminal-xtask/src/haq.rs",
+                "crates/liminal-xtask/src/haq.rs",
+            ),
+            ("R  docs/old.md -> docs/new.md", "docs/new.md"),
+            ("A  \"docs/with space.md\"", "docs/with space.md"),
+        ] {
+            assert_eq!(
+                porcelain_path(line).as_deref(),
+                Some(want),
+                "line: {line:?}"
+            );
+        }
+    }
+
+    /// Evidence dirt is what the lanes PRODUCE; refusing it would refuse every
+    /// campaign at its own second stage. This is the same rule as
+    /// scripts/haqp_paths.py and the two must not drift.
+    #[test]
+    fn source_dirt_ignores_metadata_and_evidence_but_not_code() {
+        for path in [
+            "conformance/haqp/evidence/canaries.json",
+            "conformance/haqp/evidence/access/cst_parse.trace",
+            "conformance/haqp/packet.json",
+            "docs/execution/phase1-suite-review.md",
+        ] {
+            assert!(
+                qualification_metadata_path(path),
+                "{path} is written by a lane and must not count as source dirt"
+            );
+        }
+        for path in [
+            "crates/liminal-xtask/src/haq.rs",
+            "scripts/haqp_qualify.sh",
+            "justfile",
+            // phase0.rs is metadata to haqp_paths.py, which runs after the
+            // flip lifts the gate's #[ignore]. Mid-campaign it is source.
+            "conformance/tests/phase0.rs",
+        ] {
+            assert!(
+                !qualification_metadata_path(path),
+                "{path} is source mid-campaign; dirtying it must invalidate a run"
+            );
+        }
     }
 
     /// M17.5 F-31 / P1-A08: the scenarios block was written by the fault lane
