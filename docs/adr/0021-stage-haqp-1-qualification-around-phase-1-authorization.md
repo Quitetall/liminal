@@ -96,19 +96,25 @@ legitimately un-ignored. Phase 1 suite ratification requires **both** stages.
   predeclared names.
 - A reader of a `complete` packet must check which stage completed. The stage is
   a required field precisely so that check cannot be skipped.
-- **Disclosed limitation (M17.5 F-33, added 2026-08-26):** the deferred plan is
-  not merely unevaluated, it is currently **inapplicable**. 36 of the 65
-  declared mutants are anchored to declarations — function signatures and enum
-  variants — which no operator can mutate, so they can never be killed while
-  still counting toward §3's denominator. 65 − 36 = **29**, against a floor of
-  64. HAQP-1b is therefore not "evaluate the existing plan" but "author most of
-  one": re-anchor 36 and add roughly 35 more, which is the same work as F-06's
-  risk-weighted selection.
+- **RESOLVED (M17.5 F-33, closed 2026-09-03):** this previously disclosed that
+  36 of the 65 declared mutants were anchored to declarations — function
+  signatures and enum variants — which no operator can mutate, leaving 29
+  against a floor of 64, and deferred the repair to 1b.
 
-  A 1a packet may complete over this plan, and a reader must not mistake that
-  for the plan being sound. `verify_mutant_anchors_support_operators` refuses
-  inside the `1b` branch so the gap cannot be rediscovered after Phase 1 is
-  built, and a canary asserts the count is still exactly 36.
+  The disclosure did not survive contact with §6. A blind reviewer rediscovered
+  it on 2026-09-02 at six coordinates and returned six verified defects, and a
+  finding can only be cleared by a commit that changes the code at its
+  coordinate — there is no "resolved by disclosure" path, by design. A defect
+  that is documented but not fixed still fails the gate, which is the correct
+  behaviour and the reason the disclosure was the wrong instrument.
+
+  The plan was re-anchored instead: every declared mutant now names a line where
+  its declared operator can genuinely be applied, 17 operators were corrected
+  where the original 5×13 grid had assigned an operator to a family whose code
+  cannot exhibit it (F-06's finding, in the specific), no two mutants share an
+  anchor, and the heaviest operator supplies 12.3% against §3's 25% cap.
+  Dispositions remain `predeclared`: re-anchoring makes the declarations TRUE,
+  it does not claim a kill, so it is 1a work and 1b's evaluation is untouched.
 
 - **Disclosed limitation (M17.5 A05, AM-17.7, added 2026-08-26):** §5's
   "exhaustive registered crash boundaries" is, in a 1a packet, exhaustive over

@@ -5,8 +5,8 @@
   "reason": "no concurrent implementation exists; deterministic schedule exploration is reserved for Phase 6",
   "source_anchor": "docs/execution/M21.md:13",
   "runner": "",
-  "source_commit": "ca5be196d87ca94a9ada73a73da8d16e586e1073",
-  "source_tree": "7d39d492edd1dcd18131f2691a535021bd3eb328",
+  "source_commit": "d6e59ce5535ab3c93490bf60007e4ceb4346dc76",
+  "source_tree": "3bc3d6d0692e0561d49e53ee99724ff15328271f",
   "oracle_id": "not_applicable",
   "schedules": []
 }

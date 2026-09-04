@@ -3713,7 +3713,7 @@ fn verify_sanitizer_proof(
         )?;
     }
     let build_log_path = safe_repo_path(root, &proof.build_log, "sanitizer build log")?;
-    let build_log_bytes = fs::read(&build_log_path)
+    let build_log_bytes = read_evidence_bytes(&build_log_path)
         .with_context(|| format!("{build_log_path}: sanitizer build log is required"))?;
     require_eq(
         &format!("{} build_log_blake3", row.target),
@@ -4181,7 +4181,8 @@ fn verify_corpus_scope_rows(
         );
         require_eq("corpus scope trace path", &row.trace, &expected_path)?;
         let path = safe_repo_path(root, &row.trace, "corpus scope trace")?;
-        let bytes = fs::read(&path).with_context(|| format!("{path}: scope trace required"))?;
+        let bytes =
+            read_evidence_bytes(&path).with_context(|| format!("{path}: scope trace required"))?;
         require_eq(
             &format!("{} corpus scope trace_blake3", row.scope),
             &row.trace_blake3,
@@ -4638,7 +4639,7 @@ fn verify_corpus_audit_campaign_binding(root: &Utf8Path, audit: &CorpusAccessAud
         )?;
         require_hex_digest(&format!("{} trace_blake3", row.target), &row.trace_blake3)?;
         let trace_path = safe_repo_path(root, &row.trace, "corpus trace")?;
-        let trace_bytes = fs::read(&trace_path)
+        let trace_bytes = read_evidence_bytes(&trace_path)
             .with_context(|| format!("{trace_path}: raw access trace is required"))?;
         require_eq(
             "corpus access trace_blake3",
@@ -5172,6 +5173,29 @@ fn porcelain_path(line: &str) -> Option<String> {
     // part of the path.
     let path = path.trim_matches('"');
     (!path.is_empty()).then(|| path.to_owned())
+}
+
+/// Read one evidence artifact, transparently decompressing `.zst`.
+///
+/// A full 30-minute ASan campaign emits gigabytes of strace output — the
+/// 2026-09-02 run produced a 1.56 GB trace for `graph_interchange_codec`, which
+/// no remote will accept. zstd takes that to roughly 55 MB, and `zstd` is
+/// already a workspace dependency used for exactly this under AM-11.6.
+///
+/// The digest is taken over the DECOMPRESSED bytes, which diverges from
+/// AM-11.6 deliberately. AM-11.6 freezes the compressed artifact; here
+/// `trace_blake3` already means "digest of the trace this campaign produced",
+/// and keeping that meaning leaves every existing check saying exactly what it
+/// said before. It also survives a zstd upgrade: the attestation is over
+/// content, not over an encoding.
+fn read_evidence_bytes(path: &Utf8Path) -> Result<Vec<u8>> {
+    if path.extension() == Some("zst") {
+        let file = fs::File::open(path).with_context(|| format!("open {path}"))?;
+        zstd::decode_all(std::io::BufReader::new(file))
+            .with_context(|| format!("{path}: evidence is not valid zstd"))
+    } else {
+        fs::read(path).with_context(|| format!("read {path}"))
+    }
 }
 
 fn qualification_metadata_path(path: &str) -> bool {
@@ -8440,7 +8464,7 @@ fn canary_expected_prefix(id: &str) -> Result<&'static str> {
         "C05" => "test ids differ",
         "C06" => "P1-T01 has no requirement mapping",
         "C07" => "mutant count must be 65",
-        "C08" => "operator predicate-deletion supplies 20 mutants; max 16",
+        "C08" => "operator predicate-deletion supplies 23 mutants; max 16",
         "C09" => "family graph/interchange codecs mutant count must be 13",
         "C10" => "canary ids differ",
         "C11" => "source/CST/formatting accepted cases below 100000",
@@ -13410,27 +13434,40 @@ mod tests {
         }
     }
 
-    /// The committed packet's anchors are known-broken (F-33), and the check
-    /// must SAY so rather than pass. This pins the deferral: if someone
-    /// re-anchors the plan, this test tells them the count changed.
+    /// F-33 is CLOSED. This used to assert the opposite -- that exactly 36
+    /// declared mutants were anchored to declarations -- because the defect was
+    /// disclosed and deferred rather than fixed. A blind reviewer then
+    /// rediscovered it at six coordinates on 2026-09-02 and §6 refused the
+    /// campaign, which is what a disclosed-but-unfixed defect earns.
+    ///
+    /// The anchors were repaired, so the invariant to hold now is the positive
+    /// one: every declared mutant names a line where its declared operator can
+    /// genuinely be applied. Without this, the plan can silently rot back --
+    /// a refactor that moves a line turns a live anchor into a signature again,
+    /// and nothing would notice until a reviewer did.
     #[test]
-    fn the_committed_mutation_plan_is_still_inapplicable() {
+    fn every_declared_mutant_anchors_a_line_its_operator_can_mutate() {
         let root = repo_root();
         let packet = read_packet(&root).expect("packet");
-        let err = verify_mutant_anchors_support_operators(&root, &packet)
-            .expect_err("36 declared mutants are anchored to declarations");
-        let message = err.to_string();
-        assert!(
-            message.contains("cannot be applied"),
-            "the refusal must name the reason: {message}"
+        verify_mutant_anchors_support_operators(&root, &packet).expect(
+            "every declared mutant must anchor a mutable line; re-anchor the plan \
+             rather than disclosing the gap again (M17.5 F-33)",
         );
-        // §3 wants at least 64 applicable mutants. 65 - 36 = 29.
-        let inapplicable = message.matches("which is a declaration").count();
-        assert_eq!(
-            inapplicable, 36,
-            "F-33 recorded 36 inapplicable mutants; the plan changed without the \
-             finding being updated"
-        );
+        // The distribution matters as much as the anchors: §3 refuses any single
+        // operator supplying more than a quarter of the denominator.
+        let mut per_operator = BTreeMap::<&str, usize>::new();
+        for mutant in &packet.mutants {
+            *per_operator.entry(mutant.operator.as_str()).or_default() += 1;
+        }
+        let cap = packet.mutants.len() / 4;
+        for (operator, count) in &per_operator {
+            assert!(
+                *count <= cap,
+                "operator {operator} supplies {count} of {} mutants; §3 caps one \
+                 operator at {cap}",
+                packet.mutants.len()
+            );
+        }
     }
 
     // ── M17.5 F-34: blind pass 1 A07 and A11 ──────────────────────────────

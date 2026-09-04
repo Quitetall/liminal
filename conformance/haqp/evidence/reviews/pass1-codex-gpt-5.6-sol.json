@@ -3,48 +3,49 @@
   "pass": 1,
   "reviewer": {
     "model_family": "codex:gpt-5.6-sol",
-    "identity_hash": "7f1b7c1ea88cc67016f4349c083114649f25e3472286b615308d98f1752ee69e",
+    "identity_hash": "f6cac6a769086b0c4a44f2b83d25874afa0b393a852ac730262a2f801543651c",
     "backend": "codex"
   },
-  "isolated_session_hash": "4c3064e126d4034ef1a01467aede84e420c987b3611de96738de374dd161c7d3",
-  "sanitized_prompt_hash": "b6456fe4f0831472a76bf4f0952c263bfdf3db15ace6ad4c350f5a11f402493c",
+  "isolated_session_hash": "93725087da9d2ea4175c0352fc7802ef538e3ebe8729ba858d6679c086a5e8cd",
+  "sanitized_prompt_hash": "06cbd72bea1e1f43e71d7cebdcd900f6a6b634b473855b2651089197e590ff55",
+  "prompt_binding_sha256": "bd743ee4f0a43da31860363063cc0884e9f26a75d889ef0a8b7749d0dfddd5f3",
   "attempts": [
     {
       "id": "P1-A01",
-      "attack_class": "vacuity",
-      "target": "conformance/haqp/packet.json:1",
-      "attempt": "Changed qualification_state from not-run to complete while retaining planned and predeclared evidence rows.",
-      "observed_result": "Caught: qualified verifier requires complete status plus exact resolved evidence statuses and committed provenance.",
-      "independently_reproduced": false,
-      "classification": "caught_violation",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-source/src/merge.rs:122",
+      "attempt": "Falsify crates/liminal-source/src/merge.rs:122 by applying declared predicate-inversion operator to its exact anchored line.",
+      "observed_result": "Inspection reproduced that crates/liminal-source/src/merge.rs:122 anchors a function declaration, so declared semantic mutation cannot be applied.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
       "resolved": false
     },
     {
       "id": "P1-A02",
       "attack_class": "shared-oracle coupling",
-      "target": "crates/liminal-xtask/src/haq.rs:1",
-      "attempt": "Replaced generated oracle source with packet-selected production-oracle prose.",
-      "observed_result": "Caught: closed family-to-oracle registry and committed source-anchor validation reject substituted oracle source.",
-      "independently_reproduced": false,
-      "classification": "caught_violation",
+      "target": "crates/liminal-source/src/file.rs:133",
+      "attempt": "Falsify crates/liminal-source/src/file.rs:133 by applying declared oracle-short-circuit operator at its registered source coordinate.",
+      "observed_result": "Inspection reproduced that crates/liminal-source/src/file.rs:133 anchors a function declaration rather than any oracle comparison or shortcut.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
       "resolved": false
     },
     {
       "id": "P1-A03",
-      "attack_class": "missing negatives",
-      "target": "conformance/haqp/packet.json:1",
-      "attempt": "Removed negative evidence from one critical requirement while preserving positive coverage.",
-      "observed_result": "Caught: evidence-coverage verifier requires positive, negative, malformed, basis, and replay evidence for every critical requirement.",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-cst/src/parser.rs:142",
+      "attempt": "Falsify crates/liminal-cst/src/parser.rs:142 by deleting its nonempty-text predicate and tracing empty-tree acceptance checks.",
+      "observed_result": "Verifier logic treats mutation at crates/liminal-cst/src/parser.rs:142 as an applicable behavioral predicate and requires evaluated evidence before qualification.",
       "independently_reproduced": false,
       "classification": "caught_violation",
       "resolved": false
     },
     {
       "id": "P1-A04",
-      "attack_class": "weak mutants",
-      "target": "conformance/haqp/packet.json:1",
-      "attempt": "Relabeled one mutant with an invented low-value operator to evade operator concentration controls.",
-      "observed_result": "Caught: mutant operator vocabulary is closed and rejects unknown operator labels.",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-source/src/paragraph.rs:76",
+      "attempt": "Falsify crates/liminal-source/src/paragraph.rs:76 by replacing identifier-presence branching with an unconditional successful branch.",
+      "observed_result": "Operator validation at crates/liminal-source/src/paragraph.rs:76 admits only exact constant-branch mutations, while negative identifier cases remain declared.",
       "independently_reproduced": false,
       "classification": "caught_violation",
       "resolved": false
@@ -52,9 +53,9 @@
     {
       "id": "P1-A05",
       "attack_class": "fault omissions",
-      "target": "conformance/haqp/packet.json:1",
-      "attempt": "Removed ilrp/before_ack from declared crash-boundary inventory.",
-      "observed_result": "Caught: declared, runtime, and authoritative crash-boundary sets must match exactly.",
+      "target": "crates/liminal-jurisdiction/src/ilrp.rs:274",
+      "attempt": "Falsify crates/liminal-jurisdiction/src/ilrp.rs:274 by renaming its acknowledgement label while claiming durable persistence was skipped.",
+      "observed_result": "Operator validation rejects label-only mutation at crates/liminal-jurisdiction/src/ilrp.rs:274 because durable commit call remains present and active.",
       "independently_reproduced": false,
       "classification": "caught_violation",
       "resolved": false
@@ -62,29 +63,29 @@
     {
       "id": "P1-A06",
       "attack_class": "nondeterminism",
-      "target": "crates/liminal-xtask/src/haq.rs:1",
-      "attempt": "Substituted committed generated rows with output from a different deterministic seed while preserving pass labels.",
-      "observed_result": "Caught: packet seed and full generated rows must equal committed evidence; completed qualification also replays 100000 cases and compares rows exactly.",
-      "independently_reproduced": false,
-      "classification": "caught_violation",
+      "target": "crates/liminal-source/src/file.rs:140",
+      "attempt": "Falsify crates/liminal-source/src/file.rs:140 by perturbing directory-entry iteration and seeking unstable staged-file ordering evidence.",
+      "observed_result": "Inspection of crates/liminal-source/src/file.rs:140 alone did not establish output nondeterminism because downstream collection semantics determine observable ordering.",
+      "independently_reproduced": true,
+      "classification": "false_positive",
       "resolved": false
     },
     {
       "id": "P1-A07",
       "attack_class": "corpus leakage",
-      "target": "crates/liminal-xtask/src/haq.rs:1",
-      "attempt": "Set review target to conformance/corpora/dev/input:1.",
-      "observed_result": "Caught: review-target validation rejects locked acceptance corpus path components before reading target content.",
-      "independently_reproduced": false,
-      "classification": "caught_violation",
+      "target": "crates/liminal-source/src/file.rs:79",
+      "attempt": "Falsify crates/liminal-source/src/file.rs:79 by treating ordinary file commit paths as aliases into locked acceptance data.",
+      "observed_result": "Reproduction found no locked-corpus reference at crates/liminal-source/src/file.rs:79, while qualification separately canonicalizes traced corpus paths and rejects aliases.",
+      "independently_reproduced": true,
+      "classification": "false_positive",
       "resolved": false
     },
     {
       "id": "P1-A08",
       "attack_class": "exception broadening",
-      "target": "conformance/haqp/packet.json:1",
-      "attempt": "Set passing review evidence path to /etc/passwd and then to ../../../etc/passwd.",
-      "observed_result": "Caught: absolute paths and parent-directory components are rejected; canonical-path containment also blocks symlink escape.",
+      "target": "crates/liminal-source/src/paragraph.rs:131",
+      "attempt": "Falsify crates/liminal-source/src/paragraph.rs:131 by broadening malformed identifier acceptance through an unconditional false rejection predicate.",
+      "observed_result": "Closed operator validation recognizes exact broadening at crates/liminal-source/src/paragraph.rs:131, and packet retains a designated negative killing test.",
       "independently_reproduced": false,
       "classification": "caught_violation",
       "resolved": false
@@ -92,48 +93,80 @@
     {
       "id": "P1-A09",
       "attack_class": "evidence/report drift",
-      "target": "docs/execution/phase1-suite-review.md:1",
-      "attempt": "Changed packet qualification state without updating Markdown state marker, status tuple, and packet digest.",
-      "observed_result": "Caught: Markdown verifier binds all three surfaces to serialized packet state.",
-      "independently_reproduced": false,
-      "classification": "caught_violation",
+      "target": "crates/liminal-graph/src/store/mod.rs:344",
+      "attempt": "Falsify crates/liminal-graph/src/store/mod.rs:344 by checking whether declared disabled-crash-point mutant names executable crash behavior.",
+      "observed_result": "Inspection reproduced that crates/liminal-graph/src/store/mod.rs:344 anchors a function declaration, contradicting packet description of a disableable crash boundary.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
       "resolved": false
     },
     {
       "id": "P1-A10",
-      "attack_class": "vacuity",
-      "target": "crates/liminal-xtask/src/haq.rs:1",
-      "attempt": "Padded blind-review attempts array to twelve using an empty observed_result field.",
-      "observed_result": "Caught: every attempt requires non-empty id, class, target, action, observation, and classification plus unique substantive signature.",
-      "independently_reproduced": false,
-      "classification": "caught_violation",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-jurisdiction/src/repair.rs:212",
+      "attempt": "Falsify crates/liminal-jurisdiction/src/repair.rs:212 by applying declared predicate-deletion operator to its registered source line.",
+      "observed_result": "Inspection reproduced that crates/liminal-jurisdiction/src/repair.rs:212 anchors a function declaration containing no deletable behavioral predicate.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
       "resolved": false
     },
     {
       "id": "P1-A11",
-      "attack_class": "weak mutants",
-      "target": "crates/liminal-xtask/src/haq.rs:1",
-      "attempt": "Presented mutant compilation failure as semantic kill evidence.",
-      "observed_result": "Caught: compilation failures become error-class evidence; semantic kills require named nextest FAIL output for declared witness test.",
-      "independently_reproduced": false,
-      "classification": "caught_violation",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-graph/src/store/mod.rs:370",
+      "attempt": "Falsify crates/liminal-graph/src/store/mod.rs:370 by applying declared ordering-nondeterminism operator at its exact registered coordinate.",
+      "observed_result": "Inspection reproduced that crates/liminal-graph/src/store/mod.rs:370 anchors a function declaration rather than ordering logic capable of nondeterministic mutation.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
       "resolved": false
     },
     {
       "id": "P1-A12",
       "attack_class": "evidence/report drift",
-      "target": "crates/liminal-xtask/src/haq.rs:1",
-      "attempt": "Marked verified-defect attempt resolved using fixed-base commit and unchanged target coordinate.",
-      "observed_result": "Caught: resolution commit must be strict descendant, reachable from qualification HEAD, change attacked file at cited added line, and bind committed evidence SHA-256.",
-      "independently_reproduced": false,
-      "classification": "caught_violation",
+      "target": "crates/liminal-revision/src/basis.rs:23",
+      "attempt": "Falsify crates/liminal-revision/src/basis.rs:23 by applying declared predicate-inversion operator and comparing packet claim against anchored source.",
+      "observed_result": "Inspection reproduced that crates/liminal-revision/src/basis.rs:23 anchors a structure field declaration with no predicate available for inversion.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
       "resolved": false
     }
   ],
-  "findings": [],
-  "independently_reproduced": [],
-  "unresolved_verified_findings": 0,
-  "result": "pass",
+  "findings": [
+    {
+      "id": "P1-F01",
+      "attempt_id": "P1-A01"
+    },
+    {
+      "id": "P1-F02",
+      "attempt_id": "P1-A02"
+    },
+    {
+      "id": "P1-F03",
+      "attempt_id": "P1-A09"
+    },
+    {
+      "id": "P1-F04",
+      "attempt_id": "P1-A10"
+    },
+    {
+      "id": "P1-F05",
+      "attempt_id": "P1-A11"
+    },
+    {
+      "id": "P1-F06",
+      "attempt_id": "P1-A12"
+    }
+  ],
+  "independently_reproduced": [
+    "P1-F01",
+    "P1-F02",
+    "P1-F03",
+    "P1-F04",
+    "P1-F05",
+    "P1-F06"
+  ],
+  "unresolved_verified_findings": 6,
+  "result": "fail",
   "blindness_proof": {
     "ephemeral_session_requested": false,
     "session_state": "fresh-codex-session",
@@ -141,10 +174,10 @@
     "pass_two_original_spec_only": false
   },
   "fixed_base": {
-    "commit": "5f1f5dea31ed780fd5392b9d826a22a289654e51",
-    "tree": "9f2cb07db23ccce2b41c08078b45f5fd269609f7",
+    "commit": "d6e59ce5535ab3c93490bf60007e4ceb4346dc76",
+    "tree": "3bc3d6d0692e0561d49e53ee99724ff15328271f",
     "clean": true
   },
-  "raw_response_sha256": "3a02bca4021f046c2bcda47e88043a648d54d6fcc4b13b2bcf9d2620f1ec23a1",
-  "integrity_binding_sha256": "40c9e874a4f89f881080072df539f68b8498b2b2a2a477c2e1d7ba09888adf30"
+  "raw_response_sha256": "bd1d3b30a336a14096b2c51959956a963451f0d89de37cdeb620181e9669baff",
+  "integrity_binding_sha256": "151c3c1289206cb1d85005ed48a9b13ef3b1f24fee6001f81636ae8bb788944a"
 }

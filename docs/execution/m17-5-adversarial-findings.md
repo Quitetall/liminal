@@ -2571,6 +2571,83 @@ The gate hashes `serde_json::to_vec(packet)`, which serializes in STRUCT field
 order, not the order the keys occupy in the file. A reimplementation would have
 agreed until someone reordered a field, then disagreed silently.
 
+## F-38 — a disclosed defect is still a defect: the blind reviewer refused F-33
+
+The 2026-09-02 lane cleared every evidence stage and refused at the flip because
+pass 1 (gpt-5.6-sol, 12 attempts) returned **6 verified defects**. All six were
+one finding, and it was **F-33** — which this ledger had already recorded, which
+ADR-0021 disclosed, and which `packet.residual_risks` carried as RISK-003.
+
+The reviewer named six coordinates: `merge.rs:122` anchors
+`pub fn overlap_slots(`, `store/mod.rs:370` anchors `pub fn relations(`,
+`basis.rs:23` anchors a struct field. The packet declared "apply
+predicate-inversion here" at lines where no operator can apply.
+
+**Disclosure is not resolution.** A review finding clears only when a commit
+changes the code at its coordinate — `verify_resolution_coordinate_changed`
+requires the diff. There is no "resolved by an accepted residual risk" path, and
+there should not be: one would let any finding be waved away by writing a risk
+entry. So the disclosure that felt like diligence in August was, at the gate,
+worth exactly nothing. §6 refused, correctly.
+
+That produced a second F-28-shaped deadlock — 1a's §6 demanding a fix 1a had
+deferred — and the way out was to notice that **re-anchoring is 1a work**.
+ADR-0021 defers *evaluating* mutants, not *declaring them truthfully*. Fixing an
+anchor makes a declaration true; it claims no kill.
+
+**Ruling (Brian, 2026-09-03):** take the real fix, always. *"We don't accept tech
+debt or improper bandaid fixes."* The alternative on the table — adding a
+resolved-by-disclosure path to the review schema — was rejected as exactly the
+bandaid that rule forbids.
+
+### Result
+
+| | before | after |
+|---|---|---|
+| mutants whose operator cannot apply at its anchor | 52 | **0** |
+| operators assigned to a family whose code cannot exhibit them | 17 | **0** |
+| duplicate anchors | — | **0** |
+| heaviest operator share (§3 caps at 25%) | 25.0% | **12.3%** |
+
+The 17 operator corrections are F-06 in the specific: the original 5×13 grid
+assigned every operator to every family regardless of behaviour, so
+`disabled-crash-point` landed on a family with no crash points and
+`oracle-short-circuit` on one with no oracle comparison. Those could not be
+re-anchored at all — no line in the family supports them — so the operator, not
+the line, was the wrong declaration.
+
+### Two false starts worth keeping
+
+**The first re-anchor was itself the bug under repair.** It matched
+`predicate-inversion` against `pub value: Option<serde_json::Value>,` — reading
+a generic's angle brackets as comparison operators — and
+`ordering-nondeterminism` against `pub nodes: BTreeMap<NodeId, Node>,` because
+the TYPE NAME contains "BTree". It would have replaced "anchored to a function
+declaration" with "anchored to a struct field that superficially matches a
+string", which is the same defect wearing a different hat. Caught by spot-checking
+the output rather than trusting the count.
+
+**The second was looser than the verifier.** It accepted a bare `.iter()` for
+`ordering-nondeterminism` and `matches!(` for `predicate-deletion` — but
+`verify_mutant_operator_patch` requires the before-text to contain `sort` or
+`BTree`, and a macro's `!` is part of its name, not a negation. Declaring those
+anchors would have passed the packet gate and then been refused when a patch was
+checked. The applicability test is now derived from the verifier's own contracts
+rather than from an approximation of them.
+
+The lesson is the session's, again: **the check must be the one that will
+actually judge you.** Twice the shortcut was to write a plausible test of my own
+instead of reading what the gate requires.
+
+### What replaced the canary
+
+`the_committed_mutation_plan_is_still_inapplicable` asserted exactly 36
+declaration-anchored mutants — a canary that pinned a *defect* so it could not be
+silently rediscovered. With the defect fixed the premise is gone, so it is now
+`every_declared_mutant_anchors_a_line_its_operator_can_mutate`, which pins the
+repaired property and the §3 concentration cap. A refactor that moves a line
+turns a live anchor back into a signature, and nothing else would notice.
+
 ### A fixture that names a count must read it
 
 Adding canary C33 turned `markdown_surface_rejects_a_stale_qualification_state`

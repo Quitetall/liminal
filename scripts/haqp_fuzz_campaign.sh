@@ -262,6 +262,11 @@ for t in "${TARGETS[@]}"; do
   if [ -s "$audit_raw" ] && grep -q '+++ exited with 0 +++' "$audit_raw"; then
     trace_complete=true
   fi
+  # A 30-minute ASan run emits gigabytes of strace output -- 1.56 GB for
+  # graph_interchange_codec on 2026-09-02, which GitHub refuses outright at its
+  # 100 MB ceiling. zstd takes that to ~55 MB. The DIGEST stays over the raw
+  # bytes so trace_blake3 keeps meaning "the trace this campaign produced",
+  # unchanged by the storage format (read_evidence_bytes decompresses to check).
   trace_hash=$(hash_file "$audit_raw")
   arts=$(ls "fuzz/artifacts/$t" 2>/dev/null | wc -l)
   execs=$(grep -oP 'stat::number_of_executed_units:\s*\K[0-9]+' "$log" | tail -1)
@@ -290,6 +295,14 @@ for t in "${TARGETS[@]}"; do
     echo "ERROR: traced corpus path resolution failed for $t" >&2
     exit 1
   }
+  # Compressed only AFTER the last reader: the paths manifest and
+  # resolve_corpus_paths both consume the raw trace, and an earlier `--rm` left
+  # them reading a file that no longer existed.
+  if ! command -v zstd >/dev/null 2>&1; then
+    echo "ERROR: zstd is required to store corpus-access traces" >&2
+    exit 1
+  fi
+  zstd -q -3 --rm -f "$audit_raw" -o "$audit_raw.zst"
   seed_manifest="target/haqp/seed-manifest-$t.bin"
   : > "$seed_manifest"
   seed_count=0
@@ -314,7 +327,7 @@ for t in "${TARGETS[@]}"; do
   printf '%s\0%s\0%s\0%s' "$trace_command" "$trace_pid" "$trace_exit_code" "$trace_hash" >"$binding_input"
   process_binding=$(hash_file "$binding_input")
   audit_row=$(printf '{"target":"%s","manifest":"%s","manifest_blake3":"%s","seed":%s,"sanitizer":"%s","exit_code":%s,"log_blake3":"%s","command":"%s","trace":"%s","trace_blake3":"%s","trace_pid":%s,"trace_exit_code":%s,"trace_complete":%s,"process_binding":"%s","tracer_binary":"strace","tracer_version":"conformance/haqp/evidence/access/strace.version","tracer_version_blake3":"%s","trace_root":"%s","resolved_paths_blake3":"%s"}' \
-    "$t" "conformance/haqp/evidence/access/$t.paths" "$audit_hash" "$SEED" "$SANITIZER" "$code" "$loghash" "$trace_command" "conformance/haqp/evidence/access/$t.trace" "$trace_hash" "$trace_pid" "$trace_exit_code" "$trace_complete" "$process_binding" "$tracer_version_blake3" "$trace_root" "$resolved_paths_blake3")
+    "$t" "conformance/haqp/evidence/access/$t.paths" "$audit_hash" "$SEED" "$SANITIZER" "$code" "$loghash" "$trace_command" "conformance/haqp/evidence/access/$t.trace.zst" "$trace_hash" "$trace_pid" "$trace_exit_code" "$trace_complete" "$process_binding" "$tracer_version_blake3" "$trace_root" "$resolved_paths_blake3")
   if [ -n "$audit_entries" ]; then audit_entries="$audit_entries,$audit_row"; else audit_entries="$audit_row"; fi
   printf '{"target":"%s","seconds":%s,"elapsed_s":%s,"exit_code":%s,"execs":%s,"artifacts":%s,"seed":%s,"seed_count":%s,"seed_manifest_blake3":"%s","sanitizer":"%s","log":"%s","log_blake3":"%s","sanitizer_proof":{"build_command":"%s","binary":"%s","binary_blake3":"%s","runtime_probe":"%s","runtime_probe_blake3":"%s","runtime_probe_exit_code":%s,"instrumentation_flags":["-fsanitize=%s"],"build_log":"%s","build_log_blake3":"%s","source_commit":"%s","source_tree":"%s","build_result":"%s"}}' \
     "$t" "$SECS" "$elapsed" "$code" "$execs" "$arts" "$SEED" "$seed_count" "$seed_manifest_blake3" "$SANITIZER" "$evidence_log" "$loghash" "$build_command" "$binary" "$binary_hash" "$probe" "$probe_hash" "$probe_code" "$SANITIZER" "$build_log_evidence" "$build_log_hash" "$source_commit" "$source_tree" "$([ "$build_code" -eq 0 ] && echo pass || echo fail)" >> "$OUT"

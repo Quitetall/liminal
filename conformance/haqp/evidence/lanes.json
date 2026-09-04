@@ -1,0 +1,53 @@
+{
+ "schema_version": "haqp-lane-manifest-v1",
+ "stages": [
+  {
+   "stage": "canaries",
+   "command": "just haq-canaries ",
+   "exit_code": 0,
+   "elapsed_s": 0,
+   "artifact": "conformance/haqp/evidence/canaries.json",
+   "artifact_blake3": "13a572e20fe4df5172a236e5d7987cff8081387e5c770c128d10ee426b30edbc"
+  },
+  {
+   "stage": "generated",
+   "command": "just haq-generated ",
+   "exit_code": 0,
+   "elapsed_s": 40,
+   "artifact": "conformance/haqp/evidence/generated.json",
+   "artifact_blake3": "da3db1f0901868da5fae3f832a487cb971f9b083b40dbc61177187cfacd1e20a"
+  },
+  {
+   "stage": "crash",
+   "command": "just haq-crash ",
+   "exit_code": 0,
+   "elapsed_s": 5,
+   "artifact": "conformance/haqp/evidence/crash.json",
+   "artifact_blake3": "e313a68fd585b9935293f1cd6dad7bdcb3cc42cf13fd42a6e79e3cd8dc83d18c"
+  },
+  {
+   "stage": "concurrency",
+   "command": "just haq-concurrency ",
+   "exit_code": 0,
+   "elapsed_s": 0,
+   "artifact": "conformance/haqp/evidence/concurrency.json",
+   "artifact_blake3": "4da6b287bf0e79f81886bd24f9980d7bc6329c8ea5d7f5a243ac93433d05ee38"
+  },
+  {
+   "stage": "fuzz",
+   "command": "scripts/haqp_fuzz_campaign.sh 1800 conformance/haqp/evidence/fuzz.json ",
+   "exit_code": 0,
+   "elapsed_s": 4387,
+   "artifact": "conformance/haqp/evidence/fuzz.json",
+   "artifact_blake3": "582d2ab1b4c120eafd63eddd384e506077e3af2beaf3a9189f694a8454f26343"
+  },
+  {
+   "stage": "reviews",
+   "command": "just haq-blind-review ",
+   "exit_code": 0,
+   "elapsed_s": 189,
+   "artifact": "none",
+   "artifact_blake3": "absent"
+  }
+ ]
+}
