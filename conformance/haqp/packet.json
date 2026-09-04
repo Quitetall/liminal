@@ -1029,7 +1029,7 @@
    "id": "P1-M002",
    "family": "source/CST/formatting",
    "operator": "predicate-inversion",
-   "source": "crates/liminal-cst/src/parser.rs:221",
+   "source": "crates/liminal-cst/src/parser.rs:65",
    "requirement": "P1-R001",
    "defect": "invert formatter fixed-point predicate",
    "killing_tests": [
@@ -1055,7 +1055,7 @@
    "id": "P1-M004",
    "family": "source/CST/formatting",
    "operator": "threshold-minus-one",
-   "source": "crates/liminal-cst/src/parser.rs:10",
+   "source": "crates/liminal-cst/src/parser.rs:209",
    "requirement": "P1-R002",
    "defect": "shift span end backward",
    "killing_tests": [
@@ -1094,7 +1094,7 @@
    "id": "P1-M007",
    "family": "source/CST/formatting",
    "operator": "stale-basis-acceptance",
-   "source": "crates/liminal-source/src/view.rs:38",
+   "source": "crates/liminal-source/src/view.rs:51",
    "requirement": "P1-R005",
    "defect": "reuse source basis after edit",
    "killing_tests": [
@@ -1107,7 +1107,7 @@
    "id": "P1-M008",
    "family": "source/CST/formatting",
    "operator": "wrong-holder-selection",
-   "source": "crates/liminal-source/src/view.rs:80",
+   "source": "crates/liminal-source/src/view.rs:59",
    "requirement": "P1-R006",
    "defect": "classify source node as graph-native",
    "killing_tests": [
@@ -1133,7 +1133,7 @@
    "id": "P1-M010",
    "family": "source/CST/formatting",
    "operator": "oracle-short-circuit",
-   "source": "crates/liminal-cli/src/format.rs:222",
+   "source": "crates/liminal-cli/src/format.rs:55",
    "requirement": "P1-R015",
    "defect": "oracle short circuit seeded at the anchored site",
    "killing_tests": [
@@ -1146,7 +1146,7 @@
    "id": "P1-M011",
    "family": "source/CST/formatting",
    "operator": "ordering-nondeterminism",
-   "source": "crates/liminal-cst/src/parser.rs:236",
+   "source": "crates/liminal-source/src/paragraph.rs:33",
    "requirement": "P1-R003",
    "defect": "emit unordered attributes",
    "killing_tests": [
@@ -1159,7 +1159,7 @@
    "id": "P1-M012",
    "family": "source/CST/formatting",
    "operator": "oracle-short-circuit",
-   "source": "crates/liminal-source/src/merge.rs:131",
+   "source": "crates/liminal-source/src/paragraph.rs:76",
    "requirement": "P1-R004",
    "defect": "replace ID-presence oracle branch with a constant",
    "killing_tests": [
@@ -1172,7 +1172,7 @@
    "id": "P1-M013",
    "family": "source/CST/formatting",
    "operator": "predicate-inversion",
-   "source": "crates/liminal-source/src/paragraph.rs:158",
+   "source": "crates/liminal-source/src/paragraph.rs:35",
    "requirement": "P1-R016",
    "defect": "predicate inversion seeded at the anchored site",
    "killing_tests": [
@@ -1198,7 +1198,7 @@
    "id": "P1-M015",
    "family": "graph/interchange codecs",
    "operator": "predicate-inversion",
-   "source": "crates/liminal-graph/src/relation.rs:81",
+   "source": "crates/liminal-graph/src/node.rs:64",
    "requirement": "P1-R008",
    "defect": "invert node-presence check",
    "killing_tests": [
@@ -1276,7 +1276,7 @@
    "id": "P1-M021",
    "family": "graph/interchange codecs",
    "operator": "wrong-holder-selection",
-   "source": "crates/liminal-graph/src/store/mod.rs:129",
+   "source": "crates/liminal-graph/src/store/mod.rs:320",
    "requirement": "P1-R012",
    "defect": "resolve EXTERNAL_VALUE ungoverned",
    "killing_tests": [
@@ -1367,7 +1367,7 @@
    "id": "P1-M028",
    "family": "transforms/projections",
    "operator": "predicate-inversion",
-   "source": "crates/liminal-source/src/merge.rs:70",
+   "source": "crates/liminal-source/src/merge.rs:44",
    "requirement": "P1-R013",
    "defect": "invert projection inclusion",
    "killing_tests": [
@@ -1432,7 +1432,7 @@
    "id": "P1-M033",
    "family": "transforms/projections",
    "operator": "stale-basis-acceptance",
-   "source": "crates/liminal-source/src/view.rs:59",
+   "source": "crates/liminal-source/src/lib.rs:17",
    "requirement": "P1-R017",
    "defect": "apply transform to stale revision",
    "killing_tests": [
@@ -1497,7 +1497,7 @@
    "id": "P1-M038",
    "family": "transforms/projections",
    "operator": "oracle-short-circuit",
-   "source": "crates/liminal-source/src/merge.rs:197",
+   "source": "crates/liminal-source/src/file.rs:102",
    "requirement": "P1-R014",
    "defect": "compare incremental render to itself",
    "killing_tests": [
@@ -1536,7 +1536,7 @@
    "id": "P1-M041",
    "family": "repair/ILRP/recovery",
    "operator": "predicate-inversion",
-   "source": "crates/liminal-jurisdiction/src/repair.rs:232",
+   "source": "crates/liminal-jurisdiction/src/repair.rs:214",
    "requirement": "P1-R015",
    "defect": "invert idempotent recovery equality",
    "killing_tests": [
@@ -1549,7 +1549,7 @@
    "id": "P1-M042",
    "family": "repair/ILRP/recovery",
    "operator": "threshold-plus-one",
-   "source": "crates/liminal-jurisdiction/src/reconcile.rs:186",
+   "source": "crates/liminal-jurisdiction/src/ilrp.rs:557",
    "requirement": "P1-R015",
    "defect": "advance occurrence counter",
    "killing_tests": [
@@ -1562,7 +1562,7 @@
    "id": "P1-M043",
    "family": "repair/ILRP/recovery",
    "operator": "threshold-minus-one",
-   "source": "crates/liminal-jurisdiction/src/reconcile.rs:187",
+   "source": "crates/liminal-jurisdiction/src/checker.rs:426",
    "requirement": "P1-R015",
    "defect": "retreat occurrence counter",
    "killing_tests": [
@@ -1601,7 +1601,7 @@
    "id": "P1-M046",
    "family": "repair/ILRP/recovery",
    "operator": "stale-basis-acceptance",
-   "source": "crates/liminal-jurisdiction/src/checker.rs:127",
+   "source": "crates/liminal-jurisdiction/src/checker.rs:42",
    "requirement": "P1-R017",
    "defect": "recover with stale Basis",
    "killing_tests": [
@@ -1640,7 +1640,7 @@
    "id": "P1-M049",
    "family": "repair/ILRP/recovery",
    "operator": "disabled-crash-point",
-   "source": "crates/liminal-jurisdiction/src/ilrp.rs:209",
+   "source": "crates/liminal-jurisdiction/src/ilrp.rs:207",
    "requirement": "P1-R015",
    "defect": "disable before_ack point",
    "killing_tests": [
@@ -1653,7 +1653,7 @@
    "id": "P1-M050",
    "family": "repair/ILRP/recovery",
    "operator": "ordering-nondeterminism",
-   "source": "crates/liminal-jurisdiction/src/checker.rs:89",
+   "source": "crates/liminal-jurisdiction/src/ilrp.rs:293",
    "requirement": "P1-R015",
    "defect": "recover steps unordered",
    "killing_tests": [
@@ -1679,7 +1679,7 @@
    "id": "P1-M052",
    "family": "repair/ILRP/recovery",
    "operator": "disabled-crash-point",
-   "source": "crates/liminal-jurisdiction/src/ilrp.rs:273",
+   "source": "crates/liminal-jurisdiction/src/ilrp.rs:209",
    "requirement": "P1-R016",
    "defect": "disabled crash point seeded at the anchored site",
    "killing_tests": [
@@ -1705,7 +1705,7 @@
    "id": "P1-M054",
    "family": "Basis/revision/query invalidation",
    "operator": "predicate-inversion",
-   "source": "crates/liminal-revision/src/durability.rs:89",
+   "source": "crates/liminal-revision/src/durability.rs:30",
    "requirement": "P1-R017",
    "defect": "invert revision freshness check",
    "killing_tests": [
@@ -1718,7 +1718,7 @@
    "id": "P1-M055",
    "family": "Basis/revision/query invalidation",
    "operator": "threshold-plus-one",
-   "source": "crates/liminal-revision/src/inputs.rs:196",
+   "source": "crates/liminal-revision/src/inputs.rs:171",
    "requirement": "P1-R018",
    "defect": "advance revision clock",
    "killing_tests": [
@@ -1731,7 +1731,7 @@
    "id": "P1-M056",
    "family": "Basis/revision/query invalidation",
    "operator": "stale-basis-acceptance",
-   "source": "crates/liminal-revision/src/durability.rs:30",
+   "source": "crates/liminal-revision/src/durability.rs:33",
    "requirement": "P1-R018",
    "defect": "stale basis acceptance seeded at the anchored site",
    "killing_tests": [
@@ -1770,7 +1770,7 @@
    "id": "P1-M059",
    "family": "Basis/revision/query invalidation",
    "operator": "stale-basis-acceptance",
-   "source": "crates/liminal-revision/src/durability.rs:33",
+   "source": "crates/liminal-revision/src/durability.rs:36",
    "requirement": "P1-R017",
    "defect": "serve query from stale Basis",
    "killing_tests": [
@@ -1783,7 +1783,7 @@
    "id": "P1-M060",
    "family": "Basis/revision/query invalidation",
    "operator": "stale-basis-acceptance",
-   "source": "crates/liminal-revision/src/durability.rs:36",
+   "source": "crates/liminal-revision/src/durability.rs:37",
    "requirement": "P1-R019",
    "defect": "stale basis acceptance seeded at the anchored site",
    "killing_tests": [
@@ -1835,7 +1835,7 @@
    "id": "P1-M064",
    "family": "Basis/revision/query invalidation",
    "operator": "stale-basis-acceptance",
-   "source": "crates/liminal-revision/src/inputs.rs:46",
+   "source": "crates/liminal-revision/src/inputs.rs:41",
    "requirement": "P1-R017",
    "defect": "stale basis acceptance seeded at the anchored site",
    "killing_tests": [
@@ -1848,7 +1848,7 @@
    "id": "P1-M065",
    "family": "Basis/revision/query invalidation",
    "operator": "predicate-inversion",
-   "source": "crates/liminal-revision/src/inputs.rs:103",
+   "source": "crates/liminal-revision/src/inputs.rs:46",
    "requirement": "P1-R019",
    "defect": "predicate inversion seeded at the anchored site",
    "killing_tests": [

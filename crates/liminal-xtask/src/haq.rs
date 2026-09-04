@@ -6335,13 +6335,17 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         (
             "crates/liminal-cst/src/parser.rs",
             142,
-            "if !text.is_empty()",
+            "if !text.is_empty() {",
         ),
-        ("crates/liminal-cst/src/parser.rs", 196, "if !valid_close"),
         (
             "crates/liminal-cst/src/parser.rs",
-            201,
-            "offset + line.trim_end_matches",
+            65,
+            "0 => SyntaxKind::Root,",
+        ),
+        (
+            "crates/liminal-cst/src/parser.rs",
+            8,
+            "pub const MAX_NESTING: u16 = 256;",
         ),
         (
             "crates/liminal-cst/src/parser.rs",
@@ -6352,34 +6356,34 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         (
             "crates/liminal-source/src/view.rs",
             32,
-            "return Err(SourceLoadError::TooLarge",
+            "return Err(SourceLoadError::TooLarge {",
         ),
         ("crates/liminal-source/src/view.rs", 51, "basis,"),
         ("crates/liminal-source/src/view.rs", 59, "&self.basis"),
         (
             "crates/liminal-cli/src/format.rs",
             73,
-            "if let Err(error) = pending.commit_if",
+            "if let Err(error) = pending.commit_if(Some(ContentHash::of(&plan.original))) {",
         ),
         (
             "crates/liminal-cli/src/format.rs",
-            63,
-            "if fail_after.is_some_and",
+            55,
+            "return Err(error).with_context(|| format!(\"stage {}\", plan.path));",
         ),
         (
             "crates/liminal-source/src/paragraph.rs",
             33,
-            "let lines: Vec",
+            "let lines: Vec<(usize, &str)> = input.lines().enumerate().collect();",
         ),
         (
             "crates/liminal-source/src/paragraph.rs",
             76,
-            "if id.is_some()",
+            "if id.is_some() {",
         ),
         (
             "crates/liminal-source/src/paragraph.rs",
-            131,
-            "if id_str.is_empty()",
+            35,
+            "let mut block_start_line: Option<usize> = None;",
         ),
     ];
     const GRAPH: [(&str, usize, &str); 13] = [
@@ -6396,12 +6400,12 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         (
             "crates/liminal-graph/src/relation.rs",
             76,
-            "pub const TOMBSTONE: RelationFlags = RelationFlags(1)",
+            "pub const TOMBSTONE: RelationFlags = RelationFlags(1);",
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
             100,
-            "node.revision.0 += 1",
+            "node.revision.0 += 1;",
         ),
         ("crates/liminal-graph/src/store/mod.rs", 81, "match op {"),
         (
@@ -6410,9 +6414,9 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
             "Ok(self.lock()?.state.head)",
         ),
         (
-            "crates/liminal-graph/src/store/mod.rs",
-            319,
-            "if rev == inner.state.head {",
+            "crates/liminal-graph/src/store/log.rs",
+            42,
+            "found.sort_unstable_by_key(|(n, _)| *n);",
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
@@ -6421,28 +6425,28 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
-            528,
-            "self.store.commit_txn(self.ops, self.aux, meta)",
+            475,
+            "inner.log.append(&record)?;",
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
-            344,
-            "pub fn relations_from(",
+            122,
+            "rel.revision.0 += 1;",
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
-            370,
-            "pub fn relations(",
-        ),
-        (
-            "crates/liminal-graph/src/store/mod.rs",
-            375,
-            "pub fn nodes(",
+            160,
+            "n.revision.0 += 1;",
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
             186,
             "match &aux.value {",
+        ),
+        (
+            "crates/liminal-graph/src/store/mod.rs",
+            84,
+            "return Err(StoreError::Conflict(format!(\"node exists: {}\", node.id)));",
         ),
     ];
     const TRANSFORM: [(&str, usize, &str); 13] = [
@@ -6453,81 +6457,93 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-source/src/merge.rs",
-            122,
-            "pub fn overlap_slots(",
+            44,
+            "let mut order: Vec<String> = Vec::new();",
         ),
-        ("crates/liminal-source/src/merge.rs", 150, "fn slot_map("),
-        ("crates/liminal-source/src/merge.rs", 167, "fn slot_order("),
-        ("crates/liminal-source/src/merge.rs", 188, "fn line_merge("),
+        ("crates/liminal-source/src/merge.rs", 158, "anon += 1;"),
+        ("crates/liminal-source/src/merge.rs", 175, "anon += 1;"),
         (
             "crates/liminal-source/src/merge.rs",
-            140,
-            "fn block_source(",
+            73,
+            "let resolved: Option<&String> = match (ours_changed, theirs_changed) {",
         ),
         (
             "crates/liminal-source/src/file.rs",
-            54,
-            "pub fn staged_path(",
+            30,
+            "Ok(bytes) => Ok(Some(FileObservation {",
+        ),
+        (
+            "crates/liminal-source/src/lib.rs",
+            17,
+            "pub use view::{SourceBasis, SourceLoadError, SourceSliceError, Utf8HolderView};",
         ),
         (
             "crates/liminal-source/src/file.rs",
-            60,
-            "pub fn target_path(",
-        ),
-        (
-            "crates/liminal-source/src/paragraph.rs",
-            154,
-            "fn byte_offset(",
-        ),
-        ("crates/liminal-source/src/file.rs", 28, "pub fn observe("),
-        (
-            "crates/liminal-source/src/file.rs",
-            140,
-            "for entry in entries.flatten()",
+            83,
+            "let found = observe(&self.target)?.map(|o| o.hash);",
         ),
         (
             "crates/liminal-source/src/file.rs",
-            133,
-            "pub fn scan_staged(",
+            204,
+            "let obs = staged.commit_if(None).unwrap();",
         ),
-        ("crates/liminal-source/src/file.rs", 79, "pub fn commit_if("),
+        (
+            "crates/liminal-source/src/file.rs",
+            203,
+            "assert!(!target.exists(), \"staging must not touch the target\");",
+        ),
+        (
+            "crates/liminal-source/src/merge.rs",
+            45,
+            "let mut seen: BTreeSet<String> = BTreeSet::new();",
+        ),
+        (
+            "crates/liminal-source/src/file.rs",
+            102,
+            "let observed = observe(&self.target)?.ok_or_else(|| {",
+        ),
+        (
+            "crates/liminal-source/src/file.rs",
+            252,
+            "assert!(!staged_path.exists());",
+        ),
     ];
     const REPAIR: [(&str, usize, &str); 13] = [
         (
             "crates/liminal-jurisdiction/src/repair.rs",
-            212,
-            "pub fn topo_order(",
+            219,
+            "if !plan.steps.contains_key(&dep.before) || !plan.steps.contains_key(&dep.after) {",
         ),
         (
             "crates/liminal-jurisdiction/src/repair.rs",
-            289,
-            "pub fn plan_undo(",
+            214,
+            "let mut indegree: BTreeMap<RepairStepId, usize> =",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            56,
-            "pub fn may_transition_to(",
+            557,
+            "const ALL: [IntentState; 7] = [",
+        ),
+        (
+            "crates/liminal-jurisdiction/src/checker.rs",
+            426,
+            "if aliases.len() > 1",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            77,
-            "pub fn is_terminal(",
+            161,
+            "match self {",
+        ),
+        ("crates/liminal-jurisdiction/src/ilrp.rs", 261, "Ok(())"),
+        (
+            "crates/liminal-jurisdiction/src/checker.rs",
+            42,
+            "pub const REPAIR_STALE_BASIS: &str = \"JUR053\";",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            160,
-            "pub fn name(",
-        ),
-        (
-            "crates/liminal-jurisdiction/src/ilrp.rs",
-            176,
-            "pub fn all(",
-        ),
-        ("crates/liminal-jurisdiction/src/ilrp.rs", 239, "fn meta("),
-        (
-            "crates/liminal-jurisdiction/src/ilrp.rs",
-            250,
-            "fn commit_intent(",
+            258,
+            "let mut txn = self.store.begin()?;",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
@@ -6536,90 +6552,90 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            282,
-            "pub fn prepare(",
+            207,
+            "impl<C: CrashInjector> CrashInjector for &C {",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            339,
-            "pub fn run(",
+            293,
+            "let graph_steps: std::collections::BTreeSet<RepairStepId> = plan",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            359,
-            "pub fn recover_all(",
+            301,
+            "if graph_steps.contains(&dep.before) && after_is_external {",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            382,
-            "fn advance(",
+            209,
+            "(*self).crash_if_armed(at);",
         ),
     ];
     const BASIS: [(&str, usize, &str); 13] = [
         (
             "crates/liminal-revision/src/deps.rs",
-            27,
-            "pub fn invalidated_by(",
+            45,
+            "assert!(!deps.invalidated_by(&b));",
         ),
         (
-            "crates/liminal-revision/src/basis.rs",
-            23,
-            "pub perspective:",
-        ),
-        (
-            "crates/liminal-revision/src/basis.rs",
-            28,
-            "pub components:",
-        ),
-        (
-            "crates/liminal-revision/src/basis.rs",
-            34,
-            "pub enum BasisComponent",
-        ),
-        (
-            "crates/liminal-revision/src/basis.rs",
-            66,
-            "GraphSnapshot {",
-        ),
-        (
-            "crates/liminal-revision/src/basis.rs",
-            98,
-            "pub fn graph_key(",
-        ),
-        (
-            "crates/liminal-revision/src/perspective.rs",
-            24,
-            "pub enum BasisPerspective",
-        ),
-        (
-            "crates/liminal-revision/src/perspective.rs",
-            27,
-            "ClientScoped {",
-        ),
-        (
-            "crates/liminal-revision/src/perspective.rs",
-            32,
-            "DurableOnly,",
-        ),
-        (
-            "crates/liminal-revision/src/perspective.rs",
-            34,
-            "Published {",
-        ),
-        (
-            "crates/liminal-revision/src/perspective.rs",
-            40,
-            "Federated {",
+            "crates/liminal-revision/src/durability.rs",
+            30,
+            "BasisComponent::ObjectContent { .. } | BasisComponent::GitCommit { .. } => {",
         ),
         (
             "crates/liminal-revision/src/inputs.rs",
+            171,
+            ".insert(key.clone(), buffer_component(neovim, nbuf, 1));",
+        ),
+        (
+            "crates/liminal-revision/src/durability.rs",
+            33,
+            "BasisComponent::FileContent { .. } | BasisComponent::GraphSnapshot { .. } => {",
+        ),
+        (
+            "crates/liminal-revision/src/durability.rs",
+            29,
+            "match component {",
+        ),
+        (
+            "crates/liminal-revision/src/inputs.rs",
+            70,
+            "return Err(PerspectiveError::AmbiguousWorkingHolder {",
+        ),
+        (
+            "crates/liminal-revision/src/durability.rs",
+            36,
+            "BasisComponent::BufferGeneration { .. }",
+        ),
+        (
+            "crates/liminal-revision/src/durability.rs",
             37,
-            "pub fn resolve(",
+            "| BasisComponent::Observation { .. }",
+        ),
+        (
+            "crates/liminal-revision/src/inputs.rs",
+            192,
+            "!matches!(comp, BasisComponent::BufferGeneration { .. }),",
         ),
         (
             "crates/liminal-revision/src/inputs.rs",
             43,
-            "let components = match perspective",
+            "let components = match perspective {",
+        ),
+        (
+            "crates/liminal-revision/src/inputs.rs",
+            84,
+            "return Err(PerspectiveError::PublishedUnavailable);",
+        ),
+        (
+            "crates/liminal-revision/src/inputs.rs",
+            41,
+            ") -> Result<WorkspaceBasis, PerspectiveError> {",
+        ),
+        (
+            "crates/liminal-revision/src/inputs.rs",
+            46,
+            "BasisPerspective::DurableOnly => inputs.durable.clone(),",
         ),
     ];
     let number = id.strip_prefix("P1-M")?.parse::<usize>().ok()?;
@@ -13237,6 +13253,42 @@ mod tests {
                 "{path} is source mid-campaign; dirtying it must invalidate a run"
             );
         }
+    }
+
+    /// The check that refused the 2026-09-03 lane at the flip.
+    ///
+    /// `verify_mutant_source_coordinates` runs only inside the qualified gate,
+    /// so F-38 could rewrite every packet coordinate, pass `haq-inventory`,
+    /// pass two blind reviews, and only be caught after a full campaign. The
+    /// packet and the closed registry are a TWO-SIDED binding; F-38 moved one
+    /// side. Exercised here so the next break costs seconds.
+    #[test]
+    fn packet_mutant_coordinates_match_the_closed_registry() {
+        let root = repo_root();
+        let packet = read_packet(&root).expect("packet");
+        verify_mutant_source_coordinates(&root, &packet)
+            .expect("committed packet must agree with the closed source registry");
+
+        // Move one coordinate off the registry.
+        let mut drifted = packet.clone();
+        let (file, line) = drifted.mutants[1]
+            .source
+            .rsplit_once(':')
+            .expect("coordinate");
+        let bumped: usize = line.parse::<usize>().expect("line") + 40;
+        drifted.mutants[1].source = format!("{file}:{bumped}");
+        let error = verify_mutant_source_coordinates(&root, &drifted)
+            .expect_err("a coordinate off the closed registry must be refused");
+        assert!(
+            error.to_string().contains("does not match closed registry"),
+            "must refuse for the stated reason: {error}"
+        );
+
+        // Two mutants may not share one coordinate.
+        let mut reused = packet.clone();
+        reused.mutants[1].source = reused.mutants[0].source.clone();
+        verify_mutant_source_coordinates(&root, &reused)
+            .expect_err("a reused source coordinate must be refused");
     }
 
     /// M17.5 F-31 / P1-A08: the scenarios block was written by the fault lane
