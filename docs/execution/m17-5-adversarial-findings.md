@@ -2724,6 +2724,17 @@ kept as harmless.
 binary produces; the new test replays it for real (~12 s) and also refuses a
 packet declaring a boundary the replay never exercised.
 
+**Correction (2026-09-05).** `146d8d4` claimed that regeneration but did not
+ship it: the committed `crash.json` still carried the raw-digest rows and the
+pre-zstd `lockfile_blake3` from `80f81e5`. It went unnoticed because every CI
+run after `80f81e5` was killed or starved before the replay test completed;
+the first run that finished refused with *"crash replay lockfile_blake3:
+expected a73bf…, got fdae1…"*. The regeneration lands in the follow-up commit
+(two consecutive runs are byte-identical), and the `haq::tests::crash_*` tests
+join the serialized `crash` nextest group: they run the full fault matrix
+through the binary and were writing one shared `target/haqp/crash-replay.json`
+concurrently with each other and with the matrix group.
+
 ## F-41 — the 1a mutant stage's rows were refused by the 1a gate
 
 `haq mutants` records every mutant as `not-ready` at stage 1a — "recorded, not

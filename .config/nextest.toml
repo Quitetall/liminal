@@ -13,10 +13,10 @@ slow-timeout = { period = "30s" }
 
 [[profile.default.overrides]]
 # Convention: crash tests are named crash_* (any package).
-filter = 'test(/^crash_/)'
+filter = 'test(/^crash_/) | test(/^haq::tests::crash_/)'
 test-group = "crash"
 slow-timeout = { period = "120s", terminate-after = 2 }
-retries = 0                                             # a flaky crash-recovery test is a FINDING, never retried away
+retries = 0                                              # a flaky crash-recovery test is a FINDING, never retried away
 
 [profile.ci]
 fail-fast = false                                      # full failure surface per run

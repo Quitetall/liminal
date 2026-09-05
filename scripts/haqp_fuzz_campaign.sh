@@ -130,6 +130,12 @@ BUILD_ROOT_BASE=/var/tmp/liminal-haqp-build
 BUILD_ROOT="$BUILD_ROOT_BASE/$source_commit"
 BUILD_RUSTFLAGS="-Zremap-cwd-prefix=/liminal --remap-path-prefix=$BUILD_ROOT=/liminal --remap-path-prefix=$HOME/.cargo=/cargo"
 mkdir -p "$BUILD_ROOT_BASE"
+# Pruning sibling commits' trees is destructive, and a replay (`haq-verify`)
+# may be mid-build in one of them -- it holds a SHARED lock on .lock for the
+# duration. Take the EXCLUSIVE lock here so pruning waits for any replay to
+# finish, and a replay started later waits for pruning (HEAD review).
+exec 9>"$BUILD_ROOT_BASE/.lock"
+flock -x 9
 for stale in "$BUILD_ROOT_BASE"/*/; do
   [ "${stale%/}" = "$BUILD_ROOT" ] && continue
   git worktree remove --force "${stale%/}" 2>/dev/null || rm -rf "${stale%/}"
@@ -139,6 +145,7 @@ if [ ! -d "$BUILD_ROOT/.git" ] && [ ! -f "$BUILD_ROOT/.git" ]; then
   rm -rf "$BUILD_ROOT"
   git worktree add --quiet --detach "$BUILD_ROOT" "$source_commit"
 fi
+flock -u 9
 mkdir -p "$BUILD_ROOT/fuzz/.cargo"
 printf '[unstable]\ntrim-paths = true\n\n[profile.release]\ntrim-paths = "all"\n' > "$BUILD_ROOT/fuzz/.cargo/config.toml"
 

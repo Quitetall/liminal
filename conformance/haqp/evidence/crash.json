@@ -7,38 +7,38 @@
       "recovery_pairs": [
         {
           "first_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
-          "first_effect_digest": "e0c87ce93690de118df107cd4c9dff66e35ee627c034c53f09d3bd53e10fce05",
-          "first_recovery_digest": "9732637703d9c5e68c81d904387e874678df172d5729d667ecfac01d505dd0a8",
+          "first_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
+          "first_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
           "occurrence": 1,
           "scenario": "promote_single_step",
           "second_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
-          "second_effect_digest": "e0c87ce93690de118df107cd4c9dff66e35ee627c034c53f09d3bd53e10fce05",
-          "second_recovery_digest": "9732637703d9c5e68c81d904387e874678df172d5729d667ecfac01d505dd0a8",
+          "second_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
+          "second_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "second_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8"
         },
         {
           "first_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
-          "first_effect_digest": "90fa7547f9673a21b994db46b4bebf1f37105910527850355e7e9dbe35c0bf16",
-          "first_recovery_digest": "a4b85238d19f7be11e5ab210f6ef5b0a4e06390468d7771f8f58fa389786705f",
+          "first_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
+          "first_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
           "occurrence": 1,
           "scenario": "dag_accept",
           "second_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
-          "second_effect_digest": "90fa7547f9673a21b994db46b4bebf1f37105910527850355e7e9dbe35c0bf16",
-          "second_recovery_digest": "a4b85238d19f7be11e5ab210f6ef5b0a4e06390468d7771f8f58fa389786705f",
+          "second_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
+          "second_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "second_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8"
         },
         {
           "first_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
-          "first_effect_digest": "5e76969ba8f99915a4f8b436b183f68ec0d5197ceb738137440b7153e0b7f638",
-          "first_recovery_digest": "5de46ef1d13a69e20240f0c5a58517811ab25684c2c40fcc2b56053913b8aad3",
+          "first_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
+          "first_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
           "occurrence": 2,
           "scenario": "dag_accept",
           "second_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
-          "second_effect_digest": "5e76969ba8f99915a4f8b436b183f68ec0d5197ceb738137440b7153e0b7f638",
-          "second_recovery_digest": "5de46ef1d13a69e20240f0c5a58517811ab25684c2c40fcc2b56053913b8aad3",
+          "second_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
+          "second_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "second_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8"
         }
       ],
@@ -52,26 +52,26 @@
       "recovery_pairs": [
         {
           "first_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
-          "first_effect_digest": "02b21657df84b052450e9ad296dc6eee68a3fb72ae8537cbba4cca19bb2821c7",
-          "first_recovery_digest": "7def0a2721855ed48a692423fd420496083f6a17478333f2630956a0135114aa",
+          "first_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
+          "first_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
           "occurrence": 1,
           "scenario": "promote_single_step",
           "second_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
-          "second_effect_digest": "02b21657df84b052450e9ad296dc6eee68a3fb72ae8537cbba4cca19bb2821c7",
-          "second_recovery_digest": "7def0a2721855ed48a692423fd420496083f6a17478333f2630956a0135114aa",
+          "second_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
+          "second_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "second_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8"
         },
         {
           "first_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
-          "first_effect_digest": "c2105872d54f73106fa313490f75ca8c3448900c94986645936fce115af11db5",
-          "first_recovery_digest": "6268a973f7edd191b36575fa41de29eb717432c95fbe9766235e35f0defebfe6",
+          "first_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
+          "first_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
           "occurrence": 1,
           "scenario": "dag_accept",
           "second_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
-          "second_effect_digest": "c2105872d54f73106fa313490f75ca8c3448900c94986645936fce115af11db5",
-          "second_recovery_digest": "6268a973f7edd191b36575fa41de29eb717432c95fbe9766235e35f0defebfe6",
+          "second_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
+          "second_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "second_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8"
         }
       ],
@@ -85,26 +85,26 @@
       "recovery_pairs": [
         {
           "first_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
-          "first_effect_digest": "955ac2840d33d30132b720c3c71b8ebf9a8a7599260847ee25e08d21de6efc2c",
-          "first_recovery_digest": "3eead14c61dce8bb9c79071a014a802e8a1ad5f6212c859d645b22c0b1b7418b",
+          "first_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
+          "first_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
           "occurrence": 1,
           "scenario": "promote_single_step",
           "second_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
-          "second_effect_digest": "955ac2840d33d30132b720c3c71b8ebf9a8a7599260847ee25e08d21de6efc2c",
-          "second_recovery_digest": "3eead14c61dce8bb9c79071a014a802e8a1ad5f6212c859d645b22c0b1b7418b",
+          "second_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
+          "second_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "second_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8"
         },
         {
           "first_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
-          "first_effect_digest": "67a9f0fba1e23e227478b0de5620c6598526a9549d87e4601ffd40fb053041fc",
-          "first_recovery_digest": "30b47167cedf84bc7c7888396a7cf4f71006805f93e38163765f3c5735a3bf19",
+          "first_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
+          "first_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
           "occurrence": 1,
           "scenario": "dag_accept",
           "second_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
-          "second_effect_digest": "67a9f0fba1e23e227478b0de5620c6598526a9549d87e4601ffd40fb053041fc",
-          "second_recovery_digest": "30b47167cedf84bc7c7888396a7cf4f71006805f93e38163765f3c5735a3bf19",
+          "second_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
+          "second_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "second_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8"
         }
       ],
@@ -118,26 +118,26 @@
       "recovery_pairs": [
         {
           "first_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
-          "first_effect_digest": "8515f9244a3ad51d93f6b1a066c10feac941a8517518e77183e3944298a199ba",
-          "first_recovery_digest": "d8355ce79727555e151c13bc8936c7abc481a6f80c5e9c6f929cb24fd736c050",
+          "first_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
+          "first_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
           "occurrence": 1,
           "scenario": "promote_single_step",
           "second_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
-          "second_effect_digest": "8515f9244a3ad51d93f6b1a066c10feac941a8517518e77183e3944298a199ba",
-          "second_recovery_digest": "d8355ce79727555e151c13bc8936c7abc481a6f80c5e9c6f929cb24fd736c050",
+          "second_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
+          "second_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "second_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8"
         },
         {
           "first_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
-          "first_effect_digest": "3635e427bf89f6e90e2b011a8accd8debc6f4152e6095b6b4d0b70d59f5931fc",
-          "first_recovery_digest": "af2e4450fd503f95ce0d7618a5589aeb7c7e9bb90c1ffeedcd4848bca2beed95",
+          "first_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
+          "first_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
           "occurrence": 1,
           "scenario": "dag_accept",
           "second_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
-          "second_effect_digest": "3635e427bf89f6e90e2b011a8accd8debc6f4152e6095b6b4d0b70d59f5931fc",
-          "second_recovery_digest": "af2e4450fd503f95ce0d7618a5589aeb7c7e9bb90c1ffeedcd4848bca2beed95",
+          "second_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
+          "second_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "second_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8"
         }
       ],
@@ -151,38 +151,38 @@
       "recovery_pairs": [
         {
           "first_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
-          "first_effect_digest": "b1622a0416b5f6873fa0c6b37d98c5efabe39d1878886bec480b312c100c6986",
-          "first_recovery_digest": "3efdc0fed940a9a73128032aa977aa28ce7ce016bd3a59c5c95934a78c485d20",
+          "first_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
+          "first_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
           "occurrence": 1,
           "scenario": "promote_single_step",
           "second_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
-          "second_effect_digest": "b1622a0416b5f6873fa0c6b37d98c5efabe39d1878886bec480b312c100c6986",
-          "second_recovery_digest": "3efdc0fed940a9a73128032aa977aa28ce7ce016bd3a59c5c95934a78c485d20",
+          "second_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
+          "second_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "second_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8"
         },
         {
           "first_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
-          "first_effect_digest": "bf8d2c4a2320217f9b8bcd9550c040f70e6715a6314d9137579909b990eb3536",
-          "first_recovery_digest": "30757cd5ae109694c12b063ba1a108e5132cba3240f3f3b5bec574d365fd35a9",
+          "first_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
+          "first_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
           "occurrence": 1,
           "scenario": "dag_accept",
           "second_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
-          "second_effect_digest": "bf8d2c4a2320217f9b8bcd9550c040f70e6715a6314d9137579909b990eb3536",
-          "second_recovery_digest": "30757cd5ae109694c12b063ba1a108e5132cba3240f3f3b5bec574d365fd35a9",
+          "second_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
+          "second_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "second_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8"
         },
         {
           "first_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
-          "first_effect_digest": "bded8947c05d0fe49711da1c032980d6b75f594aea4d296fe17b9709dbe90cc2",
-          "first_recovery_digest": "e8f68326890198fa50ca790acfe10425caaafd6bb40b48c3967ca05de36ff778",
+          "first_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
+          "first_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
           "occurrence": 2,
           "scenario": "dag_accept",
           "second_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
-          "second_effect_digest": "bded8947c05d0fe49711da1c032980d6b75f594aea4d296fe17b9709dbe90cc2",
-          "second_recovery_digest": "e8f68326890198fa50ca790acfe10425caaafd6bb40b48c3967ca05de36ff778",
+          "second_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
+          "second_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "second_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8"
         }
       ],
@@ -196,26 +196,26 @@
       "recovery_pairs": [
         {
           "first_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
-          "first_effect_digest": "004a1ecf3ba11f1fea80ac1f0d676ed7705fc19d3481ff918dde78e4229528fd",
-          "first_recovery_digest": "84e17c5896918c185f5eb1b4ebbffad292bd218f28280665c1de92e795a6b7df",
+          "first_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
+          "first_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
           "occurrence": 1,
           "scenario": "promote_single_step",
           "second_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
-          "second_effect_digest": "004a1ecf3ba11f1fea80ac1f0d676ed7705fc19d3481ff918dde78e4229528fd",
-          "second_recovery_digest": "84e17c5896918c185f5eb1b4ebbffad292bd218f28280665c1de92e795a6b7df",
+          "second_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
+          "second_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "second_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8"
         },
         {
           "first_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
-          "first_effect_digest": "55b83923f985f2705dd44894e3236a5f363883804bffc231aff6b154dbaf47b3",
-          "first_recovery_digest": "56180b11282d7df96686a3502d6237a45e1ff7a0ffa1f4463f6f0354508600a9",
+          "first_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
+          "first_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
           "occurrence": 1,
           "scenario": "dag_accept",
           "second_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
-          "second_effect_digest": "55b83923f985f2705dd44894e3236a5f363883804bffc231aff6b154dbaf47b3",
-          "second_recovery_digest": "56180b11282d7df96686a3502d6237a45e1ff7a0ffa1f4463f6f0354508600a9",
+          "second_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
+          "second_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "second_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8"
         }
       ],
@@ -229,26 +229,26 @@
       "recovery_pairs": [
         {
           "first_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
-          "first_effect_digest": "74836fb496d589f83b553e0f9e1cd9947a9ac876fb7d600ab6b72518ec826300",
-          "first_recovery_digest": "d677c92e77281c5ab24e2c40847e4d3ab3c738d9e7bf37052a81d533220661d6",
+          "first_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
+          "first_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
           "occurrence": 1,
           "scenario": "promote_single_step",
           "second_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
-          "second_effect_digest": "74836fb496d589f83b553e0f9e1cd9947a9ac876fb7d600ab6b72518ec826300",
-          "second_recovery_digest": "d677c92e77281c5ab24e2c40847e4d3ab3c738d9e7bf37052a81d533220661d6",
+          "second_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
+          "second_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "second_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8"
         },
         {
           "first_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
-          "first_effect_digest": "bf246448053c9e1ed61c378cb6f27cd7925ea5a67a6ad015d10782c4ae271d86",
-          "first_recovery_digest": "21019b1275b543b18ee87891919ce1cf743f15deef79abf00a88fdca63543f5f",
+          "first_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
+          "first_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
           "occurrence": 1,
           "scenario": "dag_accept",
           "second_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
-          "second_effect_digest": "bf246448053c9e1ed61c378cb6f27cd7925ea5a67a6ad015d10782c4ae271d86",
-          "second_recovery_digest": "21019b1275b543b18ee87891919ce1cf743f15deef79abf00a88fdca63543f5f",
+          "second_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
+          "second_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "second_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8"
         }
       ],
@@ -262,26 +262,26 @@
       "recovery_pairs": [
         {
           "first_basis_digest": "97ae1ac3657d6fe7db3f46ec76d1877a0b09c8b8ac0a87f9295dd5884b96e1ac",
-          "first_effect_digest": "bf125f9154475aebfd5fb11d72f263da3aa9d7ccc953f522a3ffcd3de6ca800e",
-          "first_recovery_digest": "c7da35b812f626fcf6ad5268a6ba6356203fd1806d1d8e62a763538fec76c4f1",
+          "first_effect_digest": "1dba91991342e87fc1e22424050f1a7b89e68fdaebce89744e67c380a15a248a",
+          "first_recovery_digest": "a46fe3d2e3a45309679fd380c0a8280c2c1325c36b387b88d5bb6656020fb77d",
           "first_terminal_digest": "d53d18c23212ea7b6300594bb89bce60218f6eff2b9d628b8cc42d3e79bbd5ab",
           "occurrence": 1,
           "scenario": "promote_single_step",
           "second_basis_digest": "97ae1ac3657d6fe7db3f46ec76d1877a0b09c8b8ac0a87f9295dd5884b96e1ac",
-          "second_effect_digest": "bf125f9154475aebfd5fb11d72f263da3aa9d7ccc953f522a3ffcd3de6ca800e",
-          "second_recovery_digest": "c7da35b812f626fcf6ad5268a6ba6356203fd1806d1d8e62a763538fec76c4f1",
+          "second_effect_digest": "1dba91991342e87fc1e22424050f1a7b89e68fdaebce89744e67c380a15a248a",
+          "second_recovery_digest": "a46fe3d2e3a45309679fd380c0a8280c2c1325c36b387b88d5bb6656020fb77d",
           "second_terminal_digest": "d53d18c23212ea7b6300594bb89bce60218f6eff2b9d628b8cc42d3e79bbd5ab"
         },
         {
           "first_basis_digest": "4a7fb1426dbc4c09ef81419b40ac44d0d4c175db5b63b7ccc0f199b5fa46f619",
-          "first_effect_digest": "e85109cbcf7f08fc7c2ba170dc9f80563cf385cf6c9b2bee16c4e3971eb27392",
-          "first_recovery_digest": "4b6450fc336e8c11a070ab78e0c8489035aec0eeebea3180d511582b2846f95c",
+          "first_effect_digest": "b3a38c351fb3fc334ae2de76e37b505350682a53c1968353e3589f25b9e22379",
+          "first_recovery_digest": "855791201e701e4230519fad86c210cf53c7af6d3e22526b8b3f08eb43101276",
           "first_terminal_digest": "d53d18c23212ea7b6300594bb89bce60218f6eff2b9d628b8cc42d3e79bbd5ab",
           "occurrence": 1,
           "scenario": "dag_accept",
           "second_basis_digest": "4a7fb1426dbc4c09ef81419b40ac44d0d4c175db5b63b7ccc0f199b5fa46f619",
-          "second_effect_digest": "e85109cbcf7f08fc7c2ba170dc9f80563cf385cf6c9b2bee16c4e3971eb27392",
-          "second_recovery_digest": "4b6450fc336e8c11a070ab78e0c8489035aec0eeebea3180d511582b2846f95c",
+          "second_effect_digest": "b3a38c351fb3fc334ae2de76e37b505350682a53c1968353e3589f25b9e22379",
+          "second_recovery_digest": "855791201e701e4230519fad86c210cf53c7af6d3e22526b8b3f08eb43101276",
           "second_terminal_digest": "d53d18c23212ea7b6300594bb89bce60218f6eff2b9d628b8cc42d3e79bbd5ab"
         }
       ],
@@ -290,7 +290,7 @@
     }
   ],
   "exercised": 8,
-  "lockfile_blake3": "a73bf11d046474c99a99d3d2583b9e48b3d0a5b7cb7b8312c3dd8ef8d1f150dc",
+  "lockfile_blake3": "fdae1da3e5295bda56c6c1ed90a6e42d9d694726e666223e4daa8bd988c4f5b5",
   "registered": 8,
   "scenarios": [
     {
@@ -324,6 +324,6 @@
       "scenario": "dag_accept"
     }
   ],
-  "source_commit": "d6e59ce5535ab3c93490bf60007e4ceb4346dc76",
-  "source_tree": "3bc3d6d0692e0561d49e53ee99724ff15328271f"
+  "source_commit": "146d8d4b580e7653f48bc8427a936d3ed4c957f5",
+  "source_tree": "8d7dc276ee3a5659affa3848fca77c86bafea7ab"
 }

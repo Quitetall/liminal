@@ -2437,7 +2437,7 @@ fn verify_mutant_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         .collect::<BTreeSet<_>>();
     anyhow::ensure!(
         seen == all,
-        "mutant evidence rows differ from declared mutants: recorded={seen:?}, declared={all:?}"
+        "every declared mutant must have an evidence row (not-ready or evaluated): recorded={seen:?}, declared={all:?}"
     );
     let expected = packet
         .mutants
@@ -3943,6 +3943,20 @@ fn sanitizer_runtime_witness(sanitizer: &str) -> Result<(&'static str, &'static 
     })
 }
 
+/// Replace the machine-specific source of the `=/cargo` remap with a token.
+fn normalize_build_rustflags(flags: &str) -> String {
+    flags
+        .split_whitespace()
+        .map(|flag| match flag.strip_prefix("--remap-path-prefix=") {
+            Some(rest) if rest.ends_with("=/cargo") => {
+                "--remap-path-prefix=<CARGO_HOME>=/cargo".to_owned()
+            }
+            _ => flag.to_owned(),
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn sanitizer_build_canon(fixed_commit: &str) -> (Utf8PathBuf, String) {
     let root = Utf8PathBuf::from(format!("/var/tmp/liminal-haqp-build/{fixed_commit}"));
     let home = std::env::var("HOME").unwrap_or_default();
@@ -3970,11 +3984,28 @@ fn verify_sanitizer_build_replay(
         &proof.build_root,
         build_root.as_str(),
     )?;
+    // The cargo-home remap's SOURCE is the campaign machine's $HOME and does
+    // not shape a single byte -- its TARGET (/cargo) does. Comparing the raw
+    // string would refuse a byte-identical build from any machine with a
+    // different home directory (HEAD review). Compare with the source
+    // normalized; the build-root remap and the cwd prefix must still match
+    // exactly, because those DO determine the bytes.
     require_eq(
         &format!("{} sanitizer build_rustflags", row.target),
-        &proof.build_rustflags,
-        &build_rustflags,
+        &normalize_build_rustflags(&proof.build_rustflags),
+        &normalize_build_rustflags(&build_rustflags),
     )?;
+    // Hold a SHARED lock on the build base while this tree is in use: the
+    // campaign prunes sibling commits' trees under an exclusive lock, so a
+    // replay mid-build cannot have its worktree removed from under it (HEAD
+    // review). std's File::lock_shared is stable on this toolchain.
+    let base = build_root
+        .parent()
+        .context("canonical build root has a parent")?;
+    fs::create_dir_all(base)?;
+    let lock = fs::File::create(base.join(".lock")).context("open sanitizer build lock")?;
+    lock.lock_shared()
+        .context("shared-lock sanitizer build base")?;
     let worktree = build_root.clone();
     if !worktree.join(".git").exists() {
         if worktree.exists() {
@@ -4216,20 +4247,17 @@ fn verify_corpus_access_audit(root: &Utf8Path, packet: &Packet) -> Result<()> {
         "corpus access audit target",
     )?;
     verify_corpus_audit_campaign_binding(root, &audit)?;
-    if let Some(provenance) = &packet.provenance {
-        verify_corpus_scope_traces(root, &audit, provenance)?;
+    // Scope traces are required only of a qualified packet.
+    if packet.provenance.is_some() {
+        verify_corpus_scope_traces(root, &audit)?;
     }
     Ok(())
 }
 
 #[allow(clippy::too_many_lines)]
-fn verify_corpus_scope_traces(
-    root: &Utf8Path,
-    audit: &CorpusAccessAudit,
-    provenance: &Provenance,
-) -> Result<()> {
+fn verify_corpus_scope_traces(root: &Utf8Path, audit: &CorpusAccessAudit) -> Result<()> {
     verify_corpus_scope_presence(audit)?;
-    verify_corpus_scope_rows(root, audit, provenance)
+    verify_corpus_scope_rows(root, audit)
 }
 
 fn verify_corpus_scope_presence(audit: &CorpusAccessAudit) -> Result<()> {
@@ -4257,12 +4285,8 @@ fn verify_corpus_scope_presence(audit: &CorpusAccessAudit) -> Result<()> {
 }
 
 #[allow(clippy::too_many_lines)]
-fn verify_corpus_scope_rows(
-    root: &Utf8Path,
-    audit: &CorpusAccessAudit,
-    provenance: &Provenance,
-) -> Result<()> {
-    verify_corpus_scope_replays(root, &audit.scope_traces, &provenance.fixed_commit)?;
+fn verify_corpus_scope_rows(root: &Utf8Path, audit: &CorpusAccessAudit) -> Result<()> {
+    verify_corpus_scope_replays(root, &audit.scope_traces)?;
     require_unique(
         audit.scope_traces.iter().map(|row| row.scope.as_str()),
         "corpus audit scope",
@@ -4407,12 +4431,7 @@ fn verify_corpus_scope_rows(
 /// resolves inside the tree. What is lost is the reproducibility claim that
 /// re-execution made; what is gained is evidence describing the run that
 /// happened rather than a different one.
-fn verify_corpus_scope_replays(
-    root: &Utf8Path,
-    rows: &[CorpusScopeTrace],
-    fixed_commit: &str,
-) -> Result<()> {
-    let _ = fixed_commit;
+fn verify_corpus_scope_replays(root: &Utf8Path, rows: &[CorpusScopeTrace]) -> Result<()> {
     for row in rows {
         let expected_command = format!(
             "strace -f -q -e trace=%file -o target/haqp/scope-{}.trace {}",
@@ -7786,6 +7805,12 @@ struct FuzzEvidence {
 #[serde(deny_unknown_fields)]
 struct SanitizerProof {
     build_command: String,
+    // `runtime_probe` / `runtime_probe_blake3` bind the COMMITTED probe log by
+    // digest (checked below). The replay re-runs the probe only as a runtime
+    // identity check: its output carries ASLR addresses ("Loaded 1 modules ...
+    // [0x5633...]") and so cannot be compared byte-for-byte to the recorded log
+    // without inventing a normalization -- which would be a new check that
+    // means less than it says (HEAD review, F-42).
     /// The canonical absolute path the binary was built at (M17.5 F-42). cargo's
     /// `-C metadata` hash includes a path dependency's absolute manifest path
     /// and ASan embeds the resulting codegen-unit name in .rodata, so a rebuild
@@ -13559,10 +13584,9 @@ mod tests {
     fn a_well_formed_scope_row_is_accepted_and_each_binding_is_enforced() {
         type Doctor = Box<dyn Fn(&mut CorpusScopeTrace)>;
         let (_s, root, row) = scope_fixture("ci");
-        let prov = scope_provenance();
-        verify_corpus_scope_rows(&root, &scope_audit(vec![row.clone()]), &prov)
+        verify_corpus_scope_rows(&root, &scope_audit(vec![row.clone()]))
             .expect("a row whose digests match its trace must verify");
-        verify_corpus_scope_replays(&root, std::slice::from_ref(&row), &prov.fixed_commit)
+        verify_corpus_scope_replays(&root, std::slice::from_ref(&row))
             .expect("the captured trace must verify without re-execution");
 
         let cases: Vec<(&str, Doctor, &str)> = vec![
@@ -13611,8 +13635,7 @@ mod tests {
         for (why, doctor, reason) in cases {
             let mut bad = row.clone();
             doctor(&mut bad);
-            let err =
-                verify_corpus_scope_rows(&root, &scope_audit(vec![bad]), &prov).expect_err(why);
+            let err = verify_corpus_scope_rows(&root, &scope_audit(vec![bad])).expect_err(why);
             assert!(
                 err.to_string().contains(reason),
                 "{why}: must refuse for the stated reason, got: {err}"
@@ -13621,7 +13644,7 @@ mod tests {
 
         // Two rows for one scope.
         let dup = scope_audit(vec![row.clone(), row.clone()]);
-        let err = verify_corpus_scope_rows(&root, &dup, &prov).expect_err("duplicate scope");
+        let err = verify_corpus_scope_rows(&root, &dup).expect_err("duplicate scope");
         assert!(err.to_string().contains("duplicate"), "{err}");
     }
 
@@ -13649,7 +13672,7 @@ mod tests {
         )
         .to_hex()
         .to_string();
-        let err = verify_corpus_scope_replays(&root, std::slice::from_ref(&row), &"0".repeat(40))
+        let err = verify_corpus_scope_replays(&root, std::slice::from_ref(&row))
             .expect_err("a held-out open must be refused for a non-fuzz scope too");
         assert!(err.to_string().contains("locked path"), "{err}");
     }
@@ -14022,6 +14045,40 @@ mod tests {
         )
         .expect_err("unknown fuzz target");
         assert!(err.to_string().contains("build failed"), "{err}");
+    }
+
+    /// The cargo-home remap source is the campaign machine's $HOME; a proof from
+    /// another machine must still be accepted when its bytes are identical, while
+    /// a different BUILD-ROOT remap -- which does shape the bytes -- must not.
+    #[test]
+    fn build_rustflags_are_compared_with_the_cargo_home_source_normalized() {
+        let (_root, canon) = sanitizer_build_canon("0123456789abcdef0123456789abcdef01234567");
+        let from_ci = canon
+            .split_whitespace()
+            .map(|f| {
+                if f.ends_with("=/cargo") {
+                    "--remap-path-prefix=/home/ci/.cargo=/cargo".to_owned()
+                } else {
+                    f.to_owned()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert_ne!(
+            from_ci, canon,
+            "the fixture must actually differ in the home source"
+        );
+        assert_eq!(
+            normalize_build_rustflags(&from_ci),
+            normalize_build_rustflags(&canon)
+        );
+
+        let other_root = canon.replace("=/liminal", "=/elsewhere");
+        assert_ne!(
+            normalize_build_rustflags(&other_root),
+            normalize_build_rustflags(&canon),
+            "a different build-root remap changes the bytes and must not normalize away"
+        );
     }
 
     /// M17.5 F-31 / P1-A08: the scenarios block was written by the fault lane
