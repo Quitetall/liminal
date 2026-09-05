@@ -173,7 +173,7 @@ for t in "${TARGETS[@]}"; do
       thread)  san_env=TSAN_OPTIONS ;; leak)   san_env=LSAN_OPTIONS ;;
       *) echo "ERROR: no runtime witness for sanitizer $SANITIZER" >&2; exit 1 ;;
     esac
-    env "$san_env=help=1" "$binary_candidate" -runs=0 -seed=1 >"$probe" 2>&1
+    env "$san_env=help=1:detect_leaks=0" "$binary_candidate" -runs=0 -seed=1 >"$probe" 2>&1
     probe_code=$?
   else
     echo "build failed: code=$build_code binary=${binary_candidate:-missing}" >"$probe"

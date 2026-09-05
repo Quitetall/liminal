@@ -3957,6 +3957,51 @@ fn normalize_build_rustflags(flags: &str) -> String {
         .join(" ")
 }
 
+/// Ask the sanitizer RUNTIME to identify itself (M17.5 F-42). A previous probe
+/// ran `-help=1` and required the text to contain `-fsanitize=<san>`; libFuzzer's
+/// help is a usage banner and never names the sanitizer, so the committed probe
+/// logs contained that string zero times and the check could not pass for any
+/// binary. `<SAN>_OPTIONS=help=1` makes the linked runtime print its own flag
+/// table, which only happens if the instrumentation is actually present. The
+/// target NAME is already bound by the caller's file-name guard; `-seed=1
+/// -runs=0` keeps the output reproducible.
+///
+/// `detect_leaks=0` is the campaign's own policy for traced sanitizer runs
+/// (`haqp_fuzz_campaign.sh`): LeakSanitizer stops the world with ptrace and
+/// aborts with exit 1 when the process is already traced, and every lane stage
+/// now runs under `strace -f` (F-43). The probe runs zero inputs, so leak
+/// detection has nothing to observe here; ASan's memory checks stay on. The
+/// campaign's probe uses the identical environment, and the recorded log is
+/// digest-bound to this output.
+fn probe_sanitizer_runtime(
+    candidate: &Utf8Path,
+    worktree: &Utf8Path,
+    row: &FuzzEvidence,
+) -> Result<(Vec<u8>, &'static str)> {
+    let (options_env, runtime_name) = sanitizer_runtime_witness(&row.sanitizer)?;
+    let probe = Command::new(candidate)
+        .env(options_env, "help=1:detect_leaks=0")
+        .args(["-runs=0", "-seed=1"])
+        .current_dir(worktree)
+        .output()
+        .with_context(|| format!("probe replayed sanitizer binary {}", row.target))?;
+    // Carry the runtime's own words: the first lane that hit F-43 said only
+    // "probe failed" and hid "LeakSanitizer does not work under ptrace".
+    anyhow::ensure!(
+        probe.status.success(),
+        "replayed sanitizer runtime probe failed for {} ({}): {}",
+        row.target,
+        probe.status,
+        String::from_utf8_lossy(&probe.stderr)
+            .lines()
+            .rfind(|line| !line.trim().is_empty())
+            .unwrap_or("<no stderr>")
+    );
+    let mut probe_bytes = probe.stdout;
+    probe_bytes.extend_from_slice(&probe.stderr);
+    Ok((probe_bytes, runtime_name))
+}
+
 fn sanitizer_build_canon(fixed_commit: &str) -> (Utf8PathBuf, String) {
     let root = Utf8PathBuf::from(format!("/var/tmp/liminal-haqp-build/{fixed_commit}"));
     let home = std::env::var("HOME").unwrap_or_default();
@@ -4061,28 +4106,7 @@ fn verify_sanitizer_build_replay(
         &proof.binary_blake3,
         &digest,
     )?;
-    // Ask the sanitizer RUNTIME to identify itself (M17.5 F-42). The previous
-    // probe ran `-help=1` and required the text to contain `-fsanitize=<san>`;
-    // libFuzzer's help is a usage banner and never names the sanitizer, so the
-    // committed probe logs contain that string zero times and the check could
-    // not pass for any binary. `<SAN>_OPTIONS=help=1` makes the linked runtime
-    // print its own flag table, which only happens if the instrumentation is
-    // actually present. The target NAME is already bound by the file-name guard
-    // above; `-seed=1 -runs=0` keeps the output reproducible.
-    let (options_env, runtime_name) = sanitizer_runtime_witness(&row.sanitizer)?;
-    let probe = Command::new(&candidate)
-        .env(options_env, "help=1")
-        .args(["-runs=0", "-seed=1"])
-        .current_dir(&worktree)
-        .output()
-        .with_context(|| format!("probe replayed sanitizer binary {}", row.target))?;
-    anyhow::ensure!(
-        probe.status.success(),
-        "replayed sanitizer runtime probe failed for {}",
-        row.target
-    );
-    let mut probe_bytes = probe.stdout;
-    probe_bytes.extend_from_slice(&probe.stderr);
+    let (probe_bytes, runtime_name) = probe_sanitizer_runtime(&candidate, &worktree, row)?;
     let probe_text = String::from_utf8_lossy(&probe_bytes);
     anyhow::ensure!(
         probe_text.contains(runtime_name),

@@ -2865,3 +2865,40 @@ should reject a boundary with zero recovery pairs. It should not — it iterates
 pairs and checks their digests, and `verify_recovery_pairs` owns the count.
 Corrected to pin both functions against their own contracts rather than
 "fixing" one to cover the other.
+
+## F-43 — the lane's scope tracer and the sanitizer runtime cannot share a process
+
+**Found.** 2026-09-05, first lane at `a42fc8f`, the first one whose stages ran
+under the F-39 scope tracer. The `ci` stage refused with
+*"replayed sanitizer runtime probe failed for cst_parse"*: the verifier's own
+ASan replay built at the canonical path, then its probe exited 1. The same probe
+exits 0 by hand, and the stage's strace shows the probe process exec, spawn one
+helper, and exit 1 with no signal.
+
+**Cause.** LeakSanitizer stops the world with `ptrace` at exit, and a process
+can have one tracer. Under `strace -f` the runtime says so itself:
+`LeakSanitizer does not work under ptrace (strace, gdb, etc)` — reproduced with
+the probe (exit 1; exit 0 with `detect_leaks=0`) and with a real three-input
+fuzz run, which finishes its inputs and then dies at the exit-time leak check.
+The campaign already rules on exactly this for its own traced runs
+(`haqp_fuzz_campaign.sh`: "Keep ASan memory checks enabled while disabling
+only leak detection for traced runs") and records `ASAN_OPTIONS=detect_leaks=0`
+in the declared command; ADR-0020 §4 lists memory errors, not leaks, as failing
+results, and a leak is not unsoundness in Rust. The probe — written when only
+the campaign's inner strace existed, which never wrapped it — did not inherit
+that policy, and F-39 put every stage under a tracer.
+
+**Fix (probe).** The probe runs under `<SAN>_OPTIONS=help=1:detect_leaks=0`
+on both sides (`probe_sanitizer_runtime` and the campaign's probe); it runs
+zero inputs, so leak detection had nothing to observe there. The refusal now
+carries the runtime's exit status and last stderr line: the first lane said
+only "probe failed" and hid the sentence above.
+
+**Open (fuzz stage).** The same one-tracer rule breaks the fuzz stage itself:
+the stage wrapper's `strace -f` and the campaign's per-target `strace -f`
+cannot both attach, and nested strace fails outright
+(`PTRACE_TRACEME: Operation not permitted`), which would leave every
+per-target corpus audit empty. The stage must be the single tracer and each
+target's audit must be carved from the stage trace by pid; the whole-stage
+fuzz trace also exceeds what one stored evidence file may weigh. Resolution
+recorded below when ruled.
