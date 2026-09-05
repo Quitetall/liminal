@@ -29,8 +29,9 @@ if [ -n "$(git status --porcelain)" ]; then
   # A lane that died mid-way leaves its own outputs behind (receipt, row
   # files, campaign evidence). They are not restored here -- discarding
   # uncommitted evidence is the operator's call -- but the call is spelled out.
+  # Fires when no dirty path lies outside the lane's output directories.
   if ! git status --short | awk '{print $2}' | grep -qvE '^conformance/haqp/evidence/|^fuzz/artifacts/'; then
-    echo "every dirty path is lane output; to discard it:" >&2
+    echo "every dirty path is lane output; to discard it (irreversible; preview with git clean -n):" >&2
     echo "  git checkout -- conformance/haqp/evidence && git clean -f conformance/haqp/evidence fuzz/artifacts" >&2
   fi
   exit 2
