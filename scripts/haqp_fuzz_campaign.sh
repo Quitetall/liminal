@@ -60,6 +60,9 @@ hash_file() {
 # writes each line as it completes and the exit line last, but reports the exit
 # after the parent has reaped the child, so the wait is bounded, not assumed.
 carve_stage_trace() {
+  # 60 s: libFuzzer has already exited (we waited on it); this only covers the
+  # tracer reporting that exit after the parent reaped the child, which is
+  # milliseconds. A missing exit line after a minute is the tracer's failure.
   local stage_trace="$1" pid="$2" out="$3" waited=0
   until grep -q -E "^${pid} \+\+\+ (exited with [0-9]+|killed by [A-Z0-9]+( \(core dumped\))?) \+\+\+$" "$stage_trace" 2>/dev/null; do
     [ "$waited" -ge 60 ] && return 1
@@ -94,7 +97,7 @@ resolve_corpus_paths() {
     # Corpus entries can be deleted by libFuzzer after they were opened. Keep
     # canonicalizing existing symlink prefixes while allowing missing leaves;
     # the trace_root case check below remains the root-boundary guard.
-    canonical=$(realpath -m -- "$relative" 2>/dev/null) || return 1
+    canonical=$(realpath -m -- "$trace_root/$relative" 2>/dev/null) || return 1
     case "$canonical" in
       "$trace_root"/*) relative="${canonical#"$trace_root"/}" ;;
       *) return 1 ;;
@@ -161,7 +164,17 @@ done
 git worktree prune
 if [ ! -d "$BUILD_ROOT/.git" ] && [ ! -f "$BUILD_ROOT/.git" ]; then
   rm -rf "$BUILD_ROOT"
-  git worktree add --quiet --detach "$BUILD_ROOT" "$source_commit"
+  # F-44: the build root never materializes the locked corpus. The sanitizer
+  # build does not reference it, and a tree without it has nothing of the
+  # locked data to write, prune or alias. The verifier's replay adds its
+  # worktree the same way (add_sparse_worktree), so both build the same tree.
+  git worktree add --quiet --detach --no-checkout "$BUILD_ROOT" "$source_commit"
+  git -C "$BUILD_ROOT" sparse-checkout set --no-cone '/*' '!/conformance/corpora/'
+  git -C "$BUILD_ROOT" checkout --quiet --detach "$source_commit"
+  if [ -e "$BUILD_ROOT/conformance/corpora" ]; then
+    echo "ERROR: sparse worktree still materialized conformance/corpora" >&2
+    exit 1
+  fi
 fi
 flock -u 9
 mkdir -p "$BUILD_ROOT/fuzz/.cargo"
@@ -386,7 +399,9 @@ for t in "${TARGETS[@]}"; do
     # Match verifier seed_manifest_digest exactly: lexical filename, NUL,
     # SHA-256 hex, NUL. Human-readable separators would bind a different
     # byte stream and make an otherwise valid campaign fail closed.
-    printf '%s\0%s\0' "${seed#fuzz/corpus/$t/}" "$(sha256sum "$seed" | cut -d' ' -f1)" >> "$seed_manifest"
+    # Absolute: under the lane the campaign's own reads are in the stage trace,
+    # and a relative fuzz/corpus path there is unresolvable evidence (F-44).
+    printf '%s\0%s\0' "${seed#fuzz/corpus/$t/}" "$(sha256sum "$trace_root/$seed" | cut -d' ' -f1)" >> "$seed_manifest"
     seed_count=$((seed_count + 1))
   done
   seed_manifest_blake3=$(hash_file "$seed_manifest")

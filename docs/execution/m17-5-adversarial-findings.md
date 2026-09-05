@@ -2960,4 +2960,33 @@ Sparse-checkout of `conformance/corpora` in canonical worktrees is worth doing
 under any ruling: the sanitizer build does not reference it, and a build root
 that never materializes the locked corpus has nothing to prune.
 
-**Status.** Awaiting ruling. Everything F-43 changed holds under every option.
+**Ruling (Brian, 2026-09-05): option 1.** Writes are the unconditional rule
+for every stage; the carved fuzz binaries keep the full rule; canonical
+worktrees are sparse.
+
+**Fix.** The trace scan classifies every file syscall as read- or write-class
+(`scope_trace_line_accesses`: creat/truncate/unlink/rename/mkdir/rmdir/link/
+symlink/chmod/chown/mknod and the open family with a writing flag; the target
+of a two-path syscall counts as written, because a link INTO the locked corpus
+is the second-name attack). For a stage's trace, write-class paths that name
+the corpus are resolved against the repository — through aliases, relative
+paths judged root-relative — and any that lands under `conformance/corpora`
+refuses (*"wrote to the locked corpus"*); reads and stats are permitted.
+Corpus resolution over a stage's union runs with the `WritesOnly` policy; the
+per-target rows and the carved parts keep `AnyTouch`, exactly as before.
+Canonical worktrees (campaign and verifier replay alike) are created with
+`--no-checkout` and a sparse-checkout that excludes `conformance/corpora`, and
+refuse if it materializes anyway: the sanitizer build does not reference the
+corpus, so the build root now has nothing of the locked data to write, prune or
+alias. Tests: a stage's read and stat of a held-out file are accepted, as is a
+write to a copy under a build root; an open for writing, an unlink, a rename
+into the corpus, a relative write and a write through a symlink alias each
+refuse for the stated reason; a carved part that opens a held-out file still
+refuses on any touch (union test). The relative-path guard follows the same
+split: a fuzz binary's relative corpus path is still the campaign's defect
+(`AnyTouch` refuses), while a stage helper's relative seed read — git's index
+refresh, the campaign's own seed manifest — is unresolvable without a cwd
+receipt and contributes nothing (`WritesOnly` skips it); the campaign's own
+corpus reads are absolute now regardless. Proved on a traced 5-second campaign:
+the fuzz scope row is produced with all seven parts, a computed resolved
+digest, and a 1.6 MB remainder carrying no fuzz-binary line.

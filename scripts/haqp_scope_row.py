@@ -48,7 +48,10 @@ def main() -> int:
         # names the parts, and every digest is over the union.
         audit = json.loads((ACCESS.parent / "corpus-access.json").read_text())
         parts = [{"trace": t["trace"], "trace_blake3": t["trace_blake3"]} for t in audit["targets"]]
-        prefixes = tuple(f"{int(t['trace_pid'])} ".encode() for t in audit["targets"])
+        pids = [int(t["trace_pid"]) for t in audit["targets"]]
+        if any(pid <= 0 for pid in pids):
+            raise SystemExit(f"fuzz scope: a target has no traced pid to carve: {pids}")
+        prefixes = tuple(f"{pid} ".encode() for pid in pids)
         remainder = raw.with_name(raw.name + ".remainder")
         with raw.open("rb") as src, remainder.open("wb") as dst:
             for line in src:

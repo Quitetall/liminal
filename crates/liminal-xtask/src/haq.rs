@@ -85,7 +85,14 @@ pub fn scope_trace_digest_repo(
             } else {
                 CorpusAccess::IfPresent
             };
-            resolved_corpus_paths_digest_from(root, root.as_str(), &open, &label, access)
+            resolved_corpus_paths_digest_from(
+                root,
+                root.as_str(),
+                &open,
+                &label,
+                access,
+                LockedCorpus::WritesOnly,
+            )
         }
         other => anyhow::bail!("unknown scope digest kind {other:?}; expected paths or resolved"),
     }
@@ -3974,6 +3981,66 @@ fn normalize_build_rustflags(flags: &str) -> String {
 /// detection has nothing to observe here; ASan's memory checks stay on. The
 /// campaign's probe uses the identical environment, and the recorded log is
 /// digest-bound to this output.
+/// A detached worktree that never materializes `conformance/corpora` (F-44):
+/// the sanitizer build does not reference the corpus, so a build root without
+/// it has nothing of the locked data to write, prune or alias. Mirrors the
+/// campaign's `git worktree add --no-checkout` + sparse-checkout sequence, so
+/// the replay builds the same tree the campaign built.
+fn add_sparse_worktree(
+    root: &Utf8Path,
+    worktree: &Utf8Path,
+    commit: &str,
+    label: &str,
+) -> Result<()> {
+    let run = |args: &[&str], cwd: &Utf8Path, what: &str| -> Result<()> {
+        let output = Command::new("git")
+            .current_dir(cwd)
+            .args(args)
+            .output()
+            .with_context(|| format!("{label}: {what}"))?;
+        anyhow::ensure!(
+            output.status.success(),
+            "{label} {what} failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+        Ok(())
+    };
+    run(
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            "--quiet",
+            "--no-checkout",
+            worktree.as_str(),
+            commit,
+        ],
+        root,
+        "worktree add",
+    )?;
+    run(
+        &[
+            "sparse-checkout",
+            "set",
+            "--no-cone",
+            "/*",
+            "!/conformance/corpora/",
+        ],
+        worktree,
+        "sparse-checkout",
+    )?;
+    run(
+        &["checkout", "--quiet", "--detach", commit],
+        worktree,
+        "checkout",
+    )?;
+    anyhow::ensure!(
+        !worktree.join("conformance/corpora").exists(),
+        "{label}: sparse worktree still materialized conformance/corpora"
+    );
+    Ok(())
+}
+
 fn probe_sanitizer_runtime(
     candidate: &Utf8Path,
     worktree: &Utf8Path,
@@ -4060,18 +4127,12 @@ fn verify_sanitizer_build_replay(
         if let Some(parent) = worktree.parent() {
             fs::create_dir_all(parent)?;
         }
-        let add = Command::new("git")
-            .current_dir(root)
-            .args(["worktree", "add", "--detach", "--quiet"])
-            .arg(&worktree)
-            .arg(&provenance.fixed_commit)
-            .output()
-            .context("add sanitizer replay worktree")?;
-        anyhow::ensure!(
-            add.status.success(),
-            "sanitizer replay worktree add failed: {}",
-            String::from_utf8_lossy(&add.stderr).trim()
-        );
+        add_sparse_worktree(
+            root,
+            &worktree,
+            &provenance.fixed_commit,
+            "sanitizer replay",
+        )?;
     }
     fs::create_dir_all(worktree.join("fuzz/.cargo"))?;
     fs::write(
@@ -4414,11 +4475,9 @@ fn verify_corpus_scope_rows(root: &Utf8Path, audit: &CorpusAccessAudit) -> Resul
             &row.process_binding,
             &binding,
         )?;
-        if let Some(fragment) = scan.forbidden {
-            anyhow::bail!(
-                "{} scope trace observed forbidden path fragment {fragment:?}",
-                row.scope
-            );
+        let label = format!("{} corpus scope", row.scope);
+        if let Some(path) = locked_corpus_write(root, &scan.locked_write_candidates, &label)? {
+            anyhow::bail!("{label} trace wrote to the locked corpus ({path})");
         }
     }
     Ok(())
@@ -4440,8 +4499,9 @@ fn verify_corpus_scope_rows(root: &Utf8Path, audit: &CorpusAccessAudit) -> Resul
 /// Ruling (Brian, 2026-09-04): the trace is evidence FROM the campaign. The
 /// lane captures each scope under strace as it actually runs, and the gate
 /// checks the recorded bytes: the command matches the closed lane registry, the
-/// path digest matches, no held-out path appears, and every traced corpus path
-/// resolves inside the tree. What is lost is the reproducibility claim that
+/// path digest matches, no stage wrote to the repository's locked corpus and no
+/// carved fuzz binary touched it at all (F-44 ruling, 2026-09-05), and every
+/// traced corpus path resolves inside the tree. What is lost is the reproducibility claim that
 /// re-execution made; what is gained is evidence describing the run that
 /// happened rather than a different one.
 fn verify_corpus_scope_replays(
@@ -4461,19 +4521,22 @@ fn verify_corpus_scope_replays(
             &expected_command,
         )?;
         verify_scope_trace_parts(row, targets)?;
-        let (_remainder, open, forbidden) = scan_scope_trace_union(root, row)?;
+        let (remainder, open, forbidden) = scan_scope_trace_union(root, row)?;
         if let Some(fragment) = forbidden {
             anyhow::bail!(
                 "{} corpus scope trace opened a locked path ({fragment})",
                 row.scope
             );
         }
+        let label = format!("{} corpus scope", row.scope);
+        if let Some(path) = locked_corpus_write(root, &remainder.locked_write_candidates, &label)? {
+            anyhow::bail!("{label} trace wrote to the locked corpus ({path})");
+        }
         require_eq(
             &format!("{} observed_paths_blake3", row.scope),
             &row.observed_paths_blake3,
             &scope_trace_paths_digest_from(&open),
         )?;
-        let label = format!("{} corpus scope", row.scope);
         require_hex_digest(
             &format!("{label} resolved_paths_blake3"),
             &row.resolved_paths_blake3,
@@ -4483,7 +4546,14 @@ fn verify_corpus_scope_replays(
         } else {
             CorpusAccess::IfPresent
         };
-        let actual = resolved_corpus_paths_digest_from(root, root.as_str(), &open, &label, access)?;
+        let actual = resolved_corpus_paths_digest_from(
+            root,
+            root.as_str(),
+            &open,
+            &label,
+            access,
+            LockedCorpus::WritesOnly,
+        )?;
         require_eq(
             &format!("{label} resolved_paths_blake3"),
             &actual,
@@ -4563,48 +4633,131 @@ fn scope_trace_paths_digest_from(open_paths: &BTreeSet<String>) -> String {
 }
 
 /// The path argument of one traced file syscall, lexical, as strace printed it.
-fn scope_trace_line_path(line: &str) -> Option<String> {
-    const FILE_SYSCALLS: [&str; 25] = [
-        "open(",
-        "openat(",
-        "openat2(",
-        "creat(",
-        "stat(",
-        "statx(",
-        "lstat(",
-        "fstatat(",
-        "newfstatat(",
-        "readlink(",
-        "readlinkat(",
-        "access(",
-        "faccessat(",
-        "faccessat2(",
-        "execve(",
-        "execveat(",
-        "name_to_handle_at(",
-        "truncate(",
-        "utimensat(",
-        "unlink(",
-        "unlinkat(",
-        "rename(",
-        "renameat(",
-        "mkdir(",
-        "chdir(",
-    ];
-    let open = FILE_SYSCALLS
+/// Every file syscall strace's `%file` class prints a path for. Write-class
+/// entries can change what a path names; the open family is write-class only
+/// with a writing flag.
+const FILE_SYSCALLS: [&str; 41] = [
+    "open(",
+    "openat(",
+    "openat2(",
+    "creat(",
+    "stat(",
+    "statx(",
+    "lstat(",
+    "fstatat(",
+    "newfstatat(",
+    "readlink(",
+    "readlinkat(",
+    "access(",
+    "faccessat(",
+    "faccessat2(",
+    "execve(",
+    "execveat(",
+    "name_to_handle_at(",
+    "truncate(",
+    "utimensat(",
+    "unlink(",
+    "unlinkat(",
+    "rename(",
+    "renameat(",
+    "renameat2(",
+    "mkdir(",
+    "mkdirat(",
+    "rmdir(",
+    "chdir(",
+    "link(",
+    "linkat(",
+    "symlink(",
+    "symlinkat(",
+    "chmod(",
+    "fchmodat(",
+    "chown(",
+    "lchown(",
+    "fchownat(",
+    "mknod(",
+    "mknodat(",
+    "setxattr(",
+    "removexattr(",
+];
+const OPEN_SYSCALLS: [&str; 3] = ["open(", "openat(", "openat2("];
+const OPEN_WRITE_FLAGS: [&str; 5] = ["O_WRONLY", "O_RDWR", "O_CREAT", "O_TRUNC", "O_APPEND"];
+const WRITE_SYSCALLS: [&str; 22] = [
+    "creat(",
+    "truncate(",
+    "utimensat(",
+    "unlink(",
+    "unlinkat(",
+    "rename(",
+    "renameat(",
+    "renameat2(",
+    "mkdir(",
+    "mkdirat(",
+    "rmdir(",
+    "link(",
+    "linkat(",
+    "symlink(",
+    "symlinkat(",
+    "chmod(",
+    "fchmodat(",
+    "chown(",
+    "lchown(",
+    "fchownat(",
+    "mknod(",
+    "mknodat(",
+];
+/// Syscalls whose second string is also a path being written (the target).
+const TWO_PATH_SYSCALLS: [&str; 7] = [
+    "rename(",
+    "renameat(",
+    "renameat2(",
+    "link(",
+    "linkat(",
+    "symlink(",
+    "symlinkat(",
+];
+
+/// The path arguments of one traced file syscall, lexical, as strace printed
+/// them, each with whether the call can change what the path names (F-44).
+/// Two-path syscalls yield both strings; a symlink's target counts as written
+/// because a link INTO the locked corpus is the second-name attack.
+fn scope_trace_line_accesses(line: &str) -> Vec<(String, bool)> {
+    let Some((open, needle)) = FILE_SYSCALLS
         .into_iter()
-        .filter_map(|needle| line.find(needle))
-        .min()?;
+        .filter_map(|needle| line.find(needle).map(|index| (index, needle)))
+        .min_by_key(|(index, _)| *index)
+    else {
+        return Vec::new();
+    };
     let rest = &line[open..];
-    let start = rest.find('"')?;
-    let end = rest[start + 1..].find('"')?;
-    Some(rest[start + 1..start + 1 + end].to_owned())
+    let write = WRITE_SYSCALLS.contains(&needle)
+        || (OPEN_SYSCALLS.contains(&needle)
+            && OPEN_WRITE_FLAGS.iter().any(|flag| rest.contains(flag)));
+    let wanted = if TWO_PATH_SYSCALLS.contains(&needle) {
+        2
+    } else {
+        1
+    };
+    let mut out = Vec::with_capacity(wanted);
+    let mut cursor = rest;
+    for _ in 0..wanted {
+        let Some(start) = cursor.find('"') else { break };
+        let Some(end) = cursor[start + 1..].find('"') else {
+            break;
+        };
+        out.push((cursor[start + 1..start + 1 + end].to_owned(), write));
+        cursor = &cursor[start + 1 + end + 1..];
+    }
+    out
 }
 
 fn scope_trace_open_paths(bytes: &[u8]) -> BTreeSet<String> {
     String::from_utf8_lossy(bytes)
         .lines()
-        .filter_map(scope_trace_line_path)
+        .flat_map(|line| {
+            scope_trace_line_accesses(line)
+                .into_iter()
+                .map(|(path, _)| path)
+        })
         .collect()
 }
 
@@ -4633,7 +4786,11 @@ struct ScopeTraceScan {
     /// Pids whose `+++ exited with 0 +++` line was seen.
     exited_zero: BTreeSet<u32>,
     /// The first locked-corpus fragment seen anywhere in the text, if any.
+    /// The carved fuzz binaries' traces may not carry it at all (F-44).
     forbidden: Option<&'static str>,
+    /// Write-class paths carrying a locked-corpus fragment: the ones the
+    /// F-44 write rule resolves against the repository.
+    locked_write_candidates: Vec<String>,
     /// blake3 of the raw bytes, exactly what `read_evidence_bytes` would hash.
     raw_blake3: String,
 }
@@ -4660,13 +4817,23 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
                 .into_iter()
                 .find(|fragment| lower.contains(fragment));
         }
-        if let Some(pid) = line.split(' ').next().and_then(|t| t.parse::<u32>().ok()) {
+        let mut tokens = line.splitn(2, ' ');
+        if let Some(pid) = tokens.next().and_then(|token| token.parse::<u32>().ok()) {
             scan.pids.insert(pid);
-            if *line == format!("{pid} +++ exited with 0 +++") {
+            if tokens.next() == Some("+++ exited with 0 +++") {
                 scan.exited_zero.insert(pid);
             }
         }
-        if let Some(path) = scope_trace_line_path(&line) {
+        for (path, write) in scope_trace_line_accesses(&line) {
+            if write {
+                let lower = path.to_ascii_lowercase();
+                if FORBIDDEN_TRACE_FRAGMENTS
+                    .iter()
+                    .any(|fragment| lower.contains(fragment))
+                {
+                    scan.locked_write_candidates.push(path.clone());
+                }
+            }
             scan.open_paths.insert(path);
         }
     }
@@ -4680,10 +4847,57 @@ fn open_evidence_reader(path: &Utf8Path) -> Result<Box<dyn std::io::BufRead>> {
     if path.extension() == Some("zst") {
         let decoder = zstd::Decoder::new(file)
             .with_context(|| format!("{path}: evidence is not valid zstd"))?;
+        // The decoder buffers its input; the outer BufReader is for read_until.
         Ok(Box::new(std::io::BufReader::new(decoder)))
     } else {
         Ok(Box::new(std::io::BufReader::new(file)))
     }
+}
+
+/// F-44 ruling (Brian, 2026-09-05). A stage may READ the locked corpus -- the
+/// SLO graduation test measures the profile on it, which is why it is held
+/// out -- but no stage may modify the repository's copy of it: the "never
+/// hash-update" half of the lock, enforced on every trace. Copies under build
+/// roots and scratch directories are outside the repository. The carved fuzz
+/// binaries keep the full rule: their traces may not carry the fragment at
+/// all (`ScopeTraceScan::forbidden`), because they are the one process family
+/// whose evidence is about the corpus.
+///
+/// Relative paths are judged root-relative, conservatively: a stage's cwd is
+/// not receipted, so a relative write that names the locked corpus refuses.
+fn locked_corpus_write(
+    root: &Utf8Path,
+    candidates: &[String],
+    label: &str,
+) -> Result<Option<String>> {
+    let canonical_root = fs::canonicalize(root.as_std_path())
+        .with_context(|| format!("{label}: canonicalize repository root"))?;
+    for lexical in candidates {
+        let path = Path::new(lexical);
+        let local = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            root.as_std_path().join(path)
+        };
+        let canonical = canonicalize_trace_path(&local).unwrap_or(local);
+        if let Ok(relative) = canonical.strip_prefix(&canonical_root)
+            && relative
+                .to_string_lossy()
+                .to_ascii_lowercase()
+                .starts_with("conformance/corpora")
+        {
+            return Ok(Some(lexical.clone()));
+        }
+    }
+    Ok(None)
+}
+
+/// Whether a resolved repository path inside the locked corpus refuses the
+/// whole trace (the carved fuzz binaries) or is a read the ruling permits.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LockedCorpus {
+    AnyTouch,
+    WritesOnly,
 }
 
 fn scan_scope_trace_file(path: &Utf8Path, label: &str) -> Result<ScopeTraceScan> {
@@ -4703,7 +4917,9 @@ fn scan_scope_trace_union(
     let remainder_path = safe_repo_path(root, &row.trace, "corpus scope trace")?;
     let remainder = scan_scope_trace_file(&remainder_path, &label)?;
     let mut open = remainder.open_paths.clone();
-    let mut forbidden = remainder.forbidden;
+    // The remainder is a stage: reads permitted, writes judged by the caller
+    // (F-44). Parts are the fuzz binaries: any fragment refuses.
+    let mut forbidden = None;
     for part in &row.parts {
         let part_path = safe_repo_path(root, &part.trace, "corpus scope trace part")?;
         let scan = scan_scope_trace_file(&part_path, &label)?;
@@ -4817,6 +5033,7 @@ fn resolved_corpus_paths_digest(
         &scope_trace_open_paths(bytes),
         label,
         access,
+        LockedCorpus::AnyTouch,
     )
 }
 
@@ -4826,6 +5043,7 @@ fn resolved_corpus_paths_digest_from(
     open_paths: &BTreeSet<String>,
     label: &str,
     access: CorpusAccess,
+    locked: LockedCorpus,
 ) -> Result<String> {
     let canonical_root = fs::canonicalize(root.as_std_path())
         .with_context(|| format!("{label}: canonicalize repository root"))?;
@@ -4845,9 +5063,18 @@ fn resolved_corpus_paths_digest_from(
             && (lexical_lower.contains("/fuzz/corpus/")
                 || lexical_lower.starts_with("fuzz/corpus/"))
         {
-            anyhow::bail!(
-                "{label}: relative fuzz corpus path lacks authenticated cwd/dirfd binding"
-            );
+            match locked {
+                // A fuzz binary is invoked with an absolute corpus path; a
+                // relative one is the campaign's defect, not evidence.
+                LockedCorpus::AnyTouch => anyhow::bail!(
+                    "{label}: relative fuzz corpus path lacks authenticated cwd/dirfd binding"
+                ),
+                // A stage's helpers (git's index refresh, the campaign's seed
+                // manifest) name seeds relative to their cwd. Unresolvable
+                // without a cwd receipt, so not evidence of corpus access;
+                // writes were already judged root-relative (F-44).
+                LockedCorpus::WritesOnly => continue,
+            }
         }
         let under_trace_root =
             !lexical_path.is_absolute() || lexical_path.strip_prefix(trace_root).is_ok();
@@ -4863,11 +5090,13 @@ fn resolved_corpus_paths_digest_from(
             .with_context(|| format!("{label}: traced repository path escapes repository root"))?;
         let relative = relative.to_str().context("non-UTF-8 traced corpus path")?;
         let lower = relative.to_ascii_lowercase();
-        for forbidden in ["heldout", "conformance/corpora"] {
-            anyhow::ensure!(
-                !lower.contains(forbidden),
-                "{label}: traced repository path resolves into forbidden data"
-            );
+        if locked == LockedCorpus::AnyTouch {
+            for forbidden in FORBIDDEN_TRACE_FRAGMENTS {
+                anyhow::ensure!(
+                    !lower.contains(forbidden),
+                    "{label}: traced repository path resolves into forbidden data"
+                );
+            }
         }
         if lexical_lower.contains("/fuzz/corpus/")
             || lexical_lower.starts_with("fuzz/corpus/")
@@ -14029,33 +14258,121 @@ mod tests {
         assert!(err.to_string().contains("only fuzz carves"), "{err}");
     }
 
-    /// The forbidden-path refusal is unconditional for every scope (ruling
-    /// 2026-09-04) even though corpus RESOLUTION is only required of `fuzz`.
-    #[test]
-    fn a_scope_trace_that_touched_the_locked_corpus_is_refused_unconditionally() {
-        let (_s, root, mut row) = scope_fixture("canaries");
-        let trace = "4242 openat(AT_FDCWD, \"conformance/corpora/heldout/x.md\", O_RDONLY) = 3\n\
-                     4242 +++ exited with 0 +++\n";
-        let path = root.join(&row.trace);
-        fs::write(&path, zstd::encode_all(trace.as_bytes(), 3).expect("zstd")).expect("rewrite");
-        row.trace_blake3 = blake3::hash(trace.as_bytes()).to_hex().to_string();
-        row.observed_paths_blake3 = scope_trace_paths_digest(trace.as_bytes());
-        row.process_binding = blake3::hash(
-            format!(
-                "{}\0{}\0{}\0{}\0{}",
-                row.command,
-                row.trace_pid,
-                row.trace_exit_code,
-                row.trace_blake3,
-                row.observed_paths_blake3
-            )
-            .as_bytes(),
+    fn rewrite_scope_trace(root: &Utf8Path, row: &mut CorpusScopeTrace, trace: &str) {
+        fs::write(
+            root.join(&row.trace),
+            zstd::encode_all(trace.as_bytes(), 3).expect("zstd"),
         )
-        .to_hex()
-        .to_string();
-        let err = verify_corpus_scope_replays(&root, std::slice::from_ref(&row), &[])
-            .expect_err("a held-out open must be refused for a non-fuzz scope too");
-        assert!(err.to_string().contains("locked path"), "{err}");
+        .expect("rewrite");
+        row.trace_blake3 = blake3::hash(trace.as_bytes()).to_hex().to_string();
+        let files = [root.join(&row.trace)];
+        row.observed_paths_blake3 =
+            scope_trace_digest_repo(root, "paths", &files, &row.scope).expect("paths");
+        row.resolved_paths_blake3 =
+            scope_trace_digest_repo(root, "resolved", &files, &row.scope).expect("resolved");
+        rebind_scope_row(row);
+    }
+
+    /// F-44 ruling (2026-09-05): a stage may read the locked corpus -- the SLO
+    /// graduation test measures on it by design -- but may never modify the
+    /// repository's copy: opens with a writing flag, unlink, and the target of
+    /// a rename all refuse, through aliases, and a relative write refuses
+    /// conservatively. Copies under a build root are outside the repository.
+    /// The carved fuzz binaries keep the full rule (see the union test).
+    #[test]
+    fn a_stage_may_read_the_locked_corpus_but_never_write_it() {
+        let (_s, root, row) = scope_fixture("canaries");
+        fs::create_dir_all(root.join("conformance/corpora/heldout")).expect("mkdir");
+        fs::write(root.join("conformance/corpora/heldout/x.md"), "locked").expect("seed");
+        let exit = "4242 +++ exited with 0 +++\n";
+        let accept = |trace: String, why: &str| {
+            let mut ok = row.clone();
+            rewrite_scope_trace(&root, &mut ok, &trace);
+            verify_corpus_scope_replays(&root, std::slice::from_ref(&ok), &[])
+                .unwrap_or_else(|e| panic!("{why}: {e}"));
+            verify_corpus_scope_rows(&root, &scope_audit(vec![ok]))
+                .unwrap_or_else(|e| panic!("{why}: {e}"));
+        };
+        let refuse = |trace: String, why: &str| {
+            let mut bad = row.clone();
+            rewrite_scope_trace(&root, &mut bad, &trace);
+            let err =
+                verify_corpus_scope_replays(&root, std::slice::from_ref(&bad), &[]).expect_err(why);
+            assert!(
+                err.to_string().contains("wrote to the locked corpus"),
+                "{why}: {err}"
+            );
+            let err = verify_corpus_scope_rows(&root, &scope_audit(vec![bad])).expect_err(why);
+            assert!(
+                err.to_string().contains("wrote to the locked corpus"),
+                "{why}: {err}"
+            );
+        };
+        accept(
+            format!(
+                "4242 openat(AT_FDCWD, \"{root}/conformance/corpora/heldout/x.md\", O_RDONLY|O_CLOEXEC) = 3\n{exit}"
+            ),
+            "a read is the graduation test's by design",
+        );
+        accept(
+            format!(
+                "4242 newfstatat(AT_FDCWD, \"{root}/conformance/corpora/heldout/x.md\", {{st_mode=S_IFREG|0644}}, 0) = 0\n{exit}"
+            ),
+            "git's index refresh stats every tracked path",
+        );
+        accept(
+            format!(
+                "4242 openat(AT_FDCWD, \"fuzz/corpus/cst_parse/01-empty.md\", O_RDONLY) = 3\n{exit}"
+            ),
+            "a stage helper's relative seed read is unresolvable, not a refusal",
+        );
+        let relative_seed = format!(
+            "4242 openat(AT_FDCWD, \"fuzz/corpus/cst_parse/01-empty.md\", O_RDONLY) = 3\n{exit}"
+        );
+        let err = resolved_corpus_paths_digest(
+            &root,
+            root.as_str(),
+            relative_seed.as_bytes(),
+            "binary",
+            CorpusAccess::IfPresent,
+        )
+        .expect_err("a fuzz binary's relative corpus path is still the campaign's defect");
+        assert!(err.to_string().contains("cwd/dirfd"), "{err}");
+        accept(
+            format!(
+                "4242 openat(AT_FDCWD, \"/var/tmp/liminal-haqp-build/abc/conformance/corpora/heldout/x.md\", O_WRONLY|O_CREAT|O_TRUNC, 0644) = 3\n{exit}"
+            ),
+            "a copy under a build root is outside the repository",
+        );
+        refuse(
+            format!(
+                "4242 openat(AT_FDCWD, \"{root}/conformance/corpora/heldout/x.md\", O_WRONLY|O_CREAT|O_TRUNC, 0644) = 3\n{exit}"
+            ),
+            "an open for writing",
+        );
+        refuse(
+            format!("4242 unlink(\"{root}/conformance/corpora/heldout/x.md\") = 0\n{exit}"),
+            "an unlink",
+        );
+        refuse(
+            format!(
+                "4242 rename(\"{root}/tmp.md\", \"{root}/conformance/corpora/heldout/y.md\") = 0\n{exit}"
+            ),
+            "a rename INTO the corpus (the second path)",
+        );
+        refuse(
+            format!(
+                "4242 openat(AT_FDCWD, \"conformance/corpora/heldout/x.md\", O_WRONLY|O_APPEND) = 3\n{exit}"
+            ),
+            "a relative write, judged root-relative",
+        );
+        // Through an alias: a symlink elsewhere in the tree that resolves inside.
+        std::os::unix::fs::symlink(root.join("conformance/corpora"), root.join("alias"))
+            .expect("alias");
+        refuse(
+            format!("4242 openat(AT_FDCWD, \"{root}/alias/heldout/x.md\", O_RDWR) = 3\n{exit}"),
+            "a write through an alias",
+        );
     }
 
     /// A non-fuzz scope with NO corpus access is fine; the `fuzz` scope with
