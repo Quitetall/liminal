@@ -2990,3 +2990,16 @@ receipt and contributes nothing (`WritesOnly` skips it); the campaign's own
 corpus reads are absolute now regardless. Proved on a traced 5-second campaign:
 the fuzz scope row is produced with all seven parts, a computed resolved
 digest, and a 1.6 MB remainder carrying no fuzz-binary line.
+
+**Second lane (c437aa3).** `ci` through `fuzz` passed with scope rows — the
+first lane to produce any — and the seven sanitizer targets ran their full 30
+minutes each under the stage tracer with zero artifacts (12.8 M executions for
+`cst_parse`, 70.5 M for `graph_interchange_codec`). `reviews` refused:
+*"traced repository path escapes repository root"*. The reviewer tooling
+(codex CLI, node, GPU probes) opens paths relative to a directory fd —
+`../nvidia0` under `/dev`, `../lib/node_modules/...` — and the resolver read
+every relative path as repository-relative, so `..` climbed out of the root.
+Under the stage policy a relative path is relative to a cwd or dirfd the trace
+does not receipt and can add no corpus entry, so it is skipped rather than
+refused; a fuzz binary's trace keeps the strict reading (test: a dirfd-relative
+open is accepted for a stage and still refused for a binary).

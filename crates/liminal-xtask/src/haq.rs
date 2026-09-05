@@ -5047,6 +5047,38 @@ fn resolved_corpus_paths_digest(
     )
 }
 
+/// Whether a relative traced path is left out of corpus resolution.
+///
+/// Relative paths are interpreted against the process cwd or a directory fd,
+/// which the trace does not receipt; resolving one as root-relative can hide a
+/// locked corpus behind a chdir or alias. A fuzz binary is invoked with an
+/// absolute corpus path, so a relative one is the campaign's defect and refuses
+/// (`AnyTouch`). A stage's helpers name seeds relative to their cwd (git's
+/// index refresh, the campaign's seed manifest) and reviewer tooling opens
+/// `../nvidia0` under /dev: unresolvable, and able to add no corpus entry, so
+/// under `WritesOnly` every relative path is skipped rather than refused as an
+/// escape (F-44). Writes were already judged root-relative by
+/// `locked_corpus_write`.
+fn relative_trace_path_is_skipped(
+    lexical_path: &Path,
+    lexical_lower: &str,
+    locked: LockedCorpus,
+    label: &str,
+) -> Result<bool> {
+    if lexical_path.is_absolute() {
+        return Ok(false);
+    }
+    let names_corpus =
+        lexical_lower.contains("/fuzz/corpus/") || lexical_lower.starts_with("fuzz/corpus/");
+    match locked {
+        LockedCorpus::AnyTouch if names_corpus => anyhow::bail!(
+            "{label}: relative fuzz corpus path lacks authenticated cwd/dirfd binding"
+        ),
+        LockedCorpus::AnyTouch => Ok(false),
+        LockedCorpus::WritesOnly => Ok(true),
+    }
+}
+
 fn resolved_corpus_paths_digest_from(
     root: &Utf8Path,
     trace_root: &str,
@@ -5066,25 +5098,8 @@ fn resolved_corpus_paths_digest_from(
     for lexical in open_paths {
         let lexical_path = Path::new(&lexical);
         let lexical_lower = lexical_path.to_string_lossy().to_ascii_lowercase();
-        // Relative openat paths are interpreted against process cwd/dirfd, not
-        // necessarily trace_root. Without a cwd/dirfd receipt, resolving one
-        // as root-relative can hide a locked corpus behind a chdir or alias.
-        if !lexical_path.is_absolute()
-            && (lexical_lower.contains("/fuzz/corpus/")
-                || lexical_lower.starts_with("fuzz/corpus/"))
-        {
-            match locked {
-                // A fuzz binary is invoked with an absolute corpus path; a
-                // relative one is the campaign's defect, not evidence.
-                LockedCorpus::AnyTouch => anyhow::bail!(
-                    "{label}: relative fuzz corpus path lacks authenticated cwd/dirfd binding"
-                ),
-                // A stage's helpers (git's index refresh, the campaign's seed
-                // manifest) name seeds relative to their cwd. Unresolvable
-                // without a cwd receipt, so not evidence of corpus access;
-                // writes were already judged root-relative (F-44).
-                LockedCorpus::WritesOnly => continue,
-            }
+        if relative_trace_path_is_skipped(lexical_path, &lexical_lower, locked, label)? {
+            continue;
         }
         let under_trace_root =
             !lexical_path.is_absolute() || lexical_path.strip_prefix(trace_root).is_ok();
@@ -14336,18 +14351,11 @@ mod tests {
             ),
             "a stage helper's relative seed read is unresolvable, not a refusal",
         );
-        let relative_seed = format!(
-            "4242 openat(AT_FDCWD, \"fuzz/corpus/cst_parse/01-empty.md\", O_RDONLY) = 3\n{exit}"
+        accept(
+            format!("4242 openat(7, \"../nvidia0\", O_RDONLY) = 8\n{exit}"),
+            "a dirfd-relative open by reviewer tooling is unresolvable, not an escape",
         );
-        let err = resolved_corpus_paths_digest(
-            &root,
-            root.as_str(),
-            relative_seed.as_bytes(),
-            "binary",
-            CorpusAccess::IfPresent,
-        )
-        .expect_err("a fuzz binary's relative corpus path is still the campaign's defect");
-        assert!(err.to_string().contains("cwd/dirfd"), "{err}");
+
         accept(
             format!(
                 "4242 openat(AT_FDCWD, \"/var/tmp/liminal-haqp-build/abc/conformance/corpora/heldout/x.md\", O_WRONLY|O_CREAT|O_TRUNC, 0644) = 3\n{exit}"
@@ -14383,6 +14391,37 @@ mod tests {
             format!("4242 openat(AT_FDCWD, \"{root}/alias/heldout/x.md\", O_RDWR) = 3\n{exit}"),
             "a write through an alias",
         );
+    }
+
+    /// The stage relaxations of F-44 do not reach a fuzz binary's trace: a
+    /// relative corpus path is still the campaign's defect, and a relative
+    /// path climbing out of the root is still an escape.
+    #[test]
+    fn a_fuzz_binary_trace_keeps_the_strict_relative_path_reading() {
+        let (_s, root, _row) = scope_fixture("fuzz");
+        let exit = "4242 +++ exited with 0 +++\n";
+        let relative_seed = format!(
+            "4242 openat(AT_FDCWD, \"fuzz/corpus/cst_parse/01-empty.md\", O_RDONLY) = 3\n{exit}"
+        );
+        let err = resolved_corpus_paths_digest(
+            &root,
+            root.as_str(),
+            relative_seed.as_bytes(),
+            "binary",
+            CorpusAccess::IfPresent,
+        )
+        .expect_err("a fuzz binary's relative corpus path is the campaign's defect");
+        assert!(err.to_string().contains("cwd/dirfd"), "{err}");
+        let dirfd_relative = format!("4242 openat(7, \"../nvidia0\", O_RDONLY) = 8\n{exit}");
+        let err = resolved_corpus_paths_digest(
+            &root,
+            root.as_str(),
+            dirfd_relative.as_bytes(),
+            "binary",
+            CorpusAccess::IfPresent,
+        )
+        .expect_err("a fuzz binary climbing out of the root is refused");
+        assert!(err.to_string().contains("escapes"), "{err}");
     }
 
     /// A non-fuzz scope with NO corpus access is fine; the `fuzz` scope with
