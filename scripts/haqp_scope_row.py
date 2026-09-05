@@ -41,14 +41,34 @@ def blake3_text(text: str) -> str:
 def main() -> int:
     scope, declared, raw, exit_code = sys.argv[1], sys.argv[2], Path(sys.argv[3]), int(sys.argv[4])
     command = f"strace -f -q -e trace=%file -o target/haqp/scope-{scope}.trace {declared}"
-    text = raw.read_text(errors="replace")
+    parts: list[dict[str, str]] = []
+    if scope == "fuzz":
+        # F-43: the campaign carved each fuzz binary's lines into its per-target
+        # trace; drop those pids' lines here and store the remainder. The row
+        # names the parts, and every digest is over the union.
+        audit = json.loads((ACCESS.parent / "corpus-access.json").read_text())
+        parts = [{"trace": t["trace"], "trace_blake3": t["trace_blake3"]} for t in audit["targets"]]
+        prefixes = tuple(f"{int(t['trace_pid'])} ".encode() for t in audit["targets"])
+        remainder = raw.with_name(raw.name + ".remainder")
+        with raw.open("rb") as src, remainder.open("wb") as dst:
+            for line in src:
+                if not line.startswith(prefixes):
+                    dst.write(line)
+        remainder.replace(raw)
     # The traced root process is the last to report exit; children exit first.
-    exits = re.findall(r"^(\d+) \+\+\+ exited with (\d+) \+\+\+$", text, re.M)
-    pid, traced_exit = (int(exits[-1][0]), int(exits[-1][1])) if exits else (0, 1)
+    # Streamed: a stage trace is a gigabyte and more.
+    exit_line = re.compile(rb"^(\d+) \+\+\+ exited with (\d+) \+\+\+$")
+    pid, traced_exit = 0, 1
+    with raw.open("rb") as src:
+        for line in src:
+            match = exit_line.match(line.rstrip(b"\r\n"))
+            if match:
+                pid, traced_exit = int(match.group(1)), int(match.group(2))
 
     trace_blake3 = xtask("hash", str(raw))
-    observed = xtask("scope-digest", "paths", str(raw), scope)
-    resolved = xtask("scope-digest", "resolved", str(raw), scope)
+    part_files = [str(ROOT / part["trace"]) for part in parts]
+    observed = xtask("scope-digest", "paths", scope, str(raw), *part_files)
+    resolved = xtask("scope-digest", "resolved", scope, str(raw), *part_files)
 
     (ACCESS / "scopes").mkdir(parents=True, exist_ok=True)
     stored = ACCESS / "scopes" / f"{scope}.trace.zst"
@@ -72,6 +92,7 @@ def main() -> int:
         "observed_paths_blake3": observed,
         "trace_root": str(ROOT),
         "resolved_paths_blake3": resolved,
+        "parts": parts,
     }
     print(json.dumps(row))
     return 0

@@ -66,25 +66,26 @@ pub fn run_concurrency_repo(root: &Utf8Path) -> Result<()> {
 pub fn scope_trace_digest_repo(
     root: &Utf8Path,
     kind: &str,
-    trace: &Utf8Path,
+    traces: &[Utf8PathBuf],
     scope: &str,
 ) -> Result<String> {
-    let bytes = read_evidence_bytes(trace)?;
+    anyhow::ensure!(!traces.is_empty(), "scope digest needs at least one trace");
+    let label = format!("{scope} corpus scope");
+    // The union of open paths: sets, so carving a fuzz binary's lines out of
+    // the stage trace into its own part changes nothing the gate judges (F-43).
+    let mut open = BTreeSet::new();
+    for trace in traces {
+        open.extend(scan_scope_trace_file(trace, &label)?.open_paths);
+    }
     match kind {
-        "paths" => Ok(scope_trace_paths_digest(&bytes)),
+        "paths" => Ok(scope_trace_paths_digest_from(&open)),
         "resolved" => {
             let access = if scope == "fuzz" {
                 CorpusAccess::Required
             } else {
                 CorpusAccess::IfPresent
             };
-            resolved_corpus_paths_digest(
-                root,
-                root.as_str(),
-                &bytes,
-                &format!("{scope} corpus scope"),
-                access,
-            )
+            resolved_corpus_paths_digest_from(root, root.as_str(), &open, &label, access)
         }
         other => anyhow::bail!("unknown scope digest kind {other:?}; expected paths or resolved"),
     }
@@ -4310,7 +4311,7 @@ fn verify_corpus_scope_presence(audit: &CorpusAccessAudit) -> Result<()> {
 
 #[allow(clippy::too_many_lines)]
 fn verify_corpus_scope_rows(root: &Utf8Path, audit: &CorpusAccessAudit) -> Result<()> {
-    verify_corpus_scope_replays(root, &audit.scope_traces)?;
+    verify_corpus_scope_replays(root, &audit.scope_traces, &audit.targets)?;
     require_unique(
         audit.scope_traces.iter().map(|row| row.scope.as_str()),
         "corpus audit scope",
@@ -4364,47 +4365,36 @@ fn verify_corpus_scope_rows(root: &Utf8Path, audit: &CorpusAccessAudit) -> Resul
         );
         require_eq("corpus scope trace path", &row.trace, &expected_path)?;
         let path = safe_repo_path(root, &row.trace, "corpus scope trace")?;
-        let bytes =
-            read_evidence_bytes(&path).with_context(|| format!("{path}: scope trace required"))?;
+        // One streaming pass over the remainder: a `just ci` trace is a
+        // gigabyte raw and the fuzz stage's is larger. The digest is over the
+        // raw bytes exactly as before; the pid receipts come from the same
+        // pass. Observed paths, resolution and the locked-corpus refusal were
+        // judged over the union (remainder + carved parts) in
+        // verify_corpus_scope_replays above.
+        let scan = scan_scope_trace_file(&path, &format!("{} corpus scope", row.scope))?;
         require_eq(
             &format!("{} corpus scope trace_blake3", row.scope),
             &row.trace_blake3,
-            blake3::hash(&bytes).to_hex().as_ref(),
+            &scan.raw_blake3,
         )?;
-        let trace_text = String::from_utf8_lossy(&bytes);
-        let lower = trace_text.to_ascii_lowercase();
-        let pid_prefix = format!("{} ", row.trace_pid);
         anyhow::ensure!(
-            trace_text.lines().any(|line| line.starts_with(&pid_prefix)),
+            scan.pids.contains(&row.trace_pid),
             "{} scope trace has no event from traced PID {}",
             row.scope,
             row.trace_pid
         );
         anyhow::ensure!(
-            trace_text
-                .lines()
-                .any(|line| line == format!("{} +++ exited with 0 +++", row.trace_pid)),
+            scan.exited_zero.contains(&row.trace_pid),
             "{} scope trace has no successful exit for PID {}",
             row.scope,
             row.trace_pid
         );
-        let observed_paths_blake3 = scope_trace_paths_digest(&bytes);
+        let canonical_root = fs::canonicalize(root.as_std_path())
+            .with_context(|| format!("{}: canonicalize repository root", row.scope))?;
         require_eq(
-            &format!("{} corpus scope observed_paths_blake3", row.scope),
-            &row.observed_paths_blake3,
-            &observed_paths_blake3,
-        )?;
-        verify_trace_corpus_resolution(
-            root,
+            &format!("{} corpus scope trace_root", row.scope),
             &row.trace_root,
-            &bytes,
-            &row.resolved_paths_blake3,
-            &format!("{} corpus scope", row.scope),
-            if row.scope == "fuzz" {
-                CorpusAccess::Required
-            } else {
-                CorpusAccess::IfPresent
-            },
+            &canonical_root.to_string_lossy(),
         )?;
         let binding = blake3::hash(
             format!(
@@ -4424,10 +4414,9 @@ fn verify_corpus_scope_rows(root: &Utf8Path, audit: &CorpusAccessAudit) -> Resul
             &row.process_binding,
             &binding,
         )?;
-        for forbidden in ["heldout", "conformance/corpora"] {
-            anyhow::ensure!(
-                !lower.contains(forbidden),
-                "{} scope trace observed forbidden path fragment {forbidden:?}",
+        if let Some(fragment) = scan.forbidden {
+            anyhow::bail!(
+                "{} scope trace observed forbidden path fragment {fragment:?}",
                 row.scope
             );
         }
@@ -4455,7 +4444,11 @@ fn verify_corpus_scope_rows(root: &Utf8Path, audit: &CorpusAccessAudit) -> Resul
 /// resolves inside the tree. What is lost is the reproducibility claim that
 /// re-execution made; what is gained is evidence describing the run that
 /// happened rather than a different one.
-fn verify_corpus_scope_replays(root: &Utf8Path, rows: &[CorpusScopeTrace]) -> Result<()> {
+fn verify_corpus_scope_replays(
+    root: &Utf8Path,
+    rows: &[CorpusScopeTrace],
+    targets: &[CorpusAccessAuditTarget],
+) -> Result<()> {
     for row in rows {
         let expected_command = format!(
             "strace -f -q -e trace=%file -o target/haqp/scope-{}.trace {}",
@@ -4467,33 +4460,34 @@ fn verify_corpus_scope_replays(root: &Utf8Path, rows: &[CorpusScopeTrace]) -> Re
             &row.command,
             &expected_command,
         )?;
-        let trace_path = safe_repo_path(root, &row.trace, "corpus scope trace")?;
-        let bytes = read_evidence_bytes(&trace_path)
-            .with_context(|| format!("{}: captured scope trace is required", row.scope))?;
-        require_eq(
-            &format!("{} observed_paths_blake3", row.scope),
-            &row.observed_paths_blake3,
-            &scope_trace_paths_digest(&bytes),
-        )?;
-        let lower = String::from_utf8_lossy(&bytes).to_ascii_lowercase();
-        for forbidden in ["heldout", "conformance/corpora"] {
-            anyhow::ensure!(
-                !lower.contains(forbidden),
-                "{} corpus scope trace opened a locked path ({forbidden})",
+        verify_scope_trace_parts(row, targets)?;
+        let (_remainder, open, forbidden) = scan_scope_trace_union(root, row)?;
+        if let Some(fragment) = forbidden {
+            anyhow::bail!(
+                "{} corpus scope trace opened a locked path ({fragment})",
                 row.scope
             );
         }
-        verify_trace_corpus_resolution(
-            root,
-            root.as_str(),
-            &bytes,
+        require_eq(
+            &format!("{} observed_paths_blake3", row.scope),
+            &row.observed_paths_blake3,
+            &scope_trace_paths_digest_from(&open),
+        )?;
+        let label = format!("{} corpus scope", row.scope);
+        require_hex_digest(
+            &format!("{label} resolved_paths_blake3"),
             &row.resolved_paths_blake3,
-            &format!("{} corpus scope", row.scope),
-            if row.scope == "fuzz" {
-                CorpusAccess::Required
-            } else {
-                CorpusAccess::IfPresent
-            },
+        )?;
+        let access = if row.scope == "fuzz" {
+            CorpusAccess::Required
+        } else {
+            CorpusAccess::IfPresent
+        };
+        let actual = resolved_corpus_paths_digest_from(root, root.as_str(), &open, &label, access)?;
+        require_eq(
+            &format!("{label} resolved_paths_blake3"),
+            &actual,
+            &row.resolved_paths_blake3,
         )?;
     }
     Ok(())
@@ -4550,11 +4544,16 @@ pub fn run_scope_probe_repo(root: &Utf8Path, scope: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
 fn scope_trace_paths_digest(bytes: &[u8]) -> String {
+    scope_trace_paths_digest_from(&scope_trace_open_paths(bytes))
+}
+
+fn scope_trace_paths_digest_from(open_paths: &BTreeSet<String>) -> String {
     blake3::hash(
-        scope_trace_open_paths(bytes)
-            .into_iter()
-            .map(|path| normalize_scope_trace_path(&path))
+        open_paths
+            .iter()
+            .map(|path| normalize_scope_trace_path(path))
             .collect::<Vec<_>>()
             .join("\n")
             .as_bytes(),
@@ -4563,7 +4562,8 @@ fn scope_trace_paths_digest(bytes: &[u8]) -> String {
     .to_string()
 }
 
-fn scope_trace_open_paths(bytes: &[u8]) -> BTreeSet<String> {
+/// The path argument of one traced file syscall, lexical, as strace printed it.
+fn scope_trace_line_path(line: &str) -> Option<String> {
     const FILE_SYSCALLS: [&str; 25] = [
         "open(",
         "openat(",
@@ -4591,25 +4591,170 @@ fn scope_trace_open_paths(bytes: &[u8]) -> BTreeSet<String> {
         "mkdir(",
         "chdir(",
     ];
-    let mut paths = BTreeSet::new();
-    for line in String::from_utf8_lossy(bytes).lines() {
-        let Some(open) = FILE_SYSCALLS
-            .into_iter()
-            .filter_map(|needle| line.find(needle))
-            .min()
-        else {
-            continue;
-        };
-        let rest = &line[open..];
-        let Some(start) = rest.find('"') else {
-            continue;
-        };
-        let Some(end) = rest[start + 1..].find('"') else {
-            continue;
-        };
-        paths.insert(rest[start + 1..start + 1 + end].to_owned());
+    let open = FILE_SYSCALLS
+        .into_iter()
+        .filter_map(|needle| line.find(needle))
+        .min()?;
+    let rest = &line[open..];
+    let start = rest.find('"')?;
+    let end = rest[start + 1..].find('"')?;
+    Some(rest[start + 1..start + 1 + end].to_owned())
+}
+
+fn scope_trace_open_paths(bytes: &[u8]) -> BTreeSet<String> {
+    String::from_utf8_lossy(bytes)
+        .lines()
+        .filter_map(scope_trace_line_path)
+        .collect()
+}
+
+/// A per-target trace carved from a stage trace by pid (M17.5 F-43). The
+/// lane's stage tracer holds the one ptrace slot a process may have, so the
+/// campaign cannot trace its fuzz binaries itself: each binary's lines are
+/// carved into the target's own trace and the stage keeps the remainder. The
+/// scope row names its parts so the gate judges the union, and no line is
+/// stored twice.
+#[derive(Debug, Clone, Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct ScopeTracePart {
+    trace: String,
+    trace_blake3: String,
+}
+
+/// What one streaming pass over a captured trace yields. A 30-minute ASan
+/// trace is gigabytes raw and the whole fuzz stage's is larger; nothing here
+/// holds more than one line and the sets.
+#[derive(Debug, Default)]
+struct ScopeTraceScan {
+    /// Every path argument of a file syscall, lexical, as strace printed it.
+    open_paths: BTreeSet<String>,
+    /// Pids that emitted at least one line.
+    pids: BTreeSet<u32>,
+    /// Pids whose `+++ exited with 0 +++` line was seen.
+    exited_zero: BTreeSet<u32>,
+    /// The first locked-corpus fragment seen anywhere in the text, if any.
+    forbidden: Option<&'static str>,
+    /// blake3 of the raw bytes, exactly what `read_evidence_bytes` would hash.
+    raw_blake3: String,
+}
+
+const FORBIDDEN_TRACE_FRAGMENTS: [&str; 2] = ["heldout", "conformance/corpora"];
+
+fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan> {
+    let mut scan = ScopeTraceScan::default();
+    let mut hasher = blake3::Hasher::new();
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        if reader.read_until(b'\n', &mut buf)? == 0 {
+            break;
+        }
+        hasher.update(&buf);
+        // Exactly `str::lines`: one trailing `\n`, then one `\r`, stripped.
+        let line = buf.strip_suffix(b"\n").unwrap_or(&buf);
+        let line = line.strip_suffix(b"\r").unwrap_or(line);
+        let line = String::from_utf8_lossy(line);
+        if scan.forbidden.is_none() {
+            let lower = line.to_ascii_lowercase();
+            scan.forbidden = FORBIDDEN_TRACE_FRAGMENTS
+                .into_iter()
+                .find(|fragment| lower.contains(fragment));
+        }
+        if let Some(pid) = line.split(' ').next().and_then(|t| t.parse::<u32>().ok()) {
+            scan.pids.insert(pid);
+            if *line == format!("{pid} +++ exited with 0 +++") {
+                scan.exited_zero.insert(pid);
+            }
+        }
+        if let Some(path) = scope_trace_line_path(&line) {
+            scan.open_paths.insert(path);
+        }
     }
-    paths
+    scan.raw_blake3 = hasher.finalize().to_hex().to_string();
+    Ok(scan)
+}
+
+/// Stream a stored trace, `.zst` accepted, without holding it whole.
+fn open_evidence_reader(path: &Utf8Path) -> Result<Box<dyn std::io::BufRead>> {
+    let file = fs::File::open(path).with_context(|| format!("open {path}"))?;
+    if path.extension() == Some("zst") {
+        let decoder = zstd::Decoder::new(file)
+            .with_context(|| format!("{path}: evidence is not valid zstd"))?;
+        Ok(Box::new(std::io::BufReader::new(decoder)))
+    } else {
+        Ok(Box::new(std::io::BufReader::new(file)))
+    }
+}
+
+fn scan_scope_trace_file(path: &Utf8Path, label: &str) -> Result<ScopeTraceScan> {
+    let reader = open_evidence_reader(path)
+        .with_context(|| format!("{label}: captured scope trace is required"))?;
+    scan_scope_trace(reader).with_context(|| format!("{label}: {path}: scope trace unreadable"))
+}
+
+/// Scan a scope's stored remainder and every carved part, binding each part's
+/// bytes to the digest the row declares. Returns the remainder's scan and the
+/// union of open paths; a locked-corpus fragment in ANY file is the row's.
+fn scan_scope_trace_union(
+    root: &Utf8Path,
+    row: &CorpusScopeTrace,
+) -> Result<(ScopeTraceScan, BTreeSet<String>, Option<&'static str>)> {
+    let label = format!("{} corpus scope", row.scope);
+    let remainder_path = safe_repo_path(root, &row.trace, "corpus scope trace")?;
+    let remainder = scan_scope_trace_file(&remainder_path, &label)?;
+    let mut open = remainder.open_paths.clone();
+    let mut forbidden = remainder.forbidden;
+    for part in &row.parts {
+        let part_path = safe_repo_path(root, &part.trace, "corpus scope trace part")?;
+        let scan = scan_scope_trace_file(&part_path, &label)?;
+        require_eq(
+            &format!(
+                "{} corpus scope part {} trace_blake3",
+                row.scope, part.trace
+            ),
+            &part.trace_blake3,
+            &scan.raw_blake3,
+        )?;
+        forbidden = forbidden.or(scan.forbidden);
+        open.extend(scan.open_paths);
+    }
+    Ok((remainder, open, forbidden))
+}
+
+/// The fuzz scope's parts are exactly the campaign's per-target traces: every
+/// binary the stage tracer saw is judged, none twice, and no other scope carves.
+fn verify_scope_trace_parts(
+    row: &CorpusScopeTrace,
+    targets: &[CorpusAccessAuditTarget],
+) -> Result<()> {
+    let declared = row
+        .parts
+        .iter()
+        .map(|part| (part.trace.as_str(), part.trace_blake3.as_str()))
+        .collect::<BTreeSet<_>>();
+    anyhow::ensure!(
+        declared.len() == row.parts.len(),
+        "{} corpus scope declares a trace part twice",
+        row.scope
+    );
+    if row.scope == "fuzz" {
+        let expected = targets
+            .iter()
+            .map(|target| (target.trace.as_str(), target.trace_blake3.as_str()))
+            .collect::<BTreeSet<_>>();
+        anyhow::ensure!(
+            declared == expected,
+            "fuzz corpus scope parts differ from the campaign's per-target traces: \
+             declared={declared:?}, expected={expected:?}"
+        );
+    } else {
+        anyhow::ensure!(
+            row.parts.is_empty(),
+            "{} corpus scope declares trace parts, but only fuzz carves its binaries out",
+            row.scope
+        );
+    }
+    Ok(())
 }
 
 fn normalize_scope_trace_path(path: &str) -> String {
@@ -4666,6 +4811,22 @@ fn resolved_corpus_paths_digest(
     label: &str,
     access: CorpusAccess,
 ) -> Result<String> {
+    resolved_corpus_paths_digest_from(
+        root,
+        trace_root,
+        &scope_trace_open_paths(bytes),
+        label,
+        access,
+    )
+}
+
+fn resolved_corpus_paths_digest_from(
+    root: &Utf8Path,
+    trace_root: &str,
+    open_paths: &BTreeSet<String>,
+    label: &str,
+    access: CorpusAccess,
+) -> Result<String> {
     let canonical_root = fs::canonicalize(root.as_std_path())
         .with_context(|| format!("{label}: canonicalize repository root"))?;
     let trace_root = Path::new(trace_root);
@@ -4674,7 +4835,7 @@ fn resolved_corpus_paths_digest(
         "{label}: trace_root must be absolute"
     );
     let mut resolved = BTreeSet::new();
-    for lexical in scope_trace_open_paths(bytes) {
+    for lexical in open_paths {
         let lexical_path = Path::new(&lexical);
         let lexical_lower = lexical_path.to_string_lossy().to_ascii_lowercase();
         // Relative openat paths are interpreted against process cwd/dirfd, not
@@ -4693,7 +4854,7 @@ fn resolved_corpus_paths_digest(
         if !under_trace_root {
             continue;
         }
-        let local = trace_path_to_repo(root, trace_root, &lexical)
+        let local = trace_path_to_repo(root, trace_root, lexical)
             .with_context(|| format!("{label}: cannot map traced repository path"))?;
         let canonical = canonicalize_trace_path(local.as_std_path())
             .with_context(|| format!("{label}: traced repository path cannot be resolved"))?;
@@ -7940,6 +8101,9 @@ struct CorpusScopeTrace {
     trace_root: String,
     #[serde(default)]
     resolved_paths_blake3: String,
+    /// Carved per-target traces this scope's stage trace also covered (F-43).
+    #[serde(default)]
+    parts: Vec<ScopeTracePart>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -13577,6 +13741,7 @@ mod tests {
             observed_paths_blake3: observed,
             trace_root: root.to_string(),
             resolved_paths_blake3: resolved,
+            parts: Vec::new(),
         };
         (scratch, root, row)
     }
@@ -13610,7 +13775,7 @@ mod tests {
         let (_s, root, row) = scope_fixture("ci");
         verify_corpus_scope_rows(&root, &scope_audit(vec![row.clone()]))
             .expect("a row whose digests match its trace must verify");
-        verify_corpus_scope_replays(&root, std::slice::from_ref(&row))
+        verify_corpus_scope_replays(&root, std::slice::from_ref(&row), &[])
             .expect("the captured trace must verify without re-execution");
 
         let cases: Vec<(&str, Doctor, &str)> = vec![
@@ -13672,6 +13837,198 @@ mod tests {
         assert!(err.to_string().contains("duplicate"), "{err}");
     }
 
+    fn rebind_scope_row(row: &mut CorpusScopeTrace) {
+        row.process_binding = blake3::hash(
+            format!(
+                "{}\0{}\0{}\0{}\0{}",
+                row.command,
+                row.trace_pid,
+                row.trace_exit_code,
+                row.trace_blake3,
+                row.observed_paths_blake3
+            )
+            .as_bytes(),
+        )
+        .to_hex()
+        .to_string();
+    }
+
+    fn audit_target(
+        target: &str,
+        trace: &str,
+        trace_blake3: &str,
+        pid: u32,
+    ) -> CorpusAccessAuditTarget {
+        CorpusAccessAuditTarget {
+            target: target.to_owned(),
+            manifest: String::new(),
+            manifest_blake3: String::new(),
+            seed: 1,
+            sanitizer: "address".to_owned(),
+            exit_code: 0,
+            log_blake3: String::new(),
+            command: String::new(),
+            trace: trace.to_owned(),
+            trace_blake3: trace_blake3.to_owned(),
+            trace_pid: pid,
+            trace_exit_code: 0,
+            trace_complete: true,
+            process_binding: String::new(),
+            tracer_binary: "strace".to_owned(),
+            tracer_version: String::new(),
+            tracer_version_blake3: String::new(),
+            trace_root: String::new(),
+            resolved_paths_blake3: String::new(),
+        }
+    }
+
+    /// F-43: the scan that judges a trace streams it line by line, through
+    /// zstd. It must extract exactly what the whole-buffer extraction did and
+    /// report the pid receipts and raw digest the row checks bind.
+    #[test]
+    fn a_streamed_scan_matches_the_whole_buffer_extraction() {
+        let trace = "7 openat(AT_FDCWD, \"/x/fuzz/corpus/t/a.md\", O_RDONLY) = 3\n\
+                     7 newfstatat(AT_FDCWD, \"/x/b\", {st_mode=S_IFREG|0644}, 0) = 0\n\
+                     8 execve(\"/usr/bin/true\", [\"true\"], 0x1 /* 1 var */) = 0\n\
+                     8 +++ exited with 0 +++\n\
+                     7 +++ exited with 1 +++\n";
+        let scratch = liminal_scratch::ScratchDir::new("haq-scan").expect("scratch");
+        let stored = scratch.path().join("t.trace.zst");
+        fs::write(
+            &stored,
+            zstd::encode_all(trace.as_bytes(), 3).expect("zstd"),
+        )
+        .expect("write");
+        let scan = scan_scope_trace_file(&stored, "fixture").expect("scan");
+        assert_eq!(scan.open_paths, scope_trace_open_paths(trace.as_bytes()));
+        assert_eq!(scan.open_paths.len(), 3);
+        assert_eq!(scan.pids.iter().copied().collect::<Vec<_>>(), vec![7, 8]);
+        assert_eq!(
+            scan.exited_zero.iter().copied().collect::<Vec<_>>(),
+            vec![8]
+        );
+        assert_eq!(
+            scan.raw_blake3,
+            blake3::hash(trace.as_bytes()).to_hex().to_string()
+        );
+        assert_eq!(scan.forbidden, None);
+        let touched =
+            format!("{trace}9 openat(AT_FDCWD, \"conformance/corpora/HeldOut/z\", O_RDONLY) = 4\n");
+        let scan = scan_scope_trace(touched.as_bytes()).expect("scan");
+        assert_eq!(scan.forbidden, Some("heldout"));
+        let corrupt = scratch.path().join("bad.trace.zst");
+        fs::write(&corrupt, b"not zstd").expect("write");
+        let err = scan_scope_trace_file(&corrupt, "fixture").expect_err("corrupt zstd");
+        assert!(err.to_string().contains("fixture"), "{err}");
+    }
+
+    /// F-43: the stage tracer holds the one ptrace slot, so each fuzz binary's
+    /// lines are carved from the stage trace into the target's own file and the
+    /// scope row names them as parts. The gate judges the UNION -- the corpus
+    /// opens live in the parts, the remainder has none -- and binds every part
+    /// to the campaign's per-target traces, so a part cannot be dropped,
+    /// forged, or claimed by a scope that carves nothing.
+    #[test]
+    fn a_fuzz_scope_is_judged_on_the_union_of_its_carved_parts() {
+        let (_s, root, mut row) = scope_fixture("fuzz");
+        let seed_dir = root.join("fuzz/corpus/cst_parse");
+        fs::create_dir_all(&seed_dir).expect("mkdir");
+        fs::write(seed_dir.join("01-empty.md"), "").expect("seed");
+        let part_trace = format!(
+            "5150 openat(AT_FDCWD, \"{root}/fuzz/corpus/cst_parse/01-empty.md\", O_RDONLY) = 3\n\
+             5150 +++ exited with 0 +++\n"
+        );
+        let part_rel = "conformance/haqp/evidence/access/cst_parse.trace.zst";
+        fs::write(
+            root.join(part_rel),
+            zstd::encode_all(part_trace.as_bytes(), 3).expect("zstd"),
+        )
+        .expect("part");
+        let part_blake3 = blake3::hash(part_trace.as_bytes()).to_hex().to_string();
+        let targets = vec![audit_target("cst_parse", part_rel, &part_blake3, 5150)];
+
+        // The remainder alone names no parts: refused against the campaign's targets.
+        let err = verify_corpus_scope_replays(&root, std::slice::from_ref(&row), &targets)
+            .expect_err("a fuzz scope without its parts");
+        assert!(err.to_string().contains("parts differ"), "{err}");
+
+        row.parts = vec![ScopeTracePart {
+            trace: part_rel.to_owned(),
+            trace_blake3: part_blake3.clone(),
+        }];
+        // Digests over the union, by the same code the lane asks for them.
+        let files = [root.join(&row.trace), root.join(part_rel)];
+        row.observed_paths_blake3 =
+            scope_trace_digest_repo(&root, "paths", &files, "fuzz").expect("paths digest");
+        row.resolved_paths_blake3 =
+            scope_trace_digest_repo(&root, "resolved", &files, "fuzz").expect("resolved digest");
+        rebind_scope_row(&mut row);
+        verify_corpus_scope_replays(&root, std::slice::from_ref(&row), &targets)
+            .expect("the union of remainder and parts must verify");
+        let mut audit = scope_audit(vec![row.clone()]);
+        audit.targets.clone_from(&targets);
+        verify_corpus_scope_rows(&root, &audit).expect("the row must verify");
+
+        // The remainder alone would have fuzzed nothing: the parts carry the corpus.
+        let err = scope_trace_digest_repo(&root, "resolved", &files[..1], "fuzz")
+            .expect_err("remainder alone");
+        assert!(
+            err.to_string().contains("no resolvable fuzz corpus path"),
+            "{err}"
+        );
+
+        // A part digest the campaign did not record.
+        let mut forged = row.clone();
+        forged.parts[0].trace_blake3 = "d".repeat(64);
+        let err = verify_corpus_scope_replays(&root, std::slice::from_ref(&forged), &targets)
+            .expect_err("a part the campaign did not produce");
+        assert!(err.to_string().contains("parts differ"), "{err}");
+        // ...and bytes that changed after both the row and the campaign recorded them.
+        let mut forged_targets = targets.clone();
+        forged_targets[0].trace_blake3 = forged.parts[0].trace_blake3.clone();
+        let err =
+            verify_corpus_scope_replays(&root, std::slice::from_ref(&forged), &forged_targets)
+                .expect_err("part bytes differ from the declared digest");
+        assert!(
+            err.to_string().contains("part") && err.to_string().contains("trace_blake3"),
+            "{err}"
+        );
+
+        // A part that touched the locked corpus is the scope's refusal.
+        let touched = format!(
+            "{part_trace}5150 openat(AT_FDCWD, \"{root}/conformance/corpora/heldout/x.md\", O_RDONLY) = 4\n"
+        );
+        fs::write(
+            root.join(part_rel),
+            zstd::encode_all(touched.as_bytes(), 3).expect("zstd"),
+        )
+        .expect("rewrite");
+        let touched_blake3 = blake3::hash(touched.as_bytes()).to_hex().to_string();
+        let mut touched_row = row.clone();
+        touched_row.parts[0]
+            .trace_blake3
+            .clone_from(&touched_blake3);
+        let mut touched_targets = targets.clone();
+        touched_targets[0].trace_blake3 = touched_blake3;
+        let err = verify_corpus_scope_replays(
+            &root,
+            std::slice::from_ref(&touched_row),
+            &touched_targets,
+        )
+        .expect_err("a carved part that opened the locked corpus");
+        assert!(err.to_string().contains("locked path"), "{err}");
+
+        // Only fuzz carves.
+        let (_s2, root2, mut ci) = scope_fixture("ci");
+        ci.parts = vec![ScopeTracePart {
+            trace: "conformance/haqp/evidence/access/x.trace.zst".to_owned(),
+            trace_blake3: "e".repeat(64),
+        }];
+        let err = verify_corpus_scope_replays(&root2, std::slice::from_ref(&ci), &[])
+            .expect_err("a ci scope with parts");
+        assert!(err.to_string().contains("only fuzz carves"), "{err}");
+    }
+
     /// The forbidden-path refusal is unconditional for every scope (ruling
     /// 2026-09-04) even though corpus RESOLUTION is only required of `fuzz`.
     #[test]
@@ -13696,7 +14053,7 @@ mod tests {
         )
         .to_hex()
         .to_string();
-        let err = verify_corpus_scope_replays(&root, std::slice::from_ref(&row))
+        let err = verify_corpus_scope_replays(&root, std::slice::from_ref(&row), &[])
             .expect_err("a held-out open must be refused for a non-fuzz scope too");
         assert!(err.to_string().contains("locked path"), "{err}");
     }

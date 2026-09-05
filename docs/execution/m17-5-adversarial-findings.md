@@ -2894,11 +2894,70 @@ zero inputs, so leak detection had nothing to observe there. The refusal now
 carries the runtime's exit status and last stderr line: the first lane said
 only "probe failed" and hid the sentence above.
 
-**Open (fuzz stage).** The same one-tracer rule breaks the fuzz stage itself:
+**Fix (fuzz stage).** The same one-tracer rule broke the fuzz stage itself:
 the stage wrapper's `strace -f` and the campaign's per-target `strace -f`
-cannot both attach, and nested strace fails outright
-(`PTRACE_TRACEME: Operation not permitted`), which would leave every
-per-target corpus audit empty. The stage must be the single tracer and each
-target's audit must be carved from the stage trace by pid; the whole-stage
-fuzz trace also exceeds what one stored evidence file may weigh. Resolution
-recorded below when ruled.
+cannot both attach — nested strace fails outright with
+`PTRACE_TRACEME: Operation not permitted` — which would have left every
+per-target corpus audit empty. The stage tracer is now the only tracer. Under
+the lane (`HAQP_STAGE_TRACE` set by the stage wrapper) the campaign runs each
+binary untraced by itself and, once the binary's exit line is present, carves
+its lines out of the stage trace by pid into the target's own trace
+(`carve_stage_trace`); libFuzzer runs single-threaded here and LeakSanitizer's
+tracer thread is off, so a binary's pid is its whole subtree. The row script
+removes those pids' lines from the stage trace and stores the remainder; the
+fuzz scope row names the carved traces as `parts`, bound to the campaign's
+per-target rows exactly (none dropped, none twice, no other scope carves), and
+the gate judges the UNION: observed paths, corpus resolution and the
+locked-corpus refusal are computed over remainder plus parts. Every digest is
+set-based, so the partition changes nothing the gate judges, and the scan
+streams each file line by line through zstd — a `just ci` trace is a gigabyte
+raw and the fuzz stage's is larger. Proved on a 5-second campaign under a real
+stage tracer: all seven targets complete, and each target's carved trace
+equals its pid's lines in the stage trace line for line.
+
+## F-44 — whole-stage traces show the suite reading the locked corpus by design
+
+**Found.** 2026-09-05, the first union digest over a real fuzz-stage trace and
+the first complete `ci` stage trace, both refused by the locked-corpus rule.
+
+**What the traces show.** The refusal fires on any trace line carrying the
+fragments `heldout` or `conformance/corpora`, unconditionally for all eight
+scopes (ruling 2026-09-04, reaffirmed 2026-09-05). Under whole-stage tracing
+(F-39) that fragment appears in lines no oracle produced:
+
+| stage | who | what | lines |
+|---|---|---|---|
+| `ci` | the SLO graduation test (`external_file_profile_graduates_on_heldout_corpus`) | `openat(O_RDONLY)` of `heldout/v1/MANIFEST.b3` and held-out traces — the profile is *measured* on the held-out corpus, which is the point of holding it out | 137 |
+| `ci` | `git` (index refresh) and the corpus-alias test walking the directory | `statx`/`newfstatat`/`openat(O_DIRECTORY)` | ~1,300 |
+| `fuzz` (remainder) | `git worktree add` at the canonical build root, and the prune of the previous commit's tree | `openat(O_CREAT)`/`unlink`/`rmdir` of a *copy* under `/var/tmp/liminal-haqp-build/<commit>/conformance/corpora` | 696 |
+| `mutation` | `cargo-mutants` (`copy_vcs = true`) | copies the whole tree, held-out files included, into its scratch build | not yet traced |
+
+The carved fuzz binaries' traces contain none of these: the rule as applied to
+the campaign's own processes holds exactly as before.
+
+**Why this is a ruling.** The rule was written when a scope trace meant the
+campaign's tools; applied to whole stages it refuses the suite's own design
+(`ci` cannot pass while the graduation test exists) and ordinary tooling
+(`mutation` cannot pass while cargo-mutants copies the tree). Narrowing it is a
+change to qualification semantics — Protocol §3 — and reverses an explicit
+instruction. The candidate rulings, for the record:
+
+1. **Repo-tree writes are the unconditional rule; the fuzz binaries keep the
+   full rule.** No stage may modify the repository's locked corpus (write-class
+   syscalls on paths resolving under `<root>/conformance/corpora`: the "never
+   hash-update" half of the lock), and the carved fuzz traces may not carry the
+   fragment at all (the "never read or tune against" half, for the one process
+   family that produces corpus evidence). Reads by the graduation test are by
+   design and documented; copies under build roots are outside the repository.
+2. Keep the literal rule and change the suite: move the graduation test out of
+   `just ci`, sparse-checkout `conformance/corpora` out of canonical worktrees,
+   run cargo-mutants in place. Ordinary `git` index refreshes still stat the
+   paths, so this alone does not make `ci` pass.
+3. Keep the literal rule as written: `ci`, `fuzz` and `mutation` can never
+   qualify. Recorded so the option is visibly rejected, not overlooked.
+
+Sparse-checkout of `conformance/corpora` in canonical worktrees is worth doing
+under any ruling: the sanitizer build does not reference it, and a build root
+that never materializes the locked corpus has nothing to prune.
+
+**Status.** Awaiting ruling. Everything F-43 changed holds under every option.

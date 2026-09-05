@@ -90,7 +90,10 @@ stage() {
   mkdir -p target/haqp
   started=$(date +%s)
   set +e
-  strace -f -q -e trace=%file -o "$trace" sh -c "$declared"
+  # HAQP_STAGE_TRACE: the fuzz campaign cannot trace its binaries under a stage
+  # that is already traced (one ptrace slot, F-43); it carves them from this
+  # trace by pid instead. Harmless to every other stage.
+  HAQP_STAGE_TRACE="$PWD/$trace" strace -f -q -e trace=%file -o "$trace" sh -c "$declared"
   exit_code=$?
   set -e
   if [ -n "$scope" ]; then

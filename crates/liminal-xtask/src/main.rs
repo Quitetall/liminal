@@ -19,13 +19,17 @@ fn main() -> Result<()> {
             HaqCommand::Concurrency => {
                 liminal_xtask::haq::run_concurrency_repo(&liminal_xtask::repo_root()?)?;
             }
-            HaqCommand::ScopeDigest { kind, trace, scope } => {
+            HaqCommand::ScopeDigest {
+                kind,
+                scope,
+                traces,
+            } => {
                 println!(
                     "{}",
                     liminal_xtask::haq::scope_trace_digest_repo(
                         &liminal_xtask::repo_root()?,
                         &kind,
-                        &trace,
+                        &traces,
                         &scope
                     )?
                 );
@@ -113,10 +117,13 @@ enum HaqCommand {
     ScopeDigest {
         /// `paths` or `resolved`.
         kind: String,
-        /// The captured strace file, `.zst` accepted.
-        trace: camino::Utf8PathBuf,
         /// The scope name, which decides whether corpus access is required.
         scope: String,
+        /// The captured strace files, `.zst` accepted: the stage remainder and,
+        /// for `fuzz`, every carved per-target trace (F-43). Digests are over
+        /// the union.
+        #[arg(required = true)]
+        traces: Vec<camino::Utf8PathBuf>,
     },
     /// The packet digest the markdown surface must carry.
     ///

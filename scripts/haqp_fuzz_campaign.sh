@@ -52,6 +52,24 @@ hash_file() {
 # Hash lexical/canonical pairs for fuzz corpus opens. Keep canonical paths
 # repository-relative and never print a forbidden target: a symlink alias into
 # held-out data must fail without leaking its pathname into retained evidence.
+# F-43: copy one pid's lines out of the lane's stage trace. The stage wrapper's
+# `strace -f` holds the one ptrace slot this process tree may have -- a second
+# strace fails with "PTRACE_TRACEME: Operation not permitted" and would leave
+# this audit empty -- so under the lane the binary runs untraced by us and its
+# lines are carved from the stage trace once its exit line is present. strace
+# writes each line as it completes and the exit line last, but reports the exit
+# after the parent has reaped the child, so the wait is bounded, not assumed.
+carve_stage_trace() {
+  local stage_trace="$1" pid="$2" out="$3" waited=0
+  until grep -q -E "^${pid} \+\+\+ (exited with [0-9]+|killed by [A-Z0-9]+( \(core dumped\))?) \+\+\+$" "$stage_trace" 2>/dev/null; do
+    [ "$waited" -ge 60 ] && return 1
+    sleep 1
+    waited=$((waited + 1))
+  done
+  grep -E "^${pid} " "$stage_trace" >"$out"
+  [ -s "$out" ]
+}
+
 resolve_corpus_paths() {
   local raw_trace="$1"
   local target="$2"
@@ -245,7 +263,19 @@ for t in "${TARGETS[@]}"; do
       -max_total_time="$SECS" -seed="$SEED" -rss_limit_mb=4096 -print_final_stats=1
     )
     printf 'Running: %s %s\n' "$binary_run" "${fuzz_argv[*]}" >"$log"
-    if [ "$AUDIT_ACCESS" = "1" ] && command -v strace >/dev/null 2>&1; then
+    if [ -n "${HAQP_STAGE_TRACE:-}" ]; then
+      # F-43: under the lane the stage tracer is the tracer; see carve_stage_trace.
+      ASAN_OPTIONS="$asan_options" "$binary_run" "${fuzz_argv[@]}" >>"$log" 2>&1 &
+      fuzz_pid=$!
+      wait "$fuzz_pid"
+      code=$?
+      if carve_stage_trace "$HAQP_STAGE_TRACE" "$fuzz_pid" "$audit_raw"; then
+        tracer="strace-open-paths"
+      else
+        echo "corpus access audit unavailable: pid $fuzz_pid has no exit line in stage trace $HAQP_STAGE_TRACE" >"$audit_raw"
+        tracer="unavailable"
+      fi
+    elif [ "$AUDIT_ACCESS" = "1" ] && command -v strace >/dev/null 2>&1; then
       ASAN_OPTIONS="$asan_options" strace -f -q -e trace=%file -o "$audit_raw" \
         "$binary_run" "${fuzz_argv[@]}" >>"$log" 2>&1 &
       fuzz_pid=$!
@@ -366,7 +396,12 @@ for t in "${TARGETS[@]}"; do
   fi
   # Must describe what actually ran: the build, then the traced BINARY.
   binary_run="conformance/haqp/evidence/binaries/$t"
-  trace_command="$build_command && ${trace_prefix}strace -f -q -e trace=%file -o $audit_raw $binary_run $trace_root/fuzz/corpus/$t -artifact_prefix=fuzz/artifacts/$t/ -max_total_time=$SECS -seed=$SEED -rss_limit_mb=4096 -print_final_stats=1"
+  if [ -n "${HAQP_STAGE_TRACE:-}" ]; then
+    # F-43: what ran is the binary under the lane's stage tracer, carved by pid.
+    trace_command="$build_command && ${trace_prefix}$binary_run $trace_root/fuzz/corpus/$t -artifact_prefix=fuzz/artifacts/$t/ -max_total_time=$SECS -seed=$SEED -rss_limit_mb=4096 -print_final_stats=1 (traced by the stage tracer: strace -f -q -e trace=%file -o $HAQP_STAGE_TRACE; pid $trace_pid carved to $audit_raw)"
+  else
+    trace_command="$build_command && ${trace_prefix}strace -f -q -e trace=%file -o $audit_raw $binary_run $trace_root/fuzz/corpus/$t -artifact_prefix=fuzz/artifacts/$t/ -max_total_time=$SECS -seed=$SEED -rss_limit_mb=4096 -print_final_stats=1"
+  fi
   binding_input="target/haqp/process-binding-$t.txt"
   printf '%s\0%s\0%s\0%s' "$trace_command" "$trace_pid" "$trace_exit_code" "$trace_hash" >"$binding_input"
   process_binding=$(hash_file "$binding_input")
