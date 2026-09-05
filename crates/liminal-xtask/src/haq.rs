@@ -4636,7 +4636,7 @@ fn scope_trace_paths_digest_from(open_paths: &BTreeSet<String>) -> String {
 /// Every file syscall strace's `%file` class prints a path for. Write-class
 /// entries can change what a path names; the open family is write-class only
 /// with a writing flag.
-const FILE_SYSCALLS: [&str; 41] = [
+const FILE_SYSCALLS: [&str; 43] = [
     "open(",
     "openat(",
     "openat2(",
@@ -4677,11 +4677,13 @@ const FILE_SYSCALLS: [&str; 41] = [
     "mknod(",
     "mknodat(",
     "setxattr(",
+    "lsetxattr(",
     "removexattr(",
+    "lremovexattr(",
 ];
 const OPEN_SYSCALLS: [&str; 3] = ["open(", "openat(", "openat2("];
 const OPEN_WRITE_FLAGS: [&str; 5] = ["O_WRONLY", "O_RDWR", "O_CREAT", "O_TRUNC", "O_APPEND"];
-const WRITE_SYSCALLS: [&str; 22] = [
+const WRITE_SYSCALLS: [&str; 26] = [
     "creat(",
     "truncate(",
     "utimensat(",
@@ -4704,6 +4706,10 @@ const WRITE_SYSCALLS: [&str; 22] = [
     "fchownat(",
     "mknod(",
     "mknodat(",
+    "setxattr(",
+    "lsetxattr(",
+    "removexattr(",
+    "lremovexattr(",
 ];
 /// Syscalls whose second string is also a path being written (the target).
 const TWO_PATH_SYSCALLS: [&str; 7] = [
@@ -4719,7 +4725,8 @@ const TWO_PATH_SYSCALLS: [&str; 7] = [
 /// The path arguments of one traced file syscall, lexical, as strace printed
 /// them, each with whether the call can change what the path names (F-44).
 /// Two-path syscalls yield both strings; a symlink's target counts as written
-/// because a link INTO the locked corpus is the second-name attack.
+/// because a link INTO the locked corpus is the second-name attack. strace
+/// prints one syscall per line, so the earliest needle is the line's call.
 fn scope_trace_line_accesses(line: &str) -> Vec<(String, bool)> {
     let Some((open, needle)) = FILE_SYSCALLS
         .into_iter()
@@ -4879,6 +4886,9 @@ fn locked_corpus_write(
         } else {
             root.as_std_path().join(path)
         };
+        // A path that no longer resolves (deleted after the trace) is judged
+        // lexically: the conservative direction, since a lexical
+        // conformance/corpora prefix still refuses.
         let canonical = canonicalize_trace_path(&local).unwrap_or(local);
         if let Ok(relative) = canonical.strip_prefix(&canonical_root)
             && relative
