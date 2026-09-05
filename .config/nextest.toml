@@ -18,6 +18,17 @@ test-group = "crash"
 slow-timeout = { period = "120s", terminate-after = 2 }
 retries = 0                                              # a flaky crash-recovery test is a FINDING, never retried away
 
+[[profile.default.overrides]]
+# The SLO tests read the whole held-out corpus: ~1.4M file syscalls in one
+# test. Untraced that is ~25 s; under the lane's `strace -f -e trace=%file`
+# every one of those syscalls stops the tracee (measured 78 s alone, and
+# `--seccomp-bpf` cannot help when the traced class IS the workload), and on a
+# loaded machine the full suite pushed both past the 180 s ceiling (M17.5,
+# 2026-09-05). The ceiling is a hang guard, so it reflects their cost under
+# the tracer rather than being defeated by it.
+filter = 'binary_id(liminal-conformance::slo)'
+slow-timeout = { period = "120s", terminate-after = 5 }
+
 [profile.ci]
 fail-fast = false                                      # full failure surface per run
 retries = 0                                            # falsification culture: no flake-masking anywhere
