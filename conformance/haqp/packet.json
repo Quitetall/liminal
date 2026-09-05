@@ -23,13 +23,13 @@
    "id": "RISK-002",
    "owner": "Brian",
    "severity": "disclosed",
-   "trigger": "\u00a75 crash-boundary exhaustiveness scoped to ILRP",
+   "trigger": "a durable transition that is NOT a single checksummed append would carry a reconciliation obligation the registry does not cover",
    "requirement": "P1-R001",
    "evidence": "docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md:113",
    "planned_phase": "M17.9",
-   "mitigation": "packet.crash_boundary_scope declares the bound and verify_crash_boundary_scope pins it to tracked source",
+   "mitigation": "AM-17.8 defines the boundary criterion; verify_crash_boundary_scope pins every durable transition to a declared surface; prop_torn_tail_truncates_cleanly evidences append atomicity",
    "authority": "ADR-0021",
-   "state": "accepted"
+   "state": "mitigated"
   },
   {
    "id": "RISK-003",
@@ -2394,7 +2394,7 @@
    }
   ],
   "deferred_to": "M17.9",
-  "rationale": "ADR-0020 \u00a75 requires exhaustive REGISTERED crash boundaries without stating the surface. For HAQP-1a the claim is scoped to the eight ilrp/* protocol boundaries and no further: the registry covers 8 of the runtime's 38 durable transitions. Registering the remainder requires deciding which fsynced transitions are registrable boundaries across the whole runtime, which is design work that would block 1a on Phase 1. Ruling 2026-08-26; deferred surface pinned by site count so this disclosure fails loudly if it goes stale."
+  "rationale": "ADR-0020 \u00a75 requires exhaustive REGISTERED crash boundaries without stating the surface. AM-17.8 defines a registrable boundary as a point where a crash leaves state that recovery must RECONCILE. ILRP's eight protocol steps qualify. The runtime's ~30 other fsynced durable transitions are single checksummed log appends: a torn append is truncated to the longest checksummed prefix (liminal-graph store/log.rs, proven by prop_torn_tail_truncates_cleanly in crates/liminal-graph/tests/store.rs), so recovery is 'read the log' and there is nothing to reconcile. The deferred surface below is pinned by site count so this claim fails loudly if a new transition appears that is not a plain append."
  },
  "reviews": [
   {

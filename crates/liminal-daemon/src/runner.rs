@@ -1901,8 +1901,18 @@ pub fn recover(root: &Utf8Path) -> anyhow::Result<RecoverOutcome> {
         }
     }
 
+    // NORMALIZED, not raw (M17.5 F-40). The raw world digest hashes
+    // `intent:<uuid>:<json>` with `StepAck.at` wall-clock timestamps and minted
+    // ids inside, so every crash-evidence run produced a different
+    // recovery/effect digest for EVERY boundary while first == second still
+    // held within a run. The committed fault matrix could not be reproduced
+    // and verify_crash_replay's equality was unsatisfiable by construction.
+    // normalized_world_digest (M04 Algorithm F) exists for exactly this: worlds
+    // differing only by minted ids and clocks hash equally, which is the
+    // reproducibility ADR-0020 §1 asks of committed evidence. Within-run
+    // idempotence is preserved: raw-equal implies normalized-equal.
     let world_digest =
-        crate::digest::world_digest(root, store).map_err(|e| anyhow::anyhow!("{e}"))?;
+        crate::digest::normalized_world_digest(root, store).map_err(|e| anyhow::anyhow!("{e}"))?;
     let basis = ws
         .basis(BasisPerspective::DurableOnly)
         .map_err(|e| anyhow::anyhow!("basis capture during recovery failed: {e}"))?;

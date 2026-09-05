@@ -115,22 +115,58 @@ echo "[" > "$OUT"
 first=1
 overall=0
 
+# Sanitizer binaries are built at a CANONICAL absolute path, not in-tree
+# (M17.5 F-42). cargo derives each crate's `-C metadata` hash from the package
+# id, which for a path dependency includes the manifest's ABSOLUTE path; ASan
+# then embeds the codegen-unit name (`<target>.<hash>-cgu.0`) in .rodata. So the
+# same commit built at two paths yields two binaries, and the replay -- which
+# rebuilds in a scratch worktree -- could never match the committed digest.
+# Measured: source-path remapping and trim-paths do not touch it; two clean
+# builds at one fixed path are byte-identical. Campaign and replay therefore
+# both build at exactly this path, keyed by commit so concurrent commits cannot
+# clobber each other. /var/tmp is persistent disk; older commits' trees are
+# pruned so the directory cannot grow without bound.
+BUILD_ROOT_BASE=/var/tmp/liminal-haqp-build
+BUILD_ROOT="$BUILD_ROOT_BASE/$source_commit"
+BUILD_RUSTFLAGS="-Zremap-cwd-prefix=/liminal --remap-path-prefix=$BUILD_ROOT=/liminal --remap-path-prefix=$HOME/.cargo=/cargo"
+mkdir -p "$BUILD_ROOT_BASE"
+for stale in "$BUILD_ROOT_BASE"/*/; do
+  [ "${stale%/}" = "$BUILD_ROOT" ] && continue
+  git worktree remove --force "${stale%/}" 2>/dev/null || rm -rf "${stale%/}"
+done
+git worktree prune
+if [ ! -d "$BUILD_ROOT/.git" ] && [ ! -f "$BUILD_ROOT/.git" ]; then
+  rm -rf "$BUILD_ROOT"
+  git worktree add --quiet --detach "$BUILD_ROOT" "$source_commit"
+fi
+mkdir -p "$BUILD_ROOT/fuzz/.cargo"
+printf '[unstable]\ntrim-paths = true\n\n[profile.release]\ntrim-paths = "all"\n' > "$BUILD_ROOT/fuzz/.cargo/config.toml"
+
 for t in "${TARGETS[@]}"; do
-  echo "=== building $t (${SANITIZER}) ==="
+  echo "=== building $t (${SANITIZER}) at $BUILD_ROOT ==="
   log="target/haqp/fuzz-$t.log"
   build_log="target/haqp/build-$t.log"
   build_log_evidence="conformance/haqp/evidence/build-logs/$t.log"
   build_command="cargo +nightly fuzz build -s $SANITIZER $t"
-  $build_command >"$build_log" 2>&1
+  (cd "$BUILD_ROOT" && RUSTFLAGS="$BUILD_RUSTFLAGS" $build_command) >"$build_log" 2>&1
   build_code=$?
   cp "$build_log" "$build_log_evidence"
-  binary_candidate=$(find fuzz/target -type f -perm -111 -name "$t" -print -quit)
+  binary_candidate=$(find "$BUILD_ROOT/fuzz/target" -type f -perm -111 -name "$t" -print -quit)
   binary="conformance/haqp/evidence/binaries/$t"
   probe="conformance/haqp/evidence/probes/$t.log"
   probe_code=1
   if [ "$build_code" -eq 0 ] && [ -n "$binary_candidate" ]; then
     cp "$binary_candidate" "$binary"
-    "$binary_candidate" -help=1 >"$probe" 2>&1
+    # The runtime probe asks the SANITIZER RUNTIME to identify itself (F-42):
+    # `-help=1` alone prints libFuzzer's usage banner, which never names the
+    # sanitizer, so the old probe recorded nothing the verifier could check.
+    # This is exactly the probe verify_sanitizer_build_replay re-runs.
+    case "$SANITIZER" in
+      address) san_env=ASAN_OPTIONS ;; memory) san_env=MSAN_OPTIONS ;;
+      thread)  san_env=TSAN_OPTIONS ;; leak)   san_env=LSAN_OPTIONS ;;
+      *) echo "ERROR: no runtime witness for sanitizer $SANITIZER" >&2; exit 1 ;;
+    esac
+    env "$san_env=help=1" "$binary_candidate" -runs=0 -seed=1 >"$probe" 2>&1
     probe_code=$?
   else
     echo "build failed: code=$build_code binary=${binary_candidate:-missing}" >"$probe"
@@ -187,7 +223,8 @@ for t in "${TARGETS[@]}"; do
     #   never its own flags, so the campaign records the invocation itself. The
     #   line is true by construction: it is the command being run on the line
     #   below it.
-    binary_run="fuzz/target/$(rustc -vV | sed -n 's/^host: //p')/release/$t"
+    # The evidence copy IS the canonical build; there is no in-tree binary now.
+    binary_run="conformance/haqp/evidence/binaries/$t"
     mkdir -p "fuzz/artifacts/$t"
     # ABSOLUTE, as cargo fuzz run passed it. resolve_corpus_paths filters
     # traced paths on "/fuzz/corpus/$target" -- with a leading slash -- so a
@@ -321,7 +358,7 @@ for t in "${TARGETS[@]}"; do
     printf -v trace_prefix 'ASAN_OPTIONS=%q ' "$asan_options"
   fi
   # Must describe what actually ran: the build, then the traced BINARY.
-  binary_run="fuzz/target/$(rustc -vV | sed -n 's/^host: //p')/release/$t"
+  binary_run="conformance/haqp/evidence/binaries/$t"
   trace_command="$build_command && ${trace_prefix}strace -f -q -e trace=%file -o $audit_raw $binary_run $trace_root/fuzz/corpus/$t -artifact_prefix=fuzz/artifacts/$t/ -max_total_time=$SECS -seed=$SEED -rss_limit_mb=4096 -print_final_stats=1"
   binding_input="target/haqp/process-binding-$t.txt"
   printf '%s\0%s\0%s\0%s' "$trace_command" "$trace_pid" "$trace_exit_code" "$trace_hash" >"$binding_input"
@@ -329,8 +366,8 @@ for t in "${TARGETS[@]}"; do
   audit_row=$(printf '{"target":"%s","manifest":"%s","manifest_blake3":"%s","seed":%s,"sanitizer":"%s","exit_code":%s,"log_blake3":"%s","command":"%s","trace":"%s","trace_blake3":"%s","trace_pid":%s,"trace_exit_code":%s,"trace_complete":%s,"process_binding":"%s","tracer_binary":"strace","tracer_version":"conformance/haqp/evidence/access/strace.version","tracer_version_blake3":"%s","trace_root":"%s","resolved_paths_blake3":"%s"}' \
     "$t" "conformance/haqp/evidence/access/$t.paths" "$audit_hash" "$SEED" "$SANITIZER" "$code" "$loghash" "$trace_command" "conformance/haqp/evidence/access/$t.trace.zst" "$trace_hash" "$trace_pid" "$trace_exit_code" "$trace_complete" "$process_binding" "$tracer_version_blake3" "$trace_root" "$resolved_paths_blake3")
   if [ -n "$audit_entries" ]; then audit_entries="$audit_entries,$audit_row"; else audit_entries="$audit_row"; fi
-  printf '{"target":"%s","seconds":%s,"elapsed_s":%s,"exit_code":%s,"execs":%s,"artifacts":%s,"seed":%s,"seed_count":%s,"seed_manifest_blake3":"%s","sanitizer":"%s","log":"%s","log_blake3":"%s","sanitizer_proof":{"build_command":"%s","binary":"%s","binary_blake3":"%s","runtime_probe":"%s","runtime_probe_blake3":"%s","runtime_probe_exit_code":%s,"instrumentation_flags":["-fsanitize=%s"],"build_log":"%s","build_log_blake3":"%s","source_commit":"%s","source_tree":"%s","build_result":"%s"}}' \
-    "$t" "$SECS" "$elapsed" "$code" "$execs" "$arts" "$SEED" "$seed_count" "$seed_manifest_blake3" "$SANITIZER" "$evidence_log" "$loghash" "$build_command" "$binary" "$binary_hash" "$probe" "$probe_hash" "$probe_code" "$SANITIZER" "$build_log_evidence" "$build_log_hash" "$source_commit" "$source_tree" "$([ "$build_code" -eq 0 ] && echo pass || echo fail)" >> "$OUT"
+  printf '{"target":"%s","seconds":%s,"elapsed_s":%s,"exit_code":%s,"execs":%s,"artifacts":%s,"seed":%s,"seed_count":%s,"seed_manifest_blake3":"%s","sanitizer":"%s","log":"%s","log_blake3":"%s","sanitizer_proof":{"build_command":"%s","build_root":"%s","build_rustflags":"%s","binary":"%s","binary_blake3":"%s","runtime_probe":"%s","runtime_probe_blake3":"%s","runtime_probe_exit_code":%s,"instrumentation_flags":["-fsanitize=%s"],"build_log":"%s","build_log_blake3":"%s","source_commit":"%s","source_tree":"%s","build_result":"%s"}}' \
+    "$t" "$SECS" "$elapsed" "$code" "$execs" "$arts" "$SEED" "$seed_count" "$seed_manifest_blake3" "$SANITIZER" "$evidence_log" "$loghash" "$build_command" "$BUILD_ROOT" "$BUILD_RUSTFLAGS" "$binary" "$binary_hash" "$probe" "$probe_hash" "$probe_code" "$SANITIZER" "$build_log_evidence" "$build_log_hash" "$source_commit" "$source_tree" "$([ "$build_code" -eq 0 ] && echo pass || echo fail)" >> "$OUT"
   echo "--- $t: exit=$code execs=$execs artifacts=$arts elapsed=${elapsed}s"
 done
 

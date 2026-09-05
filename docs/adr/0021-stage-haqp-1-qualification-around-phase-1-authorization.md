@@ -116,15 +116,18 @@ legitimately un-ignored. Phase 1 suite ratification requires **both** stages.
   Dispositions remain `predeclared`: re-anchoring makes the declarations TRUE,
   it does not claim a kill, so it is 1a work and 1b's evaluation is untouched.
 
-- **Disclosed limitation (M17.5 A05, AM-17.7, added 2026-08-26):** §5's
-  "exhaustive registered crash boundaries" is, in a 1a packet, exhaustive over
-  **ILRP only** — 8 of the runtime's 38 durable transitions. Every `txn.commit()`
-  is a durable boundary by `liminal-graph`'s own documentation and none is
-  registered. A reader must not read a complete 1a packet as evidence that the
-  runtime's crash behaviour has been exhaustively probed; it evidences the ILRP
-  protocol's. `packet.crash_boundary_scope` states the bound, and
-  `verify_crash_boundary_scope` pins it to tracked source so it cannot silently
-  widen or rot.
+- **RESOLVED by definition (M17.5 A05, AM-17.7 → AM-17.8, closed 2026-09-04):**
+  AM-17.7 scoped §5's "exhaustive registered crash boundaries" to ILRP and
+  disclosed that the runtime's other ~30 fsynced durable transitions were out of
+  scope. That was a disclosure without a criterion. AM-17.8 supplies one: a
+  registrable crash boundary is a point where a crash leaves state that recovery
+  must *reconcile*. ILRP's eight protocol steps qualify. A single checksummed log
+  append does not — it either landed or it did not, and recovery is the
+  longest-checksummed-prefix rule `store/log.rs` documents and
+  `prop_torn_tail_truncates_cleanly` proves. The registry stays at eight because
+  eight is the count of reconciliation points, not because the rest were
+  deferred. `packet.crash_boundary_scope` carries the criterion and
+  `verify_crash_boundary_scope` still pins every transition to a declared surface.
 
 - **Disclosed limitation:** between M17.6 and M24, Phase 1 proceeds on a suite
   whose defect-detection power has been argued but not measured. That is a real

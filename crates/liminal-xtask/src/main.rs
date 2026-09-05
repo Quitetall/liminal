@@ -19,6 +19,17 @@ fn main() -> Result<()> {
             HaqCommand::Concurrency => {
                 liminal_xtask::haq::run_concurrency_repo(&liminal_xtask::repo_root()?)?;
             }
+            HaqCommand::ScopeDigest { kind, trace, scope } => {
+                println!(
+                    "{}",
+                    liminal_xtask::haq::scope_trace_digest_repo(
+                        &liminal_xtask::repo_root()?,
+                        &kind,
+                        &trace,
+                        &scope
+                    )?
+                );
+            }
             HaqCommand::PacketDigest => {
                 println!(
                     "{}",
@@ -98,6 +109,15 @@ enum HaqCommand {
     },
     /// Re-attest the not-applicable concurrency declaration at this base.
     Concurrency,
+    /// Digest a captured scope trace with the gate's own code (`paths` or `resolved`).
+    ScopeDigest {
+        /// `paths` or `resolved`.
+        kind: String,
+        /// The captured strace file, `.zst` accepted.
+        trace: camino::Utf8PathBuf,
+        /// The scope name, which decides whether corpus access is required.
+        scope: String,
+    },
     /// The packet digest the markdown surface must carry.
     ///
     /// The flip shells out here rather than recomputing it: the gate hashes

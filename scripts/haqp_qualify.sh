@@ -70,31 +70,54 @@ echo
 LANES="conformance/haqp/evidence/lanes.json"
 : > "${LANES}.parts"
 
+# Corpus-scope capture (ruling 2026-09-04). verify_corpus_scope_replays used
+# to RE-EXECUTE every scope's command inside the gate -- a second fuzz campaign
+# and a second pair of paid reviews per haq-verify. Now each stage runs under
+# strace exactly once, here, and the gate verifies the recorded bytes.
+#
+# The declared command string is what scope_lane_command names for that scope,
+# verbatim, and it is what actually runs: the gate compares the recorded string
+# against its closed registry, so the two cannot be allowed to differ.
+SCOPE_ROWS="conformance/haqp/evidence/scope-rows.ndjson"
+: > "$SCOPE_ROWS"
+
+# stage <label> <artifact-or-empty> <scope-or-empty> <declared command string>
 stage() {
-  local label="$1" artifact="$2"; shift 2
+  local label="$1" artifact="$2" scope="$3" declared="$4"
   echo "--- ${label} ---"
-  local started exit_code elapsed digest
+  local started exit_code elapsed digest trace
+  trace="target/haqp/scope-${label}.trace"
+  mkdir -p target/haqp
   started=$(date +%s)
   set +e
-  "$@"
+  strace -f -q -e trace=%file -o "$trace" sh -c "$declared"
   exit_code=$?
   set -e
+  if [ -n "$scope" ]; then
+    python3 scripts/haqp_scope_row.py "$scope" "$declared" "$trace" "$exit_code" >> "$SCOPE_ROWS"
+  else
+    rm -f "$trace"
+  fi
   elapsed=$(( $(date +%s) - started ))
   digest="absent"
   if [ -n "$artifact" ] && [ -f "$artifact" ]; then
     digest=$(cargo run -q -p liminal-xtask -- haq hash "$artifact")
   fi
   printf '{"stage":"%s","command":"%s","exit_code":%s,"elapsed_s":%s,"artifact":"%s","artifact_blake3":"%s"}\n' \
-    "$label" "$(printf '%q ' "$@" | sed 's/"/\\"/g')" "$exit_code" "$elapsed" "${artifact:-none}" "$digest" \
+    "$label" "$(printf '%s' "$declared" | sed 's/"/\\"/g')" "$exit_code" "$elapsed" "${artifact:-none}" "$digest" \
     >> "${LANES}.parts"
   return "$exit_code"
 }
 
 # Cheap lanes first: a failure here should not cost 3.5 hours to discover.
-stage canaries  conformance/haqp/evidence/canaries.json  just haq-canaries
-stage generated conformance/haqp/evidence/generated.json just haq-generated
-stage crash     conformance/haqp/evidence/crash.json     just haq-crash
-stage concurrency conformance/haqp/evidence/concurrency.json just haq-concurrency
+# `ci` and `replay` are scopes the closed registry names and the lane never
+# ran; they go first so the canaries stage below writes the final canaries.json.
+stage ci          ""                                          ci          "just ci"
+stage replay      ""                                          replay      "cargo test -q --workspace"
+stage canaries    conformance/haqp/evidence/canaries.json    canaries    "just haq-canaries"
+stage generated   conformance/haqp/evidence/generated.json   generated   "just haq-generated"
+stage crash       conformance/haqp/evidence/crash.json       crash       "just haq-crash"
+stage concurrency conformance/haqp/evidence/concurrency.json ""          "just haq-concurrency"
 echo "--- mutants (stage 1b machinery; recorded, not claimed) ---"
 # `|| echo` swallowed every failure, not only the expected not-ready one — the
 # F-19 family, masking an exit code (M17.5 F-35). Only not-ready is tolerated.
@@ -105,7 +128,7 @@ echo "--- mutants (stage 1b machinery; recorded, not claimed) ---"
 # file from three weeks earlier, and the stale source_commit rode through to the
 # flip. Requiring the file to be REWRITTEN at this base closes that.
 mutants_before=$(cargo run -q -p liminal-xtask -- haq hash conformance/haqp/evidence/mutants.json 2>/dev/null || echo none)
-if ! just haq-mutants; then
+if ! stage mutation conformance/haqp/evidence/mutants.json mutation "just haq-mutants"; then
   mutants_after=$(cargo run -q -p liminal-xtask -- haq hash conformance/haqp/evidence/mutants.json 2>/dev/null || echo none)
   if [ "$mutants_after" = "$mutants_before" ]; then
     echo "mutant lane failed WITHOUT writing evidence; the not-ready tolerance may" >&2
@@ -120,12 +143,24 @@ if ! just haq-mutants; then
 fi
 
 # The long one. Writes fuzz.json and corpus-access.json.
-stage fuzz conformance/haqp/evidence/fuzz.json \
-  scripts/haqp_fuzz_campaign.sh 1800 conformance/haqp/evidence/fuzz.json
+stage fuzz conformance/haqp/evidence/fuzz.json fuzz \
+  "scripts/haqp_fuzz_campaign.sh 1800 conformance/haqp/evidence/fuzz.json"
 
 # ADR-0020 §6: two blinded reviews, distinct model families. Last, because it
 # reads the tree the other lanes just described.
-stage reviews "" just haq-blind-review
+stage reviews "" reviews "just haq-blind-review"
+
+# Fold the eight scope rows into the audit the fuzz campaign just wrote.
+python3 - "$SCOPE_ROWS" <<'MERGE'
+import json, sys, pathlib
+rows = [json.loads(l) for l in pathlib.Path(sys.argv[1]).read_text().splitlines() if l.strip()]
+audit = pathlib.Path("conformance/haqp/evidence/corpus-access.json")
+d = json.loads(audit.read_text())
+d["scope_traces"] = rows
+audit.write_text(json.dumps(d, indent=1) + "\n")
+pathlib.Path(sys.argv[1]).unlink()
+print(f"merged {len(rows)} scope rows into corpus-access.json")
+MERGE
 
 # One manifest, written once, so a partial lane cannot leave half a file behind.
 python3 - "$LANES" <<'MANIFEST'

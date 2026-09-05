@@ -60,6 +60,36 @@ pub fn run_concurrency_repo(root: &Utf8Path) -> Result<()> {
     Ok(())
 }
 
+/// Digests the lane records for a captured scope trace, computed by the same
+/// code the gate later judges them with. `kind` is `paths` (the observed
+/// open-path set) or `resolved` (traced corpus paths resolved inside the tree).
+pub fn scope_trace_digest_repo(
+    root: &Utf8Path,
+    kind: &str,
+    trace: &Utf8Path,
+    scope: &str,
+) -> Result<String> {
+    let bytes = read_evidence_bytes(trace)?;
+    match kind {
+        "paths" => Ok(scope_trace_paths_digest(&bytes)),
+        "resolved" => {
+            let access = if scope == "fuzz" {
+                CorpusAccess::Required
+            } else {
+                CorpusAccess::IfPresent
+            };
+            resolved_corpus_paths_digest(
+                root,
+                root.as_str(),
+                &bytes,
+                &format!("{scope} corpus scope"),
+                access,
+            )
+        }
+        other => anyhow::bail!("unknown scope digest kind {other:?}; expected paths or resolved"),
+    }
+}
+
 /// The digest `verify_markdown_surface` requires the review markdown to carry.
 pub fn packet_digest_repo(root: &Utf8Path) -> Result<String> {
     packet_digest(&read_packet(root)?)
@@ -2394,9 +2424,21 @@ fn verify_mutant_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         .map(|mutant| (mutant.id.as_str(), mutant))
         .collect::<BTreeMap<_, _>>();
     let mut seen = BTreeSet::<String>::new();
+    let mut evaluated = BTreeSet::<String>::new();
     for row in &evidence.rows {
-        verify_mutant_evidence_row(row, &declared, &mut seen)?;
+        verify_mutant_evidence_row(row, &declared, &mut seen, &mut evaluated)?;
     }
+    // Every declared mutant has a row (not-ready or evaluated), and the
+    // EVALUATED rows are exactly the non-predeclared dispositions.
+    let all = packet
+        .mutants
+        .iter()
+        .map(|m| m.id.clone())
+        .collect::<BTreeSet<_>>();
+    anyhow::ensure!(
+        seen == all,
+        "mutant evidence rows differ from declared mutants: recorded={seen:?}, declared={all:?}"
+    );
     let expected = packet
         .mutants
         .iter()
@@ -2404,8 +2446,8 @@ fn verify_mutant_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         .map(|mutant| mutant.id.clone())
         .collect::<BTreeSet<_>>();
     anyhow::ensure!(
-        seen == expected,
-        "mutant evidence rows differ: recorded={seen:?}, expected={expected:?}"
+        evaluated == expected,
+        "evaluated mutant rows differ: recorded={evaluated:?}, expected={expected:?}"
     );
     Ok(())
 }
@@ -2475,6 +2517,7 @@ fn verify_mutant_evidence_row(
     row: &MutantEvidenceRow,
     declared: &BTreeMap<&str, &Mutant>,
     seen: &mut BTreeSet<String>,
+    evaluated: &mut BTreeSet<String>,
 ) -> Result<()> {
     anyhow::ensure!(
         seen.insert(row.id.clone()),
@@ -2484,11 +2527,36 @@ fn verify_mutant_evidence_row(
     let mutant = declared
         .get(row.id.as_str())
         .with_context(|| format!("mutant evidence names undeclared {}", row.id))?;
+    // Stage 1a (M17.5 F-41). `haq mutants` records every mutant as `not-ready`
+    // -- "recorded, not claimed" -- and this verifier, written for 1b's
+    // evaluated rows, refused each one as "evaluated evidence". A not-ready row
+    // is the ABSENCE of a claim: it may exist only for a predeclared mutant,
+    // may carry no result, and does not count toward the evaluated set.
+    if row.status == "not-ready" {
+        anyhow::ensure!(
+            mutant.disposition == "predeclared",
+            "{} is declared {:?} but its evidence is not ready",
+            row.id,
+            mutant.disposition
+        );
+        require_eq(
+            "mutant evidence disposition",
+            &row.disposition,
+            "predeclared",
+        )?;
+        anyhow::ensure!(
+            row.failed_tests.is_empty() && row.exit_codes.is_empty(),
+            "{} is not ready yet carries results",
+            row.id
+        );
+        return Ok(());
+    }
     anyhow::ensure!(
         mutant.disposition != "predeclared",
         "predeclared mutant {} has evaluated evidence",
         row.id
     );
+    evaluated.insert(row.id.clone());
     require_eq(
         "mutant evidence disposition",
         &row.disposition,
@@ -3858,28 +3926,84 @@ fn verify_sanitizer_proof(
 
 /// Build sanitizer target from fixed source commit and compare output. Marker
 /// strings and self-authored logs cannot prove compiler/runtime instrumentation.
+/// The one path and flag set sanitizer binaries are built with, keyed by commit.
+///
+/// Must match `BUILD_ROOT` / `BUILD_RUSTFLAGS` in scripts/haqp_fuzz_campaign.sh
+/// verbatim; the proof records the campaign's values and the replay refuses any
+/// that differ, which is how the two are kept from drifting.
+/// The environment variable that makes a sanitizer runtime print its flags, and
+/// the name it prints. Closed: an unknown sanitizer is refused, not guessed.
+fn sanitizer_runtime_witness(sanitizer: &str) -> Result<(&'static str, &'static str)> {
+    Ok(match sanitizer {
+        "address" => ("ASAN_OPTIONS", "AddressSanitizer"),
+        "memory" => ("MSAN_OPTIONS", "MemorySanitizer"),
+        "thread" => ("TSAN_OPTIONS", "ThreadSanitizer"),
+        "leak" => ("LSAN_OPTIONS", "LeakSanitizer"),
+        other => anyhow::bail!("no runtime witness registered for sanitizer {other:?}"),
+    })
+}
+
+fn sanitizer_build_canon(fixed_commit: &str) -> (Utf8PathBuf, String) {
+    let root = Utf8PathBuf::from(format!("/var/tmp/liminal-haqp-build/{fixed_commit}"));
+    let home = std::env::var("HOME").unwrap_or_default();
+    let flags = format!(
+        "-Zremap-cwd-prefix=/liminal --remap-path-prefix={root}=/liminal --remap-path-prefix={home}/.cargo=/cargo"
+    );
+    (root, flags)
+}
+
 fn verify_sanitizer_build_replay(
     root: &Utf8Path,
     row: &FuzzEvidence,
     proof: &SanitizerProof,
     provenance: &Provenance,
 ) -> Result<()> {
-    let scratch = liminal_scratch::ScratchDir::new("haq-sanitizer-replay")?;
-    let worktree = scratch.path().to_owned();
-    let add = Command::new("git")
-        .current_dir(root)
-        .args(["worktree", "add", "--detach", "--quiet"])
-        .arg(&worktree)
-        .arg(&provenance.fixed_commit)
-        .output()?;
-    anyhow::ensure!(
-        add.status.success(),
-        "sanitizer replay worktree add failed: {}",
-        String::from_utf8_lossy(&add.stderr).trim()
-    );
-    let mut guard = WorktreeGuard::new(root, &worktree);
+    // Rebuild at the CANONICAL path the campaign built at (M17.5 F-42), not a
+    // scratch worktree. Measured: the same commit built at two paths differs in
+    // .rodata by its codegen-unit name, because cargo hashes the fuzz crate's
+    // absolute manifest path into `-C metadata`; two clean builds at one fixed
+    // path are byte-identical. The path and flags are closed here and the proof
+    // must record the same, so neither side can drift from the other.
+    let (build_root, build_rustflags) = sanitizer_build_canon(&provenance.fixed_commit);
+    require_eq(
+        &format!("{} sanitizer build_root", row.target),
+        &proof.build_root,
+        build_root.as_str(),
+    )?;
+    require_eq(
+        &format!("{} sanitizer build_rustflags", row.target),
+        &proof.build_rustflags,
+        &build_rustflags,
+    )?;
+    let worktree = build_root.clone();
+    if !worktree.join(".git").exists() {
+        if worktree.exists() {
+            fs::remove_dir_all(&worktree).with_context(|| format!("clear stale {worktree}"))?;
+        }
+        if let Some(parent) = worktree.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let add = Command::new("git")
+            .current_dir(root)
+            .args(["worktree", "add", "--detach", "--quiet"])
+            .arg(&worktree)
+            .arg(&provenance.fixed_commit)
+            .output()
+            .context("add sanitizer replay worktree")?;
+        anyhow::ensure!(
+            add.status.success(),
+            "sanitizer replay worktree add failed: {}",
+            String::from_utf8_lossy(&add.stderr).trim()
+        );
+    }
+    fs::create_dir_all(worktree.join("fuzz/.cargo"))?;
+    fs::write(
+        worktree.join("fuzz/.cargo/config.toml"),
+        "[unstable]\ntrim-paths = true\n\n[profile.release]\ntrim-paths = \"all\"\n",
+    )?;
     let output = Command::new("cargo")
         .current_dir(&worktree)
+        .env("RUSTFLAGS", &build_rustflags)
         .args([
             "+nightly",
             "fuzz",
@@ -3906,8 +4030,18 @@ fn verify_sanitizer_build_replay(
         &proof.binary_blake3,
         &digest,
     )?;
+    // Ask the sanitizer RUNTIME to identify itself (M17.5 F-42). The previous
+    // probe ran `-help=1` and required the text to contain `-fsanitize=<san>`;
+    // libFuzzer's help is a usage banner and never names the sanitizer, so the
+    // committed probe logs contain that string zero times and the check could
+    // not pass for any binary. `<SAN>_OPTIONS=help=1` makes the linked runtime
+    // print its own flag table, which only happens if the instrumentation is
+    // actually present. The target NAME is already bound by the file-name guard
+    // above; `-seed=1 -runs=0` keeps the output reproducible.
+    let (options_env, runtime_name) = sanitizer_runtime_witness(&row.sanitizer)?;
     let probe = Command::new(&candidate)
-        .arg("-help=1")
+        .env(options_env, "help=1")
+        .args(["-runs=0", "-seed=1"])
         .current_dir(&worktree)
         .output()
         .with_context(|| format!("probe replayed sanitizer binary {}", row.target))?;
@@ -3920,13 +4054,11 @@ fn verify_sanitizer_build_replay(
     probe_bytes.extend_from_slice(&probe.stderr);
     let probe_text = String::from_utf8_lossy(&probe_bytes);
     anyhow::ensure!(
-        probe_text.contains(row.target.as_str())
-            && probe_text.contains(&format!("-fsanitize={}", row.sanitizer)),
-        "replayed sanitizer probe does not identify {} and {}",
+        probe_text.contains(runtime_name),
+        "replayed binary for {} does not carry the {} runtime ({runtime_name} absent from its help)",
         row.target,
         row.sanitizer
     );
-    guard.remove()?;
     Ok(())
 }
 
@@ -4175,8 +4307,11 @@ fn verify_corpus_scope_rows(
             &row.tracer_version_blake3,
             blake3::hash(&tracer_version_bytes).to_hex().as_ref(),
         )?;
+        // Stored compressed, as the fuzz-target traces are: a `just ci` trace
+        // is hundreds of MB raw. read_evidence_bytes decompresses; the digest
+        // is over the raw bytes.
         let expected_path = format!(
-            "conformance/haqp/evidence/access/scopes/{}.trace",
+            "conformance/haqp/evidence/access/scopes/{}.trace.zst",
             row.scope
         );
         require_eq("corpus scope trace path", &row.trace, &expected_path)?;
@@ -4217,6 +4352,11 @@ fn verify_corpus_scope_rows(
             &bytes,
             &row.resolved_paths_blake3,
             &format!("{} corpus scope", row.scope),
+            if row.scope == "fuzz" {
+                CorpusAccess::Required
+            } else {
+                CorpusAccess::IfPresent
+            },
         )?;
         let binding = blake3::hash(
             format!(
@@ -4247,28 +4387,32 @@ fn verify_corpus_scope_rows(
     Ok(())
 }
 
-/// Bind each qualification-wide trace to its closed, actual lane command.
-/// A scope-probe helper is not accepted as a substitute for tracing the lane
-/// that the qualification packet claims to have run.
+/// Verify each scope's CAPTURED trace, rather than re-running the campaign.
+///
+/// This used to re-execute every scope's lane command inside a worktree —
+/// `just ci`, `haq generate --cases 100000`, `cargo test --workspace`,
+/// `just haq-blind-review` and `scripts/haqp_fuzz_campaign.sh 1800`. That made
+/// `haq-verify` a second complete campaign, with a second fuzz run and a second
+/// pair of paid model reviews inside every lane, and it threatened §7's
+/// eight-hour ceiling with work that produced no new evidence.
+///
+/// It had never fired: `scope_traces` was empty, so the loop body never ran.
+/// Populating it — which `verify_corpus_scope_presence` requires — would have
+/// switched it on.
+///
+/// Ruling (Brian, 2026-09-04): the trace is evidence FROM the campaign. The
+/// lane captures each scope under strace as it actually runs, and the gate
+/// checks the recorded bytes: the command matches the closed lane registry, the
+/// path digest matches, no held-out path appears, and every traced corpus path
+/// resolves inside the tree. What is lost is the reproducibility claim that
+/// re-execution made; what is gained is evidence describing the run that
+/// happened rather than a different one.
 fn verify_corpus_scope_replays(
     root: &Utf8Path,
     rows: &[CorpusScopeTrace],
     fixed_commit: &str,
 ) -> Result<()> {
-    let scratch = liminal_scratch::ScratchDir::new("haq-scope-replay")?;
-    let worktree = scratch.path().to_owned();
-    let add = Command::new("git")
-        .current_dir(root)
-        .args(["worktree", "add", "--detach", "--quiet"])
-        .arg(&worktree)
-        .arg(fixed_commit)
-        .output()?;
-    anyhow::ensure!(
-        add.status.success(),
-        "scope replay worktree add failed: {}",
-        String::from_utf8_lossy(&add.stderr).trim()
-    );
-    let mut guard = WorktreeGuard::new(root, &worktree);
+    let _ = fixed_commit;
     for row in rows {
         let expected_command = format!(
             "strace -f -q -e trace=%file -o target/haqp/scope-{}.trace {}",
@@ -4280,24 +4424,11 @@ fn verify_corpus_scope_replays(
             &row.command,
             &expected_command,
         )?;
-        // `row.command` is shell syntax only after exact equality with the
-        // closed lane-command registry above; never execute an unbound field.
-        let output = Command::new("sh")
-            .current_dir(&worktree)
-            .args(["-c", &row.command])
-            .output()
-            .with_context(|| format!("replay corpus scope {}", row.scope))?;
-        anyhow::ensure!(
-            output.status.success(),
-            "scope replay {} failed: {}",
-            row.scope,
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-        let trace = worktree.join(format!("target/haqp/scope-{}.trace", row.scope));
-        let bytes = fs::read(&trace)
-            .with_context(|| format!("scope replay {} produced no trace", row.scope))?;
+        let trace_path = safe_repo_path(root, &row.trace, "corpus scope trace")?;
+        let bytes = read_evidence_bytes(&trace_path)
+            .with_context(|| format!("{}: captured scope trace is required", row.scope))?;
         require_eq(
-            &format!("{} replayed observed_paths_blake3", row.scope),
+            &format!("{} observed_paths_blake3", row.scope),
             &row.observed_paths_blake3,
             &scope_trace_paths_digest(&bytes),
         )?;
@@ -4305,32 +4436,43 @@ fn verify_corpus_scope_replays(
         for forbidden in ["heldout", "conformance/corpora"] {
             anyhow::ensure!(
                 !lower.contains(forbidden),
-                "{} replay observed forbidden path fragment {forbidden:?}",
+                "{} corpus scope trace opened a locked path ({forbidden})",
                 row.scope
             );
         }
         verify_trace_corpus_resolution(
-            &worktree,
-            worktree.as_str(),
+            root,
+            root.as_str(),
             &bytes,
             &row.resolved_paths_blake3,
-            &format!("{} replayed corpus scope", row.scope),
+            &format!("{} corpus scope", row.scope),
+            if row.scope == "fuzz" {
+                CorpusAccess::Required
+            } else {
+                CorpusAccess::IfPresent
+            },
         )?;
     }
-    guard.remove()?;
     Ok(())
 }
 
+/// The exact command the lane runs for each scope, under strace.
+///
+/// These must be what `haqp_qualify.sh` actually invokes, verbatim: the gate
+/// requires `row.command` to equal `strace ... <this>`, so a registry that
+/// describes a tidier command than the one that ran would fail the campaign it
+/// is meant to describe. The fuzz entry therefore carries its output path, and
+/// the wrappers are the `just` recipes rather than the cargo lines behind them.
 fn scope_lane_command(scope: &str) -> Result<&'static str> {
     match scope {
         "ci" => Ok("just ci"),
-        "canaries" => Ok("cargo run -q -p liminal-xtask -- haq run-canaries"),
-        "generated" => Ok("cargo run -q -p liminal-xtask -- haq generate --cases 100000"),
-        "crash" => Ok("cargo run -q -p liminal-conformance --bin crash-evidence"),
+        "canaries" => Ok("just haq-canaries"),
+        "generated" => Ok("just haq-generated"),
+        "crash" => Ok("just haq-crash"),
         "replay" => Ok("cargo test -q --workspace"),
-        "mutation" => Ok("cargo run -q -p liminal-xtask -- haq mutants"),
+        "mutation" => Ok("just haq-mutants"),
         "reviews" => Ok("just haq-blind-review"),
-        "fuzz" => Ok("scripts/haqp_fuzz_campaign.sh 1800"),
+        "fuzz" => Ok("scripts/haqp_fuzz_campaign.sh 1800 conformance/haqp/evidence/fuzz.json"),
         _ => anyhow::bail!("unknown corpus scope {scope}"),
     }
 }
@@ -4442,14 +4584,45 @@ fn normalize_scope_trace_path(path: &str) -> String {
 /// digest of `(lexical, canonical repository-relative)` pairs, so no path
 /// receipt can disclose corpus names; verification recomputes it and fails
 /// closed on missing, escaping, or forbidden resolutions.
+/// Whether a trace is REQUIRED to have opened a fuzz corpus path.
+///
+/// The forbidden-path refusal below is unconditional for every trace. What
+/// varies is whether an EMPTY resolved set is a defect: for a fuzz campaign it
+/// is (a run that never read its corpus fuzzed nothing), while `just ci` or
+/// `haq-canaries` legitimately never open one. Before this distinction the
+/// corpus-scope subsystem could not be satisfied by six of its eight scopes,
+/// which is one reason it had never produced a row (ruling 2026-09-04).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CorpusAccess {
+    Required,
+    IfPresent,
+}
+
+/// Compare a trace's resolved corpus paths against the recorded digest.
 fn verify_trace_corpus_resolution(
     root: &Utf8Path,
     trace_root: &str,
     bytes: &[u8],
     expected_digest: &str,
     label: &str,
+    access: CorpusAccess,
 ) -> Result<()> {
     require_hex_digest(&format!("{label} resolved_paths_blake3"), expected_digest)?;
+    let actual = resolved_corpus_paths_digest(root, trace_root, bytes, label, access)?;
+    require_eq(
+        &format!("{label} resolved_paths_blake3"),
+        &actual,
+        expected_digest,
+    )
+}
+
+fn resolved_corpus_paths_digest(
+    root: &Utf8Path,
+    trace_root: &str,
+    bytes: &[u8],
+    label: &str,
+    access: CorpusAccess,
+) -> Result<String> {
     let canonical_root = fs::canonicalize(root.as_std_path())
         .with_context(|| format!("{label}: canonicalize repository root"))?;
     let trace_root = Path::new(trace_root);
@@ -4500,19 +4673,15 @@ fn verify_trace_corpus_resolution(
             resolved.insert(format!("{lexical}\0{relative}"));
         }
     }
-    anyhow::ensure!(
-        !resolved.is_empty(),
-        "{label}: trace contains no resolvable fuzz corpus path"
-    );
+    if access == CorpusAccess::Required {
+        anyhow::ensure!(
+            !resolved.is_empty(),
+            "{label}: trace contains no resolvable fuzz corpus path"
+        );
+    }
     let resolved = resolved.into_iter().collect::<Vec<_>>();
     let resolved_bytes = format!("{}\n", resolved.join("\n"));
-    let actual = blake3::hash(resolved_bytes.as_bytes()).to_hex().to_string();
-    require_eq(
-        &format!("{label} resolved_paths_blake3"),
-        &actual,
-        expected_digest,
-    )?;
-    Ok(())
+    Ok(blake3::hash(resolved_bytes.as_bytes()).to_hex().to_string())
 }
 
 /// Canonicalize the existing prefix of a traced path, then append historical
@@ -4798,6 +4967,7 @@ fn verify_corpus_audit_campaign_binding(root: &Utf8Path, audit: &CorpusAccessAud
             &trace_bytes,
             &row.resolved_paths_blake3,
             &format!("{} corpus audit", row.target),
+            CorpusAccess::Required,
         )?;
     }
     Ok(())
@@ -7616,6 +7786,14 @@ struct FuzzEvidence {
 #[serde(deny_unknown_fields)]
 struct SanitizerProof {
     build_command: String,
+    /// The canonical absolute path the binary was built at (M17.5 F-42). cargo's
+    /// `-C metadata` hash includes a path dependency's absolute manifest path
+    /// and ASan embeds the resulting codegen-unit name in .rodata, so a rebuild
+    /// only reproduces the committed bytes at the SAME path.
+    #[serde(default)]
+    build_root: String,
+    #[serde(default)]
+    build_rustflags: String,
     binary: String,
     binary_blake3: String,
     runtime_probe: String,
@@ -13291,6 +13469,561 @@ mod tests {
             .expect_err("a reused source coordinate must be refused");
     }
 
+    /// Builds a scratch root holding everything verify_corpus_scope_rows reads:
+    /// the tracer receipt, a compressed scope trace whose one open resolves
+    /// inside the root, and a row whose digests were computed by the same code
+    /// the gate uses. Every reject case below doctors ONE thing off this.
+    fn scope_fixture(scope: &str) -> (liminal_scratch::ScratchDir, Utf8PathBuf, CorpusScopeTrace) {
+        let scratch = liminal_scratch::ScratchDir::new("haq-scope").expect("scratch");
+        let root = fs::canonicalize(scratch.path().as_std_path())
+            .map(|p| Utf8PathBuf::from_path_buf(p).expect("utf8"))
+            .expect("canonical root");
+        let access = root.join("conformance/haqp/evidence/access");
+        fs::create_dir_all(access.join("scopes")).expect("mkdir");
+        fs::write(access.join("strace.version"), "strace -- version 6.0\n").expect("receipt");
+        fs::write(root.join("Cargo.toml"), "[workspace]\n").expect("opened file");
+        let pid = 4242u32;
+        let trace = format!(
+            "{pid} openat(AT_FDCWD, \"{root}/Cargo.toml\", O_RDONLY) = 3\n{pid} +++ exited with 0 +++\n"
+        );
+        let stored = access.join(format!("scopes/{scope}.trace.zst"));
+        fs::write(
+            &stored,
+            zstd::encode_all(trace.as_bytes(), 3).expect("zstd"),
+        )
+        .expect("trace");
+        let command = format!(
+            "strace -f -q -e trace=%file -o target/haqp/scope-{scope}.trace {}",
+            scope_lane_command(scope).expect("scope")
+        );
+        let trace_blake3 = blake3::hash(trace.as_bytes()).to_hex().to_string();
+        let observed = scope_trace_paths_digest(trace.as_bytes());
+        let resolved = resolved_corpus_paths_digest(
+            &root,
+            root.as_str(),
+            trace.as_bytes(),
+            "fixture",
+            CorpusAccess::IfPresent,
+        )
+        .expect("resolved digest");
+        let binding =
+            blake3::hash(format!("{command}\0{pid}\0{}\0{trace_blake3}\0{observed}", 0).as_bytes())
+                .to_hex()
+                .to_string();
+        let receipt_bytes = fs::read(access.join("strace.version")).expect("receipt bytes");
+        let row = CorpusScopeTrace {
+            scope: scope.to_owned(),
+            command,
+            trace: format!("conformance/haqp/evidence/access/scopes/{scope}.trace.zst"),
+            trace_blake3,
+            exit_code: 0,
+            result: "pass".to_owned(),
+            trace_pid: pid,
+            trace_exit_code: 0,
+            trace_complete: true,
+            process_binding: binding,
+            tracer_binary: "strace".to_owned(),
+            tracer_version: "conformance/haqp/evidence/access/strace.version".to_owned(),
+            tracer_version_blake3: blake3::hash(&receipt_bytes).to_hex().to_string(),
+            observed_paths_blake3: observed,
+            trace_root: root.to_string(),
+            resolved_paths_blake3: resolved,
+        };
+        (scratch, root, row)
+    }
+
+    fn scope_audit(rows: Vec<CorpusScopeTrace>) -> CorpusAccessAudit {
+        CorpusAccessAudit {
+            schema_version: "haqp-corpus-access-v2".to_owned(),
+            tracer: "strace-open-paths".to_owned(),
+            source_commit: "0".repeat(40),
+            source_tree: "0".repeat(40),
+            targets: Vec::new(),
+            scope_traces: rows,
+        }
+    }
+
+    fn scope_provenance() -> Provenance {
+        Provenance {
+            commit: "0".repeat(40),
+            lockfile_blake3: "0".repeat(64),
+            fixed_commit: "0".repeat(40),
+            fixed_tree: "0".repeat(40),
+            evidence_parent: "0".repeat(40),
+        }
+    }
+
+    /// The corpus-scope subsystem had never produced a row, so all three of
+    /// these survived replacement with Ok(()): nothing had ever run them.
+    #[test]
+    fn a_well_formed_scope_row_is_accepted_and_each_binding_is_enforced() {
+        type Doctor = Box<dyn Fn(&mut CorpusScopeTrace)>;
+        let (_s, root, row) = scope_fixture("ci");
+        let prov = scope_provenance();
+        verify_corpus_scope_rows(&root, &scope_audit(vec![row.clone()]), &prov)
+            .expect("a row whose digests match its trace must verify");
+        verify_corpus_scope_replays(&root, std::slice::from_ref(&row), &prov.fixed_commit)
+            .expect("the captured trace must verify without re-execution");
+
+        let cases: Vec<(&str, Doctor, &str)> = vec![
+            (
+                "wrong observed digest",
+                Box::new(|r| r.observed_paths_blake3 = "a".repeat(64)),
+                "observed_paths_blake3",
+            ),
+            (
+                "wrong trace digest",
+                Box::new(|r| r.trace_blake3 = "b".repeat(64)),
+                "trace_blake3",
+            ),
+            ("non-zero exit", Box::new(|r| r.exit_code = 1), "exit_code"),
+            (
+                "result not pass",
+                Box::new(|r| r.result = "fail".to_owned()),
+                "result",
+            ),
+            (
+                "not recursive (-f missing)",
+                Box::new(|r| r.command = r.command.replacen("-f ", "", 1)),
+                "corpus scope command",
+            ),
+            (
+                "command off the closed registry",
+                Box::new(|r| r.command.push_str(" --extra")),
+                "corpus scope command",
+            ),
+            (
+                "tracer not strace",
+                Box::new(|r| r.tracer_binary = "ltrace".to_owned()),
+                "tracer",
+            ),
+            (
+                "pid absent from trace",
+                Box::new(|r| r.trace_pid = 1),
+                "traced PID",
+            ),
+            (
+                "binding stale",
+                Box::new(|r| r.process_binding = "c".repeat(64)),
+                "process_binding",
+            ),
+        ];
+        for (why, doctor, reason) in cases {
+            let mut bad = row.clone();
+            doctor(&mut bad);
+            let err =
+                verify_corpus_scope_rows(&root, &scope_audit(vec![bad]), &prov).expect_err(why);
+            assert!(
+                err.to_string().contains(reason),
+                "{why}: must refuse for the stated reason, got: {err}"
+            );
+        }
+
+        // Two rows for one scope.
+        let dup = scope_audit(vec![row.clone(), row.clone()]);
+        let err = verify_corpus_scope_rows(&root, &dup, &prov).expect_err("duplicate scope");
+        assert!(err.to_string().contains("duplicate"), "{err}");
+    }
+
+    /// The forbidden-path refusal is unconditional for every scope (ruling
+    /// 2026-09-04) even though corpus RESOLUTION is only required of `fuzz`.
+    #[test]
+    fn a_scope_trace_that_touched_the_locked_corpus_is_refused_unconditionally() {
+        let (_s, root, mut row) = scope_fixture("canaries");
+        let trace = "4242 openat(AT_FDCWD, \"conformance/corpora/heldout/x.md\", O_RDONLY) = 3\n\
+                     4242 +++ exited with 0 +++\n";
+        let path = root.join(&row.trace);
+        fs::write(&path, zstd::encode_all(trace.as_bytes(), 3).expect("zstd")).expect("rewrite");
+        row.trace_blake3 = blake3::hash(trace.as_bytes()).to_hex().to_string();
+        row.observed_paths_blake3 = scope_trace_paths_digest(trace.as_bytes());
+        row.process_binding = blake3::hash(
+            format!(
+                "{}\0{}\0{}\0{}\0{}",
+                row.command,
+                row.trace_pid,
+                row.trace_exit_code,
+                row.trace_blake3,
+                row.observed_paths_blake3
+            )
+            .as_bytes(),
+        )
+        .to_hex()
+        .to_string();
+        let err = verify_corpus_scope_replays(&root, std::slice::from_ref(&row), &"0".repeat(40))
+            .expect_err("a held-out open must be refused for a non-fuzz scope too");
+        assert!(err.to_string().contains("locked path"), "{err}");
+    }
+
+    /// A non-fuzz scope with NO corpus access is fine; the `fuzz` scope with
+    /// none is a defect. Before the ruling the first case was impossible to
+    /// satisfy, which is why six of eight scopes could never pass.
+    #[test]
+    fn corpus_resolution_is_required_only_of_the_fuzz_scope() {
+        let (_s, root, _) = scope_fixture("ci");
+        let trace = format!(
+            "1 openat(AT_FDCWD, \"{root}/Cargo.toml\", O_RDONLY) = 3\n1 +++ exited with 0 +++\n"
+        );
+        resolved_corpus_paths_digest(
+            &root,
+            root.as_str(),
+            trace.as_bytes(),
+            "ci",
+            CorpusAccess::IfPresent,
+        )
+        .expect("a scope that opened no corpus path resolves to an empty set");
+        let err = resolved_corpus_paths_digest(
+            &root,
+            root.as_str(),
+            trace.as_bytes(),
+            "fuzz",
+            CorpusAccess::Required,
+        )
+        .expect_err("a fuzz run that opened no corpus path fuzzed nothing");
+        assert!(
+            err.to_string().contains("no resolvable fuzz corpus path"),
+            "{err}"
+        );
+    }
+
+    /// Presence is the closed set of eight lanes, exactly.
+    #[test]
+    fn scope_presence_requires_all_eight_lanes_and_no_others() {
+        let all = [
+            "ci",
+            "canaries",
+            "generated",
+            "crash",
+            "replay",
+            "mutation",
+            "reviews",
+            "fuzz",
+        ];
+        let mk = |names: &[&str]| scope_audit(names.iter().map(|n| scope_fixture(n).2).collect());
+        verify_corpus_scope_presence(&mk(&all)).expect("all eight");
+        let err = verify_corpus_scope_presence(&mk(&all[..7])).expect_err("seven");
+        assert!(err.to_string().contains("does not cover lane"), "{err}");
+        verify_corpus_scope_presence(&scope_audit(Vec::new())).expect_err("none");
+    }
+
+    /// The wrapper reads concurrency.json and delegates; replacing it with
+    /// Ok(()) survived because canary C32 exercises the RECORD function, never
+    /// the read. A scratch root whose file contradicts the packet proves the
+    /// wrapper actually reads it.
+    #[test]
+    fn concurrency_evidence_is_read_from_disk_not_assumed() {
+        let root = repo_root();
+        let packet = read_packet(&root).expect("packet");
+        verify_concurrency_evidence(&root, &packet)
+            .expect("the committed not-applicable declaration must verify");
+
+        let scratch = liminal_scratch::ScratchDir::new("haq-concurrency").expect("scratch");
+        let sroot = scratch.path().to_owned();
+        fs::create_dir_all(sroot.join("conformance/haqp/evidence")).expect("mkdir");
+        let err = verify_concurrency_evidence(&sroot, &packet)
+            .expect_err("no concurrency.json at all must be refused");
+        assert!(
+            err.to_string()
+                .contains("concurrent schedule evidence required"),
+            "{err}"
+        );
+
+        let mut doctored: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("conformance/haqp/evidence/concurrency.json")).expect("read"),
+        )
+        .expect("parse");
+        doctored["mode"] = serde_json::Value::String("executed".to_owned());
+        fs::write(
+            sroot.join("conformance/haqp/evidence/concurrency.json"),
+            serde_json::to_vec(&doctored).expect("serialize"),
+        )
+        .expect("write");
+        let err = verify_concurrency_evidence(&sroot, &packet)
+            .expect_err("a file whose mode contradicts the packet must be refused");
+        assert!(err.to_string().contains("concurrency mode"), "{err}");
+    }
+
+    /// Canary evidence must equal a fresh replay from the FIXED commit's own
+    /// packet and Markdown. Deleting the check survived: nothing compared the
+    /// committed record to anything. The replay is a real `git show` plus the
+    /// real canary suite, so this costs about a second.
+    #[test]
+    fn canary_evidence_must_match_a_replay_from_the_fixed_commit() {
+        let root = repo_root();
+        let head = git_text(&root, &["rev-parse", "HEAD"]).expect("HEAD");
+        let mut provenance = scope_provenance();
+        provenance.fixed_commit = head;
+        let recorded: Vec<CanaryEvidence> = serde_json::from_slice(
+            &fs::read(root.join("conformance/haqp/evidence/canaries.json")).expect("read"),
+        )
+        .expect("parse");
+        verify_canary_evidence_replay(&root, &provenance, &recorded)
+            .expect("committed canary evidence must replay identically from HEAD");
+
+        let mut altered = recorded.clone();
+        altered[0].caught = !altered[0].caught;
+        let err = verify_canary_evidence_replay(&root, &provenance, &altered)
+            .expect_err("a record that disagrees with its own replay must be refused");
+        assert!(err.to_string().contains("differs from replay"), "{err}");
+
+        let mut unknown = provenance.clone();
+        unknown.fixed_commit = "0".repeat(40);
+        let err = verify_canary_evidence_replay(&root, &unknown, &recorded)
+            .expect_err("a fixed commit git cannot show must be refused");
+        assert!(err.to_string().contains("git show"), "{err}");
+    }
+
+    /// The crash fault matrix is re-derived by an independent run of the
+    /// crash-evidence binary and must equal the committed record. Deleting the
+    /// check survived. The replay is real (~12s); the refusal is earned by a
+    /// packet whose declared boundary set the replay cannot match.
+    #[test]
+    fn crash_evidence_must_match_an_independent_replay() {
+        let root = repo_root();
+        let packet = read_packet(&root).expect("packet");
+        verify_crash_replay(&root, &packet)
+            .expect("committed crash evidence must equal an independent replay");
+
+        let mut extra = packet.clone();
+        let mut ghost = extra.crash_boundaries[0].clone();
+        ghost.boundary = "ilrp/ghost_boundary".to_owned();
+        extra.crash_boundaries.push(ghost);
+        let err = verify_crash_replay(&root, &extra)
+            .expect_err("a declared boundary the replay never exercised must be refused");
+        assert!(
+            err.to_string().to_ascii_lowercase().contains("boundary"),
+            "must refuse on the boundary set: {err}"
+        );
+    }
+
+    /// mutants.json is bound to the packet's provenance, the lockfile, the
+    /// runner and the packet's own disposition claims. Deleting the check
+    /// survived: the committed packet has no provenance, so the real tree can
+    /// only exercise the refusal, never the acceptance -- which is why the
+    /// accept case is built in scratch with a provenance that matches.
+    #[test]
+    fn mutant_evidence_is_bound_to_provenance_lockfile_and_packet() {
+        let root = repo_root();
+        let packet = read_packet(&root).expect("packet");
+        let err = verify_mutant_evidence(&root, &packet)
+            .expect_err("a packet without provenance cannot claim mutant evidence");
+        assert!(err.to_string().contains("provenance"), "{err}");
+
+        // Scratch root: the real mutants.json and Cargo.lock, and a packet whose
+        // provenance names the commit the evidence was produced at.
+        let scratch = liminal_scratch::ScratchDir::new("haq-mutant-evidence").expect("scratch");
+        let sroot = scratch.path().to_owned();
+        fs::create_dir_all(sroot.join("conformance/haqp/evidence")).expect("mkdir");
+        fs::copy(root.join("Cargo.lock"), sroot.join("Cargo.lock")).expect("lockfile");
+        let mut evidence: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("conformance/haqp/evidence/mutants.json")).expect("evidence"),
+        )
+        .expect("parse");
+        // The committed evidence predates this Cargo.lock (zstd was added to the
+        // xtask after it was produced). The fixture binds evidence to the scratch
+        // lockfile so the accept case is a real accept, not a hedge that swallows
+        // a lockfile refusal -- and so the doctorings below reach THEIR check
+        // instead of tripping over the lockfile first.
+        evidence["lockfile_blake3"] = serde_json::Value::String(hex_digest(
+            &fs::read(sroot.join("Cargo.lock")).expect("lock"),
+        ));
+        fs::write(
+            sroot.join("conformance/haqp/evidence/mutants.json"),
+            serde_json::to_vec(&evidence).expect("serialize"),
+        )
+        .expect("write");
+        let produced_at = evidence["source_commit"]
+            .as_str()
+            .expect("source_commit")
+            .to_owned();
+        let mut bound = packet.clone();
+        let mut prov = scope_provenance();
+        prov.fixed_commit = produced_at.clone();
+        prov.commit = produced_at;
+        prov.lockfile_blake3 = hex_digest(&fs::read(root.join("Cargo.lock")).expect("lock"));
+        bound.provenance = Some(prov);
+        let rewrite = |mutate: &dyn Fn(&mut serde_json::Value)| {
+            let mut v = evidence.clone();
+            mutate(&mut v);
+            fs::write(
+                sroot.join("conformance/haqp/evidence/mutants.json"),
+                serde_json::to_vec(&v).expect("serialize"),
+            )
+            .expect("write");
+        };
+        verify_mutant_evidence(&sroot, &bound)
+            .expect("evidence bound to this provenance, lockfile and packet must verify");
+
+        rewrite(&|v| v["lockfile_blake3"] = serde_json::Value::String("0".repeat(64)));
+        let err = verify_mutant_evidence(&sroot, &bound).expect_err("lockfile drift");
+        assert!(err.to_string().contains("lockfile"), "{err}");
+
+        rewrite(&|v| v["schema_version"] = serde_json::Value::String("haqp-mutants-v0".to_owned()));
+        let err = verify_mutant_evidence(&sroot, &bound).expect_err("wrong schema");
+        assert!(err.to_string().contains("schema_version"), "{err}");
+
+        rewrite(&|v| v["source_commit"] = serde_json::Value::String("0".repeat(40)));
+        let err = verify_mutant_evidence(&sroot, &bound).expect_err("evidence from another commit");
+        assert!(err.to_string().contains("source_commit"), "{err}");
+
+        rewrite(&|v| v["runner"] = serde_json::Value::String("someone else".to_owned()));
+        let err = verify_mutant_evidence(&sroot, &bound).expect_err("unknown runner");
+        assert!(err.to_string().contains("runner"), "{err}");
+    }
+
+    /// F-41: a not-ready row is the absence of a claim. It is accepted for a
+    /// predeclared mutant, counted toward nothing, and refused the moment it
+    /// carries a result or belongs to a mutant that claims a disposition.
+    #[test]
+    fn a_not_ready_row_is_accepted_only_as_the_absence_of_a_claim() {
+        let root = repo_root();
+        let packet = read_packet(&root).expect("packet");
+        let declared = packet
+            .mutants
+            .iter()
+            .map(|m| (m.id.as_str(), m))
+            .collect::<BTreeMap<_, _>>();
+        let evidence: MutantEvidence = serde_json::from_slice(
+            &fs::read(root.join("conformance/haqp/evidence/mutants.json")).expect("evidence"),
+        )
+        .expect("parse");
+        let row = evidence.rows[0].clone();
+        assert_eq!(
+            row.status, "not-ready",
+            "the committed 1a evidence is not-ready"
+        );
+
+        let (mut seen, mut evaluated) = (BTreeSet::new(), BTreeSet::new());
+        verify_mutant_evidence_row(&row, &declared, &mut seen, &mut evaluated)
+            .expect("a not-ready row for a predeclared mutant is fine");
+        assert!(
+            evaluated.is_empty(),
+            "not-ready counts toward no evaluated set"
+        );
+
+        let mut claims = row.clone();
+        claims.status = "killed".to_owned();
+        let err = verify_mutant_evidence_row(
+            &claims,
+            &declared,
+            &mut BTreeSet::new(),
+            &mut BTreeSet::new(),
+        )
+        .expect_err("a predeclared mutant may not carry an evaluated status");
+        assert!(err.to_string().contains("has evaluated evidence"), "{err}");
+
+        let mut leaks = row.clone();
+        leaks.exit_codes = vec![1];
+        let err = verify_mutant_evidence_row(
+            &leaks,
+            &declared,
+            &mut BTreeSet::new(),
+            &mut BTreeSet::new(),
+        )
+        .expect_err("not-ready yet carrying results");
+        assert!(err.to_string().contains("carries results"), "{err}");
+
+        let mut promoted = packet.mutants[0].clone();
+        promoted.disposition = "killed".to_owned();
+        let one = BTreeMap::from([(promoted.id.as_str(), &promoted)]);
+        let err =
+            verify_mutant_evidence_row(&row, &one, &mut BTreeSet::new(), &mut BTreeSet::new())
+                .expect_err("a mutant that claims killed cannot be backed by a not-ready row");
+        assert!(err.to_string().contains("is not ready"), "{err}");
+    }
+
+    /// F-42. A real rebuild at the canonical path. The first call carries a
+    /// deliberately wrong digest so the refusal proves the build ran and the
+    /// digest is compared; the binary it produced is then hashed and fed back,
+    /// and the second call must ACCEPT -- which is also the reproducibility
+    /// claim itself, measured. The committed proof is not used as the accept
+    /// oracle on purpose: it was built in-tree and cannot match, which is the
+    /// verdict the lane will (correctly) hand it until the campaign reruns.
+    #[test]
+    fn sanitizer_replay_reproduces_the_canonical_build_and_refuses_the_rest() {
+        let root = repo_root();
+        let head = git_text(&root, &["rev-parse", "HEAD"]).expect("HEAD");
+        let mut provenance = scope_provenance();
+        provenance.fixed_commit = head.clone();
+        let (canon_root, canon_flags) = sanitizer_build_canon(&head);
+        let row = fuzz_row("cst_parse", 30);
+        let proof = |digest: &str, root: &str, flags: &str| SanitizerProof {
+            build_command: "cargo +nightly fuzz build -s address cst_parse".to_owned(),
+            build_root: root.to_owned(),
+            build_rustflags: flags.to_owned(),
+            binary: "conformance/haqp/evidence/binaries/cst_parse".to_owned(),
+            binary_blake3: digest.to_owned(),
+            runtime_probe: "conformance/haqp/evidence/probes/cst_parse.log".to_owned(),
+            runtime_probe_blake3: "0".repeat(64),
+            runtime_probe_exit_code: 0,
+            instrumentation_flags: vec!["-fsanitize=address".to_owned()],
+            build_log: "conformance/haqp/evidence/build-logs/cst_parse.log".to_owned(),
+            build_log_blake3: "0".repeat(64),
+            source_commit: head.clone(),
+            source_tree: "0".repeat(40),
+            build_result: "pass".to_owned(),
+        };
+
+        // Closed registry: a proof recorded at any other path or with other
+        // flags is refused before a single compile.
+        let err = verify_sanitizer_build_replay(
+            &root,
+            &row,
+            &proof(&"0".repeat(64), "/elsewhere", &canon_flags),
+            &provenance,
+        )
+        .expect_err("non-canonical build root");
+        assert!(err.to_string().contains("build_root"), "{err}");
+        let err = verify_sanitizer_build_replay(
+            &root,
+            &row,
+            &proof(&"0".repeat(64), canon_root.as_str(), "-C opt-level=3"),
+            &provenance,
+        )
+        .expect_err("non-canonical flags");
+        assert!(err.to_string().contains("build_rustflags"), "{err}");
+
+        // Real build; wrong digest must be refused AFTER building.
+        let err = verify_sanitizer_build_replay(
+            &root,
+            &row,
+            &proof(&"0".repeat(64), canon_root.as_str(), &canon_flags),
+            &provenance,
+        )
+        .expect_err("a digest that is not the rebuilt binary's");
+        assert!(err.to_string().contains("digest"), "{err}");
+
+        // Hash what that build produced and feed it back: must accept, and the
+        // second build must reproduce the first (cached, but re-verified).
+        let built = find_named_files(&canon_root.join("fuzz/target"), "cst_parse")
+            .expect("find")
+            .into_iter()
+            .find(|p| p.file_name() == Some("cst_parse"))
+            .expect("the replay built a binary");
+        let digest = blake3::hash(&fs::read(&built).expect("read built"))
+            .to_hex()
+            .to_string();
+        verify_sanitizer_build_replay(
+            &root,
+            &row,
+            &proof(&digest, canon_root.as_str(), &canon_flags),
+            &provenance,
+        )
+        .expect("a proof carrying the canonical build's own digest must verify");
+
+        // A target that does not exist cannot be built, and the failure is the
+        // build's, not a guess.
+        let mut ghost = fuzz_row("no_such_target", 30);
+        ghost.sanitizer = "address".to_owned();
+        let err = verify_sanitizer_build_replay(
+            &root,
+            &ghost,
+            &proof(&digest, canon_root.as_str(), &canon_flags),
+            &provenance,
+        )
+        .expect_err("unknown fuzz target");
+        assert!(err.to_string().contains("build failed"), "{err}");
+    }
+
     /// M17.5 F-31 / P1-A08: the scenarios block was written by the fault lane
     /// and read by nothing.
     #[test]
@@ -13359,6 +14092,7 @@ mod tests {
             trace.as_bytes(),
             &"0".repeat(64),
             "relative-corpus-test",
+            CorpusAccess::Required,
         )
         .expect_err("relative corpus path must not be rebased on trace root");
         assert!(err.to_string().contains("authenticated cwd/dirfd"), "{err}");

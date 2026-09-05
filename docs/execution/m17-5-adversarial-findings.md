@@ -2648,6 +2648,153 @@ silently rediscovered. With the defect fixed the premise is gone, so it is now
 repaired property and the §3 concentration cap. A refactor that moves a line
 turns a live anchor back into a signature, and nothing else would notice.
 
+## F-39 — the corpus-scope subsystem: never run, and unrunnable as written
+
+Fixing F-38's registry binding moved the 2026-09-03 lane's refusal one gate down
+to `verify_corpus_access_audit`, where three things were waiting.
+
+**1. It had never produced a row.** `scope_traces` in the committed audit was
+empty for its whole life. `verify_corpus_scope_presence` requires exactly eight
+scopes, so any lane that reached it would refuse — and none had. The producer
+(`haq scope-probe`) existed but nothing in the lane or the justfile invoked it:
+the same species as `concurrency.json` (F-37), one gate later.
+
+**2. "Replay" meant re-executing the campaign inside the gate.**
+`verify_corpus_scope_replays` created a worktree and ran each scope's full lane
+command under strace — `just ci`, `haq generate --cases 100000`,
+`cargo test --workspace`, `just haq-blind-review`, and
+`scripts/haqp_fuzz_campaign.sh 1800`. Populating `scope_traces`, which (1)
+requires, would have made every `haq-verify` a second complete campaign with a
+second fuzz run and a second pair of paid reviews. It had never fired only
+because the loop body had never had a row to iterate.
+
+**3. Six of the eight scopes could not satisfy it.** `verify_trace_corpus_resolution`
+collected only paths under `fuzz/corpus/` and then refused if it had collected
+none. Only the `fuzz` scope reliably opens that corpus; `just ci`,
+`haq-canaries`, `haq-generated`, `haq-crash`, `haq-mutants` and
+`haq-blind-review` never do. A mandatory check that six of eight subjects cannot
+pass is not a check, it is a guarantee of refusal.
+
+**Rulings (Brian, 2026-09-04).** Capture during the lane and verify the recorded
+bytes; no re-execution. Keep the forbidden-path refusal unconditional for all
+eight scopes — that is the security property — and require corpus *resolution*
+only of `fuzz`, the one scope for which an empty corpus set is a defect.
+
+**What changed.** Every lane stage now runs under strace exactly once and
+`scripts/haqp_scope_row.py` emits its row with digests asked of the xtask, so
+the row is judged by the code that wrote it. `ci` and `replay` are lane stages
+for the first time. `scope_lane_command` names the commands the lane actually
+runs, verbatim, because the gate compares strings. Traces are stored `.zst`.
+`CorpusAccess::{Required, IfPresent}` carries the ruling into the checker.
+
+Four tests, built entirely in scratch: a well-formed row accepted and nine
+single-field doctorings each refused for its stated reason; a held-out open
+refused for a non-fuzz scope; resolution required of `fuzz` alone; presence
+exactly eight. Before this the three functions survived `Ok(())` because no test
+had ever constructed a row.
+
+## F-40 — the crash fault matrix was not reproducible, so its replay gate could never pass
+
+Closing `verify_crash_replay` (F-36) meant running it honestly: an independent
+`crash-evidence` run must equal the committed record. It did not — and two
+consecutive runs did not equal **each other**. Every boundary's
+`first_effect_digest` and `first_recovery_digest` changed per run, while within
+one run `first == second` held. §5's "second recovery identical" was true; §1's
+"reproducible from the tree" was false; and the equality `verify_crash_replay`
+enforces was unsatisfiable by construction. It had never been noticed because
+the check had never run (F-36).
+
+**Cause.** `recover()` hashed `crate::digest::world_digest` — the RAW world
+digest, `intent:<uuid>:<json>` with `StepAck.at` wall-clock timestamps and
+minted ids inside — and `effect_digest` is built from it. The codebase already
+had `normalized_world_digest` (M04 Algorithm F: uuids → first-appearance
+ordinals, clock fields dropped), written so that "two workspaces that differ
+only by minted ids and clocks produce the SAME normalized digest". Recovery
+simply did not use it. The authors had excluded `TransactionId` from the basis
+digest for exactly this reason two lines above.
+
+**Fix.** Recovery digests use the normalized world digest. Two runs now agree on
+`registered`, `exercised`, `scenarios` and every boundary. `recover()` was the
+raw digest's only caller, so nothing else moved. A first attempt normalized the
+terminal intent states instead; measured, it changed nothing (the timestamps
+enter through the intent aux, not the terminals) and was reverted rather than
+kept as harmless.
+
+`crash.json` is regenerated so the committed record matches what the fixed
+binary produces; the new test replays it for real (~12 s) and also refuses a
+packet declaring a boundary the replay never exercised.
+
+## F-41 — the 1a mutant stage's rows were refused by the 1a gate
+
+`haq mutants` records every mutant as `not-ready` at stage 1a — "recorded, not
+claimed", exactly as the lane comment says and as ADR-0021 requires.
+`verify_mutant_evidence_row`, written for 1b's evaluated rows, refused the very
+first one: *"predeclared mutant P1-M001 has evaluated evidence."* A not-ready
+row is the absence of a claim, and the verifier had no notion of one. Never
+noticed: it is one of the F-36 dead gates.
+
+Now a not-ready row is accepted only for a predeclared mutant, may carry no
+results, and counts toward nothing; every declared mutant must have a row; the
+evaluated set must equal the non-predeclared dispositions. Four refusals pin it:
+a predeclared mutant with an evaluated status, a not-ready row carrying exit
+codes, a `killed` disposition backed by a not-ready row, and a duplicate.
+
+Also found writing the wrapper's test: my first accept case *hedged* — it
+accepted an `Err` so long as the message mentioned the lockfile, because the
+committed evidence predates this `Cargo.lock`. That is the passes-for-the-
+wrong-reason species in the very test meant to close it. The fixture now binds
+its evidence to its own scratch lockfile so the accept is strict, and lockfile
+drift is a separately-asserted refusal.
+
+## F-42 — the sanitizer-build replay could never match, because cargo hashes the build path
+
+`verify_sanitizer_build_replay` rebuilds each fuzz target in a scratch worktree
+and requires the digest to equal the committed binary's. It had never run
+(F-36). Run honestly, it cannot pass: the same commit built at two paths yields
+two binaries.
+
+**What differs, measured rather than assumed.** Not source paths — with
+`--remap-path-prefix`, `-Zremap-cwd-prefix` and `trim-paths = "all"` the two
+binaries still differed in 5.9 MB of `.debug_*`/`.strtab`, and after stripping
+those, in exactly 112 bytes: 111 in `.rodata` and one in `.text`. Those bytes
+are the codegen-unit name, `cst_parse.db8c568e48c1f5ae-cgu.0` versus
+`cst_parse.6be4151ba0cf3c2-cgu.0`. cargo derives `-C metadata` from the package
+id, which for a path dependency includes the manifest's **absolute path**; ASan
+embeds the resulting CGU name in `.rodata`; the `.text` byte is its length.
+Remapping cannot reach it because it is not a path string, it is a hash of one.
+
+**Proven fix.** Two clean worktree builds at one fixed path,
+`/var/tmp/liminal-haqp-build/<commit>`, are byte-identical
+(`424194da…` twice). The campaign now builds every sanitizer binary in a
+worktree at that canonical, commit-keyed path — persistent disk, older commits
+pruned — and runs the evidence copy directly; the replay rebuilds at the same
+path with the same flags. The path and flags are a closed registry in the
+verifier (`sanitizer_build_canon`); the proof records what the campaign used and
+the replay refuses any that differ, so the two sides cannot drift apart.
+
+**Cost of the honest answer.** The first replay after a fresh clone performs a
+cold ASan build per target (~30 s each here); later replays hit the cached
+worktree. The committed proofs must be regenerated by the next campaign — the
+current ones were built in-tree and will not match, which is the correct
+verdict on them.
+
+**A second defect inside the same verifier.** Once the digest matched, the
+runtime probe refused: it ran `-help=1` and required the text to contain
+`-fsanitize=address`. libFuzzer's help is a usage banner and never names the
+sanitizer — the campaign's own committed probe logs contain that string **zero**
+times — so the probe could not pass for any binary that has ever existed. It
+now asks the runtime to identify itself: `ASAN_OPTIONS=help=1 <bin> -runs=0
+-seed=1` makes the linked AddressSanitizer print its flag table, which cannot
+happen without the instrumentation. The campaign records the same probe, so the
+proof and the replay describe one witness. The map from sanitizer to runtime
+name is closed; an unknown sanitizer is refused rather than guessed.
+
+Rejected on the way: comparing stripped binaries with the CGU name masked
+(guessing which bytes are non-semantic is exactly how a check stops meaning what
+it says), and dropping the digest equality in favour of the runtime probe alone
+(which would have turned "this binary is reproducible from this commit" into "a
+binary with a sanitizer exists").
+
 ### A fixture that names a count must read it
 
 Adding canary C33 turned `markdown_surface_rejects_a_stale_qualification_state`
