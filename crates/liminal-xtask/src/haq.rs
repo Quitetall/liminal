@@ -1565,7 +1565,13 @@ fn verify_review_record_digests(
     require_hex_digest(
         "review integrity_binding_sha256",
         &record.integrity_binding_sha256,
-    )
+    )?;
+    anyhow::ensure!(
+        record.schema_retries <= 3,
+        "review record claims {} schema retries; the runner allows at most 3",
+        record.schema_retries
+    );
+    Ok(())
 }
 
 fn verify_review_record(
@@ -5026,6 +5032,11 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
             scan.pids.insert(pid);
             if tokens.next() == Some("+++ exited with 0 +++") {
                 scan.exited_zero.insert(pid);
+            }
+            // A pid that exited holds no directory fds; a later process
+            // reusing the number must not inherit them.
+            if line.contains(" +++ exited with ") || line.contains(" +++ killed by ") {
+                dir_fds.retain(|(owner, _), _| *owner != pid);
             }
         }
         let pid = line
@@ -10361,11 +10372,15 @@ fn independent_oracle_interchange(
     );
     // Blind pass 1 at f360e90 (A02): a renamed field round-trips through the
     // same serde on both sides. The published schema is a closed key set.
+    // Sorted on this side: the pin is "no field added, removed or renamed",
+    // not the encoder's key order.
     let keys = |value: &serde_json::Value| -> Vec<String> {
-        value
+        let mut keys: Vec<String> = value
             .as_object()
             .map(|map| map.keys().cloned().collect())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        keys.sort_unstable();
+        keys
     };
     anyhow::ensure!(
         keys(&value) == ["id", "meta", "ops", "parent"],
