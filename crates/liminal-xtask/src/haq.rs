@@ -121,7 +121,8 @@ const INDEPENDENT_ORACLES: [(&str, &str, &[&str]); 1] = [(
 )];
 
 /// The body of `name` in `text`: from its `fn` line to the first line that is a
-/// bare `}` at column zero.
+/// bare `}` at column zero — under rustfmt only a top-level item closes there,
+/// so nested blocks cannot end the scan early.
 fn item_body<'a>(text: &'a str, name: &str) -> Option<&'a str> {
     let start = text.find(&format!("fn {name}("))?;
     let rest = &text[start..];
@@ -1813,35 +1814,17 @@ pub fn effective_unresolved_findings_repo(root: &Utf8Path, record: &Utf8Path) ->
         .into_iter()
         .filter(|ruling| ruling_in_force(root, ruling).unwrap_or(false))
         .collect::<Vec<_>>();
-    let strings = |key: &str| -> BTreeSet<String> {
-        value[key]
-            .as_array()
-            .map(|items| {
-                items
-                    .iter()
-                    .filter_map(|v| v.as_str().map(str::to_owned))
-                    .collect()
-            })
-            .unwrap_or_default()
-    };
-    let reproduced = strings("independently_reproduced");
-    let finding_attempts = value["findings"]
-        .as_array()
-        .map(|items| {
-            items
-                .iter()
-                .filter(|f| f["id"].as_str().is_some_and(|id| reproduced.contains(id)))
-                .filter_map(|f| f["attempt_id"].as_str().map(str::to_owned))
-                .collect::<BTreeSet<_>>()
-        })
-        .unwrap_or_default();
+    // Counted from each attempt's own flags, not through the findings list:
+    // a verified, reproduced attempt the reviewer forgot to list as a finding
+    // is still unresolved.
     let mut unresolved = 0u64;
     for attempt in value["attempts"].as_array().into_iter().flatten() {
-        let id = attempt["id"].as_str().unwrap_or_default();
         let class = attempt["attack_class"].as_str().unwrap_or_default();
         let target = attempt["target"].as_str().unwrap_or_default();
-        if !finding_attempts.contains(id)
-            || attempt["classification"].as_str() != Some("verified_defect")
+        if attempt["classification"].as_str() != Some("verified_defect")
+            || !attempt["independently_reproduced"]
+                .as_bool()
+                .unwrap_or(false)
             || attempt["resolved"].as_bool().unwrap_or(false)
         {
             continue;
@@ -5471,7 +5454,10 @@ fn locked_corpus_write(
         // `../conformance/corpora/heldout/x`, joined onto the root climbed out
         // of it and passed. The cwd is not receipted, so a relative write that
         // names the locked corpus at all is refused, before any resolution.
-        if !path.is_absolute() && lexical.to_ascii_lowercase().contains("conformance/corpora") {
+        let lower = lexical.to_ascii_lowercase();
+        if !path.is_absolute()
+            && (lower.contains("conformance/corpora/") || lower.ends_with("conformance/corpora"))
+        {
             return Ok(Some(lexical.clone()));
         }
         let local = if path.is_absolute() {
@@ -16014,7 +16000,7 @@ mod tests {
         );
         // The effective count ignores a draft: a verified reproduced finding stays unresolved.
         let record = root.join("r.json");
-        fs::write(&record, r#"{"attempts":[{"id":"A7","attack_class":"corpus leakage","target":"crates/liminal-xtask/src/haq.rs:1","classification":"verified_defect","resolved":false}],"findings":[{"id":"F1","attempt_id":"A7"}],"independently_reproduced":["F1"]}"#).expect("record");
+        fs::write(&record, r#"{"attempts":[{"id":"A7","attack_class":"corpus leakage","target":"crates/liminal-xtask/src/haq.rs:1","classification":"verified_defect","independently_reproduced":true,"resolved":false}],"findings":[],"independently_reproduced":[]}"#).expect("record");
         assert_eq!(
             effective_unresolved_findings_repo(&root, &record).expect("count"),
             1
