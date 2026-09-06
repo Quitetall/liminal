@@ -1,5 +1,10 @@
 # SAS migration verification
 
+This is the verification snapshot at migration commit `d984f66`. A subsequent
+[human acceptance](sas-acceptance-receipt.md) accepts the exact SAS revision;
+OpenWarrant registration remains pending. The original observations below are
+retained as recorded and make no claim about that later tool import.
+
 Status: proposed migration, locally implemented and reviewed; adoption remains
 pending. This record does not establish HAQP qualification, human acceptance,
 Warrant resolution, Phase GO, suite ratification, or a compiler release.

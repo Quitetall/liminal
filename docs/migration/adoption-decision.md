@@ -1,7 +1,9 @@
-# Proposed decision: consolidate Liminal authority into one SAS
+# Decision: consolidate Liminal authority into one SAS
 
-Status: proposed. No human acceptance, Phase GO, or suite ratification recorded.
-This is a migration decision proposal, not an allocated or accepted ADR.
+Status: accepted by Brian through the [exact SAS acceptance](sas-acceptance-receipt.md).
+OpenWarrant registration remains pending the human authority register. Phase GO
+and suite ratification remain separate. This migration decision is not an
+allocated ADR; no ADR number or retrospective approval is created.
 
 ## Problem
 
@@ -11,7 +13,7 @@ navigation repeats historical Phase -1 status, while execution has reached the
 M17 qualification gate. Several source orders make suite ratification a
 prerequisite for the very work ADR-0021 requires before ratification.
 
-## Proposed decision
+## Accepted decision
 
 Accept one digest-bound SAS revision as the sole governing specification,
 preserving complete v4/R4 clauses, accepted decisions, constitutional chapters,

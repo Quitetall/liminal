@@ -1,9 +1,12 @@
 # Liminal production roadmap
 
 This is the central delivery sequence for the complete Phase -1–12 program.
-The [SAS candidate](../sas/LIMINAL_Software_Architecture_Specification.md) is
-**proposed, not accepted**. Its acceptance changes specification authority;
-it does not authorize Phase 1, ratify a suite, or resolve a Warrant.
+The [SAS](../sas/LIMINAL_Software_Architecture_Specification.md) was
+[accepted by Brian](../migration/sas-acceptance-receipt.md) at its exact revision
+and digest. OpenWarrant registration remains pending the human authority
+register, so its machine view still reports proposed. Acceptance changes
+specification authority; it does not authorize Phase 1, ratify a suite, or
+resolve a Warrant.
 
 ## Baseline and evidence
 
@@ -84,7 +87,7 @@ interfaces or waive architectural experiments.
 
 | Blocker | Owner / responsibility | Required evidence to remove it |
 |---|---|---|
-| Proposed SAS authority | Brian, T1 | Acceptance of exact revision/digest after migration review; separate from Phase GO and suite ratification. |
+| OpenWarrant registration of accepted SAS | Brian, T1 | Human acceptance received; human-authored authority register and acting-role response still required for tool ingestion. Phase GO and suite ratification remain separate. |
 | Program-specific OpenWarrant phases | OpenWarrant compatibility Warrant performer + independent reviewer | Signed references and all fourteen LIM phases; OW compatibility; duplicate/malformed/undeclared/wrong-program refusals; missing/ambiguous/drifted authority unavailable. |
 | HAQP-1a completion | M17 performer and blind reviewers; Brian owns GO | Exact final packet/tree/parent, all evidence lanes and fresh findings; no completion from partial campaign outputs. |
 | Historical meter and ledger reconciliation | M17/M24 T1 owner | Named inventory deltas, disposition of every open amendment, explicit unresolved gaps rather than invented approvals. |
@@ -99,6 +102,11 @@ semantic observables at zero differences. No cross-repository authorization or
 federated resolution is inferred from this source citation.
 
 ## Adoption procedure
+
+Human acceptance of the exact proposed revision has been received. The receipt
+above is authoritative for that decision; tool registration and cross-repository
+integration remain pending. The original procedure is retained below as the
+sequence, with step 3's human decision completed but its registry import pending.
 
 1. Review the proposed SAS, complete crosswalk, reconciliation table and twelve
    Warrants. Check source preservation, ID uniqueness, all phase declarations,

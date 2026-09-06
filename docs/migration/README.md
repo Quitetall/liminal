@@ -1,9 +1,12 @@
 # SAS migration record
 
 This directory contains migration inputs, traceability and review records. It
-is not another governing specification. The only SAS candidate is
+is not another governing specification. The single governing SAS is
 [`../sas/LIMINAL_Software_Architecture_Specification.md`](../sas/LIMINAL_Software_Architecture_Specification.md).
-It remains proposed until a human accepts its exact revision and digest.
+Brian [accepted its exact revision and digest](sas-acceptance-receipt.md).
+OpenWarrant registration remains pending the human authority register; the
+controlled revision and machine view still report proposed. The SAS and its
+proposal-time source map/crosswalk retain their accepted bytes.
 
 ## Reproduce and inspect
 
@@ -78,15 +81,16 @@ baseline requires qualification again under the existing rules. No run in this
 migration claims HAQP completion.
 
 See [production roadmap](../roadmap/PRODUCTION_ROADMAP.md) for all delivery
-dependencies and [adoption decision](adoption-decision.md) for the proposed
+dependencies and [adoption decision](adoption-decision.md) for the accepted
 authority change. The [verification record](VERIFICATION.md) retains check
 results, review limits and unresolved adoption blockers.
 
 The [tool-emitted acceptance request](sas-acceptance-request.toml) names revision
 `0.1.0-proposed.1`, 777 requirements, and SHA-256
 `53eb3ebf1616ae7017e2ed22e39acee9823c56f16b3c527f0035d769b582ec73`.
-Its `eligible_acceptors` is empty: Liminal has no human-authored authority
-register. OpenWarrant requires a human to establish
+Its proposal-time `eligible_acceptors` is empty: Liminal has no human-authored
+authority register. The [later human acceptance](sas-acceptance-receipt.md)
+has been received; tool registration still requires a human to establish
 `docs/authority/roles.toml`; this migration does not invent that authorization.
 The request's `architecture_changing=false` describes its lack of a prior
 registered SAS to diff, not absence of a governance change from v4/R4.

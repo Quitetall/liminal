@@ -20,10 +20,12 @@ themselves hold Jurisdiction over the data they govern (v4 Law 7).
 
 Start with the [central production roadmap](docs/roadmap/PRODUCTION_ROADMAP.md)
 for sequence, blockers and evidence. The
-[single SAS candidate](docs/sas/LIMINAL_Software_Architecture_Specification.md)
-is **proposed; human acceptance pending**. Existing v4/R4 authority remains in
-force until its exact revision is accepted. The first distributable milestone
-is a qualified OpenWarrant compiler; the full Phase -1–12 vision remains.
+[single governing SAS](docs/sas/LIMINAL_Software_Architecture_Specification.md)
+was [accepted by Brian](docs/migration/sas-acceptance-receipt.md) at its exact
+revision and digest. OpenWarrant registration remains pending the human
+authority register; its machine view still reports proposed. The first
+distributable milestone is a qualified OpenWarrant compiler; the full
+Phase -1–12 vision remains.
 
 ## What Liminal is
 
@@ -96,7 +98,7 @@ liminal/
 ├── integrations/    Planned tool integrations — deliberately empty. See README.
 ├── apps/            Planned rich clients (Phase 9) — deliberately empty.
 └── docs/            docs/roadmap/PRODUCTION_ROADMAP.md (central sequence),
-                     docs/sas/ (proposed governing SAS), docs/warrants/,
+                     docs/sas/ (accepted governing SAS), docs/warrants/,
                      docs/implementation-plan.md (historical phase plan),
                      docs/execution/ (execution-grade work orders), and
                      docs/adr/ (architecture decision records).
@@ -105,14 +107,14 @@ liminal/
 ## Reading order
 
 1. [Central roadmap](docs/roadmap/PRODUCTION_ROADMAP.md),
-   [SAS candidate](docs/sas/LIMINAL_Software_Architecture_Specification.md), and
-   [migration guide](docs/migration/README.md) — proposed authority, complete
+   [SAS](docs/sas/LIMINAL_Software_Architecture_Specification.md), and
+   [migration guide](docs/migration/README.md) — accepted authority, complete
    program, near-term Warrants, evidence and acceptance boundaries.
 2. [`ARCHITECTURE.md`](ARCHITECTURE.md) — the codemap: crate layering, the
    correctness laws, and the boundary invariants a contributor must not break.
 3. [`spec/v4/`](spec/v4/) — preserved architecture: the master plan
    (cited as "v4 §N") and Revision 4 (cited as "R4 §N"). These documents
-   retain authority until SAS acceptance and remain immutable citation history.
+   remain immutable citation history incorporated by the accepted SAS.
 4. [`docs/implementation-plan.md`](docs/implementation-plan.md) — the historical
    milestone plan, the crash-injection architecture, and the explicit list of
    what must NOT be built yet.
