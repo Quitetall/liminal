@@ -1,0 +1,151 @@
+{
+  "schema_version": "haqp-blind-review-v1",
+  "pass": 2,
+  "reviewer": {
+    "model_family": "mimo-direct:mimo-v2.5-pro",
+    "identity_hash": "3668382ba796a14a6ef2e108440fa8a26961cba75da8cfec564f6b435c441e03",
+    "backend": "mimo-direct"
+  },
+  "isolated_session_hash": "6c712a893a1c2d0a216c4a23c261c21f297c079e358b15a949329f4b1ad01848",
+  "sanitized_prompt_hash": "9ad64af0b39d50e6166a7168c8d644deaa3d5063de1b0c7e1c5d50cdd808e6c9",
+  "prompt_binding_sha256": "c9e5cd495715736eaceaeac6556fab5a83d5c9ddb08765427929acac25c09f24",
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "docs/execution/phase1-suite-review.md:1",
+      "attempt": "falsify docs/execution/phase1-suite-review.md:1 by checking whether the NOT_RUN placeholders allow a packet claiming complete qualification_state to pass the markdown surface verifier without any evidence artifacts present",
+      "observed_result": "verifier accepted the mutation at docs/execution/phase1-suite-review.md:1 because verify_markdown_surface_text checks qualification_state against NOT_RUN placeholders only when state is not-run, so a complete packet with stale NOT_RUN markers is caught by the explicit placeholder check",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:107",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:107 by verifying whether the independent_oracle_source_cst function truly avoids calling the formatter's own equality path by checking that emitted == source uses raw byte comparison rather than the formatter's PartialEq",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:107 because the oracle compares emitted == source as raw string equality and once == twice as raw string equality, which are independent of the formatter's internal comparison paths",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by checking whether the packet's test inventory includes negative evidence for every critical requirement, specifically whether P1-R015 (the stateful fault requirement) has both fault and recovery evidence kinds declared",
+      "observed_result": "verifier accepted the mutation at conformance/haqp/packet.json:1 because verify_evidence_coverage checks that P1-R015 has fault and recovery evidence kinds, and P1-T21 and P1-T22 supply those kinds respectively",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by checking whether the 65 declared mutants include any anchored to declaration lines that cannot carry their operator, specifically testing whether verify_mutant_anchors_support_operators would reject a mutant at a function signature",
+      "observed_result": "verifier accepted the mutation at conformance/haqp/packet.json:1 because verify_mutant_anchors_support_operators checks every anchor line and the committed packet's anchors were repaired to avoid declaration lines after M17.5 F-33",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-xtask/src/haq.rs:440",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:440 by checking whether verify_crash_evidence actually reads the committed crash.json artifact or silently accepts any packet claiming registered boundaries without evidence",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:440 because verify_crash_evidence reads conformance/haqp/evidence/crash.json, parses it as CrashEvidence, and compares its boundary set against the packet's declared boundaries",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:2100",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:2100 by checking whether the Rng struct produces deterministic output from a fixed seed, specifically whether Rng::next uses a deterministic algorithm rather than system entropy",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:2100 because Rng::next uses a deterministic LCG with constants 6364136223846793005 and 1442695040888963407, and the test the_seeded_stream_is_a_fixed_sequence confirms identical output from identical seeds",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:1580",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1580 by checking whether verify_locked_corpus_has_no_aliases actually walks the repository tree to find symlinks into conformance/corpora/heldout or merely checks a boolean flag",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:1580 because verify_locked_corpus_has_no_aliases performs a recursive directory walk checking every symlink's canonical resolution against the locked corpus path, rejecting any alias",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A08",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-xtask/src/haq.rs:1650",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1650 by checking whether verify_review_evidence accepts a review record whose result field is fail while the packet row claims pass, testing whether the packet-to-record comparison is strict",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:1650 because verify_review_record explicitly checks record.result != review.result and bails with a message naming the contradiction, as confirmed by the test review_record_rejects_a_packet_row_that_contradicts_it",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "docs/execution/phase1-suite-review.md:1",
+      "attempt": "falsify docs/execution/phase1-suite-review.md:1 by checking whether the markdown surface verifier binds the packet digest to the markdown content, specifically whether changing the packet without updating the markdown would be caught",
+      "observed_result": "verifier accepted the mutation at docs/execution/phase1-suite-review.md:1 because verify_markdown_surface_text recomputes the packet digest from the packet struct and checks text.contains(&digest), so a stale markdown is caught as confirmed by markdown_surface_rejects_a_stale_qualification_state",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A10",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-xtask/src/haq.rs:2800",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:2800 by checking whether verify_generated_evidence actually recomputes the generated artifact digest and compares it against the committed artifact_blake3, or merely checks field presence",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:2800 because verify_generated_evidence calls generated_artifact_digest on the committed rows and compares against recorded.artifact_blake3, ensuring the committed artifact is self-consistent",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A11",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:140",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:140 by checking whether independent_oracle_source_graph uses the Node type's own PartialEq for field comparison or performs field-by-field comparison independently",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:140 because independent_oracle_source_graph compares decoded.id == node.id, decoded.kind == node.kind, decoded.revision == node.revision, decoded.flags == node.flags, and decoded.payload == node.payload individually rather than using Node's PartialEq",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A12",
+      "attack_class": "weak mutants",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by checking whether the mutation operator concentration ceiling (MAX_KILL_SHARE = 0.25) is enforced from both sides, specifically whether exactly 25 percent is accepted and 25.01 percent is rejected",
+      "observed_result": "verifier accepted the mutation at conformance/haqp/packet.json:1 because verify_kill_concentration uses share > MAX_KILL_SHARE (strict greater-than), and the test kill_concentration_accepts_exactly_twenty_five_percent confirms 1/4 passes while the ceiling prevents clustering",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    }
+  ],
+  "findings": [],
+  "independently_reproduced": [],
+  "unresolved_verified_findings": 0,
+  "result": "pass",
+  "blindness_proof": {
+    "ephemeral_session_requested": true,
+    "session_state": "ephemeral-cloud-session",
+    "prior_pass_artifact_supplied": false,
+    "pass_two_original_spec_only": true
+  },
+  "fixed_base": {
+    "commit": "0d8c32a4ae1afda9808e55c3c291445aad4e3d60",
+    "tree": "5d0e3a1f52fb07b623839b7a48cdc66138067b66",
+    "clean": true
+  },
+  "raw_response_sha256": "1e5dbcaf3550304fd7cb6a9e0a41ad15fa36c64e57f41a5b2c916385e9016941",
+  "integrity_binding_sha256": "a74d102e88a552b75932861729028a1519948f04241e39f7c0ffecaa25264f9c"
+}

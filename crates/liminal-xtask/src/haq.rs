@@ -49,6 +49,7 @@ pub fn run_concurrency_repo(root: &Utf8Path) -> Result<()> {
         source_tree: tree,
         oracle_id: "not_applicable".to_owned(),
         schedules: Vec::new(),
+        sync_primitives: scan_concurrency_primitives(root)?.sync,
     };
     // Fail here rather than at the gate: the record is checked by the same code
     // that will judge it, so a generator that drifts from the verifier is
@@ -6855,6 +6856,9 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
         //
         // Skipping a transition means the CALL stops happening, so the markers
         // are call-shaped and the call must be gone from the after-text.
+        // Blind pass 1 (2026-09-05) A10/A12: P1-M022 deletes `log.append(`
+        // and P1-M035 deletes `.commit_if(`; neither call was on this list,
+        // so both mutants were unevaluable while counting toward §3.
         "skipped-durable-transition" => [
             "commit_intent(",
             "prepare(",
@@ -6862,6 +6866,8 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
             "persist(",
             "ack(",
             ".commit(",
+            ".commit_if(",
+            ".append(",
             "write(",
         ]
         .iter()
@@ -6875,6 +6881,9 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
         }
         "broadened-allow-list" => {
             (!before.contains('*') && after.contains('*'))
+                // P1-M013: `matches!(byte, b'_' | b'-')` gains `| _`, admitting every byte.
+                || (!before.contains("| _") && after.contains("| _"))
+                || (!before.contains("|| true") && after.contains("|| true"))
                 || (before.contains("ensure!") && !after.contains("ensure!"))
                 // P1-M013 and P1-M026 are admitted by exact anchors below.
                 || (before == "if id_str.is_empty()" && after == "if false")
@@ -7009,9 +7018,9 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
             "if id.is_some() {",
         ),
         (
-            "crates/liminal-source/src/paragraph.rs",
-            35,
-            "let mut block_start_line: Option<usize> = None;",
+            "crates/liminal-format/src/lib.rs",
+            358,
+            ".all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))",
         ),
     ];
     const GRAPH: [(&str, usize, &str); 13] = [
@@ -7725,6 +7734,26 @@ fn verify_concurrency_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
     verify_concurrency_evidence_record(root, packet, &evidence)
 }
 
+/// A05: the not-applicable label is checked against the implementation, not
+/// trusted from the packet. Concurrent execution refuses; the recorded
+/// synchronization primitives must be the ones the tree has.
+fn verify_not_applicable_against_implementation(
+    root: &Utf8Path,
+    evidence: &ConcurrentEvidence,
+) -> Result<()> {
+    let scan = scan_concurrency_primitives(root)?;
+    anyhow::ensure!(
+        scan.execution.is_empty(),
+        "concurrent_code is not_applicable, but the implementation runs concurrently: {:?}",
+        scan.execution
+    );
+    require_eq(
+        "concurrency sync_primitives",
+        &evidence.sync_primitives.join("\n"),
+        &scan.sync.join("\n"),
+    )
+}
+
 fn verify_concurrency_evidence_record(
     root: &Utf8Path,
     packet: &Packet,
@@ -7752,6 +7781,7 @@ fn verify_concurrency_evidence_record(
             evidence.schedules.is_empty(),
             "not-applicable concurrency evidence must contain no schedules"
         );
+        verify_not_applicable_against_implementation(root, evidence)?;
         anyhow::ensure!(
             evidence.reason.contains("reserved for Phase 6")
                 && evidence.reason.contains("no concurrent implementation"),
@@ -8126,6 +8156,7 @@ fn require_exact_ids<'a>(
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 struct Packet {
     suite_version: String,
     status: String,
@@ -8377,6 +8408,105 @@ struct ConcurrentEvidence {
     source_tree: String,
     oracle_id: String,
     schedules: Vec<ConcurrentSchedule>,
+    /// Blind pass 1 (2026-09-05) A05: the not-applicable label used to be
+    /// trusted from the packet. The generator now scans the implementation:
+    /// concurrent EXECUTION (spawned threads, async runtimes) contradicts the
+    /// label and refuses; synchronization primitives are recorded here, and
+    /// the gate recomputes the scan so the record describes the tree.
+    #[serde(default)]
+    sync_primitives: Vec<String>,
+}
+
+/// Crates outside the qualified surfaces: the gate itself and the scratch
+/// test scaffold. Closed list, so an addition is a visible decision.
+const CONCURRENCY_SCAN_EXCLUDED_CRATES: [&str; 2] = ["liminal-xtask", "liminal-scratch"];
+/// Tokens that mean code runs concurrently.
+const CONCURRENCY_EXECUTION_PRIMITIVES: [&str; 8] = [
+    "thread::spawn",
+    "thread::scope",
+    "thread::Builder",
+    "tokio::",
+    "rayon::",
+    "async fn",
+    "crossbeam",
+    "mpsc::",
+];
+/// Tokens that mean code is written to be shared: recorded, not refused.
+const CONCURRENCY_SYNC_PRIMITIVES: [&str; 3] = ["Mutex<", "RwLock<", "Atomic"];
+
+struct ConcurrencyScan {
+    execution: Vec<String>,
+    sync: Vec<String>,
+}
+
+/// Scan the implementation crates' non-test sources for concurrency
+/// primitives. A file's trailing `#[cfg(test)]` module is skipped; comment
+/// lines are skipped. Deterministic order: crates, files and lines sorted.
+fn scan_concurrency_primitives(root: &Utf8Path) -> Result<ConcurrencyScan> {
+    fn walk(dir: &Utf8Path, out: &mut Vec<Utf8PathBuf>) -> Result<()> {
+        let mut entries = fs::read_dir(dir.as_std_path())
+            .with_context(|| format!("read {dir}"))?
+            .map(|entry| entry.map(|e| e.path()))
+            .collect::<std::io::Result<Vec<_>>>()?;
+        entries.sort();
+        for path in entries {
+            let path = Utf8PathBuf::from_path_buf(path)
+                .map_err(|p| anyhow::anyhow!("non-UTF-8 path {}", p.display()))?;
+            if path.is_dir() {
+                walk(&path, out)?;
+            } else if path.extension() == Some("rs") {
+                out.push(path);
+            }
+        }
+        Ok(())
+    }
+    let mut scan = ConcurrencyScan {
+        execution: Vec::new(),
+        sync: Vec::new(),
+    };
+    let crates_dir = root.join("crates");
+    let mut crate_dirs = fs::read_dir(crates_dir.as_std_path())
+        .with_context(|| format!("read {crates_dir}"))?
+        .map(|entry| entry.map(|e| e.path()))
+        .collect::<std::io::Result<Vec<_>>>()?;
+    crate_dirs.sort();
+    for member in crate_dirs {
+        let member_dir = Utf8PathBuf::from_path_buf(member)
+            .map_err(|p| anyhow::anyhow!("non-UTF-8 path {}", p.display()))?;
+        let Some(name) = member_dir.file_name() else {
+            continue;
+        };
+        if CONCURRENCY_SCAN_EXCLUDED_CRATES.contains(&name) || !member_dir.join("src").is_dir() {
+            continue;
+        }
+        let mut files = Vec::new();
+        walk(&member_dir.join("src"), &mut files)?;
+        for file in files {
+            let text = fs::read_to_string(&file).with_context(|| format!("read {file}"))?;
+            let relative = file.strip_prefix(root).unwrap_or(&file);
+            for (index, line) in text.lines().enumerate() {
+                let trimmed = line.trim();
+                if trimmed == "#[cfg(test)]" {
+                    break;
+                }
+                if trimmed.starts_with("//") {
+                    continue;
+                }
+                for token in CONCURRENCY_EXECUTION_PRIMITIVES {
+                    if line.contains(token) {
+                        scan.execution
+                            .push(format!("{relative}:{}:{token}", index + 1));
+                    }
+                }
+                for token in CONCURRENCY_SYNC_PRIMITIVES {
+                    if line.contains(token) {
+                        scan.sync.push(format!("{relative}:{}:{token}", index + 1));
+                    }
+                }
+            }
+        }
+    }
+    Ok(scan)
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -8431,6 +8561,7 @@ struct ResidualRisk {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 struct Requirement {
     id: String,
     kind: String,
@@ -8443,6 +8574,7 @@ struct Requirement {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 struct Test {
     id: String,
     name: String,
@@ -8454,6 +8586,7 @@ struct Test {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 struct Mutant {
     id: String,
     family: String,
@@ -8525,6 +8658,7 @@ struct MutantEvidenceRow {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 struct Canary {
     id: String,
     gate: String,
@@ -8534,6 +8668,7 @@ struct Canary {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 struct Generated {
     family: String,
     accepted: u64,
@@ -8577,6 +8712,7 @@ struct GeneratedOracleDeclaration {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 struct CrashBoundary {
     boundary: String,
     before: bool,
@@ -8622,6 +8758,7 @@ struct DeferredDurableSurface {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 struct Review {
     reviewer: String,
     attempts: u64,
@@ -8887,6 +9024,60 @@ fn is_qualification_canary(id: &str) -> bool {
     )
 }
 
+/// A scratch repository in which a provenance block is ACCEPTED: the fixed
+/// base commit (lockfile and unbound packet), then a metadata child whose
+/// packet is bound to it. C26 strips the block from that state (A01).
+fn provenance_canary_repo(
+    root: &Utf8Path,
+    packet: &Packet,
+) -> Result<(liminal_scratch::ScratchDir, Utf8PathBuf, Packet)> {
+    let scratch = liminal_scratch::ScratchDir::new("haq-c26").context("C26 scratch")?;
+    let scratch_root = Utf8PathBuf::from_path_buf(fs::canonicalize(scratch.path().as_std_path())?)
+        .map_err(|p| anyhow::anyhow!("non-UTF-8 scratch path {}", p.display()))?;
+    let git = |args: &[&str]| -> Result<String> {
+        let output = Command::new("git")
+            .current_dir(&scratch_root)
+            .args(["-c", "user.email=haq@liminal", "-c", "user.name=haq"])
+            .args(args)
+            .output()
+            .with_context(|| format!("C26 git {args:?}"))?;
+        anyhow::ensure!(
+            output.status.success(),
+            "C26 git {args:?} failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+    };
+    git(&["init", "-q"])?;
+    fs::create_dir_all(scratch_root.join("conformance/haqp"))?;
+    let lockfile = fs::read(root.join("Cargo.lock")).context("C26: Cargo.lock")?;
+    fs::write(scratch_root.join("Cargo.lock"), &lockfile)?;
+    let mut unbound = packet.clone();
+    unbound.provenance = None;
+    fs::write(
+        scratch_root.join("conformance/haqp/packet.json"),
+        serde_json::to_vec_pretty(&unbound)?,
+    )?;
+    git(&["add", "-A"])?;
+    git(&["commit", "-q", "-m", "fixed base"])?;
+    let base = git(&["rev-parse", "HEAD"])?;
+    let tree = git(&["rev-parse", "HEAD^{tree}"])?;
+    let mut qualified = unbound;
+    qualified.provenance = Some(Provenance {
+        commit: base.clone(),
+        lockfile_blake3: blake3::hash(&lockfile).to_hex().to_string(),
+        fixed_commit: base.clone(),
+        fixed_tree: tree,
+        evidence_parent: base,
+    });
+    fs::write(
+        scratch_root.join("conformance/haqp/packet.json"),
+        serde_json::to_vec_pretty(&qualified)?,
+    )?;
+    git(&["commit", "-q", "-am", "qualification metadata"])?;
+    Ok((scratch, scratch_root, qualified))
+}
+
 /// Execute deliberate failures for qualified-only gates whose evidence does
 /// not exist in the proposed inventory packet. Each arm mutates a valid
 /// qualification state, then invokes the closed failure contract.
@@ -8926,9 +9117,19 @@ fn run_qualification_canary(root: &Utf8Path, packet: &Packet, id: &str) -> Resul
     }
     match id {
         "C26" => {
-            let mut candidate = packet.clone();
+            // Blind pass 1 (2026-09-05) A01: at the fixed base the packet has
+            // no provenance, so stripping it changed nothing and the canary
+            // "caught" the baseline's own refusal. Removal is only a violation
+            // of an ACCEPTED state: build one in a scratch repository (fixed
+            // base, then a metadata child carrying a bound provenance block),
+            // require the verifier to accept it, then strip it.
+            let (_scratch, scratch_root, qualified) = provenance_canary_repo(root, packet)?;
+            verify_provenance(&scratch_root, &qualified).context(
+                "C26: a bound provenance block must verify before its removal can be caught",
+            )?;
+            let mut candidate = qualified;
             candidate.provenance = None;
-            let error = verify_provenance(root, &candidate)
+            let error = verify_provenance(&scratch_root, &candidate)
                 .expect_err("provenance canary must exercise provenance verifier");
             anyhow::bail!("{error}");
         }
@@ -14296,6 +14497,80 @@ mod tests {
         row.resolved_paths_blake3 =
             scope_trace_digest_repo(root, "resolved", &files, &row.scope).expect("resolved");
         rebind_scope_row(row);
+    }
+
+    /// Blind pass 1 (2026-09-05) A08: serde dropped a field the schema did not
+    /// declare, and the typed reserialization digested the packet without it.
+    #[test]
+    fn a_packet_with_an_undeclared_field_is_refused() {
+        let root = repo_root();
+        let mut value: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("conformance/haqp/packet.json")).expect("packet"),
+        )
+        .expect("json");
+        value["exceptions"] = serde_json::json!(["*"]);
+        let err = serde_json::from_value::<Packet>(value.clone())
+            .expect_err("a wildcard exceptions field outside the schema");
+        assert!(err.to_string().contains("unknown field"), "{err}");
+        value.as_object_mut().expect("object").remove("exceptions");
+        value["mutants"][0]["exempt"] = serde_json::json!(true);
+        let err = serde_json::from_value::<Packet>(value).expect_err("a row-level unknown field");
+        assert!(err.to_string().contains("unknown field"), "{err}");
+    }
+
+    /// Blind pass 1 (2026-09-05) A05: the not-applicable label was trusted.
+    /// The scan refuses concurrent execution in non-test implementation code,
+    /// records synchronization primitives, and skips the test module.
+    #[test]
+    fn the_not_applicable_label_is_checked_against_the_implementation() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-conc").expect("scratch");
+        let root = scratch.path().to_owned();
+        let src = root.join("crates/store/src");
+        fs::create_dir_all(&src).expect("mkdir");
+        fs::write(
+            src.join("lib.rs"),
+            "use std::sync::Mutex;\npub struct S { inner: Mutex<u8> }\n// thread::spawn in a comment\n#[cfg(test)]\nmod tests { fn t() { std::thread::spawn(|| {}); } }\n",
+        )
+        .expect("write");
+        fs::create_dir_all(root.join("crates/liminal-xtask/src")).expect("mkdir");
+        fs::write(
+            root.join("crates/liminal-xtask/src/lib.rs"),
+            "async fn gate() {}\n",
+        )
+        .expect("write");
+        let scan = scan_concurrency_primitives(&root).expect("scan");
+        assert!(
+            scan.execution.is_empty(),
+            "test module and excluded crate: {:?}",
+            scan.execution
+        );
+        assert_eq!(
+            scan.sync,
+            vec!["crates/store/src/lib.rs:2:Mutex<".to_owned()]
+        );
+        fs::write(
+            src.join("worker.rs"),
+            "pub fn go() { std::thread::spawn(|| {}); }\n",
+        )
+        .expect("write");
+        let scan = scan_concurrency_primitives(&root).expect("scan");
+        assert_eq!(
+            scan.execution,
+            vec!["crates/store/src/worker.rs:1:thread::spawn".to_owned()]
+        );
+    }
+
+    /// Blind pass 1 (2026-09-05) A01: C26 must strip a provenance the
+    /// verifier ACCEPTED, or it only re-observes the baseline's refusal.
+    #[test]
+    fn c26_strips_an_accepted_provenance_rather_than_an_absent_one() {
+        let root = repo_root();
+        let packet = read_packet(&root).expect("packet");
+        let (_scratch, scratch_root, qualified) =
+            provenance_canary_repo(&root, &packet).expect("repo");
+        verify_provenance(&scratch_root, &qualified).expect("the bound block must verify");
+        let err = run_qualification_canary(&root, &packet, "C26").expect_err("the canary refuses");
+        assert!(err.to_string().contains("no provenance block"), "{err}");
     }
 
     /// F-44 ruling (2026-09-05): a stage may read the locked corpus -- the SLO

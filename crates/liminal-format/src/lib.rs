@@ -77,11 +77,54 @@ pub struct Phase1Document {
 }
 
 impl PartialEq for Phase1Document {
+    /// Semantic equality: the derived graph, and the HIR and diagnostics with
+    /// their source positions removed. Reformatting moves every byte offset,
+    /// so positions cannot take part; leaving the HIR and diagnostics out
+    /// entirely let a reparse drift in HIR content or diagnostic set pass as
+    /// equal (M17.5 blind pass 1, A02).
     fn eq(&self, other: &Self) -> bool {
         self.holder == other.holder
             && basis_semantic_eq(&self.graph.basis, &other.graph.basis, &self.holder)
             && self.graph.nodes == other.graph.nodes
             && self.graph.relations == other.graph.relations
+            && position_free(serde_json::to_value(&self.hir).unwrap_or(serde_json::Value::Null))
+                == position_free(
+                    serde_json::to_value(&other.hir).unwrap_or(serde_json::Value::Null),
+                )
+            && self
+                .diagnostics
+                .iter()
+                .map(diagnostic_position_free)
+                .eq(other.diagnostics.iter().map(diagnostic_position_free))
+    }
+}
+
+/// A value's serialization with every source position removed: `range`
+/// fields, the source map and the source basis, which all move under
+/// reformatting while the meaning stays.
+fn position_free(mut json: serde_json::Value) -> serde_json::Value {
+    fn strip(value: &mut serde_json::Value) {
+        match value {
+            serde_json::Value::Object(map) => {
+                map.retain(|key, _| !matches!(key.as_str(), "range" | "source_map" | "basis"));
+                map.values_mut().for_each(strip);
+            }
+            serde_json::Value::Array(items) => items.iter_mut().for_each(strip),
+            _ => {}
+        }
+    }
+    strip(&mut json);
+    json
+}
+
+fn diagnostic_position_free(diagnostic: &Phase1Diagnostic) -> serde_json::Value {
+    match diagnostic {
+        Phase1Diagnostic::Hir(hir) => serde_json::json!({
+            "hir": position_free(serde_json::to_value(hir).unwrap_or(serde_json::Value::Null))
+        }),
+        Phase1Diagnostic::Resolve(resolve) => serde_json::json!({
+            "resolve": position_free(serde_json::to_value(resolve).unwrap_or(serde_json::Value::Null))
+        }),
     }
 }
 impl Eq for Phase1Document {}
@@ -347,7 +390,7 @@ fn is_compact_literal(value: &str) -> bool {
         && first_trimmed
             .get(heading_end..)
             .is_some_and(|rest| rest.starts_with(' ')))
-        || first.starts_with("```")
+        || first_trimmed.starts_with("```")
         || lines.iter().all(|line| line.trim_start().starts_with('>'))
         || lines
             .iter()

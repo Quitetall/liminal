@@ -1,0 +1,193 @@
+{
+  "schema_version": "haqp-blind-review-v1",
+  "pass": 1,
+  "reviewer": {
+    "model_family": "codex:gpt-5.6-sol",
+    "identity_hash": "f6cac6a769086b0c4a44f2b83d25874afa0b393a852ac730262a2f801543651c",
+    "backend": "codex"
+  },
+  "isolated_session_hash": "68edeb430aad206180b1d8b9eb0ba7eb9dbb4ef6058e874dfba4e5d8241724ea",
+  "sanitized_prompt_hash": "d88a0134f10bed08854e320f7aac6c4a238a3e7a815ef4e59892a1d884e3a7e7",
+  "prompt_binding_sha256": "1026566005437abdd1deda09eb672836c47927e5f9c1017e9d0c82a6f7fc2606",
+  "attempts": [
+    {
+      "id": "P1-A01",
+      "attack_class": "vacuity",
+      "target": "conformance/haqp/packet.json:5",
+      "attempt": "falsify conformance/haqp/packet.json:5 by executing C26 provenance removal against the fixed-base packet",
+      "observed_result": "C26 leaves conformance/haqp/packet.json:5 unchanged because the baseline already lacks provenance, yet records a caught violation",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "P1-A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-format/src/lib.rs:83",
+      "attempt": "falsify crates/liminal-format/src/lib.rs:83 by changing HIR and diagnostics while retaining holder and derived graph",
+      "observed_result": "PartialEq at crates/liminal-format/src/lib.rs:83 still returns equal because it omits HIR and diagnostics, masking canonical reparse drift",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "P1-A03",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-format/src/lib.rs:350",
+      "attempt": "falsify crates/liminal-format/src/lib.rs:350 with an explicit paragraph literal beginning spaces before a fenced marker",
+      "observed_result": "predicate at crates/liminal-format/src/lib.rs:350 checks the untrimmed first line, so an indented fence bypasses compact-emission refusal",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "P1-A04",
+      "attack_class": "weak mutants",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by counting every predeclared operator required by ADR-0020 section three",
+      "observed_result": "inventory at conformance/haqp/packet.json:1 contains zero broadened-allow-list mutants, while the required operator list explicitly includes one",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "P1-A05",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-xtask/src/haq.rs:31",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:31 by adding concurrent implementation code while retaining the not_applicable packet label",
+      "observed_result": "generator at crates/liminal-xtask/src/haq.rs:31 trusts the packet label and emits empty schedules without checking implementation concurrency",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "P1-A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-format/src/lib.rs:164",
+      "attempt": "falsify crates/liminal-format/src/lib.rs:164 by formatting identical source through two fresh default formatter instances",
+      "observed_result": "random transaction at crates/liminal-format/src/lib.rs:164 changes parsed Basis identity but does not enter emitted bytes, so formatting remains deterministic",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    },
+    {
+      "id": "P1-A07",
+      "attack_class": "corpus leakage",
+      "target": "conformance/haqp/packet.json:6",
+      "attempt": "falsify conformance/haqp/packet.json:6 by routing a fuzz corpus through a benign symlink into locked data",
+      "observed_result": "alias scanning and canonical path resolution catch conformance/haqp/packet.json:6 leakage despite the benign lexical path",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "P1-A08",
+      "attack_class": "exception broadening",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by adding a wildcard exceptions field outside the typed Packet schema",
+      "observed_result": "Serde accepts conformance/haqp/packet.json:1 with the wildcard field, and typed reserialization omits it from the packet digest",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "P1-A09",
+      "attack_class": "evidence/report drift",
+      "target": "docs/execution/phase1-suite-review.md:5",
+      "attempt": "falsify docs/execution/phase1-suite-review.md:5 by declaring completed status while the machine packet remains not-run",
+      "observed_result": "markdown header parsing rejects docs/execution/phase1-suite-review.md:5 because completed prose cannot replace the required proposed status",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "P1-A10",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-graph/src/store/mod.rs:475",
+      "attempt": "falsify crates/liminal-graph/src/store/mod.rs:475 by deleting the declared durable append as mutant P1-M022",
+      "observed_result": "operator validation for crates/liminal-graph/src/store/mod.rs:475 recognizes commit calls but not append, making P1-M022 unevaluable",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "P1-A11",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-jurisdiction/src/ilrp.rs:209",
+      "attempt": "falsify crates/liminal-jurisdiction/src/ilrp.rs:209 by disabling the crash injection call while preserving registry names",
+      "observed_result": "fault replay and injection receipts reject crates/liminal-jurisdiction/src/ilrp.rs:209 because the registered boundary is no longer exercised",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "P1-A12",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-source/src/file.rs:204",
+      "attempt": "falsify crates/liminal-source/src/file.rs:204 by deleting the commit_if durable transition declared for mutant P1-M035",
+      "observed_result": "operator validation for crates/liminal-source/src/file.rs:204 recognizes dot-commit but not dot-commit-if, so P1-M035 cannot execute",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    }
+  ],
+  "findings": [
+    {
+      "id": "P1-F01",
+      "attempt_id": "P1-A01"
+    },
+    {
+      "id": "P1-F02",
+      "attempt_id": "P1-A02"
+    },
+    {
+      "id": "P1-F03",
+      "attempt_id": "P1-A03"
+    },
+    {
+      "id": "P1-F04",
+      "attempt_id": "P1-A04"
+    },
+    {
+      "id": "P1-F05",
+      "attempt_id": "P1-A05"
+    },
+    {
+      "id": "P1-F06",
+      "attempt_id": "P1-A08"
+    },
+    {
+      "id": "P1-F07",
+      "attempt_id": "P1-A10"
+    },
+    {
+      "id": "P1-F08",
+      "attempt_id": "P1-A12"
+    }
+  ],
+  "independently_reproduced": [
+    "P1-F01",
+    "P1-F02",
+    "P1-F03",
+    "P1-F04",
+    "P1-F05",
+    "P1-F06",
+    "P1-F07",
+    "P1-F08"
+  ],
+  "unresolved_verified_findings": 8,
+  "result": "fail",
+  "blindness_proof": {
+    "ephemeral_session_requested": false,
+    "session_state": "fresh-codex-session",
+    "prior_pass_artifact_supplied": false,
+    "pass_two_original_spec_only": false
+  },
+  "fixed_base": {
+    "commit": "0d8c32a4ae1afda9808e55c3c291445aad4e3d60",
+    "tree": "5d0e3a1f52fb07b623839b7a48cdc66138067b66",
+    "clean": true
+  },
+  "raw_response_sha256": "5bdf5c7340e848152df04000328d998aa180d18315fe63feb617afaaf6cb93a5",
+  "integrity_binding_sha256": "8175ad7ebf0f180faae0842e2fe5dd600affeb8bd6f66a8a7a12599d27eb00f1"
+}

@@ -1171,13 +1171,13 @@
   {
    "id": "P1-M013",
    "family": "source/CST/formatting",
-   "operator": "predicate-inversion",
-   "source": "crates/liminal-source/src/paragraph.rs:35",
+   "operator": "broadened-allow-list",
+   "source": "crates/liminal-format/src/lib.rs:358",
    "requirement": "P1-R016",
-   "defect": "predicate inversion seeded at the anchored site",
+   "defect": "broaden the compact identifier allow-list to every byte, making compact emission lossy",
    "killing_tests": [
-    "P1-T09",
-    "P1-T05"
+    "P1-T17",
+    "P1-T01"
    ],
    "disposition": "predeclared"
   },

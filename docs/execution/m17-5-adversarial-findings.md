@@ -3003,3 +3003,32 @@ Under the stage policy a relative path is relative to a cwd or dirfd the trace
 does not receipt and can add no corpus entry, so it is skipped rather than
 refused; a fuzz binary's trace keeps the strict reading (test: a dirfd-relative
 open is accepted for a stage and still refused for a binary).
+
+## F-45 — the first complete lane: eight verified defects from blind pass 1
+
+**Found.** 2026-09-05, lane at `0d8c32a`: every stage produced its scope row,
+the seven sanitizer targets ran 30 minutes each with zero artifacts, both
+blinded reviews ran, and the flip refused — *"pass1-codex-gpt-5.6-sol.json
+reports 8 unresolved verified findings; ADR-0020 §6 requires zero"*. Pass 2
+(mimo-v2.5-pro) reported none; §6 lets one pass block alone (F-33). The
+records are preserved under `docs/execution/reviews/2026-09-05-lane-0d8c32a/`.
+Each finding was verified at its line before anything moved; all eight held.
+
+| attempt | class | what was true | fix |
+|---|---|---|---|
+| A01 | vacuity | C26 stripped provenance from a packet that had none, then "caught" the baseline's own refusal | C26 builds a scratch repository (fixed base, then a metadata child with a bound block), requires `verify_provenance` to ACCEPT it, then strips it |
+| A02 | shared-oracle coupling | `Phase1Document`'s `PartialEq` compared holder and derived graph only; HIR content and diagnostic drift on reparse passed the round-trip oracle | equality also compares the HIR and diagnostics with source positions removed (`range`, `source_map`, `basis`), since reformatting moves every offset |
+| A03 | missing negatives | the compact-paragraph predicate tested `first.starts_with("```")` on the untrimmed line while every other check used the trimmed one; an indented fence bypassed the refusal | trimmed line; negative test |
+| A04 | weak mutants | ADR-0020 §3 names *broadened allow-list*; the inventory had none (F-38 re-anchored the two that were) | P1-M013 re-anchored to `is_compact_id`'s byte allow-list (`matches!(byte, b'_' \| b'-')` gains `\| _`), killed by P1-T17/P1-T01; the operator arm admits an added wildcard alternative |
+| A05 | fault omissions | `run_concurrency_repo` trusted `concurrent_code = not_applicable` from the packet | the generator scans non-test implementation sources: concurrent execution (spawned threads, async runtimes) refuses the label; synchronization primitives are recorded and the gate recomputes them (two `Mutex<` sites today) |
+| A08 | exception broadening | `Packet` and its rows accepted undeclared fields, which typed reserialization dropped from the digest | `deny_unknown_fields` on the packet and every row type; test |
+| A10 | weak mutants | the skipped-durable-transition arm knew `.commit(` but not `.append(`, so P1-M022 was unevaluable | call markers |
+| A12 | weak mutants | same for `.commit_if(` and P1-M035 | call markers |
+
+Rejected by the reviewer's own verification and left alone: A06 (a random
+transaction changes Basis identity but never emitted bytes), A07, A09, A11
+(caught by the gate as designed).
+
+**Consequences.** The packet digest and the canary evidence rebound; the
+committed concurrency record now carries the primitives it must match. Every
+fix is source or gate code, so the lane reruns from a new fixed base.

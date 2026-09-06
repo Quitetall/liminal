@@ -5,8 +5,12 @@
   "reason": "no concurrent implementation exists; deterministic schedule exploration is reserved for Phase 6",
   "source_anchor": "docs/execution/M21.md:13",
   "runner": "",
-  "source_commit": "d6e59ce5535ab3c93490bf60007e4ceb4346dc76",
-  "source_tree": "3bc3d6d0692e0561d49e53ee99724ff15328271f",
+  "source_commit": "0d8c32a4ae1afda9808e55c3c291445aad4e3d60",
+  "source_tree": "5d0e3a1f52fb07b623839b7a48cdc66138067b66",
   "oracle_id": "not_applicable",
-  "schedules": []
+  "schedules": [],
+  "sync_primitives": [
+    "crates/liminal-daemon/src/crash.rs:34:Mutex<",
+    "crates/liminal-graph/src/store/mod.rs:216:Mutex<"
+  ]
 }
