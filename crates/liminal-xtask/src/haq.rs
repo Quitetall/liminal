@@ -990,9 +990,15 @@ fn independent_oracle_source_repair(
         .enumerate()
         .map(|(index, id)| (*id, index))
         .collect();
+    // Blind pass 1 at f360e90 (A03): equal length let a duplicated step stand
+    // in for a missing one. The order is exactly the declared steps, once each.
+    let mut declared = ids.to_vec();
+    let mut returned = order.to_vec();
+    declared.sort_unstable();
+    returned.sort_unstable();
     anyhow::ensure!(
-        order.len() == ids.len(),
-        "ordering dropped or duplicated steps"
+        declared == returned && declared.windows(2).all(|pair| pair[0] != pair[1]),
+        "ordering dropped, duplicated or invented steps"
     );
     for (before, after) in edges {
         anyhow::ensure!(
@@ -1439,7 +1445,7 @@ fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         })?;
         let record: ReviewRecord =
             serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))?;
-        verify_review_record(root, review, &record)?;
+        verify_review_record(root, review, &record, &path)?;
         let provenance = packet
             .provenance
             .as_ref()
@@ -1522,7 +1528,52 @@ fn verify_cross_pass_reproduction(records: &[(String, ReviewRecord)]) -> Result<
     clippy::too_many_lines,
     reason = "one review record's contract is one contract; splitting it by line count would scatter the checks a reader must see together"
 )]
-fn verify_review_record(root: &Utf8Path, review: &Review, record: &ReviewRecord) -> Result<()> {
+/// The reviewer's raw answer lives beside its record as `<record>.raw.txt`;
+/// its SHA-256 must be the record's `raw_response_sha256` (A09).
+fn verify_review_raw_response(
+    root: &Utf8Path,
+    record_path: &Utf8Path,
+    expected: &str,
+) -> Result<()> {
+    let raw_path = record_path.with_extension("raw.txt");
+    let relative = raw_path.strip_prefix(root).unwrap_or(&raw_path);
+    let raw = fs::read(&raw_path).with_context(|| {
+        format!("{relative}: the reviewer's raw answer must be retained beside its record")
+    })?;
+    let actual = format!("{:x}", Sha256::digest(&raw));
+    require_eq(
+        "review raw_response_sha256 (of the retained answer)",
+        &actual,
+        expected,
+    )
+}
+
+/// The record's digests: hex-shaped, and the raw one the SHA-256 of the
+/// retained answer (A09: a digest of nothing retained bound a record to no
+/// answer).
+fn verify_review_record_digests(
+    root: &Utf8Path,
+    record: &ReviewRecord,
+    record_path: &Utf8Path,
+) -> Result<()> {
+    require_hex_digest(
+        "review sanitized_prompt_hash",
+        &record.sanitized_prompt_hash,
+    )?;
+    require_hex_digest("review raw_response_sha256", &record.raw_response_sha256)?;
+    verify_review_raw_response(root, record_path, &record.raw_response_sha256)?;
+    require_hex_digest(
+        "review integrity_binding_sha256",
+        &record.integrity_binding_sha256,
+    )
+}
+
+fn verify_review_record(
+    root: &Utf8Path,
+    review: &Review,
+    record: &ReviewRecord,
+    record_path: &Utf8Path,
+) -> Result<()> {
     let who = &review.reviewer;
     require_eq(
         "review record model_family",
@@ -1548,15 +1599,7 @@ fn verify_review_record(root: &Utf8Path, review: &Review, record: &ReviewRecord)
         &record.reviewer.identity_hash,
         &expected_identity,
     )?;
-    require_hex_digest(
-        "review sanitized_prompt_hash",
-        &record.sanitized_prompt_hash,
-    )?;
-    require_hex_digest("review raw_response_sha256", &record.raw_response_sha256)?;
-    require_hex_digest(
-        "review integrity_binding_sha256",
-        &record.integrity_binding_sha256,
-    )?;
+    verify_review_record_digests(root, record, record_path)?;
     require_eq(
         "review prompt_binding_sha256",
         &record.prompt_binding_sha256,
@@ -4954,6 +4997,14 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
     let mut scan = ScopeTraceScan::default();
     let mut hasher = blake3::Hasher::new();
     let mut buf = Vec::new();
+    // Blind pass 1 at f360e90 (A07): `openat(AT_FDCWD, ".../heldout", O_DIRECTORY) = 7`
+    // followed by `openat(7, "x.md", O_WRONLY)` named the locked corpus only on
+    // the permitted read; the write carried no fragment. Directory fds are
+    // remembered per pid from their open's return value, and a path relative
+    // to one is judged under that directory. An `<unfinished ...>` open is
+    // completed by its `<... openat resumed>) = fd` line.
+    let mut dir_fds: BTreeMap<(u32, i64), String> = BTreeMap::new();
+    let mut unfinished: BTreeMap<u32, (String, bool)> = BTreeMap::new();
     loop {
         buf.clear();
         if reader.read_until(b'\n', &mut buf)? == 0 {
@@ -4977,7 +5028,55 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
                 scan.exited_zero.insert(pid);
             }
         }
-        for (path, write) in scope_trace_line_accesses(&line) {
+        let pid = line
+            .split(' ')
+            .next()
+            .and_then(|token| token.parse::<u32>().ok());
+        let returned_fd = line
+            .rsplit(" = ")
+            .next()
+            .and_then(|tail| tail.trim().parse::<i64>().ok());
+        if let (Some(pid), true) = (pid, line.contains("<... openat resumed>"))
+            && let (Some((path, is_dir)), Some(fd)) = (unfinished.remove(&pid), returned_fd)
+        {
+            if is_dir && fd >= 0 {
+                dir_fds.insert((pid, fd), path);
+            } else {
+                dir_fds.remove(&(pid, fd));
+            }
+        }
+        let mut accesses = scope_trace_line_accesses(&line);
+        if let Some(pid) = pid {
+            let dirfd = line
+                .split_once("openat(")
+                .or_else(|| line.split_once("openat2("))
+                .and_then(|(_, rest)| rest.split(',').next())
+                .and_then(|token| token.trim().parse::<i64>().ok());
+            if let Some(dirfd) = dirfd
+                && let Some(dir) = dir_fds.get(&(pid, dirfd))
+            {
+                for (path, _) in &mut accesses {
+                    if !path.starts_with('/') {
+                        *path = format!("{dir}/{path}");
+                    }
+                }
+            }
+            if line.contains("openat(") || line.contains("openat2(") {
+                let is_dir = line.contains("O_DIRECTORY");
+                if let Some((path, _)) = accesses.first() {
+                    if line.contains("<unfinished ...>") {
+                        unfinished.insert(pid, (path.clone(), is_dir));
+                    } else if let Some(fd) = returned_fd {
+                        if is_dir && fd >= 0 {
+                            dir_fds.insert((pid, fd), path.clone());
+                        } else {
+                            dir_fds.remove(&(pid, fd));
+                        }
+                    }
+                }
+            }
+        }
+        for (path, write) in accesses {
             if write {
                 let lower = path.to_ascii_lowercase();
                 if FORBIDDEN_TRACE_FRAGMENTS
@@ -6710,6 +6809,8 @@ fn anchor_is_mutable_line(line: &str) -> bool {
         "type ",
         "pub type ",
         "use ",
+        "pub use ",
+        "pub(crate) use ",
     ]
     .iter()
     .any(|kw| trimmed.starts_with(kw));
@@ -7255,9 +7356,9 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
             "Ok(bytes) => Ok(Some(FileObservation {",
         ),
         (
-            "crates/liminal-source/src/lib.rs",
-            17,
-            "pub use view::{SourceBasis, SourceLoadError, SourceSliceError, Utf8HolderView};",
+            "crates/liminal-source/src/view.rs",
+            38,
+            "if actual_hash != basis.content_hash {",
         ),
         (
             "crates/liminal-source/src/file.rs",
@@ -8119,7 +8220,16 @@ fn durable_transition_sites(root: &Utf8Path) -> Result<BTreeMap<String, usize>> 
     // Blind pass 1 at 612cbcc (A05): `inner.log.append(` is the store's durable
     // append (P1-M022 deletes it) and was outside the census, so an append-based
     // transition could move without the scope disclosure noticing.
-    const MARKERS: [&str; 3] = [".commit(", ".commit_if(", ".log.append("];
+    // Blind pass 1 at f360e90 (A05): a direct `fs::rename` or `sync_all` is a
+    // durable transition with no marker call around it, so it escaped.
+    const MARKERS: [&str; 6] = [
+        ".commit(",
+        ".commit_if(",
+        ".log.append(",
+        ".sync_all(",
+        ".sync_data(",
+        "fs::rename(",
+    ];
     let listed = git_text(root, &["ls-files", "-z", "--", "crates"])?;
     let mut sites = BTreeMap::new();
     for name in listed.split('\0').filter(|name| !name.trim().is_empty()) {
@@ -8569,9 +8679,15 @@ struct ConcurrentEvidence {
 /// test scaffold. Closed list, so an addition is a visible decision.
 const CONCURRENCY_SCAN_EXCLUDED_CRATES: [&str; 2] = ["liminal-xtask", "liminal-scratch"];
 /// Tokens that mean code runs concurrently.
-const CONCURRENCY_EXECUTION_PRIMITIVES: [&str; 8] = [
-    "thread::spawn",
-    "thread::scope",
+// Blind pass 1 at f360e90 (A06): `use std::thread as th; th::spawn(..)` named
+// no listed token. The spawn and scope calls are matched by their call shape,
+// whatever path prefix reaches them; `.spawn(` also catches a builder. The
+// product crates spawn no processes today, so the over-match is a refusal
+// that names its line, never a miss.
+const CONCURRENCY_EXECUTION_PRIMITIVES: [&str; 9] = [
+    "::spawn(",
+    ".spawn(",
+    "::scope(",
     "thread::Builder",
     "tokio::",
     "rayon::",
@@ -8969,6 +9085,9 @@ struct ReviewRecord {
     result: String,
     #[serde(default)]
     raw_response_sha256: String,
+    /// How many off-schema answers preceded this record (F-46).
+    #[serde(default)]
+    schema_retries: u32,
     #[serde(default)]
     integrity_binding_sha256: String,
     isolated_session_hash: String,
@@ -8979,6 +9098,7 @@ struct ReviewRecord {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 struct ReviewRecordReviewer {
     model_family: String,
     identity_hash: String,
@@ -8988,6 +9108,7 @@ struct ReviewRecordReviewer {
 /// Findings carry model-chosen key names, so they stay untyped; ATTEMPTS are
 /// the runner's own contract and are pinned.
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 struct ReviewRecordAttempt {
     id: String,
     attack_class: String,
@@ -9011,6 +9132,7 @@ struct ReviewResolution {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 struct ReviewFixedBase {
     commit: String,
     tree: String,
@@ -9018,6 +9140,7 @@ struct ReviewFixedBase {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 struct ReviewRecordBlindness {
     ephemeral_session_requested: bool,
     session_state: String,
@@ -10236,6 +10359,39 @@ fn independent_oracle_interchange(
         count("create-node") == shape.nodes && count("add-relation") == shape.relations,
         "encoded shape differs from the category's promise: {shape:?}"
     );
+    // Blind pass 1 at f360e90 (A02): a renamed field round-trips through the
+    // same serde on both sides. The published schema is a closed key set.
+    let keys = |value: &serde_json::Value| -> Vec<String> {
+        value
+            .as_object()
+            .map(|map| map.keys().cloned().collect())
+            .unwrap_or_default()
+    };
+    anyhow::ensure!(
+        keys(&value) == ["id", "meta", "ops", "parent"],
+        "encoded transaction keys are not the published schema: {:?}",
+        keys(&value)
+    );
+    for op in ops {
+        if let Some(node) = op.pointer("/create-node/node") {
+            anyhow::ensure!(
+                keys(node) == ["flags", "id", "kind", "payload", "revision"],
+                "encoded node keys are not the published schema: {:?}",
+                keys(node)
+            );
+        }
+        if let Some(relation) = op.pointer("/add-relation/relation") {
+            anyhow::ensure!(
+                keys(relation)
+                    == [
+                        "flags", "id", "kind", "payload", "requires", "revision", "source",
+                        "target"
+                    ],
+                "encoded relation keys are not the published schema: {:?}",
+                keys(relation)
+            );
+        }
+    }
     let payload_bytes = ops
         .iter()
         .filter_map(|op| op.pointer("/create-node/node/payload/text"))
@@ -10416,13 +10572,60 @@ fn case_repair(rng: &mut Rng) -> Result<Case> {
         state_witness.is_terminal() || state_witness.may_transition_to(legal_next),
         "declared ILRP state has no legal transition"
     );
-    let count = usize::try_from(2 + rng.below(5)).expect("step count fits");
+    // Blind pass 1 at f360e90 (A01): every category built WriteFile steps whose
+    // contents carried the category's name. Each category now builds the
+    // shape it names; the refusal categories are refused by `topo_order`
+    // itself and recorded as negatives below.
+    let count = match category {
+        "two-step" => 2,
+        "boundary" => 6,
+        _ => usize::try_from(2 + rng.below(5)).expect("step count fits"),
+    };
     let ids: Vec<liminal_id::RepairStepId> = (0..count)
         .map(|_| liminal_id::RepairStepId::from_uuid(rng.uuid()))
         .collect();
-    let steps = ids
+    let steps: BTreeMap<_, _> = ids
         .iter()
         .map(|id| {
+            let contents = match category {
+                "hostile" => {
+                    let mut bytes = format!("{}\0\u{202e}", rng.word()).into_bytes();
+                    bytes.extend(std::iter::repeat_n(0xff_u8, 65_536));
+                    bytes
+                }
+                _ => rng.word().into_bytes(),
+            };
+            let path = liminal_id::PathId(if category == "hostile" {
+                "../../etc/passwd\0".into()
+            } else {
+                "generated.md".into()
+            });
+            let operation = if category == "graph-step" {
+                RepairOperation::Graph(liminal_graph::Operation::CreateNode {
+                    node: liminal_graph::Node {
+                        id: liminal_id::NodeId::from_uuid(rng.uuid()),
+                        kind: liminal_graph::KindId(1),
+                        payload: liminal_graph::PayloadRef::Text(
+                            String::from_utf8_lossy(&contents).into_owned(),
+                        ),
+                        revision: liminal_id::RevisionId(0),
+                        flags: liminal_graph::NodeFlags::default(),
+                    },
+                })
+            } else {
+                RepairOperation::WriteFile {
+                    path: path.clone(),
+                    contents: contents.clone(),
+                }
+            };
+            let expected_poststate = if category == "poststate" {
+                StatePredicate::FileContent {
+                    path,
+                    hash: liminal_id::ContentHash(*blake3::hash(&contents).as_bytes()),
+                }
+            } else {
+                StatePredicate::Any
+            };
             (
                 *id,
                 ProposedMutation {
@@ -10430,12 +10633,9 @@ fn case_repair(rng: &mut Rng) -> Result<Case> {
                     subject: liminal_id::JurisdictionSubject::Node(liminal_id::NodeId::from_uuid(
                         rng.uuid(),
                     )),
-                    operation: RepairOperation::WriteFile {
-                        path: liminal_id::PathId("generated.md".into()),
-                        contents: format!("{category}:{}", rng.word()).into_bytes(),
-                    },
+                    operation,
                     expected_prestate: StatePredicate::Any,
-                    expected_poststate: StatePredicate::Any,
+                    expected_poststate,
                     idempotency_key: liminal_id::IdempotencyKey::from_uuid(rng.uuid()),
                 },
             )
@@ -10443,12 +10643,22 @@ fn case_repair(rng: &mut Rng) -> Result<Case> {
         .collect();
 
     let mut edges = Vec::new();
-    for i in 0..count {
-        for j in (i + 1)..count {
-            if rng.below(3) == 0 {
-                edges.push((i, j));
+    if category == "two-step" {
+        edges.push((0, 1));
+    } else {
+        for i in 0..count {
+            for j in (i + 1)..count {
+                if rng.below(3) == 0 {
+                    edges.push((i, j));
+                }
             }
         }
+    }
+    if category == "duplicate-ack" {
+        // The same dependency acknowledged twice: the plan orders as if once.
+        let first = edges.first().copied().unwrap_or((0, 1));
+        edges.push(first);
+        edges.push(first);
     }
     // Rarely close a genuine cycle. A lone back edge is NOT a cycle unless a
     // forward path exists, so add both directions to guarantee one.
@@ -10458,14 +10668,32 @@ fn case_repair(rng: &mut Rng) -> Result<Case> {
         edges.push((0, count - 1));
         edges.push((count - 1, 0));
     }
-    let dependencies: Vec<RepairDependency> = edges
+    let mut dependencies: Vec<RepairDependency> = edges
         .iter()
         .map(|(before, after)| RepairDependency {
             before: ids[*before],
             after: ids[*after],
         })
         .collect();
-
+    let mut steps = steps;
+    match category {
+        // A dependency on a step the plan never declares.
+        "missing-step" => dependencies.push(RepairDependency {
+            before: ids[0],
+            after: liminal_id::RepairStepId::from_uuid(rng.uuid()),
+        }),
+        // The plan's steps were cut short while its dependencies still name
+        // the lost tail.
+        "truncated-intent" => {
+            let lost = ids[count - 1];
+            dependencies.push(RepairDependency {
+                before: ids[0],
+                after: lost,
+            });
+            steps.remove(&lost);
+        }
+        _ => {}
+    }
     let plan = RepairPlan {
         id: liminal_id::RepairId::from_uuid(rng.uuid()),
         basis: liminal_revision::WorkspaceBasis {
@@ -10477,23 +10705,48 @@ fn case_repair(rng: &mut Rng) -> Result<Case> {
         dependencies: dependencies.clone(),
         inverse: None,
     };
-    let Ok(order) = topo_order(&plan) else {
-        // Cyclic plans are correctly refused; not acceptance evidence. The
-        // witness carries the EDGES, so the shape of the refused cycle reaches
-        // the digest — without it, every cycle looks alike and the
-        // construction that built it is unobservable (M17.5 F-30).
-        let witness = [
-            format!("cyclic:{edges:?}:{state_witness:?}:"),
-            String::from_utf8_lossy(probe).into_owned(),
-        ]
-        .concat()
-        .into_bytes();
-        return Ok(if category == "cycle" {
-            Case::Negative { category, witness }
-        } else {
-            Case::Discarded { category, witness }
-        });
+    let order = match topo_order(&plan) {
+        Ok(order) => order,
+        Err(error) => {
+            // Refused plans are not acceptance evidence. The witness carries
+            // the EDGES and the refusal, so the shape reaches the digest —
+            // without it every refusal looks alike (M17.5 F-30). A category
+            // that promised a refusal gets a negative; a random cycle in an
+            // accepted category is out of domain.
+            let witness = [
+                format!("refused:{error}:{edges:?}:{state_witness:?}:"),
+                String::from_utf8_lossy(probe).into_owned(),
+            ]
+            .concat()
+            .into_bytes();
+            let promised = match category {
+                "cycle" => matches!(
+                    error,
+                    liminal_jurisdiction::repair::CycleError::Cycle { .. }
+                ),
+                "missing-step" | "truncated-intent" => {
+                    matches!(
+                        error,
+                        liminal_jurisdiction::repair::CycleError::UnknownStep { .. }
+                    )
+                }
+                _ => false,
+            };
+            return Ok(if promised {
+                Case::Negative { category, witness }
+            } else if matches!(category, "cycle" | "missing-step" | "truncated-intent") {
+                anyhow::bail!(
+                    "repair category {category} was refused for the wrong reason: {error}"
+                )
+            } else {
+                Case::Discarded { category, witness }
+            });
+        }
     };
+    anyhow::ensure!(
+        !matches!(category, "missing-step" | "truncated-intent"),
+        "repair category {category} promised a refusal and was ordered instead"
+    );
     anyhow::ensure!(
         !cyclic,
         "a cyclic plan was ordered instead of refused: {dependencies:?}"
@@ -11677,6 +11930,15 @@ mod tests {
         }
     }
 
+    /// The retained raw answer a fixture record's digest names (A09): a
+    /// scratch directory holding `r.raw.txt`, and the record path beside it.
+    fn fixture_record_path() -> (liminal_scratch::ScratchDir, Utf8PathBuf) {
+        let scratch = liminal_scratch::ScratchDir::new("haq-review-raw").expect("scratch");
+        fs::write(scratch.path().join("r.raw.txt"), "fixture raw answer").expect("raw");
+        let path = scratch.path().join("r.json");
+        (scratch, path)
+    }
+
     fn review_record(pass: u8, family: &str, backend: &str) -> ReviewRecord {
         let root = repo_root();
         let commit = git_text(&root, &["rev-parse", "HEAD"]).expect("test HEAD");
@@ -11694,7 +11956,8 @@ mod tests {
             independently_reproduced: Vec::new(),
             unresolved_verified_findings: 0,
             result: "pass".to_owned(),
-            raw_response_sha256: "a".repeat(64),
+            raw_response_sha256: sha256_text("fixture raw answer"),
+            schema_retries: 0,
             integrity_binding_sha256: String::new(),
             isolated_session_hash: hex_digest(format!("session:{family}:{pass}").as_bytes()),
             sanitized_prompt_hash: hex_digest(format!("prompt:{family}").as_bytes()),
@@ -11749,6 +12012,7 @@ mod tests {
             &repo_root(),
             &review_row(),
             &review_record(1, "openai", "codex"),
+            &fixture_record_path().1,
         )
         .expect("a complete record must pass, or every check below is vacuous");
     }
@@ -11786,8 +12050,13 @@ mod tests {
     fn review_record_rejects_empty_attempt_records() {
         let mut record = review_record(1, "openai", "codex");
         record.attempts[3].observed_result = "   ".to_owned();
-        let err = verify_review_record(&repo_root(), &review_row(), &record)
-            .expect_err("an attempt with no observed result is not an attempt");
+        let err = verify_review_record(
+            &repo_root(),
+            &review_row(),
+            &record,
+            &fixture_record_path().1,
+        )
+        .expect_err("an attempt with no observed result is not an attempt");
         assert!(err.to_string().contains("empty observed_result"), "{err}");
     }
 
@@ -11796,8 +12065,13 @@ mod tests {
         let mut record = review_record(1, "openai", "codex");
         record.attempts[0].attempt = "did a thing".to_owned();
         record.attempts[0].observed_result = "saw a thing".to_owned();
-        let err = verify_review_record(&repo_root(), &review_row(), &record)
-            .expect_err("generic prose is not a concrete falsification attempt");
+        let err = verify_review_record(
+            &repo_root(),
+            &review_row(),
+            &record,
+            &fixture_record_path().1,
+        )
+        .expect_err("generic prose is not a concrete falsification attempt");
         assert!(err.to_string().contains("substantive"), "{err}");
     }
 
@@ -11841,8 +12115,13 @@ mod tests {
     fn review_identity_binding_rejects_arbitrary_hashes() {
         let mut record = review_record(1, "openai", "codex");
         record.reviewer.identity_hash = "a".repeat(64);
-        let err = verify_review_record(&repo_root(), &review_row(), &record)
-            .expect_err("review identity must bind to pass and model family");
+        let err = verify_review_record(
+            &repo_root(),
+            &review_row(),
+            &record,
+            &fixture_record_path().1,
+        )
+        .expect_err("review identity must bind to pass and model family");
         assert!(err.to_string().contains("identity_hash"), "{err}");
     }
 
@@ -11850,24 +12129,38 @@ mod tests {
     fn review_integrity_binding_rejects_arbitrary_digests() {
         let mut record = review_record(1, "openai", "codex");
         record.raw_response_sha256 = "c".repeat(64);
-        let err = verify_review_record(&repo_root(), &review_row(), &record)
-            .expect_err("raw-response digest must be bound to integrity receipt");
-        assert!(
-            err.to_string().contains("integrity_binding_sha256"),
-            "{err}"
-        );
+        let err = verify_review_record(
+            &repo_root(),
+            &review_row(),
+            &record,
+            &fixture_record_path().1,
+        )
+        .expect_err("raw-response digest must be bound to the retained answer");
+        // A09: the substituted digest is caught against the retained answer
+        // before the integrity receipt is even consulted.
+        assert!(err.to_string().contains("raw_response_sha256"), "{err}");
     }
 
     #[test]
     fn review_record_rejects_unknown_classifications_and_duplicate_ids() {
         let mut unknown = review_record(1, "openai", "codex");
         unknown.attempts[0].classification = "inconclusive".to_owned();
-        verify_review_record(&repo_root(), &review_row(), &unknown)
-            .expect_err("a classification outside the declared set must be rejected");
+        verify_review_record(
+            &repo_root(),
+            &review_row(),
+            &unknown,
+            &fixture_record_path().1,
+        )
+        .expect_err("a classification outside the declared set must be rejected");
         let mut duplicated = review_record(1, "openai", "codex");
         duplicated.attempts[1].id = duplicated.attempts[0].id.clone();
-        verify_review_record(&repo_root(), &review_row(), &duplicated)
-            .expect_err("twelve attempts must be twelve DISTINCT attempts");
+        verify_review_record(
+            &repo_root(),
+            &review_row(),
+            &duplicated,
+            &fixture_record_path().1,
+        )
+        .expect_err("twelve attempts must be twelve DISTINCT attempts");
     }
 
     #[test]
@@ -11875,20 +12168,35 @@ mod tests {
         let mut record = review_record(1, "openai", "codex");
         record.attempts[0].classification = "false_positive".to_owned();
         record.attempts[0].independently_reproduced = false;
-        let err = verify_review_record(&repo_root(), &review_row(), &record)
-            .expect_err("false positives must retain reproduction evidence");
+        let err = verify_review_record(
+            &repo_root(),
+            &review_row(),
+            &record,
+            &fixture_record_path().1,
+        )
+        .expect_err("false positives must retain reproduction evidence");
         assert!(err.to_string().contains("false-positive"), "{err}");
         record.attempts[0].independently_reproduced = true;
-        verify_review_record(&repo_root(), &review_row(), &record)
-            .expect("a reproduced false positive is admissible");
+        verify_review_record(
+            &repo_root(),
+            &review_row(),
+            &record,
+            &fixture_record_path().1,
+        )
+        .expect("a reproduced false positive is admissible");
     }
 
     #[test]
     fn review_record_rejects_an_unbound_fixed_tree() {
         let mut record = review_record(1, "openai", "codex");
         record.fixed_base.tree = "not-a-digest".to_owned();
-        verify_review_record(&repo_root(), &review_row(), &record)
-            .expect_err("a review record without a fixed tree binding is untrusted");
+        verify_review_record(
+            &repo_root(),
+            &review_row(),
+            &record,
+            &fixture_record_path().1,
+        )
+        .expect_err("a review record without a fixed tree binding is untrusted");
     }
 
     #[test]
@@ -11907,14 +12215,24 @@ mod tests {
     fn review_record_rejects_a_packet_row_that_contradicts_it() {
         let mut failed = review_record(1, "openai", "codex");
         failed.result = "fail".to_owned();
-        let err = verify_review_record(&repo_root(), &review_row(), &failed)
-            .expect_err("a pass row over a failing record must be rejected");
+        let err = verify_review_record(
+            &repo_root(),
+            &review_row(),
+            &failed,
+            &fixture_record_path().1,
+        )
+        .expect_err("a pass row over a failing record must be rejected");
         assert!(err.to_string().contains("record says"), "{err}");
 
         let mut unresolved = review_record(1, "openai", "codex");
         unresolved.unresolved_verified_findings = 9;
-        verify_review_record(&repo_root(), &review_row(), &unresolved)
-            .expect_err("a row claiming zero unresolved findings over a record counting nine");
+        verify_review_record(
+            &repo_root(),
+            &review_row(),
+            &unresolved,
+            &fixture_record_path().1,
+        )
+        .expect_err("a row claiming zero unresolved findings over a record counting nine");
     }
 
     #[test]
@@ -11941,7 +12259,7 @@ mod tests {
         row.findings = vec!["F1".to_owned(), "F2".to_owned()];
         row.independently_reproduced = vec!["F1".to_owned()];
         row.unresolved_verified_findings = 1;
-        let err = verify_review_record(&repo_root(), &row, &record)
+        let err = verify_review_record(&repo_root(), &row, &record, &fixture_record_path().1)
             .expect_err("every emitted finding must be independently reproduced");
         assert!(err.to_string().contains("every finding"), "{err}");
     }
@@ -11951,13 +12269,23 @@ mod tests {
     fn review_record_rejects_a_pass_that_saw_prior_artifacts() {
         let mut leaked = review_record(1, "openai", "codex");
         leaked.blindness_proof.prior_pass_artifact_supplied = true;
-        verify_review_record(&repo_root(), &review_row(), &leaked)
-            .expect_err("a reviewer shown the prior pass is not blind");
+        verify_review_record(
+            &repo_root(),
+            &review_row(),
+            &leaked,
+            &fixture_record_path().1,
+        )
+        .expect_err("a reviewer shown the prior pass is not blind");
 
         let mut informed = review_record(2, "xiaomi", "lamu");
         informed.blindness_proof.pass_two_original_spec_only = false;
-        verify_review_record(&repo_root(), &review_row(), &informed)
-            .expect_err("pass 2 must start from the original spec alone");
+        verify_review_record(
+            &repo_root(),
+            &review_row(),
+            &informed,
+            &fixture_record_path().1,
+        )
+        .expect_err("pass 2 must start from the original spec alone");
     }
 
     #[test]
@@ -13068,7 +13396,7 @@ mod tests {
             ),
             (
                 "repair/ILRP/recovery",
-                "2b0d9f1b62eb1699c5da50aefdd1c5adc68b1cb102d22ba95dd516c87e40efdc",
+                "c2ff73e22df13d34ca85c40c357ace4655c0d4a3cf796c873c20933019096ddf",
             ),
             (
                 "Basis/revision/query invalidation",
@@ -14901,7 +15229,7 @@ mod tests {
         let scan = scan_concurrency_primitives(&root).expect("scan");
         assert_eq!(
             scan.execution,
-            vec!["crates/store/src/worker.rs:1:thread::spawn".to_owned()]
+            vec!["crates/store/src/worker.rs:1:::spawn(".to_owned()]
         );
     }
 
@@ -14974,7 +15302,7 @@ mod tests {
         let scan = scan_concurrency_primitives(&root).expect("scan");
         assert_eq!(
             scan.execution,
-            vec!["crates/w/src/lib.rs:6:thread::spawn".to_owned()]
+            vec!["crates/w/src/lib.rs:6:::spawn(".to_owned()]
         );
         assert_eq!(scan.sync, vec!["crates/w/src/lib.rs:9:RwLock<".to_owned()]);
     }
@@ -15047,6 +15375,182 @@ mod tests {
         }
         commit_all("classed seeds");
         verify_seed_classes(&root, "t", &dir).expect("every class declared");
+    }
+
+    /// Blind pass 1 at f360e90 (A03): equal length let a duplicated step
+    /// stand in for a missing one.
+    #[test]
+    fn an_order_that_duplicates_one_step_for_another_is_refused() {
+        let mut rng = Rng(9);
+        let ids: Vec<liminal_id::RepairStepId> = (0..3)
+            .map(|_| liminal_id::RepairStepId::from_uuid(rng.uuid()))
+            .collect();
+        let faithful = vec![ids[0], ids[1], ids[2]];
+        independent_oracle_source_repair(&faithful, &ids, &[(0, 1)], &faithful).expect("faithful");
+        let duplicated = vec![ids[0], ids[1], ids[1]];
+        let err = independent_oracle_source_repair(&duplicated, &ids, &[(0, 1)], &duplicated)
+            .expect_err("B twice, C never");
+        assert!(
+            err.to_string().contains("dropped, duplicated or invented"),
+            "{err}"
+        );
+    }
+
+    /// Blind pass 1 at f360e90 (A01): repair categories build what they name
+    /// and the refusal categories are refused by the ordering itself.
+    #[test]
+    fn repair_cases_carry_the_shape_their_category_names() {
+        let mut rng = Rng(3);
+        let mut seen = BTreeMap::new();
+        for _ in 0..4_000 {
+            let case = case_repair(&mut rng).expect("total");
+            let (category, kind) = match &case {
+                Case::Accepted { category, .. } => (*category, "accepted"),
+                Case::Negative { category, .. } => (*category, "negative"),
+                Case::Discarded { category, .. } => (*category, "discarded"),
+            };
+            seen.entry((category, kind)).or_insert(0usize);
+            *seen.get_mut(&(category, kind)).expect("just inserted") += 1;
+        }
+        for category in ["missing-step", "truncated-intent", "cycle"] {
+            assert!(
+                seen.contains_key(&(category, "negative")),
+                "{category} must be refused: {seen:?}"
+            );
+            assert!(
+                !seen.contains_key(&(category, "accepted")),
+                "{category} must never be accepted"
+            );
+        }
+        for category in [
+            "graph-step",
+            "two-step",
+            "duplicate-ack",
+            "poststate",
+            "hostile",
+        ] {
+            assert!(
+                seen.contains_key(&(category, "accepted")),
+                "{category} must be ordered: {seen:?}"
+            );
+        }
+    }
+
+    /// Blind pass 1 at f360e90 (A02): a renamed published field survives a
+    /// symmetric serde round trip; the closed key set does not let it.
+    #[test]
+    fn the_interchange_oracle_pins_the_published_field_names() {
+        let mut rng = Rng(5);
+        let (txn, shape) = interchange_transaction("single-edge", &mut rng, "seed", false);
+        let once = serde_json::to_vec(&txn).expect("encodes");
+        let renamed = String::from_utf8(once.clone())
+            .expect("utf8")
+            .replacen("\"revision\"", "\"rev\"", 1)
+            .into_bytes();
+        let err = independent_oracle_interchange(&txn, &txn, &renamed, &renamed, shape)
+            .expect_err("a renamed field");
+        assert!(err.to_string().contains("published schema"), "{err}");
+    }
+
+    /// Blind pass 1 at f360e90 (A04): a re-export is a declaration, not a
+    /// line an operator can mutate.
+    #[test]
+    fn a_re_export_is_not_a_mutable_anchor() {
+        assert!(!anchor_is_mutable_line(
+            "pub use view::{SourceBasis, SourceLoadError};"
+        ));
+        assert!(!anchor_is_mutable_line("pub(crate) use crate::x::Y;"));
+        assert!(anchor_is_mutable_line(
+            "if actual_hash != basis.content_hash {"
+        ));
+    }
+
+    /// Blind pass 1 at f360e90 (A06): an aliased thread module spawns all the same.
+    #[test]
+    fn an_aliased_spawn_is_concurrent_execution() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-conc3").expect("scratch");
+        let root = scratch.path().to_owned();
+        let src = root.join("crates/w/src");
+        fs::create_dir_all(&src).expect("mkdir");
+        fs::write(
+            src.join("lib.rs"),
+            "use std::thread as th;\npub fn go() { th::spawn(|| {}); }\n",
+        )
+        .expect("write");
+        let scan = scan_concurrency_primitives(&root).expect("scan");
+        assert_eq!(
+            scan.execution,
+            vec!["crates/w/src/lib.rs:2:::spawn(".to_owned()]
+        );
+    }
+
+    /// Blind pass 1 at f360e90 (A07): a write through a directory fd opened on
+    /// the locked corpus names no fragment; the fd is remembered.
+    #[test]
+    fn a_write_through_a_locked_directory_fd_is_refused() {
+        let (_s, root, row) = scope_fixture("canaries");
+        fs::create_dir_all(root.join("conformance/corpora/heldout")).expect("mkdir");
+        let exit = "4242 +++ exited with 0 +++\n";
+        let mut bad = row.clone();
+        rewrite_scope_trace(
+            &root,
+            &mut bad,
+            &format!(
+                "4242 openat(AT_FDCWD, \"{root}/conformance/corpora/heldout\", O_RDONLY|O_DIRECTORY) = 7\n\
+                 4242 openat(7, \"x.md\", O_WRONLY|O_CREAT, 0644) = 8\n{exit}"
+            ),
+        );
+        let err = verify_corpus_scope_replays(&root, std::slice::from_ref(&bad), &[])
+            .expect_err("a dirfd-relative write into the locked corpus");
+        assert!(
+            err.to_string().contains("wrote to the locked corpus"),
+            "{err}"
+        );
+        // The unfinished/resumed split reaches the same verdict.
+        let mut split = row.clone();
+        rewrite_scope_trace(
+            &root,
+            &mut split,
+            &format!(
+                "4242 openat(AT_FDCWD, \"{root}/conformance/corpora/heldout\", O_RDONLY|O_DIRECTORY <unfinished ...>\n\
+                 4243 openat(AT_FDCWD, \"{root}/Cargo.toml\", O_RDONLY) = 3\n\
+                 4242 <... openat resumed>) = 7\n\
+                 4242 openat(7, \"x.md\", O_WRONLY|O_CREAT, 0644) = 8\n{exit}"
+            ),
+        );
+        let err = verify_corpus_scope_replays(&root, std::slice::from_ref(&split), &[])
+            .expect_err("the same write across an unfinished open");
+        assert!(
+            err.to_string().contains("wrote to the locked corpus"),
+            "{err}"
+        );
+    }
+
+    /// Blind pass 1 at f360e90 (A08/A09): an undeclared waiver inside an
+    /// attempt is refused, and the record's raw digest must be the retained
+    /// answer's.
+    #[test]
+    fn a_review_record_binds_its_retained_raw_answer_and_refuses_waivers() {
+        let path = repo_root()
+            .join("conformance/haqp/evidence/reviews/pass2-mimo-direct-mimo-v2.5-pro.json");
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).expect("record")).expect("json");
+        value["attempts"][0]["waiver"] = serde_json::json!("*");
+        let err = serde_json::from_value::<ReviewRecord>(value).expect_err("a waiver field");
+        assert!(err.to_string().contains("unknown field"), "{err}");
+        let scratch = liminal_scratch::ScratchDir::new("haq-raw").expect("scratch");
+        let root = scratch.path().to_owned();
+        let record = root.join("r.json");
+        fs::write(&record, "{}").expect("record");
+        let err = verify_review_raw_response(&root, &record, &"a".repeat(64))
+            .expect_err("no retained answer");
+        assert!(err.to_string().contains("retained"), "{err}");
+        fs::write(root.join("r.raw.txt"), "answer").expect("raw");
+        let digest = format!("{:x}", Sha256::digest(b"answer"));
+        verify_review_raw_response(&root, &record, &digest).expect("the retained answer hashes");
+        let err = verify_review_raw_response(&root, &record, &"a".repeat(64))
+            .expect_err("a substituted digest");
+        assert!(err.to_string().contains("raw_response_sha256"), "{err}");
     }
 
     /// F-44 ruling (2026-09-05): a stage may read the locked corpus -- the SLO

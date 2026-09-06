@@ -1,0 +1,199 @@
+{
+  "schema_version": "haqp-blind-review-v1",
+  "pass": 1,
+  "reviewer": {
+    "model_family": "codex:gpt-5.6-sol",
+    "identity_hash": "f6cac6a769086b0c4a44f2b83d25874afa0b393a852ac730262a2f801543651c",
+    "backend": "codex"
+  },
+  "isolated_session_hash": "9882649bc1b9e6254aadb682b67a96ddc311b044e8e23ed01976d42abcf48019",
+  "sanitized_prompt_hash": "526c240ff82c3808769524695cca21f07d45beaeb7343fc3e565920750b18959",
+  "prompt_binding_sha256": "cfea0510f8ee249417c792224c14f798fc6d0f669cc5f9700ad2e31d4a025cc2",
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-xtask/src/haq.rs:10433",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:10433 by tracing each repair seed category into its constructed operation and malformed-state shape.",
+      "observed_result": "Fixed source at crates/liminal-xtask/src/haq.rs:10433 constructs WriteFile for every category; graph-step, duplicate-ack, missing-step, truncated-intent, and hostile labels alter only file contents instead of generating promised shapes.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:10236",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:10236 by renaming a published transaction field while preserving round-trip equality and operation counts.",
+      "observed_result": "Check at crates/liminal-xtask/src/haq.rs:10236 independently inspects only two operation counts; paired serde encoding and decoding can accept published-schema field drift without literal field-fidelity verification.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-xtask/src/haq.rs:994",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:994 with ids A,B,C, returned order A,B,B, dependency A-to-B, and identical permuted order.",
+      "observed_result": "Predicate at crates/liminal-xtask/src/haq.rs:994 accepts equal lengths while the edge check still succeeds; duplicated B replaces isolated C because exact membership and uniqueness are never checked.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-source/src/lib.rs:17",
+      "attempt": "Falsify crates/liminal-source/src/lib.rs:17 by applying the declared stale-basis-acceptance operator to its SourceBasis re-export declaration.",
+      "observed_result": "Inventory validation accepts crates/liminal-source/src/lib.rs:17 as mutable, but removing SourceBasis changes a public re-export or causes compilation failure rather than introducing stale-basis acceptance.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-xtask/src/haq.rs:8122",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:8122 by adding a direct fs rename and sync_all durable transition without any registered marker call.",
+      "observed_result": "Marker registry at crates/liminal-xtask/src/haq.rs:8122 recognizes only commit, commit_if, and log.append spellings, so a direct durable transition escapes scope-drift detection.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:8572",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:8572 by aliasing std thread as th and invoking th::spawn from production code.",
+      "observed_result": "Closed token list at crates/liminal-xtask/src/haq.rs:8572 lacks aliased thread invocation forms, so th::spawn introduces concurrent execution while the not-applicable scan remains empty.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:4987",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:4987 by opening the locked directory read-only, then writing x.md through the returned directory file descriptor.",
+      "observed_result": "Candidate filter at crates/liminal-xtask/src/haq.rs:4987 sees the permitted absolute directory read but omits the dirfd-relative write because x.md contains no forbidden lexical fragment.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A08",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-xtask/src/haq.rs:8991",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:8991 by adding an undeclared wildcard waiver field inside one adversarial-review attempt object.",
+      "observed_result": "Nested structure at crates/liminal-xtask/src/haq.rs:8991 lacks deny_unknown_fields, so serde silently discards the undeclared waiver while accepting the surrounding review record.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "crates/liminal-xtask/src/haq.rs:1555",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:1555 by replacing the raw-response digest with arbitrary hexadecimal and recomputing its self-contained integrity binding.",
+      "observed_result": "Verifier at crates/liminal-xtask/src/haq.rs:1555 checks only hexadecimal shape; no retained raw response is hashed, and the later binding trusts the substituted digest.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A10",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-xtask/src/haq.rs:8307",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:8307 by inserting a top-level exceptions wildcard into the machine packet.",
+      "observed_result": "Deserializer guard at crates/liminal-xtask/src/haq.rs:8307 rejects the undeclared top-level exceptions field through deny_unknown_fields before packet verification proceeds.",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A11",
+      "attack_class": "evidence/report drift",
+      "target": "docs/execution/phase1-suite-review.md:29",
+      "attempt": "Falsify docs/execution/phase1-suite-review.md:29 by deleting the packet digest while leaving all human-readable status claims unchanged.",
+      "observed_result": "Markdown verifier rejects docs/execution/phase1-suite-review.md:29 after digest removal because the report no longer contains the digest recomputed from packet serialization.",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A12",
+      "attack_class": "vacuity",
+      "target": "conformance/haqp/packet.json:3",
+      "attempt": "Falsify conformance/haqp/packet.json:3 by changing proposed status to ratified without supplying qualification evidence.",
+      "observed_result": "Inventory verifier rejects conformance/haqp/packet.json:3 because status must remain proposed, preventing a bare ratification label from passing as evidence.",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    }
+  ],
+  "findings": [
+    {
+      "id": "HAQP1-F01",
+      "attempt_id": "A01"
+    },
+    {
+      "id": "HAQP1-F02",
+      "attempt_id": "A02"
+    },
+    {
+      "id": "HAQP1-F03",
+      "attempt_id": "A03"
+    },
+    {
+      "id": "HAQP1-F04",
+      "attempt_id": "A04"
+    },
+    {
+      "id": "HAQP1-F05",
+      "attempt_id": "A05"
+    },
+    {
+      "id": "HAQP1-F06",
+      "attempt_id": "A06"
+    },
+    {
+      "id": "HAQP1-F07",
+      "attempt_id": "A07"
+    },
+    {
+      "id": "HAQP1-F08",
+      "attempt_id": "A08"
+    },
+    {
+      "id": "HAQP1-F09",
+      "attempt_id": "A09"
+    }
+  ],
+  "independently_reproduced": [
+    "HAQP1-F01",
+    "HAQP1-F02",
+    "HAQP1-F03",
+    "HAQP1-F04",
+    "HAQP1-F05",
+    "HAQP1-F06",
+    "HAQP1-F07",
+    "HAQP1-F08",
+    "HAQP1-F09"
+  ],
+  "unresolved_verified_findings": 9,
+  "result": "fail",
+  "blindness_proof": {
+    "ephemeral_session_requested": false,
+    "session_state": "fresh-codex-session",
+    "prior_pass_artifact_supplied": false,
+    "pass_two_original_spec_only": false
+  },
+  "schema_retries": 0,
+  "fixed_base": {
+    "commit": "f360e90ed6ae2d32f650a2ffc9ed03a152ee8a29",
+    "tree": "bb60ac1b5b27d02f83ed14b7226f0a0867417bd5",
+    "clean": true
+  },
+  "raw_response_sha256": "062e296c8dbb4ac8b32c4a40345f17e3370e4455c93d649bd1d4487e2bccf291",
+  "integrity_binding_sha256": "f07f82c21cde2ed625f8d95b9e11247f73bdcc7e43745fe5d22d8a3905e58c53"
+}

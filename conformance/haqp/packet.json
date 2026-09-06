@@ -1432,9 +1432,9 @@
    "id": "P1-M033",
    "family": "transforms/projections",
    "operator": "stale-basis-acceptance",
-   "source": "crates/liminal-source/src/lib.rs:17",
+   "source": "crates/liminal-source/src/view.rs:38",
    "requirement": "P1-R017",
-   "defect": "apply transform to stale revision",
+   "defect": "accept a source whose content hash no longer matches its declared basis",
    "killing_tests": [
     "P1-T29",
     "P1-T01"
@@ -2364,8 +2364,8 @@
    },
    {
     "path": "crates/liminal-source/src/file.rs",
-    "sites": 3,
-    "reason": "atomic file replacement and directory fsync; the durable primitive ILRP is built on, not an ILRP step"
+    "sites": 7,
+    "reason": "atomic file replacement and directory fsync; the durable primitive ILRP is built on, not an ILRP step (F-47 A05 brought its fsync and atomic-rename sites into the census: 3 commit_if, 2 rename, 2 fsync; a crash leaves the old or the new file, never a partial one)"
    },
    {
     "path": "crates/liminal-daemon/src/session.rs",
@@ -2396,6 +2396,21 @@
     "path": "crates/liminal-graph/src/store/mod.rs",
     "sites": 1,
     "reason": "the store's single checksummed log append (P1-M022): a crash leaves a torn tail that recovery truncates to the longest checksummed prefix (prop_torn_tail_truncates_cleanly), not state to reconcile, so it is not a registrable boundary (AM-17.8; M17.5 F-46 A05 brought it into the census)"
+   },
+   {
+    "path": "crates/liminal-daemon/src/crash.rs",
+    "sites": 1,
+    "reason": "the fault-injection recorder's fsync of its hit log: diagnostic state for crash-matrix evidence, not world state, so a crash mid-write loses a hit count and nothing recovery reconciles (M17.5 F-47 A05 brought fsync into the census)"
+   },
+   {
+    "path": "crates/liminal-graph/src/store/log.rs",
+    "sites": 4,
+    "reason": "the checksummed append log's fsyncs (record, batch, directory): a crash leaves a torn tail that recovery truncates to the longest checksummed prefix (prop_torn_tail_truncates_cleanly), not state to reconcile (AM-17.8; F-47 A05)"
+   },
+   {
+    "path": "crates/liminal-graph/src/store/snapshot.rs",
+    "sites": 2,
+    "reason": "the snapshot's fsync and atomic rename: a crash before the rename leaves the previous snapshot, after it the new one; either is a consistent state the log replays onto, nothing to reconcile (AM-17.8; F-47 A05)"
    }
   ],
   "deferred_to": "M17.9",

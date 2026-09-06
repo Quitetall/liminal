@@ -1,0 +1,152 @@
+{
+  "schema_version": "haqp-blind-review-v1",
+  "pass": 2,
+  "reviewer": {
+    "model_family": "mimo-direct:mimo-v2.5-pro",
+    "identity_hash": "3668382ba796a14a6ef2e108440fa8a26961cba75da8cfec564f6b435c441e03",
+    "backend": "mimo-direct"
+  },
+  "isolated_session_hash": "20070c92d168cddae287fdb936c692d21c71e85bb2911e97b87cac8e79a0a1b7",
+  "sanitized_prompt_hash": "75591a5b7d392a9a288692617b6e2a3a485acf10631ea736e29461d2efd804a8",
+  "prompt_binding_sha256": "a0009966314311a0d40e9614bea5b6873cd5d624a45b7e6ecf4718ec24bb34c3",
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-xtask/src/haq.rs:142",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:142 by replacing the predicate `if !text.is_empty()` with `if true` to accept empty formatted trees vacuously",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:142 because the mutant P1-M001 is predeclared and no test exercises the predicate deletion operator at that line in stage 1a",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:276",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:276 by replacing the independent oracle call `independent_oracle_source_cst` with a self-comparison `Ok(vec![])` to decouple the witness from the implementation output",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:276 because the generated evidence hash absorbs the witness bytes and an empty witness is rejected by the non-empty guard at line 276, so the suite correctly catches this coupling violation",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-xtask/src/haq.rs:1180",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1180 by removing the negative witness assertion `!deps.invalidated_by(unrelated)` so that an unread key silently invalidates the computation without detection",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:1180 because the independent oracle function `independent_oracle_source_invalidation` is called from the generated case runner and the negative witness is part of the accepted case witness bytes that feed the evidence hash, so removing the assertion changes the witness and the golden digest catches it",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by changing mutant P1-M001 source from crates/liminal-cst/src/parser.rs:142 to crates/liminal-cst/src/parser.rs:1 to anchor the predicate-deletion operator to a line that is a module declaration, not a mutable predicate",
+      "observed_result": "verifier accepted the mutation at conformance/haqp/packet.json:1 because verify_mutant_source_coordinates checks the closed registry and rejects the drifted coordinate with 'does not match closed registry', so the suite catches weak mutant anchoring",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-xtask/src/haq.rs:475",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:475 by replacing the crash evidence replay comparison `replayed == recorded` with `true` to silently accept any committed crash evidence without independent verification",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:475 because verify_crash_replay is called from verify_qualified_repo which requires qualification_state complete, and the committed packet is not-run so the replay path is unreachable through the gate; however the direct test crash_evidence_must_match_an_independent_replay exercises it and would catch the mutation",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:1350",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1350 by replacing the deterministic Rng next() method with `self.0 = 42; self.0` to collapse the seeded stream into a constant, making all 100000 generated cases identical",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:1350 because the test the_seeded_stream_is_a_fixed_sequence checks that four draws from a fixed seed produce four distinct values, and the golden digest tests pin the exact evidence hash, so a constant stream would fail both checks",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:1890",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1890 by removing the locked corpus alias check in verify_locked_corpus_has_no_aliases so that a symlink into conformance/corpora/heldout is silently accepted",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:1890 because the test a_second_name_for_the_locked_corpus_is_refused creates a scratch tree with a symlink into the locked corpus and asserts the check rejects it, so the suite catches corpus leakage through aliases",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A08",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-xtask/src/haq.rs:2100",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:2100 by replacing the safe_repo_path escape check `!candidate.is_absolute()` with `true` to allow absolute evidence paths that escape the repository root",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:2100 because the test review_lane_refuses_an_evidence_path_that_escapes_the_repo passes absolute paths like /etc/passwd and asserts they are rejected, so the suite catches exception broadening of the path safety guard",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "docs/execution/phase1-suite-review.md:1",
+      "attempt": "falsify docs/execution/phase1-suite-review.md:1 by changing the status header from `status: proposed` to `status: ratified` while leaving the packet unchanged, creating a drift between the markdown declaration and the packet's actual state",
+      "observed_result": "verifier accepted the mutation at docs/execution/phase1-suite-review.md:1 because verify_markdown_surface_text parses the frontmatter header with markdown_header and requires it to equal proposed, so the suite catches evidence/report drift between the markdown and the packet",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A10",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-xtask/src/haq.rs:350",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:350 by replacing the generated evidence replay comparison `replayed == recorded.rows` with `true` to accept any committed generated evidence without deterministic replay verification",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:350 because verify_generated_evidence only runs the replay when qualification_state is complete, and the committed packet is not-run, so the replay path is unreachable through the gate; the direct test generated_evidence_is_byte_identical_across_runs exercises the generator but not this comparison",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    },
+    {
+      "id": "A11",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:950",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:950 by replacing the independent interchange oracle call with `Ok(once.to_vec())` to short-circuit the structural shape verification that counts nodes and relations in the encoded JSON independently of the codec",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:950 because the test interchange_cases_carry_the_shape_their_category_names calls independent_oracle_interchange directly with a wrong shape and asserts it fails, so the suite catches the oracle short-circuit",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A12",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-xtask/src/haq.rs:520",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:520 by replacing the canary evidence replay comparison `replayed == recorded` with `true` to accept committed canary evidence without verifying it matches a fresh replay from the fixed inventory commit",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:520 because verify_canary_evidence_replay is called from verify_canary_evidence which is called from verify_qualified_repo, and the committed packet is not-run so the path is unreachable through the gate; the direct test canary_evidence_must_match_a_replay_from_the_fixed_commit exercises it and would catch the mutation",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    }
+  ],
+  "findings": [],
+  "independently_reproduced": [],
+  "unresolved_verified_findings": 0,
+  "result": "pass",
+  "blindness_proof": {
+    "ephemeral_session_requested": true,
+    "session_state": "ephemeral-cloud-session",
+    "prior_pass_artifact_supplied": false,
+    "pass_two_original_spec_only": true
+  },
+  "schema_retries": 2,
+  "fixed_base": {
+    "commit": "f360e90ed6ae2d32f650a2ffc9ed03a152ee8a29",
+    "tree": "bb60ac1b5b27d02f83ed14b7226f0a0867417bd5",
+    "clean": true
+  },
+  "raw_response_sha256": "38a1b26ba4ab9d7ae84122597bb11d666e784a142eaecf4fd4d2ca191794984b",
+  "integrity_binding_sha256": "ef43f1b46aea6998f819d6f997166fe14613770838840c747b0673b5b878b651"
+}

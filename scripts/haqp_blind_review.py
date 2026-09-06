@@ -788,6 +788,10 @@ def run_pass(
     committed = EVIDENCE_REVIEWS / f"{name.replace(':', '-')}.json"
     committed.parent.mkdir(parents=True, exist_ok=True)
     committed.write_text(json.dumps(record, indent=2) + "\n")
+    # F-47 (A09): the answer the digest was computed over is retained beside
+    # the record, verbatim, so the gate can hash it. A digest of nothing
+    # retained bound the record to no answer.
+    committed.with_suffix(".raw.txt").write_text(raw)
     return record
 
 

@@ -3060,3 +3060,26 @@ malformed review. Self-tested.
 
 **Consequences.** Packet (scope disclosure), digests, canaries and the two
 corpora changed; the campaign reruns from a new fixed base.
+
+## F-47 — the third complete lane: nine verified defects
+
+**Found.** 2026-09-06, lane at `f360e90`. Every stage passed; pass 2 (mimo)
+answered off-schema twice and the F-46 retry recovered it (`schema_retries: 2`,
+result pass); pass 1 (codex gpt-5.6-sol) reported nine verified findings.
+Records under `docs/execution/reviews/2026-09-06-lane-f360e90/`. All nine
+verified at their lines; all nine held.
+
+| attempt | class | what was true | fix |
+|---|---|---|---|
+| A01 | vacuity | every repair seed category built `WriteFile` steps with the category's name in their contents | each category builds what it names: `graph-step` graph operations, `two-step` two steps and one edge, `duplicate-ack` a dependency acknowledged twice, `poststate` a content-hash predicate, `hostile` NUL/bidi/64 KiB contents on a traversal path, `boundary` six steps; `missing-step`, `truncated-intent` and `cycle` are refused by `topo_order` itself (`UnknownStep`, `Cycle`) and recorded as negatives, and a refusal for the wrong reason is a generator error |
+| A02 | shared-oracle coupling | the interchange oracle counted two operation kinds; a renamed published field round-trips through the same serde on both sides | the encoded JSON's key sets for the transaction, node and relation are pinned to the published schema |
+| A03 | missing negatives | the ordering oracle accepted equal lengths; a duplicated step stood in for a missing one | the order is exactly the declared steps, once each |
+| A04 | weak mutants | P1-M033 was anchored on a `pub use` re-export; the mutability scan excluded `use` but not `pub use` | re-exports are declarations; P1-M033 re-anchored to `view.rs:38`, the content-hash staleness check |
+| A05 | fault omissions | the durable census knew call markers only; a direct `fs::rename` or `sync_all` escaped | `.sync_all(`, `.sync_data(` and `fs::rename(` are markers; the census grew by `file.rs` 3→7, `store/log.rs` 4, `store/snapshot.rs` 2, `daemon/crash.rs` 1, each disclosed as deferred with its AM-17.8 reason |
+| A06 | nondeterminism | `use std::thread as th; th::spawn(..)` named no listed token | spawn and scope are matched by call shape (`::spawn(`, `.spawn(`, `::scope(`); the product crates spawn no processes, so the over-match is a named refusal |
+| A07 | corpus leakage | `openat(AT_FDCWD, ".../heldout", O_DIRECTORY) = 7` then `openat(7, "x.md", O_WRONLY)` carried no fragment on the write | directory fds are remembered per pid from their open's return value (including the `<unfinished ...>`/`resumed` split) and a path relative to one is judged under that directory |
+| A08 | exception broadening | the review record's attempt, reviewer, fixed-base and blindness objects accepted undeclared fields | `deny_unknown_fields` on all of them; `schema_retries` declared |
+| A09 | evidence/report drift | `raw_response_sha256` was only hex-shaped; nothing retained was hashed | the reviewer's raw answer is retained beside its record as `<record>.raw.txt` and its SHA-256 must be the record's |
+
+**Consequences.** Packet (scope disclosure, P1-M033), digests, canaries and
+the repair-family golden rebound; the campaign reruns from a new fixed base.
