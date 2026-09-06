@@ -7019,7 +7019,7 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-format/src/lib.rs",
-            358,
+            353,
             ".all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))",
         ),
     ];

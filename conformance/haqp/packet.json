@@ -1172,7 +1172,7 @@
    "id": "P1-M013",
    "family": "source/CST/formatting",
    "operator": "broadened-allow-list",
-   "source": "crates/liminal-format/src/lib.rs:358",
+   "source": "crates/liminal-format/src/lib.rs:353",
    "requirement": "P1-R016",
    "defect": "broaden the compact identifier allow-list to every byte, making compact emission lossy",
    "killing_tests": [

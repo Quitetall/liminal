@@ -77,25 +77,31 @@ pub struct Phase1Document {
 }
 
 impl PartialEq for Phase1Document {
-    /// Semantic equality: the derived graph, and the HIR and diagnostics with
-    /// their source positions removed. Reformatting moves every byte offset,
-    /// so positions cannot take part; leaving the HIR and diagnostics out
-    /// entirely let a reparse drift in HIR content or diagnostic set pass as
-    /// equal (M17.5 blind pass 1, A02).
+    /// Semantic equality: the derived graph, and the HIR with its source
+    /// positions removed. Reformatting moves every byte offset, so positions
+    /// cannot take part; leaving the HIR out entirely let a reparse drift in
+    /// HIR content pass as equal (M17.5 blind pass 1, A02).
+    ///
+    /// Diagnostics are deliberately NOT part of equality. They describe the
+    /// text that was parsed, and canonical emission rewrites that text: a
+    /// malformed construct is diagnosed, dropped, and absent from the emitted
+    /// source, so the reparse is clean while the HIR and graph are unchanged
+    /// (regression fixture `f09-070ba65d68c9.bin`: UnknownForm and
+    /// MalformedSyntax on the original, none on the reparse, identical HIR).
+    /// A serialization failure compares unequal rather than masking a
+    /// difference.
     fn eq(&self, other: &Self) -> bool {
         self.holder == other.holder
             && basis_semantic_eq(&self.graph.basis, &other.graph.basis, &self.holder)
             && self.graph.nodes == other.graph.nodes
             && self.graph.relations == other.graph.relations
-            && position_free(serde_json::to_value(&self.hir).unwrap_or(serde_json::Value::Null))
-                == position_free(
-                    serde_json::to_value(&other.hir).unwrap_or(serde_json::Value::Null),
-                )
-            && self
-                .diagnostics
-                .iter()
-                .map(diagnostic_position_free)
-                .eq(other.diagnostics.iter().map(diagnostic_position_free))
+            && match (
+                serde_json::to_value(&self.hir),
+                serde_json::to_value(&other.hir),
+            ) {
+                (Ok(a), Ok(b)) => position_free(a) == position_free(b),
+                _ => false,
+            }
     }
 }
 
@@ -115,17 +121,6 @@ fn position_free(mut json: serde_json::Value) -> serde_json::Value {
     }
     strip(&mut json);
     json
-}
-
-fn diagnostic_position_free(diagnostic: &Phase1Diagnostic) -> serde_json::Value {
-    match diagnostic {
-        Phase1Diagnostic::Hir(hir) => serde_json::json!({
-            "hir": position_free(serde_json::to_value(hir).unwrap_or(serde_json::Value::Null))
-        }),
-        Phase1Diagnostic::Resolve(resolve) => serde_json::json!({
-            "resolve": position_free(serde_json::to_value(resolve).unwrap_or(serde_json::Value::Null))
-        }),
-    }
 }
 impl Eq for Phase1Document {}
 
@@ -841,6 +836,34 @@ mod tests {
             .starts_with("#!liminal-explicit-v1"),
             "a paragraph whose child is not a bare literal has no compact spelling"
         );
+    }
+
+    /// M17.5 blind pass 1 A03: the fence check read the UNTRIMMED first line
+    /// while every other compact condition reads the trimmed one, so a
+    /// literal beginning with spaces before a fence marker was emitted compact
+    /// and reparsed as a fenced block.
+    #[test]
+    fn compact_surface_is_refused_for_an_indented_fence() {
+        let formatter = MarkdownFormatter::default();
+        let bare = formatter
+            .parse("#!liminal-explicit-v1\nnode paragraph {\n  literal \"a\";\n}\n")
+            .expect("parses");
+        assert_eq!(
+            emit_compact(&bare.hir).as_deref(),
+            Some("a\n"),
+            "the bare control must be compact-representable, or this test proves nothing"
+        );
+        let indented = formatter
+            .parse("#!liminal-explicit-v1\nnode paragraph {\n  literal \"   ```x\";\n}\n")
+            .expect("parses");
+        assert_eq!(
+            emit_compact(&indented.hir),
+            None,
+            "an indented fence marker must force explicit emission"
+        );
+        let emitted = formatter.emit(&indented).expect("emit");
+        let reparsed = formatter.parse(&emitted).expect("reparses");
+        assert_eq!(reparsed, indented, "the explicit emission must round-trip");
     }
 
     /// Kills `replace || with &&` at lib.rs:283 — the clause the test above
