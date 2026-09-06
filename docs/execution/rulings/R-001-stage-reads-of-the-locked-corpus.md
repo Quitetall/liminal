@@ -2,7 +2,7 @@
 id: R-001
 attack_class: corpus leakage
 target: crates/liminal-xtask/src/haq.rs
-status: draft
+status: ruled
 ruled_by: Brian
 date: 2026-09-06
 ---

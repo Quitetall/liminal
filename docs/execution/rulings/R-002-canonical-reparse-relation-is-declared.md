@@ -2,7 +2,7 @@
 id: R-002
 attack_class: vacuity
 target: conformance/haqp/packet.json
-status: draft
+status: ruled
 ruled_by: Brian
 date: 2026-09-06
 ---
