@@ -3032,3 +3032,31 @@ transaction changes Basis identity but never emitted bytes), A07, A09, A11
 **Consequences.** The packet digest and the canary evidence rebound; the
 committed concurrency record now carries the primitives it must match. Every
 fix is source or gate code, so the lane reruns from a new fixed base.
+
+## F-46 — the second complete lane: six verified defects, and a reviewer answer that killed the lane
+
+**Found.** 2026-09-06, lane at `612cbcc`. Every stage passed with scope rows
+and seven clean campaigns again. Pass 1 (codex gpt-5.6-sol) reported six
+verified findings; pass 2 (mimo-v2.5-pro) answered off-schema — one attempt's
+`observed_result` did not quote its target string — and the lane died there,
+two hours in, with no record. Records preserved under
+`docs/execution/reviews/2026-09-06-lane-612cbcc/`. All six verified at their
+lines; all six held.
+
+| attempt | class | what was true | fix |
+|---|---|---|---|
+| A02 | shared-oracle coupling | a pure move kept only the marker SET: swapping two moved markers' contents passed the identity oracle | a move keeps every marker's content (`ordered_block_contents` compared per marker); test |
+| A03 | missing negatives | transform negatives `invalid-span`, `truncated`, `hostile` were ordinary label strings | each category constructs the shape it names (unterminated and spaced markers; a block cut mid-marker; NUL, bidi override, nested and over-long markers); the oracle is totality plus token survival, and a non-disjoint outcome is recorded as the refusal it is |
+| A05 | fault omissions | the durable-transition census knew `.commit(` and `.commit_if(`, not the store's `inner.log.append(` | `.log.append(` is a marker; the store's single checksummed append is disclosed as deferred under AM-17.8 |
+| A06 | nondeterminism | the concurrency scan (F-45) stopped at the first `#[cfg(test)]` line, so production code after an earlier test module escaped | the attributed item is skipped as a brace-delimited block and scanning resumes; test |
+| A07 | corpus leakage | every accepted interchange category built one `Node` with the category name in its payload — and a `Node` is not the codec's unit; the fuzz target decodes a `Transaction` | each category builds the transaction it names (`single-edge` two nodes one relation, `dag` a diamond, `wide` 1+8, `deep` a chain of 12, `large-payload` 64 KiB) and an independent JSON count certifies the shape; goldens re-recorded |
+| A10 | missing negatives | the seed manifest counted sixteen and hashed them; `graph_interchange_codec` and `ilrp_recovery` carried sixteen hash-named inputs of no declared class | every corpus must declare, by seed name through a closed token table, at least one valid, boundary, truncated, malformed and hostile seed; both corpora replaced by classed sets written by `haq seed-corpus` from the same constructors |
+
+**Lane defect.** A reviewer that answers off-schema is retried with the
+identical prompt in a fresh isolated session, at most three times; every
+off-schema answer is kept (redacted) beside the record and the record carries
+`schema_retries`. Provider failures are not retried: an outage is not a
+malformed review. Self-tested.
+
+**Consequences.** Packet (scope disclosure), digests, canaries and the two
+corpora changed; the campaign reruns from a new fixed base.

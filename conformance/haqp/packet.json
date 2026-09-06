@@ -2391,6 +2391,11 @@
     "path": "crates/liminal-cli/src/format.rs",
     "sites": 1,
     "reason": "M20 formatter replacement, quarantined under AM-17.2; its injection unwinds rather than aborting, so it is strictly weaker than a crash boundary"
+   },
+   {
+    "path": "crates/liminal-graph/src/store/mod.rs",
+    "sites": 1,
+    "reason": "the store's single checksummed log append (P1-M022): a crash leaves a torn tail that recovery truncates to the longest checksummed prefix (prop_torn_tail_truncates_cleanly), not state to reconcile, so it is not a registrable boundary (AM-17.8; M17.5 F-46 A05 brought it into the census)"
    }
   ],
   "deferred_to": "M17.9",

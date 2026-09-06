@@ -16,6 +16,9 @@ fn main() -> Result<()> {
             HaqCommand::RunCanaries => {
                 liminal_xtask::haq::run_canaries_repo(&liminal_xtask::repo_root()?)?;
             }
+            HaqCommand::SeedCorpus { target } => {
+                liminal_xtask::haq::write_seed_corpus_repo(&liminal_xtask::repo_root()?, &target)?;
+            }
             HaqCommand::Concurrency => {
                 liminal_xtask::haq::run_concurrency_repo(&liminal_xtask::repo_root()?)?;
             }
@@ -110,6 +113,11 @@ enum HaqCommand {
     Hash {
         /// File to digest.
         path: camino::Utf8PathBuf,
+    },
+    /// Write a fuzz target's classed seed set (ADR-0020 §4; M17.5 F-46).
+    SeedCorpus {
+        /// `graph_interchange_codec` or `ilrp_recovery`.
+        target: String,
     },
     /// Re-attest the not-applicable concurrency declaration at this base.
     Concurrency,

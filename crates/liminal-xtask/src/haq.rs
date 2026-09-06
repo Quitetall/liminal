@@ -868,28 +868,6 @@ fn independent_oracle_source_cst(
     Ok(witness)
 }
 
-/// Independent graph oracle. Field-by-field checks avoid the implementation's
-/// own `PartialEq` becoming its proof of fidelity.
-fn independent_oracle_source_graph(
-    node: &liminal_graph::Node,
-    decoded: &liminal_graph::Node,
-    once: &[u8],
-    twice: &[u8],
-) -> Result<Vec<u8>> {
-    anyhow::ensure!(once == twice, "interchange codec is not byte-canonical");
-    anyhow::ensure!(decoded.id == node.id, "codec lost the node id");
-    anyhow::ensure!(decoded.kind == node.kind, "codec lost the node kind");
-    anyhow::ensure!(decoded.revision == node.revision, "codec lost the revision");
-    anyhow::ensure!(decoded.flags == node.flags, "codec lost the node flags");
-    anyhow::ensure!(
-        decoded.payload == node.payload,
-        "codec lost the payload: {:?} -> {:?}",
-        node.payload,
-        decoded.payload
-    );
-    Ok(once.to_vec())
-}
-
 /// Independent merge oracle. It checks raw content and outcome classes, not
 /// merge-result equality.
 fn independent_oracle_source_transform(
@@ -932,6 +910,19 @@ fn independent_oracle_source_transform(
         anyhow::ensure!(
             actual == expected,
             "identity merge changed durable marker set under layout normalization"
+        );
+        // Blind pass 1 at 612cbcc (A02): the marker SET surviving a move said
+        // nothing about which content each marker kept; swapping the contents
+        // of two moved markers passed. A move keeps every marker's content.
+        let markered = |text: &str| {
+            ordered_block_contents(text)
+                .into_iter()
+                .filter(|(marker, _)| marker.starts_with("{#"))
+                .collect::<BTreeMap<_, _>>()
+        };
+        anyhow::ensure!(
+            markered(merged) == markered(ours),
+            "identity merge re-associated content across moved markers: {ours:?} -> {merged:?}"
         );
     }
     if ours_markers == base_markers {
@@ -3543,7 +3534,155 @@ fn verify_fuzz_seed_manifests(root: &Utf8Path, recorded: &[FuzzEvidence]) -> Res
             &row.seed_manifest_blake3,
             &digest,
         )?;
+        verify_seed_classes(root, &row.target, &seed_dir)?;
     }
+    Ok(())
+}
+
+/// The seed classes ADR-0020 §4 requires a corpus to span, and the closed name
+/// tokens that declare each. A seed matching no negative token is a valid
+/// input by declaration; a corpus needs at least one seed in every class.
+const SEED_CLASSES: [(&str, &[&str]); 4] = [
+    ("boundary", &["boundary"]),
+    ("truncated", &["truncated", "unterminated"]),
+    (
+        "malformed",
+        &[
+            "malformed",
+            "invalid",
+            "illegal",
+            "duplicate",
+            "missing",
+            "unknown",
+            "control",
+        ],
+    ),
+    ("hostile", &["hostile"]),
+];
+
+/// Blind pass 1 at 612cbcc (A10): the manifest check counted seeds and hashed
+/// them; sixteen inputs of one class satisfied it. Each tracked seed's name
+/// declares its class through the closed token table above.
+fn verify_seed_classes(root: &Utf8Path, target: &str, seed_dir: &Utf8Path) -> Result<()> {
+    let relative = seed_dir
+        .strip_prefix(root)
+        .map_or_else(|_| seed_dir.to_string(), ToString::to_string);
+    let listed = git_text(root, &["ls-files", "-z", "--", &relative])?;
+    let mut counts = BTreeMap::new();
+    for name in listed.split('\0').filter(|name| !name.trim().is_empty()) {
+        let file = Utf8Path::new(name)
+            .file_name()
+            .unwrap_or(name)
+            .to_ascii_lowercase();
+        let class = SEED_CLASSES
+            .iter()
+            .find(|(_, tokens)| tokens.iter().any(|token| file.contains(token)))
+            .map_or("valid", |(class, _)| *class);
+        *counts.entry(class).or_insert(0usize) += 1;
+    }
+    for class in ["valid", "boundary", "truncated", "malformed", "hostile"] {
+        anyhow::ensure!(
+            counts.get(class).copied().unwrap_or(0) > 0,
+            "{target}: committed seed set has no {class} seed; ADR-0020 §4 requires seeds \
+             spanning valid, boundary, truncated, malformed and hostile input (declared by \
+             name: {:?})",
+            SEED_CLASSES
+                .iter()
+                .map(|(c, t)| (*c, *t))
+                .collect::<Vec<_>>()
+        );
+    }
+    Ok(())
+}
+
+/// Write a target's classed seed set (A10). Deterministic, so the committed
+/// seeds are reproducible from this code. `graph_interchange_codec` seeds are
+/// transactions built by the same constructors the generated cases use;
+/// `ilrp_recovery` seeds are the byte walks its target consumes.
+pub fn write_seed_corpus_repo(root: &Utf8Path, target: &str) -> Result<()> {
+    let dir = root.join("fuzz/corpus").join(target);
+    fs::create_dir_all(&dir)?;
+    let mut rng = Rng(0x5eed_c0de);
+    let seeds: Vec<(&str, Vec<u8>)> = match target {
+        "graph_interchange_codec" => {
+            let txn = |rng: &mut Rng, category: &str| {
+                serde_json::to_vec(&interchange_transaction(category, rng, "seed", false).0)
+                    .expect("transaction encodes")
+            };
+            let mut boundary = interchange_transaction("single-node", &mut rng, "seed", false).0;
+            boundary.parent = liminal_id::GraphRevisionId(u64::MAX);
+            boundary.meta.at = liminal_id::Timestamp(i64::MAX);
+            vec![
+                ("01-empty.json", Vec::new()),
+                ("02-single-node.json", txn(&mut rng, "single-node")),
+                ("03-single-edge.json", txn(&mut rng, "single-edge")),
+                ("04-dag.json", txn(&mut rng, "dag")),
+                ("05-wide.json", txn(&mut rng, "wide")),
+                ("06-deep.json", txn(&mut rng, "deep")),
+                ("07-large-payload.json", txn(&mut rng, "large-payload")),
+                ("08-duplicate-id.json", br#"{"id":"00000000-0000-0000-0000-000000000001","id":"00000000-0000-0000-0000-000000000002","parent":0,"meta":{"actor":null,"origin":"human","at":0,"provenance":null,"inverse":null},"ops":[]}"#.to_vec()),
+                ("09-missing-node.json", br#"{"ops":[{"delete-node":{"id":"00000000-0000-0000-0000-000000000001"}}]}"#.to_vec()),
+                ("10-unknown-kind.json", br#"{"id":"00000000-0000-0000-0000-000000000001","parent":0,"meta":{"actor":null,"origin":"nobody","at":0,"provenance":null,"inverse":null},"ops":[]}"#.to_vec()),
+                ("11-comment.json", b"// not json\n{\"ops\":[]}".to_vec()),
+                ("12-truncated-json.json", {
+                    let mut full = txn(&mut rng, "single-edge");
+                    full.truncate(full.len() / 2);
+                    full
+                }),
+                ("13-invalid-json.bin", b"{\"ops\":[\x00\xff".to_vec()),
+                ("14-boundary-revision.json", serde_json::to_vec(&boundary).expect("encodes")),
+                ("15-unicode-payload.json", serde_json::to_vec(&interchange_transaction("single-node", &mut rng, "\u{1F600} \u{202e}rtl \u{0}", false).0).expect("encodes")),
+                ("16-hostile.bin", vec![0, 0xff, 0x7f, b'{', b'"', 0xc3, 0x28]),
+            ]
+        }
+        "ilrp_recovery" => {
+            // Byte b drives state STATES[b % 7]: 0 Prepared, 1 Applying,
+            // 2 ExternalApplied, 3 Finalizing, 4 Committed, 5 NeedsReview,
+            // 6 Aborted. Legal path to Committed: 1,2,3,4.
+            vec![
+                ("01-empty.bin", Vec::new()),
+                ("02-single-step.bin", vec![1]),
+                ("03-legal-path-committed.bin", vec![1, 2, 3, 4]),
+                ("04-abort-path.bin", vec![1, 6]),
+                ("05-needs-review-path.bin", vec![1, 2, 5]),
+                ("06-truncated-path.bin", vec![1, 2, 3]),
+                ("07-boundary-max-byte.bin", vec![255, 254, 253, 252]),
+                ("08-boundary-all-terminals.bin", vec![4, 5, 6, 4, 5, 6]),
+                ("09-illegal-steps.bin", vec![4, 0, 3, 0, 6, 0]),
+                ("10-after-terminal.bin", vec![1, 2, 3, 4, 1, 2, 3]),
+                (
+                    "11-long-run.bin",
+                    (0..4096u32)
+                        .map(|i| u8::try_from(i % 7).expect("fits"))
+                        .collect(),
+                ),
+                (
+                    "12-wide-alternating.bin",
+                    (0..64u8).map(|i| if i % 2 == 0 { 1 } else { 2 }).collect(),
+                ),
+                (
+                    "13-deep-cycle-attempt.bin",
+                    vec![1, 2, 1, 2, 1, 2, 3, 2, 3, 4],
+                ),
+                (
+                    "14-invalid-high-bytes.bin",
+                    vec![0x80, 0x90, 0xa0, 0xb0, 0xc0, 0xd0, 0xe0, 0xf0],
+                ),
+                (
+                    "15-hostile-random.bin",
+                    (0..256)
+                        .map(|_| u8::try_from(rng.below(256)).expect("fits"))
+                        .collect(),
+                ),
+                ("16-hostile-zero-fill.bin", vec![0; 1024]),
+            ]
+        }
+        other => anyhow::bail!("no classed seed set is defined for {other}"),
+    };
+    for (name, bytes) in seeds {
+        fs::write(dir.join(name), bytes)?;
+    }
+    println!("wrote 16 classed seeds to {dir}");
     Ok(())
 }
 
@@ -7971,7 +8110,10 @@ fn verify_crash_boundary_inventory(packet: &Packet) -> Result<()> {
 /// undercounting, would let a real durable transition hide, so the bias is the
 /// one worth having.
 fn durable_transition_sites(root: &Utf8Path) -> Result<BTreeMap<String, usize>> {
-    const MARKERS: [&str; 2] = [".commit(", ".commit_if("];
+    // Blind pass 1 at 612cbcc (A05): `inner.log.append(` is the store's durable
+    // append (P1-M022 deletes it) and was outside the census, so an append-based
+    // transition could move without the scope disclosure noticing.
+    const MARKERS: [&str; 3] = [".commit(", ".commit_if(", ".log.append("];
     let listed = git_text(root, &["ls-files", "-z", "--", "crates"])?;
     let mut sites = BTreeMap::new();
     for name in listed.split('\0').filter(|name| !name.trim().is_empty()) {
@@ -8484,10 +8626,28 @@ fn scan_concurrency_primitives(root: &Utf8Path) -> Result<ConcurrencyScan> {
         for file in files {
             let text = fs::read_to_string(&file).with_context(|| format!("read {file}"))?;
             let relative = file.strip_prefix(root).unwrap_or(&file);
+            // Blind pass 1 at 612cbcc (A06): this used to stop at the first
+            // `#[cfg(test)]` line, so production code after an earlier test
+            // module escaped the scan. The attributed item is skipped as a
+            // block (brace depth), and scanning resumes after it.
+            let mut skipping: Option<(usize, bool)> = None;
             for (index, line) in text.lines().enumerate() {
                 let trimmed = line.trim();
+                if let Some((depth, entered)) = skipping.as_mut() {
+                    *depth += line.matches('{').count();
+                    let closes = line.matches('}').count();
+                    if *depth > 0 {
+                        *entered = true;
+                    }
+                    *depth = depth.saturating_sub(closes);
+                    if (*entered && *depth == 0) || (!*entered && trimmed.ends_with(';')) {
+                        skipping = None;
+                    }
+                    continue;
+                }
                 if trimmed == "#[cfg(test)]" {
-                    break;
+                    skipping = Some((0, false));
+                    continue;
                 }
                 if trimmed.starts_with("//") {
                     continue;
@@ -9854,7 +10014,7 @@ fn case_source_cst(rng: &mut Rng) -> Result<Case> {
 /// comparison is over BYTES, never the type's own `PartialEq`, so a broken
 /// `Eq` cannot make this pass (ADR-0020 §5).
 fn case_interchange(rng: &mut Rng) -> Result<Case> {
-    use liminal_graph::{Node, NodeFlags, PayloadRef};
+    use liminal_graph::Node;
 
     let category = rng.category("graph/interchange codecs");
     let malformed = matches!(
@@ -9899,24 +10059,52 @@ fn case_interchange(rng: &mut Rng) -> Result<Case> {
         };
         return Ok(Case::Negative { category, witness });
     }
+    // Blind pass 1 at 612cbcc (A07): every accepted category built one Node
+    // with the category's name leaked into its payload, and a Node is not even
+    // the codec's unit — the fuzz target decodes a Transaction. Each category
+    // now builds the transaction shape it names, and the oracle counts that
+    // shape in the encoded JSON independently of the codec's own equality.
     let text = format!("{category}:{}", rng.word());
     let durable = rng.below(2) == 1;
-    // Domain rule: a node claiming a durable id must carry payload text.
-    // Candidates violating it are out of domain and discarded, not "fixed".
-    if durable && text.trim().is_empty() {
+    if matches!(category, "single-node") && durable && text.trim().is_empty() {
         return Ok(Case::Discarded {
             category,
             witness: format!("durable-without-payload:{text:?}").into_bytes(),
         });
     }
-    let node = Node {
+    let (txn, shape) = interchange_transaction(category, rng, &text, durable);
+    let once = serde_json::to_vec(&txn)?;
+    let decoded: liminal_graph::Transaction = serde_json::from_slice(&once)?;
+    let twice = serde_json::to_vec(&decoded)?;
+    let witness = independent_oracle_interchange(&txn, &decoded, &once, &twice, shape)?;
+    Ok(Case::Accepted { category, witness })
+}
+
+/// The node and relation counts a category promises.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct InterchangeShape {
+    nodes: usize,
+    relations: usize,
+    payload_bytes_at_least: usize,
+}
+
+/// A transaction with the shape its category names: `single-edge` is two nodes
+/// and one relation, `dag` a diamond, `wide` a root with eight children, `deep`
+/// a chain of twelve, `large-payload` one node carrying 64 KiB of text.
+fn interchange_transaction(
+    category: &str,
+    rng: &mut Rng,
+    text: &str,
+    durable: bool,
+) -> (liminal_graph::Transaction, InterchangeShape) {
+    use liminal_graph::{
+        Node, NodeFlags, Operation, Origin, PayloadRef, Relation, RelationFlags, Target,
+        Transaction, TxnMeta,
+    };
+    let node = |rng: &mut Rng, payload: PayloadRef, durable: bool| Node {
         id: liminal_id::NodeId::from_uuid(rng.uuid()),
         kind: liminal_graph::KindId(u32::try_from(rng.below(8)).expect("kind fits")),
-        payload: if rng.below(4) == 0 {
-            PayloadRef::None
-        } else {
-            PayloadRef::Text(text)
-        },
+        payload,
         revision: liminal_id::RevisionId(rng.below(1_000)),
         flags: if durable {
             NodeFlags::HAS_DURABLE_ID
@@ -9924,13 +10112,128 @@ fn case_interchange(rng: &mut Rng) -> Result<Case> {
             NodeFlags::default()
         },
     };
+    let relation =
+        |rng: &mut Rng, source: liminal_id::NodeId, target: liminal_id::NodeId| Relation {
+            id: liminal_id::RelationId::from_uuid(rng.uuid()),
+            source,
+            target: Target::Node(target),
+            kind: liminal_graph::KindId(u32::try_from(rng.below(8)).expect("kind fits")),
+            payload: PayloadRef::None,
+            revision: liminal_id::RevisionId(0),
+            flags: RelationFlags(0),
+            requires: None,
+        };
+    let (nodes, edges, payload_floor): (Vec<Node>, Vec<(usize, usize)>, usize) = match category {
+        "single-edge" => (
+            vec![
+                node(rng, PayloadRef::Text(text.to_owned()), durable),
+                node(rng, PayloadRef::None, false),
+            ],
+            vec![(0, 1)],
+            0,
+        ),
+        "dag" => (
+            (0..4).map(|_| node(rng, PayloadRef::None, false)).collect(),
+            vec![(0, 1), (0, 2), (1, 3), (2, 3)],
+            0,
+        ),
+        "wide" => (
+            (0..9).map(|_| node(rng, PayloadRef::None, false)).collect(),
+            (1..9).map(|child| (0, child)).collect(),
+            0,
+        ),
+        "deep" => (
+            (0..12)
+                .map(|_| node(rng, PayloadRef::None, false))
+                .collect(),
+            (0..11).map(|index| (index, index + 1)).collect(),
+            0,
+        ),
+        "large-payload" => (
+            vec![node(
+                rng,
+                PayloadRef::Text(text.repeat(65_536 / text.len().max(1) + 1)),
+                durable,
+            )],
+            Vec::new(),
+            65_536,
+        ),
+        _ => {
+            let payload = if rng.below(4) == 0 {
+                PayloadRef::None
+            } else {
+                PayloadRef::Text(text.to_owned())
+            };
+            (vec![node(rng, payload, durable)], Vec::new(), 0)
+        }
+    };
+    let shape = InterchangeShape {
+        nodes: nodes.len(),
+        relations: edges.len(),
+        payload_bytes_at_least: payload_floor,
+    };
+    let ids = nodes.iter().map(|n| n.id).collect::<Vec<_>>();
+    let mut ops = nodes
+        .into_iter()
+        .map(|node| Operation::CreateNode { node })
+        .collect::<Vec<_>>();
+    for (from, to) in edges {
+        ops.push(Operation::AddRelation {
+            relation: relation(rng, ids[from], ids[to]),
+        });
+    }
+    let txn = Transaction {
+        id: liminal_id::TransactionId::from_uuid(rng.uuid()),
+        parent: liminal_id::GraphRevisionId(rng.below(1_000)),
+        meta: TxnMeta {
+            actor: None,
+            origin: Origin::Human,
+            at: liminal_id::Timestamp(i64::try_from(rng.below(1_000_000)).expect("fits")),
+            provenance: None,
+            inverse: None,
+        },
+        ops,
+    };
+    (txn, shape)
+}
 
-    let once = serde_json::to_vec(&node)?;
-    let decoded: Node = serde_json::from_slice(&once)?;
-    let twice = serde_json::to_vec(&decoded)?;
-
-    let witness = independent_oracle_source_graph(&node, &decoded, &once, &twice)?;
-    Ok(Case::Accepted { category, witness })
+/// Independent oracle for the interchange codec: structural round-trip,
+/// byte-stable re-encoding, and the promised shape counted in the encoded JSON
+/// by a parser that is not the codec (serde_json::Value), so a codec that
+/// silently dropped an operation could not certify itself.
+fn independent_oracle_interchange(
+    txn: &liminal_graph::Transaction,
+    decoded: &liminal_graph::Transaction,
+    once: &[u8],
+    twice: &[u8],
+    shape: InterchangeShape,
+) -> Result<Vec<u8>> {
+    anyhow::ensure!(
+        txn == decoded,
+        "interchange round trip changed the transaction"
+    );
+    anyhow::ensure!(once == twice, "interchange encoding is not byte-stable");
+    let value: serde_json::Value = serde_json::from_slice(once)?;
+    let ops = value["ops"]
+        .as_array()
+        .context("encoded transaction has no ops array")?;
+    let count = |key: &str| ops.iter().filter(|op| op.get(key).is_some()).count();
+    anyhow::ensure!(
+        count("create-node") == shape.nodes && count("add-relation") == shape.relations,
+        "encoded shape differs from the category's promise: {shape:?}"
+    );
+    let payload_bytes = ops
+        .iter()
+        .filter_map(|op| op.pointer("/create-node/node/payload/text"))
+        .filter_map(serde_json::Value::as_str)
+        .map(str::len)
+        .max()
+        .unwrap_or(0);
+    anyhow::ensure!(
+        payload_bytes >= shape.payload_bytes_at_least,
+        "encoded payload {payload_bytes} bytes is under the category's floor"
+    );
+    Ok(once.to_vec())
 }
 
 /// Family 2 — transforms/projections.
@@ -9939,25 +10242,53 @@ fn case_interchange(rng: &mut Rng) -> Result<Case> {
 /// **identity** (a side that changed nothing must not perturb the other
 /// side's content) and **outcome-class symmetry** (swapping `ours`/`theirs`
 /// cannot change whether the merge was structurally disjoint).
+/// The input a transform negative category names (A03). `empty` is the empty
+/// side; `invalid-span` is a marker that never closes and one with whitespace
+/// inside; `truncated` is a block cut in the middle of its marker; `hostile`
+/// carries a NUL, a bidi override, a nested marker and an over-long marker.
+fn transform_negative_input(category: &str, rng: &mut Rng) -> String {
+    let word = rng.word();
+    match category {
+        "empty" => String::new(),
+        "invalid-span" => format!("{word} {{#open\n\n{word} {{# spaced }}"),
+        "truncated" => format!("{word} {{#full}}\n\n{word} {{#cu"),
+        "hostile" => format!(
+            "{word}\0 {{#\u{202e}}} {{#{{#nested}}}} {{#{}}}",
+            "x".repeat(4096)
+        ),
+        other => format!("{other}:{word}"),
+    }
+}
+
 fn case_transform(rng: &mut Rng) -> Result<Case> {
     use liminal_source::merge::three_way;
 
     let category = rng.category("transforms/projections");
     if matches!(category, "empty" | "invalid-span" | "truncated" | "hostile") {
-        // Negative inputs still cross the production merge implementation. A
-        // category label and random witness alone only tests the generator's
-        // branch, not the transform's refusal/preservation behavior.
-        let malformed = format!("{category}:{}", rng.word());
+        // Negative inputs still cross the production merge implementation.
+        // Blind pass 1 at 612cbcc (A03): every category used to become an
+        // ordinary label string, so the "negative" tested only the generator's
+        // branch. Each category now constructs the shape it names.
+        let malformed = transform_negative_input(category, rng);
         let outcome = three_way("{#negative}", &malformed, "{#negative}");
-        let liminal_source::merge::MergeOutcome::Disjoint { merged } = &outcome else {
-            anyhow::bail!(
-                "transform negative category {category} produced non-disjoint outcome: {outcome:?}"
+        // Totality is the property: the merge returned rather than panicked.
+        // A disjoint outcome must carry the malformed side verbatim; any other
+        // outcome class is the transform refusing the shape, recorded as such.
+        if let liminal_source::merge::MergeOutcome::Disjoint { merged } = &outcome {
+            // The merge normalizes layout (base slot order, block spacing), so
+            // verbatim containment is not the property; every token of the
+            // malformed side surviving is.
+            let mut missing = malformed.split_whitespace().collect::<Vec<_>>();
+            for token in merged.split_whitespace() {
+                if let Some(index) = missing.iter().position(|m| *m == token) {
+                    missing.swap_remove(index);
+                }
+            }
+            anyhow::ensure!(
+                missing.is_empty(),
+                "transform negative category {category} lost malformed input tokens {missing:?}"
             );
-        };
-        anyhow::ensure!(
-            merged.contains(&malformed),
-            "transform negative category {category} lost malformed input"
-        );
+        }
         let witness = format!("transform-negative:{category}:{outcome:?}").into_bytes();
         return Ok(Case::Negative { category, witness });
     }
@@ -12715,11 +13046,11 @@ mod tests {
             ),
             (
                 "graph/interchange codecs",
-                "68a9537820365388241d28b84daa4f0b195721033c950b9fd24573208d40201d",
+                "ca99f0374a5e69c0d1e20954b8056859ffee020ff2672658eed28c8f1684bb86",
             ),
             (
                 "transforms/projections",
-                "c3524a5a331362b5851e3151b30531876b769e40a454a8cd19d214caef3e6c82",
+                "3c56f417ccf4334d819c7600c1feb1143d32530de59130be531aaba991cba40d",
             ),
             (
                 "repair/ILRP/recovery",
@@ -14571,6 +14902,137 @@ mod tests {
         verify_provenance(&scratch_root, &qualified).expect("the bound block must verify");
         let err = run_qualification_canary(&root, &packet, "C26").expect_err("the canary refuses");
         assert!(err.to_string().contains("no provenance block"), "{err}");
+    }
+
+    /// Blind pass 1 at 612cbcc (A02): a pure move kept only the marker SET;
+    /// swapping two moved markers' contents passed.
+    #[test]
+    fn a_move_that_swaps_marker_contents_is_refused() {
+        use liminal_source::merge::MergeOutcome;
+        let base = "alpha {#x}\n\nbeta {#y}";
+        let ours = "beta {#y}\n\nalpha {#x}";
+        let faithful = MergeOutcome::Disjoint {
+            merged: ours.to_owned(),
+        };
+        let swapped = MergeOutcome::Disjoint {
+            merged: "alpha {#y}\n\nbeta {#x}".to_owned(),
+        };
+        independent_oracle_source_transform(base, ours, &faithful, &faithful, &faithful)
+            .expect("a faithful move keeps every marker's content");
+        let err = independent_oracle_source_transform(base, ours, &swapped, &swapped, &swapped)
+            .expect_err("swapped contents under moved markers");
+        assert!(err.to_string().contains("re-associated"), "{err}");
+    }
+
+    /// Blind pass 1 at 612cbcc (A03): each negative category constructs the
+    /// shape it names, not a label.
+    #[test]
+    fn transform_negatives_are_shaped_like_their_category() {
+        let mut rng = Rng(7);
+        assert!(transform_negative_input("empty", &mut rng).is_empty());
+        let span = transform_negative_input("invalid-span", &mut rng);
+        assert!(
+            span.contains("{#open\n") && span.contains("{# spaced }"),
+            "{span:?}"
+        );
+        let truncated = transform_negative_input("truncated", &mut rng);
+        assert!(truncated.ends_with("{#cu"), "{truncated:?}");
+        let hostile = transform_negative_input("hostile", &mut rng);
+        assert!(hostile.contains('\0') && hostile.contains("{#{#nested}}") && hostile.len() > 4096);
+        for _ in 0..64 {
+            case_transform(&mut rng).expect("the merge is total over shaped negatives");
+        }
+    }
+
+    /// Blind pass 1 at 612cbcc (A06): production code after an earlier test
+    /// module must still be scanned; the module itself must not be.
+    #[test]
+    fn the_concurrency_scan_resumes_after_a_test_module() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-conc2").expect("scratch");
+        let root = scratch.path().to_owned();
+        let src = root.join("crates/w/src");
+        fs::create_dir_all(&src).expect("mkdir");
+        fs::write(
+            src.join("lib.rs"),
+            "pub fn a() {}\n#[cfg(test)]\nmod tests {\n    fn t() { std::thread::spawn(|| {}); }\n}\npub fn b() { std::thread::spawn(|| {}); }\n#[cfg(test)]\nuse std::sync::Mutex;\npub struct S { inner: std::sync::RwLock<u8> }\n",
+        )
+        .expect("write");
+        let scan = scan_concurrency_primitives(&root).expect("scan");
+        assert_eq!(
+            scan.execution,
+            vec!["crates/w/src/lib.rs:6:thread::spawn".to_owned()]
+        );
+        assert_eq!(scan.sync, vec!["crates/w/src/lib.rs:9:RwLock<".to_owned()]);
+    }
+
+    /// Blind pass 1 at 612cbcc (A07): each accepted interchange category builds
+    /// the transaction shape it names, counted independently in the JSON.
+    #[test]
+    fn interchange_cases_carry_the_shape_their_category_names() {
+        let mut rng = Rng(11);
+        for (category, nodes, relations) in [
+            ("single-node", 1, 0),
+            ("single-edge", 2, 1),
+            ("dag", 4, 4),
+            ("wide", 9, 8),
+            ("deep", 12, 11),
+            ("large-payload", 1, 0),
+        ] {
+            let (txn, shape) = interchange_transaction(category, &mut rng, "seed", false);
+            assert_eq!(
+                (shape.nodes, shape.relations),
+                (nodes, relations),
+                "{category}"
+            );
+            let once = serde_json::to_vec(&txn).expect("encodes");
+            let decoded: liminal_graph::Transaction =
+                serde_json::from_slice(&once).expect("decodes");
+            let twice = serde_json::to_vec(&decoded).expect("encodes");
+            independent_oracle_interchange(&txn, &decoded, &once, &twice, shape).expect(category);
+            let wrong = InterchangeShape {
+                nodes: nodes + 1,
+                ..shape
+            };
+            independent_oracle_interchange(&txn, &decoded, &once, &twice, wrong)
+                .expect_err("a shape the JSON does not carry");
+        }
+        let (_, big) = interchange_transaction("large-payload", &mut rng, "seed", false);
+        assert!(big.payload_bytes_at_least >= 65_536);
+    }
+
+    /// Blind pass 1 at 612cbcc (A10): sixteen seeds of one class no longer
+    /// satisfy the manifest; every class must be declared by a seed's name.
+    #[test]
+    fn a_seed_set_must_span_every_class_by_name() {
+        let (_scratch, root) = scratch_git_repo("haq-seeds");
+        let dir = root.join("fuzz/corpus/t");
+        fs::create_dir_all(&dir).expect("mkdir");
+        let commit_all = |message: &str| {
+            for args in [vec!["add", "-A"], vec!["commit", "--quiet", "-m", message]] {
+                let status = Command::new("git")
+                    .current_dir(&root)
+                    .args(&args)
+                    .status()
+                    .expect("git");
+                assert!(status.success(), "git {args:?} failed");
+            }
+        };
+        for i in 0..16 {
+            fs::write(dir.join(format!("{i:02x}-deadbeef.bin")), [i]).expect("seed");
+        }
+        commit_all("same-class seeds");
+        let err = verify_seed_classes(&root, "t", &dir).expect_err("no boundary seed");
+        assert!(err.to_string().contains("no boundary seed"), "{err}");
+        for name in [
+            "boundary.bin",
+            "truncated.bin",
+            "invalid.bin",
+            "hostile.bin",
+        ] {
+            fs::write(dir.join(name), b"x").expect("seed");
+        }
+        commit_all("classed seeds");
+        verify_seed_classes(&root, "t", &dir).expect("every class declared");
     }
 
     /// F-44 ruling (2026-09-05): a stage may read the locked corpus -- the SLO

@@ -1,0 +1,183 @@
+{
+  "schema_version": "haqp-blind-review-v1",
+  "pass": 1,
+  "reviewer": {
+    "model_family": "codex:gpt-5.6-sol",
+    "identity_hash": "f6cac6a769086b0c4a44f2b83d25874afa0b393a852ac730262a2f801543651c",
+    "backend": "codex"
+  },
+  "isolated_session_hash": "637d0936268f067cf8959befe8228950404f57a6388c1765ec48e51f2f5ef43b",
+  "sanitized_prompt_hash": "c941779bf0174830b8b4a538e3b45c45ab1b6fb498334d97de32e251633d7b28",
+  "prompt_binding_sha256": "75fcbacaf08178a9c5bc14d049ad3ff06385e5d474bdc39e11f34b81df755006",
+  "attempts": [
+    {
+      "id": "P1-A01",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-xtask/src/haq.rs:578",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:578 by clearing every declared relation from a passing generated family.",
+      "observed_result": "Targeted fixed-tree test rejected empty relations at crates/liminal-xtask/src/haq.rs:578 with the expected non-vacuity error.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "P1-A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:927",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:927 using moved blocks whose marker-to-content associations are swapped while global multisets remain equal.",
+      "observed_result": "Counterexample passed every applicable guard at crates/liminal-xtask/src/haq.rs:927 despite attaching content A to marker b and content B to marker a.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "P1-A03",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-xtask/src/haq.rs:9950",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:9950 by tracing invalid-span, truncated, and hostile categories into their constructed transform inputs.",
+      "observed_result": "At crates/liminal-xtask/src/haq.rs:9950 every named negative becomes an ordinary valid UTF-8 label string; no invalid span, truncation, or hostile representation is constructed.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "P1-A04",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-xtask/src/haq.rs:6874",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:6874 by renaming an ack label while leaving the durable commit_intent call intact.",
+      "observed_result": "Targeted fixed-tree test confirmed crates/liminal-xtask/src/haq.rs:6874 rejects label-only replacement and accepts only removal of a durable call.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "P1-A05",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-xtask/src/haq.rs:7974",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:7974 with a tracked durable inner.log.append call outside the scanner's two recognized markers.",
+      "observed_result": "Direct scanner reproduction showed crates/liminal-xtask/src/haq.rs:7974 counts zero sites for inner.log.append, allowing append-based durable transitions to evade scope drift detection.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "P1-A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:8489",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:8489 by placing production thread spawning after an earlier cfg(test) module in the same source file.",
+      "observed_result": "Direct loop reproduction showed crates/liminal-xtask/src/haq.rs:8489 stops at the first cfg(test) line and misses later production thread::spawn execution.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "P1-A07",
+      "attack_class": "corpus leakage",
+      "target": "conformance/haqp/packet.json:2145",
+      "attempt": "Falsify conformance/haqp/packet.json:2145 by tracing the declared single-edge category through the graph generated-case constructor.",
+      "observed_result": "The category at conformance/haqp/packet.json:2145 reaches the same single-Node constructor as dag, wide, deep, and large-payload; category text leaks into payload without constructing claimed structures.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "P1-A08",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-xtask/src/haq.rs:8159",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:8159 by adding wildcard exceptions at packet level and an exempt field inside a mutant row.",
+      "observed_result": "Targeted fixed-tree test confirmed crates/liminal-xtask/src/haq.rs:8159 rejects both undeclared exception fields instead of silently broadening packet allowances.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "P1-A09",
+      "attack_class": "evidence/report drift",
+      "target": "crates/liminal-xtask/src/haq.rs:1594",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:1594 by pairing a packet pass claim with a committed review record reporting fail.",
+      "observed_result": "Targeted fixed-tree test confirmed crates/liminal-xtask/src/haq.rs:1594 rejects packet and record result disagreement with the expected contradiction error.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "P1-A10",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-xtask/src/haq.rs:3531",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:3531 using sixteen tracked seeds from one input class while omitting valid, boundary, truncated, malformed, and hostile coverage.",
+      "observed_result": "Inspection reproduced that crates/liminal-xtask/src/haq.rs:3531 checks only seed count and aggregate digest; sixteen same-class seeds satisfy every enforced manifest condition.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "P1-A11",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-xtask/src/haq.rs:7936",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:7936 by clearing only one side of a declared crash-boundary injection pair.",
+      "observed_result": "Targeted fixed-tree test confirmed crates/liminal-xtask/src/haq.rs:7936 rejects both before-only and after-only crash-boundary declarations.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "P1-A12",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:3713",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:3713 by assigning one fuzz target a different nonzero seed while retaining otherwise clean campaign rows.",
+      "observed_result": "Targeted fixed-tree test confirmed crates/liminal-xtask/src/haq.rs:3713 rejects multiple nonzero campaign seeds rather than treating separate runs as one campaign.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    }
+  ],
+  "findings": [
+    {
+      "id": "P1-F01",
+      "attempt_id": "P1-A02"
+    },
+    {
+      "id": "P1-F02",
+      "attempt_id": "P1-A03"
+    },
+    {
+      "id": "P1-F03",
+      "attempt_id": "P1-A05"
+    },
+    {
+      "id": "P1-F04",
+      "attempt_id": "P1-A06"
+    },
+    {
+      "id": "P1-F05",
+      "attempt_id": "P1-A07"
+    },
+    {
+      "id": "P1-F06",
+      "attempt_id": "P1-A10"
+    }
+  ],
+  "independently_reproduced": [
+    "P1-F01",
+    "P1-F02",
+    "P1-F03",
+    "P1-F04",
+    "P1-F05",
+    "P1-F06"
+  ],
+  "unresolved_verified_findings": 6,
+  "result": "fail",
+  "blindness_proof": {
+    "ephemeral_session_requested": false,
+    "session_state": "fresh-codex-session",
+    "prior_pass_artifact_supplied": false,
+    "pass_two_original_spec_only": false
+  },
+  "fixed_base": {
+    "commit": "612cbcc3752074c2906cd0cb1c164be33c90612c",
+    "tree": "f44d9c1f168e210888de1b1c535b2d73b395b7db",
+    "clean": true
+  },
+  "raw_response_sha256": "88b877aa5697be31edbebb7f09f8930f7d37b8bd48c35d7e588bf0ffddf86e43",
+  "integrity_binding_sha256": "dd13a897eed7b9475674531c0b93621a1215441e9b8c863eefe2781076101225"
+}

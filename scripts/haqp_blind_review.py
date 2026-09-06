@@ -591,8 +591,35 @@ class ProviderFailure(RuntimeError):
 
 
 class ReviewSchemaFailure(ValueError):
-    """A reviewer returned text that cannot serve as a complete review record."""
+    """A reviewer answered, but not in the record schema. Carries the raw text
+    so a retry can keep what it is retrying (F-46)."""
 
+    def __init__(self, message: str, raw: str = "") -> None:
+        super().__init__(message)
+        self.raw = raw
+
+
+
+def run_pass_with_retries(
+    name: str, model: str, context: str, fixed_base: dict[str, Any], *, pass_two: bool
+) -> dict[str, Any]:
+    """A reviewer that answers off-schema is retried with the identical prompt,
+    at most SCHEMA_RETRIES times, each attempt in a fresh isolated session. The
+    lane at 612cbcc (F-46) died after two hours because one pass misquoted one
+    target string. Every off-schema answer is kept (redacted) beside the
+    record, and the record says how many retries it took; provider failures
+    are not retried, they are outages."""
+    last: ReviewSchemaFailure | None = None
+    for attempt in range(SCHEMA_RETRIES):
+        try:
+            return run_pass(name, model, context, fixed_base, pass_two=pass_two, schema_retry=attempt)
+        except ReviewSchemaFailure as exc:
+            (OUT / f"{name}-schema-failure-{attempt}.txt").write_text(
+                f"{exc}\n\n{redact(exc.raw)}\n"
+            )
+            last = exc
+    assert last is not None
+    raise ReviewSchemaFailure(f"{last} (after {SCHEMA_RETRIES} attempts)", last.raw)
 
 def bound_record_hash(*, prompt_hash: str, fixed_base: dict[str, Any], parsed: dict[str, Any], raw: str) -> str:
     """Hash every persisted review claim to the exact prompt and fixed checkout."""
@@ -630,10 +657,19 @@ def record_integrity_hash(*, record: dict[str, Any]) -> str:
     )
 
 
+SCHEMA_RETRIES = 3
+
+
 def run_pass(
-    name: str, model: str, context: str, fixed_base: dict[str, Any], *, pass_two: bool
+    name: str,
+    model: str,
+    context: str,
+    fixed_base: dict[str, Any],
+    *,
+    pass_two: bool,
+    schema_retry: int = 0,
 ) -> dict[str, Any]:
-    session_id = f"haqp-blind-{name}-{int(time.time())}"
+    session_id = f"haqp-blind-{name}-{int(time.time())}-r{schema_retry}"
     prompt = (
         "Conduct one isolated HAQP-1 falsification pass. Do not infer passing evidence. "
         "Record exactly twelve concrete attempts. Each attempt object must contain id, "
@@ -683,13 +719,16 @@ def run_pass(
     try:
         parsed = parse_json(raw)
     except (ValueError, TypeError) as exc:
-        raise ReviewSchemaFailure(f"pass {2 if pass_two else 1} schema failure for {model}: {exc}") from exc
+        raise ReviewSchemaFailure(
+            f"pass {2 if pass_two else 1} schema failure for {model}: {exc}", raw
+        ) from exc
     if not pass_two:
         seen_classes = {attempt["attack_class"] for attempt in parsed["attempts"]}
         missing_classes = ATTACK_CLASSES - seen_classes
         if missing_classes:
             raise ReviewSchemaFailure(
-                f"pass 1 schema failure for {model}: missing attack classes {sorted(missing_classes)}"
+                f"pass 1 schema failure for {model}: missing attack classes {sorted(missing_classes)}",
+                raw,
             )
     record = {
         "schema_version": "haqp-blind-review-v1",
@@ -725,6 +764,7 @@ def run_pass(
             "prior_pass_artifact_supplied": False,
             "pass_two_original_spec_only": pass_two,
         },
+        "schema_retries": schema_retry,
         "fixed_base": fixed_base,
         "raw_response_sha256": digest(raw.encode()),
     }
@@ -928,6 +968,29 @@ def self_test() -> int:
         except ReviewSchemaFailure as exc:
             if "pass 2 schema failure" not in str(exc):
                 failures.append("pass 2 schema failure was not explicit")
+        # F-46: one off-schema answer is retried with the same prompt and the
+        # record counts it; three in a row still refuse.
+        answers = iter(["{}", body])
+        globals()["mcp_call"] = lambda *_args: next(answers)
+        try:
+            retried = run_pass_with_retries("retry-self-test", "m", "context", fixed, pass_two=True)
+            if retried.get("schema_retries") != 1:
+                failures.append("a retried pass did not record its retry count")
+        except ReviewSchemaFailure:
+            failures.append("one off-schema answer was not retried")
+        # The retried self-test pass persisted a record like a real pass would;
+        # a self-test leaves no evidence behind.
+        for stray in [*OUT.glob("retry-self-test*"), *(ROOT / "conformance/haqp/evidence/reviews").glob("retry-self-test*")]:
+            stray.unlink()
+        globals()["mcp_call"] = lambda *_args: "{}"
+        try:
+            run_pass_with_retries("retry-self-test", "m", "context", fixed, pass_two=True)
+            failures.append("three off-schema answers were accepted")
+        except ReviewSchemaFailure as exc:
+            if "after 3 attempts" not in str(exc):
+                failures.append("exhausted retries were not explicit")
+        for stray in OUT.glob("retry-self-test*"):
+            stray.unlink()
     finally:
         globals()["mcp_call"] = original_mcp_call
     # Backend routing. A misroute is invisible in the recorded evidence: a
@@ -1053,7 +1116,7 @@ def main() -> int:
         return blocked(dead, commit=commit, clean=True)
     try:
         records = [
-            run_pass(f"{name}-{model}", model, context, fixed_base, pass_two=pass_two)
+            run_pass_with_retries(f"{name}-{model}", model, context, fixed_base, pass_two=pass_two)
             for name, model, pass_two in PASSES
         ]
         first, second = records
