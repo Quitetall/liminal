@@ -1,0 +1,44 @@
+schema: "oh.war/milestones/v1"
+
+milestones:
+  - id: "M1"
+    title: "Bounded delivery and refusal evidence collected"
+    stage_refs: ["STAGE-001", "STAGE-002", "STAGE-003", "STAGE-004", "STAGE-005", "STAGE-006"]
+    obligation_refs: ["OBL-001", "OBL-002"]
+
+  - id: "M2"
+    title: "Independent evidence and actual scoped decisions established"
+    depends_on: ["M1"]
+    obligation_refs: ["OBL-003"]
+
+stages:
+  - id: "STAGE-001"
+    title: "Pin `ropey = \"=1.6.1\"` and `rowan = \"=0.16.1\"` in the workspace and consuming crates"
+    executor_kind: "agent"
+    responsibility_tier: "T4"
+
+  - id: "STAGE-002"
+    title: "Implement `SourceBasis`, `Utf8HolderView`, and fail-closed loading exactly as specified"
+    executor_kind: "agent"
+    responsibility_tier: "T3"
+
+  - id: "STAGE-003"
+    title: "Implement the bounded Liminal-owned rowan language, coarse scan, parser, recovery, and exact emitter"
+    executor_kind: "agent"
+    responsibility_tier: "T2"
+
+  - id: "STAGE-004"
+    title: "Fill and flip only the existing malformed-source gate"
+    executor_kind: "agent"
+    responsibility_tier: "T2"
+
+  - id: "STAGE-005"
+    title: "Run full repository verification"
+    executor_kind: "agent"
+    responsibility_tier: "T3"
+
+  - id: "STAGE-006"
+    title: "Close milestone"
+    executor_kind: "agent"
+    responsibility_tier: "T4"
+

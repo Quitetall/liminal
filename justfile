@@ -42,6 +42,11 @@ gates:
 haq-inventory:
     cargo run -p liminal-xtask -- haq verify-inventory
 
+# Lossless SAS migration coverage and planted refusal checks; no qualification claim.
+sas-check:
+    python3 scripts/sas_migration.py check
+    python3 -m unittest discover -s scripts -p 'test_sas_migration.py'
+
 haq-verify:
     cargo run -p liminal-xtask -- haq verify
 
@@ -144,7 +149,7 @@ haq-lane run="run-1":
     scripts/haqp_campaign_clock.sh {{ run }} conformance/haqp/evidence/campaign.json -- ./scripts/haqp_qualify.sh
 
 # Everything CI runs, locally, in CI order
-ci: fmt-check lint
+ci: fmt-check lint sas-check
     cargo nextest run --workspace --all-features --profile ci
     just test-threaded
     cargo test --workspace --doc

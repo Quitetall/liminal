@@ -35,4 +35,10 @@ extend-exclude = [
   "**/snapshots/*.snap",
   "*.lock",
   "spec/v4/**",
+  # Exact historical source transcriptions, including deliberate examples and
+  # the v3-to-v4 diff. sas-check proves lossless reproduction and source hashes;
+  # authored migration policy and Warrant atoms remain spellchecked.
+  "docs/sas/LIMINAL_Software_Architecture_Specification.md",
+  "docs/migration/source-map.json",
+  "docs/migration/source-crosswalk.json",
 ]
