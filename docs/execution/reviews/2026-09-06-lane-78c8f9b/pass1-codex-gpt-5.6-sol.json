@@ -1,0 +1,194 @@
+{
+  "schema_version": "haqp-blind-review-v1",
+  "pass": 1,
+  "reviewer": {
+    "model_family": "codex:gpt-5.6-sol",
+    "identity_hash": "f6cac6a769086b0c4a44f2b83d25874afa0b393a852ac730262a2f801543651c",
+    "backend": "codex"
+  },
+  "isolated_session_hash": "0c27a2546e10bd546ff1bd5b1d60a5ad98f2161d063910c8e44f4a2e8270eda9",
+  "sanitized_prompt_hash": "d91177fee1748cf813c2354c87805aa094af2539d9f534f6f3c2319ba687dd31",
+  "prompt_binding_sha256": "9097d933a4891503bd6d94964a1fed4bda089cefa98b28ddb1695d71be8da16f",
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "Replace formatter behavior with constant canonical output while retaining relations declared at conformance/haqp/packet.json:1.",
+      "observed_result": "Constant output remains idempotent, and conformance/haqp/packet.json:1 declares no semantic canonical-reparse relation capable of detecting lost meaning.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-query/src/lib.rs:1",
+      "attempt": "Replace incremental_paragraph_oracle with paragraph::parse at crates/liminal-query/src/lib.rs:1 and examine independence enforcement.",
+      "observed_result": "Existing agreement tests still succeed after coupling at crates/liminal-query/src/lib.rs:1 because no guard prohibits calling production parser as oracle.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-format/src/lib.rs:353",
+      "attempt": "Broaden compact identifier predicate at crates/liminal-format/src/lib.rs:353 so identifiers containing spaces become compact-representable.",
+      "observed_result": "Invalid-identifier regression covering bad id at crates/liminal-format/src/lib.rs:353 requires explicit fallback and catches broadened predicate.",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-cli/src/format.rs:55",
+      "attempt": "Apply declared oracle-short-circuit mutant P1-M010 at crates/liminal-cli/src/format.rs:55 using permitted operator transformations.",
+      "observed_result": "Anchored return-error statement at crates/liminal-cli/src/format.rs:55 contains no supported oracle predicate, making declared mutant unevaluable rather than killable.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "Understate one deferred durable-transition site in crash_boundary_scope at conformance/haqp/packet.json:1 while preserving remaining declarations.",
+      "observed_result": "Exact tracked-source census comparison for conformance/haqp/packet.json:1 detects mismatched site count and refuses stale fault-scope disclosure.",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "Replace seeded UUID construction with time-random UUID generation at crates/liminal-xtask/src/haq.rs:1 during generated evidence production.",
+      "observed_result": "Byte-identical replay and recorded golden-digest tests covering crates/liminal-xtask/src/haq.rs:1 expose nondeterministic generated artifacts.",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "Open locked acceptance data read-only from an unapproved qualification-stage process through crates/liminal-xtask/src/haq.rs:1 trace verification.",
+      "observed_result": "Stage remainder handling at crates/liminal-xtask/src/haq.rs:1 checks locked-corpus writes only, so unauthorized read access remains accepted.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A08",
+      "attack_class": "exception broadening",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "Add wildcard exceptions field permitting whole-file exclusions to packet root at conformance/haqp/packet.json:1.",
+      "observed_result": "Packet deserialization for conformance/haqp/packet.json:1 denies unknown fields and rejects wildcard exception before qualification checks.",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "docs/execution/phase1-suite-review.md:1",
+      "attempt": "Replace qualification-table evidence cells with arbitrary non-NOT_RUN claims at docs/execution/phase1-suite-review.md:1 without changing packet digest.",
+      "observed_result": "Markdown verifier at docs/execution/phase1-suite-review.md:1 checks headers, placeholders, tuple, and packet digest but does not validate table claims against artifacts.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A10",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-cst/src/parser.rs:65",
+      "attempt": "Implement declared predicate-inversion mutant P1-M002 at crates/liminal-cst/src/parser.rs:65 using closed inversion-pair rules.",
+      "observed_result": "Match-arm value at crates/liminal-cst/src/parser.rs:65 contains no predicate or recognized inversion pair, leaving mutant structurally inapplicable.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A11",
+      "attack_class": "evidence/report drift",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "Alter structured review attempts and findings while retaining original raw response beside crates/liminal-xtask/src/haq.rs:1 verification path.",
+      "observed_result": "Raw-response digest checked by crates/liminal-xtask/src/haq.rs:1 is never compared semantically with structured attempts, and integrity digest excludes attempts and findings.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A12",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "Write ../conformance/corpora/heldout/x from repository subdirectory while auditing relative path through crates/liminal-xtask/src/haq.rs:1.",
+      "observed_result": "Relative write resolution at crates/liminal-xtask/src/haq.rs:1 assumes repository-root cwd, allowing actual subdirectory-relative locked-corpus write to evade canonical check.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    }
+  ],
+  "findings": [
+    {
+      "id": "F01",
+      "attempt_id": "A01"
+    },
+    {
+      "id": "F02",
+      "attempt_id": "A02"
+    },
+    {
+      "id": "F03",
+      "attempt_id": "A04"
+    },
+    {
+      "id": "F04",
+      "attempt_id": "A07"
+    },
+    {
+      "id": "F05",
+      "attempt_id": "A09"
+    },
+    {
+      "id": "F06",
+      "attempt_id": "A10"
+    },
+    {
+      "id": "F07",
+      "attempt_id": "A11"
+    },
+    {
+      "id": "F08",
+      "attempt_id": "A12"
+    }
+  ],
+  "independently_reproduced": [
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05",
+    "F06",
+    "F07",
+    "F08"
+  ],
+  "unresolved_verified_findings": 8,
+  "result": "fail",
+  "blindness_proof": {
+    "ephemeral_session_requested": false,
+    "session_state": "fresh-codex-session",
+    "prior_pass_artifact_supplied": false,
+    "pass_two_original_spec_only": false
+  },
+  "schema_retries": 0,
+  "fixed_base": {
+    "commit": "78c8f9bff329656776e8fc0685429bd7a747ea64",
+    "tree": "7d6af407b90c8950d08b2eac5ff16f2e36278791",
+    "clean": true
+  },
+  "raw_response_sha256": "f4718d0381e60c54c986c034e16427d5ed1d8f468631dc16d68dd8eed15684a3",
+  "integrity_binding_sha256": "ccd3ae851a8aa2b0800c0800e961f391a9dac47ab336b0006550bbf75ade18c2"
+}

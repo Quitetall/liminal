@@ -3083,3 +3083,35 @@ verified at their lines; all nine held.
 
 **Consequences.** Packet (scope disclosure, P1-M033), digests, canaries and
 the repair-family golden rebound; the campaign reruns from a new fixed base.
+
+## F-48 — the fourth complete lane: six verified defects and the first two rulings
+
+**Found.** 2026-09-06, lane at `78c8f9b`. Every stage passed; both passes
+completed in one answer each; pass 1 (codex gpt-5.6-sol) reported eight
+verified findings. Records under `docs/execution/reviews/2026-09-06-lane-78c8f9b/`
+(with the retained raw answers, the first lane to keep them). Six held; two
+contest standing decisions and go to the signed-ruling path the grilling
+provided for (decision 6, 2026-09-03), built here because it was first needed.
+
+| attempt | class | what was true | fix |
+|---|---|---|---|
+| A02 | shared-oracle coupling | the incremental oracle's comment said it does not call `paragraph::parse`; nothing enforced it | a closed tripwire (`INDEPENDENT_ORACLES`): the oracle's body may not name the production symbols it judges; run at inventory time; test |
+| A04 | weak mutants | P1-M010 (oracle short-circuit) was anchored on `return Err(error)`, which has no predicate | P1-M010 is `success-error-substitution` at the same line: a failed stage treated as success |
+| A09 | evidence/report drift | the markdown verifier checked headers, tuple and digest, never the cells the flip renders from artifacts | each pass block's eleven rows are re-derived from the committed record and compared; an unqualified packet's rows must be NOT_RUN |
+| A10 | weak mutants | P1-M002 (predicate inversion) was anchored on a match arm | re-anchored to `parser.rs:221`, the nesting-overflow predicate |
+| A11 | evidence/report drift | the integrity binding covered the verdict and raw digest, not the attempts and findings | binding v2 adds the SHA-256 of the persisted attempts, findings and reproduced ids in canonical JSON (sorted keys, compact, UTF-8 unescaped), re-derived by the gate from the record file |
+| A12 | fault omissions | a relative write from a subdirectory, `../conformance/corpora/heldout/x`, joined onto the root climbed out and passed | a relative write naming the locked corpus refuses on its name, before resolution |
+
+**Rulings.** A07 (corpus leakage: stage reads of the locked corpus are
+accepted) restates F-44's rejected option and is ruled by **R-001**; A01
+(vacuity: no canonical-reparse relation is declared) is false against the
+committed packet — P1-T02 and P1-T04 assert `parse(emit(parse(x))) == parse(x)`
+through the equality F-45 strengthened — and is ruled by **R-002**. A ruling
+lives in `docs/execution/rulings/`, names an attack class and a target file,
+and is in force only while its status is `ruled` and the last commit touching
+it verifies against the pinned signers in `conformance/haqp/ruling-signers`
+(SSH signature; Brian's key). The gate's own count of a record's unresolved
+findings after rulings (`haq review-unresolved`) is what the flip consults;
+the reviewer's number is recorded but does not decide. Standing rulings are
+part of the specification every reviewer is given. Both rulings are drafts
+until Brian signs them.

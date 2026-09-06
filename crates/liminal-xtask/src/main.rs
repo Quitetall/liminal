@@ -16,6 +16,15 @@ fn main() -> Result<()> {
             HaqCommand::RunCanaries => {
                 liminal_xtask::haq::run_canaries_repo(&liminal_xtask::repo_root()?)?;
             }
+            HaqCommand::ReviewUnresolved { record } => {
+                println!(
+                    "{}",
+                    liminal_xtask::haq::effective_unresolved_findings_repo(
+                        &liminal_xtask::repo_root()?,
+                        &record
+                    )?
+                );
+            }
             HaqCommand::SeedCorpus { target } => {
                 liminal_xtask::haq::write_seed_corpus_repo(&liminal_xtask::repo_root()?, &target)?;
             }
@@ -113,6 +122,12 @@ enum HaqCommand {
     Hash {
         /// File to digest.
         path: camino::Utf8PathBuf,
+    },
+    /// A review record's unresolved verified findings after standing signed
+    /// rulings (grilling decision 6; M17.5 F-48).
+    ReviewUnresolved {
+        /// The record JSON.
+        record: camino::Utf8PathBuf,
     },
     /// Write a fuzz target's classed seed set (ADR-0020 §4; M17.5 F-46).
     SeedCorpus {

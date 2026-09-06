@@ -1029,9 +1029,9 @@
    "id": "P1-M002",
    "family": "source/CST/formatting",
    "operator": "predicate-inversion",
-   "source": "crates/liminal-cst/src/parser.rs:65",
+   "source": "crates/liminal-cst/src/parser.rs:221",
    "requirement": "P1-R001",
-   "defect": "invert formatter fixed-point predicate",
+   "defect": "invert the nesting-overflow predicate so over-deep input is never reported",
    "killing_tests": [
     "P1-T13",
     "P1-T02"
@@ -1132,10 +1132,10 @@
   {
    "id": "P1-M010",
    "family": "source/CST/formatting",
-   "operator": "oracle-short-circuit",
+   "operator": "success-error-substitution",
    "source": "crates/liminal-cli/src/format.rs:55",
    "requirement": "P1-R015",
-   "defect": "oracle short circuit seeded at the anchored site",
+   "defect": "treat a failed formatting stage as success, dropping the error after the checkpoint is abandoned",
    "killing_tests": [
     "P1-T10",
     "P1-T02"

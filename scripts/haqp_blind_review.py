@@ -64,6 +64,9 @@ def base_context() -> tuple[str, bool, dict[str, Any]]:
     tree = run("git", "rev-parse", "HEAD^{tree}").strip()
     files = [
         "docs/adr/0020-require-high-assurance-phase-1-suite-qualification.md",
+        # Standing signed rulings are part of the specification under review
+        # (F-48): a reviewer attacks the qualification as ruled.
+        *sorted(str(p.relative_to(ROOT)) for p in (ROOT / "docs/execution/rulings").glob("*.md")),
         "docs/execution/phase1-suite-review.md",
         "conformance/haqp/packet.json",
         "crates/liminal-xtask/src/haq.rs",
@@ -621,6 +624,18 @@ def run_pass_with_retries(
     assert last is not None
     raise ReviewSchemaFailure(f"{last} (after {SCHEMA_RETRIES} attempts)", last.raw)
 
+
+def claims_sha256(record: dict[str, Any]) -> str:
+    """SHA-256 of attempts, findings and reproduced ids in canonical JSON:
+    sorted keys, compact separators, UTF-8 left unescaped so serde_json's
+    compact output is byte-identical."""
+    claims = {
+        "attempts": record["attempts"],
+        "findings": record["findings"],
+        "independently_reproduced": record["independently_reproduced"],
+    }
+    return digest(json.dumps(claims, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode())
+
 def bound_record_hash(*, prompt_hash: str, fixed_base: dict[str, Any], parsed: dict[str, Any], raw: str) -> str:
     """Hash every persisted review claim to the exact prompt and fixed checkout."""
     bound = {
@@ -643,13 +658,16 @@ def record_integrity_hash(*, record: dict[str, Any]) -> str:
     return digest(
         "\0".join(
             [
-                "haqp-review-integrity-v1",
+                "haqp-review-integrity-v2",
                 str(record["pass"]),
                 str(record["reviewer"]["model_family"]),
                 str(record["fixed_base"]["commit"]),
                 str(record["fixed_base"]["tree"]),
                 str(record["prompt_binding_sha256"]),
                 str(record["raw_response_sha256"]),
+                # F-48 (A11): the structured claims as persisted, in the same
+                # canonical JSON the gate re-derives from the record file.
+                claims_sha256(record),
                 str(record["result"]),
                 str(record["unresolved_verified_findings"]),
             ]

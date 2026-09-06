@@ -105,12 +105,175 @@ pub fn packet_digest_repo(root: &Utf8Path) -> Result<String> {
 }
 
 /// Verify committed HAQP inventories, packet status, and crash-boundary registry.
+/// Generated-case oracles that must not call the production path they judge
+/// (ADR-0020 §5). Closed list: (file, function, forbidden symbols). Blind pass 1
+/// at 78c8f9b (A02): the comment on `incremental_paragraph_oracle` said it does
+/// not call `paragraph::parse`, and nothing enforced it.
+const INDEPENDENT_ORACLES: [(&str, &str, &[&str]); 1] = [(
+    "crates/liminal-query/src/lib.rs",
+    "incremental_paragraph_oracle",
+    &[
+        "paragraph::parse",
+        "ParagraphCompiler",
+        "liminal_source::paragraph",
+        "IncrementalCompiler",
+    ],
+)];
+
+/// The body of `name` in `text`: from its `fn` line to the first line that is a
+/// bare `}` at column zero.
+fn item_body<'a>(text: &'a str, name: &str) -> Option<&'a str> {
+    let start = text.find(&format!("fn {name}("))?;
+    let rest = &text[start..];
+    let end = rest.find("\n}\n").map_or(rest.len(), |index| index + 2);
+    Some(&rest[..end])
+}
+
+fn verify_oracle_independence(root: &Utf8Path) -> Result<()> {
+    for (file, function, forbidden) in INDEPENDENT_ORACLES {
+        let path = root.join(file);
+        let text = fs::read_to_string(&path).with_context(|| format!("read {path}"))?;
+        let body = item_body(&text, function)
+            .with_context(|| format!("{file}: independent oracle {function} is not defined"))?;
+        for symbol in forbidden {
+            anyhow::ensure!(
+                !body.contains(symbol),
+                "{file}: oracle {function} reaches the production path it judges ({symbol}); \
+                 ADR-0020 §5 requires an independent oracle"
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Blind pass 1 at 78c8f9b (A09): the markdown verifier checked headers, the
+/// status tuple and the packet digest, never the table cells the flip renders
+/// from artifacts. Each pass block's rows are re-derived from the committed
+/// record and compared; an unqualified packet's rows must all be NOT_RUN.
+/// The eleven cells the flip renders for one pass block, derived from its
+/// record exactly as `haqp_flip_packet.py` derives them.
+fn expected_review_rows(record: &ReviewRecord) -> [(&'static str, String); 11] {
+    let caught = record
+        .attempts
+        .iter()
+        .filter(|a| a.classification == "caught_violation")
+        .count();
+    [
+        (
+            "reviewer identity hash",
+            record.reviewer.identity_hash.clone(),
+        ),
+        (
+            "reviewer kind/model family",
+            format!(
+                "{} via {}",
+                record.reviewer.model_family, record.reviewer.backend
+            ),
+        ),
+        (
+            "isolated session hash",
+            record.isolated_session_hash.clone(),
+        ),
+        (
+            "sanitized prompt hash",
+            record.sanitized_prompt_hash.clone(),
+        ),
+        ("fixed-base hash", record.fixed_base.commit.clone()),
+        (
+            "blindness proof",
+            format!(
+                "{}; prior_pass_artifact_supplied={}",
+                record.blindness_proof.session_state,
+                record.blindness_proof.prior_pass_artifact_supplied
+            ),
+        ),
+        (
+            "concrete falsification attempts (minimum 12)",
+            record.attempts.len().to_string(),
+        ),
+        ("attempted caught violations", caught.to_string()),
+        (
+            "findings artifact hash",
+            record.integrity_binding_sha256.clone(),
+        ),
+        (
+            "unresolved verified findings",
+            record.unresolved_verified_findings.to_string(),
+        ),
+        ("result", record.result.clone()),
+    ]
+}
+
+fn verify_markdown_review_blocks(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    let text = fs::read_to_string(root.join("docs/execution/phase1-suite-review.md"))
+        .context("read the review markdown")?;
+    let fields = [
+        "reviewer identity hash",
+        "reviewer kind/model family",
+        "isolated session hash",
+        "sanitized prompt hash",
+        "fixed-base hash",
+        "blindness proof",
+        "concrete falsification attempts (minimum 12)",
+        "attempted caught violations",
+        "findings artifact hash",
+        "unresolved verified findings",
+        "result",
+    ];
+    let cell = |value: &str| value.replace('|', "\\|").replace('\n', " ");
+    for (index, review) in packet.reviews.iter().enumerate() {
+        let marker = format!("### Pass {}", index + 1);
+        let block_at = text
+            .find(&marker)
+            .with_context(|| format!("review markdown has no {marker:?} block"))?;
+        let block = &text[block_at..];
+        let block = &block[..block[1..].find("\n### ").map_or(block.len(), |i| i + 1)];
+        let row_value = |field: &str| -> Result<String> {
+            let prefix = format!("| {field} | ");
+            let line = block
+                .lines()
+                .find(|line| line.starts_with(&prefix))
+                .with_context(|| format!("{marker}: no row for {field:?}"))?;
+            Ok(line[prefix.len()..]
+                .trim_end()
+                .trim_end_matches('|')
+                .trim()
+                .to_owned())
+        };
+        if packet.provenance.is_none() {
+            for field in fields {
+                require_eq(&format!("{marker} {field}"), &row_value(field)?, "NOT_RUN")?;
+            }
+            continue;
+        }
+        let path = review
+            .evidence
+            .as_deref()
+            .with_context(|| format!("{marker}: qualified review row names no record"))?;
+        let record_path = safe_repo_path(root, path, "review record")?;
+        let record: ReviewRecord = serde_json::from_slice(&fs::read(&record_path)?)
+            .with_context(|| format!("parse {record_path}"))?;
+        let expected = expected_review_rows(&record);
+        for (field, value) in expected {
+            require_eq(
+                &format!("{marker} {field}"),
+                &row_value(field)?,
+                &cell(&value),
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// Verify this repository's HAQP state for the named subcommand.
 pub fn verify_inventory_repo(root: &Utf8Path) -> Result<()> {
     let packet = read_packet(root)?;
     verify_packet_shape(&packet)?;
     verify_requirement_sources(root, &packet)?;
     verify_packet_statuses(&packet, inventory_statuses())?;
     verify_markdown_surface(root, &packet)?;
+    verify_markdown_review_blocks(root, &packet)?;
+    verify_oracle_independence(root)?;
     Ok(())
 }
 
@@ -1551,6 +1714,149 @@ fn verify_review_raw_response(
 /// The record's digests: hex-shaped, and the raw one the SHA-256 of the
 /// retained answer (A09: a digest of nothing retained bound a record to no
 /// answer).
+/// A standing ruling on a class of reviewer finding (grilling decision 6,
+/// 2026-09-03): a finding Brian rules incorrect is cleared by a ruling
+/// commit signed against the pinned signer, never by editing the record.
+/// Rulings live in `docs/execution/rulings/*.md` with a front matter of
+/// `id`, `attack_class`, `target` (a repository path) and `status`
+/// (`draft` or `ruled`). A ruling cannot name its own commit, so the commit
+/// that counts is the last one that touched the ruling's file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Ruling {
+    id: String,
+    attack_class: String,
+    target: String,
+    status: String,
+    file: String,
+}
+
+const RULING_SIGNERS: &str = "conformance/haqp/ruling-signers";
+
+fn rulings(root: &Utf8Path) -> Result<Vec<Ruling>> {
+    let dir = root.join("docs/execution/rulings");
+    if !dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut files = fs::read_dir(dir.as_std_path())?
+        .map(|entry| entry.map(|e| e.path()))
+        .collect::<std::io::Result<Vec<_>>>()?;
+    files.sort();
+    let mut out = Vec::new();
+    for file in files {
+        let file = Utf8PathBuf::from_path_buf(file)
+            .map_err(|p| anyhow::anyhow!("non-UTF-8 path {}", p.display()))?;
+        if file.extension() != Some("md") {
+            continue;
+        }
+        let text = fs::read_to_string(&file)?;
+        let front = text
+            .strip_prefix("---\n")
+            .and_then(|rest| rest.split_once("\n---\n"))
+            .map(|(front, _)| front)
+            .with_context(|| format!("{file}: ruling has no front matter"))?;
+        let field = |key: &str| -> Result<String> {
+            front
+                .lines()
+                .find_map(|line| line.strip_prefix(&format!("{key}: ")))
+                .map(|v| v.trim().trim_matches('"').to_owned())
+                .with_context(|| format!("{file}: ruling front matter lacks {key}"))
+        };
+        out.push(Ruling {
+            id: field("id")?,
+            attack_class: field("attack_class")?,
+            target: field("target")?,
+            status: field("status")?,
+            file: file.strip_prefix(root).unwrap_or(&file).to_string(),
+        });
+    }
+    Ok(out)
+}
+
+/// A ruling is in force when its status is `ruled` and the last commit that
+/// touched its file verifies against the pinned signers. A draft, an
+/// uncommitted edit, or an unsigned commit clears nothing.
+fn ruling_in_force(root: &Utf8Path, ruling: &Ruling) -> Result<bool> {
+    if ruling.status != "ruled" {
+        return Ok(false);
+    }
+    let signers = root.join(RULING_SIGNERS);
+    anyhow::ensure!(
+        signers.is_file(),
+        "{RULING_SIGNERS} is missing; a ruling cannot be verified against no signer"
+    );
+    let dirty = git_text(root, &["status", "--porcelain", "--", &ruling.file])?;
+    if !dirty.trim().is_empty() {
+        return Ok(false);
+    }
+    let commit = git_text(root, &["log", "-1", "--format=%H", "--", &ruling.file])?;
+    if commit.trim().is_empty() {
+        return Ok(false);
+    }
+    let verified = Command::new("git")
+        .current_dir(root)
+        .args(["-c", "gpg.format=ssh", "-c"])
+        .arg(format!("gpg.ssh.allowedSignersFile={signers}"))
+        .args(["verify-commit", commit.trim()])
+        .output()
+        .context("git verify-commit")?;
+    Ok(verified.status.success())
+}
+
+/// The findings a record leaves unresolved after standing rulings: verified,
+/// independently reproduced, not resolved by a fix proof, and not covered by
+/// a ruling in force on the same attack class and target file. Read as plain
+/// JSON so the count is over what was persisted.
+pub fn effective_unresolved_findings_repo(root: &Utf8Path, record: &Utf8Path) -> Result<u64> {
+    let value: serde_json::Value =
+        serde_json::from_slice(&fs::read(record)?).with_context(|| format!("parse {record}"))?;
+    let in_force = rulings(root)?
+        .into_iter()
+        .filter(|ruling| ruling_in_force(root, ruling).unwrap_or(false))
+        .collect::<Vec<_>>();
+    let strings = |key: &str| -> BTreeSet<String> {
+        value[key]
+            .as_array()
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|v| v.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let reproduced = strings("independently_reproduced");
+    let finding_attempts = value["findings"]
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter(|f| f["id"].as_str().is_some_and(|id| reproduced.contains(id)))
+                .filter_map(|f| f["attempt_id"].as_str().map(str::to_owned))
+                .collect::<BTreeSet<_>>()
+        })
+        .unwrap_or_default();
+    let mut unresolved = 0u64;
+    for attempt in value["attempts"].as_array().into_iter().flatten() {
+        let id = attempt["id"].as_str().unwrap_or_default();
+        let class = attempt["attack_class"].as_str().unwrap_or_default();
+        let target = attempt["target"].as_str().unwrap_or_default();
+        if !finding_attempts.contains(id)
+            || attempt["classification"].as_str() != Some("verified_defect")
+            || attempt["resolved"].as_bool().unwrap_or(false)
+        {
+            continue;
+        }
+        let target_file = target.split(':').next().unwrap_or(target);
+        let ruled = in_force
+            .iter()
+            .any(|ruling| ruling.attack_class == class && ruling.target == target_file);
+        if !ruled {
+            unresolved += 1;
+        }
+    }
+    Ok(unresolved)
+}
+
 fn verify_review_record_digests(
     root: &Utf8Path,
     record: &ReviewRecord,
@@ -1667,22 +1973,46 @@ fn verify_review_record(
         record.blindness_proof.ephemeral_session_requested == expected_ephemeral,
         "{who} blindness session state disagrees with ephemeral_session_requested"
     );
+    // Blind pass 1 at 78c8f9b (A11): the binding covered the verdict and the
+    // raw digest but not the attempts and findings, so those could be edited
+    // under an intact binding. Version 2 binds the structured claims as
+    // persisted, through the same canonical JSON the runner hashes.
     require_eq(
         "review integrity_binding_sha256",
         &record.integrity_binding_sha256,
         &sha256_text(&format!(
-            "haqp-review-integrity-v1\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}",
+            "haqp-review-integrity-v2\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}",
             record.pass,
             record.reviewer.model_family,
             record.fixed_base.commit,
             record.fixed_base.tree,
             record.prompt_binding_sha256,
             record.raw_response_sha256,
+            review_claims_sha256(record_path)?,
             record.result,
             record.unresolved_verified_findings
         )),
     )?;
     Ok(())
+}
+
+/// SHA-256 of the record's persisted attempts, findings and reproduced ids in
+/// canonical JSON (sorted keys, compact separators, UTF-8 unescaped), read from
+/// the file rather than the typed struct so the bytes are what was written.
+fn review_claims_sha256(record_path: &Utf8Path) -> Result<String> {
+    let value: serde_json::Value = serde_json::from_slice(
+        &fs::read(record_path).with_context(|| format!("read {record_path}"))?,
+    )
+    .with_context(|| format!("parse {record_path}"))?;
+    let claims = serde_json::json!({
+        "attempts": value.get("attempts").cloned().unwrap_or(serde_json::Value::Null),
+        "findings": value.get("findings").cloned().unwrap_or(serde_json::Value::Null),
+        "independently_reproduced": value
+            .get("independently_reproduced")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+    });
+    Ok(sha256_text(&serde_json::to_string(&claims)?))
 }
 
 const REVIEW_ATTACK_CLASSES: [&str; 9] = [
@@ -5137,6 +5467,13 @@ fn locked_corpus_write(
         .with_context(|| format!("{label}: canonicalize repository root"))?;
     for lexical in candidates {
         let path = Path::new(lexical);
+        // Blind pass 1 at 78c8f9b (A12): a relative write from a subdirectory,
+        // `../conformance/corpora/heldout/x`, joined onto the root climbed out
+        // of it and passed. The cwd is not receipted, so a relative write that
+        // names the locked corpus at all is refused, before any resolution.
+        if !path.is_absolute() && lexical.to_ascii_lowercase().contains("conformance/corpora") {
+            return Ok(Some(lexical.clone()));
+        }
         let local = if path.is_absolute() {
             path.to_path_buf()
         } else {
@@ -7233,8 +7570,8 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-cst/src/parser.rs",
-            65,
-            "0 => SyntaxKind::Root,",
+            221,
+            "if delimiter_depth > MAX_NESTING && !nesting_reported {",
         ),
         (
             "crates/liminal-cst/src/parser.rs",
@@ -11951,6 +12288,9 @@ mod tests {
         let scratch = liminal_scratch::ScratchDir::new("haq-review-raw").expect("scratch");
         fs::write(scratch.path().join("r.raw.txt"), "fixture raw answer").expect("raw");
         let path = scratch.path().join("r.json");
+        // The claims the v2 binding hashes are read from this file; the
+        // fixture record's binding is computed over the same empty claims.
+        fs::write(&path, "{}").expect("record file");
         (scratch, path)
     }
 
@@ -11996,13 +12336,15 @@ mod tests {
             },
         };
         record.integrity_binding_sha256 = sha256_text(&format!(
-            "haqp-review-integrity-v1\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}",
+            "haqp-review-integrity-v2\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}",
             record.pass,
             record.reviewer.model_family,
             record.fixed_base.commit,
             record.fixed_base.tree,
             record.prompt_binding_sha256,
             record.raw_response_sha256,
+            // fixture_record_path writes `{}`: every claim key reads as null.
+            sha256_text(r#"{"attempts":null,"findings":null,"independently_reproduced":null}"#),
             record.result,
             record.unresolved_verified_findings
         ));
@@ -13232,6 +13574,8 @@ mod tests {
         for rel in [
             "conformance/haqp/packet.json",
             "docs/execution/phase1-suite-review.md",
+            // The inventory gate reads the independent oracle (F-48 A02).
+            "crates/liminal-query/src/lib.rs",
         ] {
             let dest = root.join(rel);
             fs::create_dir_all(dest.parent().expect("parent")).expect("mkdir");
@@ -15566,6 +15910,115 @@ mod tests {
         let err = verify_review_raw_response(&root, &record, &"a".repeat(64))
             .expect_err("a substituted digest");
         assert!(err.to_string().contains("raw_response_sha256"), "{err}");
+    }
+
+    /// Blind pass 1 at 78c8f9b (A12): a relative write climbing to the locked
+    /// corpus from a subdirectory refuses on its name alone.
+    #[test]
+    fn a_relative_write_that_climbs_into_the_locked_corpus_is_refused() {
+        let (_s, root, row) = scope_fixture("canaries");
+        let exit = "4242 +++ exited with 0 +++\n";
+        let mut bad = row.clone();
+        rewrite_scope_trace(
+            &root,
+            &mut bad,
+            &format!(
+                "4242 openat(AT_FDCWD, \"../conformance/corpora/heldout/x.md\", O_WRONLY|O_CREAT, 0644) = 3\n{exit}"
+            ),
+        );
+        let err = verify_corpus_scope_replays(&root, std::slice::from_ref(&bad), &[])
+            .expect_err("a climbing relative write");
+        assert!(
+            err.to_string().contains("wrote to the locked corpus"),
+            "{err}"
+        );
+    }
+
+    /// Blind pass 1 at 78c8f9b (A02): the independent oracle must not reach
+    /// the production path it judges, and the tripwire says which symbol.
+    #[test]
+    fn an_oracle_that_calls_the_production_parser_is_refused() {
+        verify_oracle_independence(&repo_root()).expect("the committed oracle is independent");
+        let scratch = liminal_scratch::ScratchDir::new("haq-oracle").expect("scratch");
+        let root = scratch.path().to_owned();
+        let file = root.join("crates/liminal-query/src/lib.rs");
+        fs::create_dir_all(file.parent().expect("parent")).expect("mkdir");
+        fs::write(&file, "fn incremental_paragraph_oracle(input: &str) -> Vec<u8> {\n    paragraph::parse(input)\n}\n").expect("write");
+        let err = verify_oracle_independence(&root).expect_err("coupled oracle");
+        assert!(err.to_string().contains("paragraph::parse"), "{err}");
+    }
+
+    /// Blind pass 1 at 78c8f9b (A11): editing an attempt under an intact
+    /// binding must break the binding.
+    #[test]
+    fn the_integrity_binding_covers_the_structured_claims() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-claims").expect("scratch");
+        let a = scratch.path().join("a.json");
+        let b = scratch.path().join("b.json");
+        fs::write(&a, r#"{"attempts":[{"id":"A1","observed_result":"x"}],"findings":[],"independently_reproduced":[]}"#).expect("a");
+        fs::write(&b, r#"{"attempts":[{"id":"A1","observed_result":"y"}],"findings":[],"independently_reproduced":[]}"#).expect("b");
+        assert_ne!(
+            review_claims_sha256(&a).expect("a"),
+            review_claims_sha256(&b).expect("b")
+        );
+        let c = scratch.path().join("c.json");
+        fs::write(&c, "{ \"independently_reproduced\": [], \"findings\": [],\n \"attempts\": [ {\"observed_result\":\"x\", \"id\":\"A1\"} ] }").expect("c");
+        assert_eq!(
+            review_claims_sha256(&a).expect("a"),
+            review_claims_sha256(&c).expect("c")
+        );
+    }
+
+    /// Rulings (grilling decision 6): a draft ruling clears nothing; a ruling
+    /// only counts when its commit verifies against the pinned signers.
+    #[test]
+    fn an_unsigned_ruling_clears_nothing() {
+        let (_scratch, root) = scratch_git_repo("haq-ruling");
+        fs::create_dir_all(root.join("docs/execution/rulings")).expect("mkdir");
+        fs::write(
+            root.join("docs/execution/rulings/R-999-test.md"),
+                        "---\nid: R-999\nattack_class: corpus leakage\ntarget: crates/liminal-xtask/src/haq.rs\nstatus: draft\n---\n\nA draft.\n",
+        )
+        .expect("ruling");
+        let parsed = rulings(&root).expect("parse");
+        assert_eq!(parsed.len(), 1);
+        assert!(
+            !ruling_in_force(&root, &parsed[0]).expect("check"),
+            "a draft is not in force"
+        );
+        // Marked ruled but committed unsigned: still not in force.
+        fs::create_dir_all(root.join("conformance/haqp")).expect("mkdir");
+        fs::write(root.join(RULING_SIGNERS), "brian ssh-ed25519 AAAA\n").expect("signers");
+        fs::write(
+            root.join("docs/execution/rulings/R-999-test.md"),
+            "---\nid: R-999\nattack_class: corpus leakage\ntarget: crates/liminal-xtask/src/haq.rs\nstatus: ruled\n---\n\nRuled, unsigned.\n",
+        )
+        .expect("ruling");
+        for args in [
+            vec!["add", "-A"],
+            vec!["commit", "--quiet", "-m", "unsigned ruling"],
+        ] {
+            assert!(
+                Command::new("git")
+                    .current_dir(&root)
+                    .args(&args)
+                    .status()
+                    .expect("git")
+                    .success()
+            );
+        }
+        let ruled = &rulings(&root).expect("parse")[0];
+        assert!(
+            !ruling_in_force(&root, ruled).expect("check"),
+            "an unsigned commit is not in force"
+        );
+        // The effective count ignores a draft: a verified reproduced finding stays unresolved.
+        let record = root.join("r.json");
+        fs::write(&record, r#"{"attempts":[{"id":"A7","attack_class":"corpus leakage","target":"crates/liminal-xtask/src/haq.rs:1","classification":"verified_defect","resolved":false}],"findings":[{"id":"F1","attempt_id":"A7"}],"independently_reproduced":["F1"]}"#).expect("record");
+        assert_eq!(
+            effective_unresolved_findings_repo(&root, &record).expect("count"),
+            1
+        );
     }
 
     /// F-44 ruling (2026-09-05): a stage may read the locked corpus -- the SLO

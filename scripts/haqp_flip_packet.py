@@ -649,15 +649,24 @@ def main() -> int:
         fail(f"packet declares {len(packet['reviews'])} reviews, evidence has {len(reviews)}")
     for row, path in zip(packet["reviews"], reviews, strict=True):
         record = json.loads(path.read_text())
-        if record.get("unresolved_verified_findings"):
+        # F-48: the count that gates the flip is the gate's own, after standing
+        # signed rulings (docs/execution/rulings), not the reviewer's number.
+        effective = int(
+            subprocess.check_output(
+                ["cargo", "run", "-q", "-p", "liminal-xtask", "--", "haq", "review-unresolved", str(path)],
+                cwd=ROOT,
+                text=True,
+            ).strip()
+        )
+        if effective:
             fail(
                 f"{path.name} reports {record['unresolved_verified_findings']} unresolved "
-                "verified findings; ADR-0020 §6 requires zero"
+                f"verified findings, {effective} after signed rulings; ADR-0020 §6 requires zero"
             )
         row["result"] = "pass"
         row["attempts"] = len(record["attempts"])
         row["findings"] = [f.get("id") or f.get("finding_id") for f in record.get("findings", [])]
-        row["unresolved_verified_findings"] = 0
+        row["unresolved_verified_findings"] = effective
         row["evidence"] = str(path.relative_to(ROOT))
 
     # Mutants are NOT touched. ADR-0021 defers the mutation requirement to 1b.
