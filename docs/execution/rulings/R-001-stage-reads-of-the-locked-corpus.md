@@ -2,6 +2,7 @@
 id: R-001
 attack_class: corpus leakage
 target: crates/liminal-xtask/src/haq.rs
+claim_requires: read access
 status: ruled
 ruled_by: Brian
 date: 2026-09-06
@@ -28,3 +29,8 @@ corpus manifest and its history, not by a stage trace.
 `crates/liminal-xtask/src/haq.rs` and whose claim is that stage reads of the
 locked corpus are accepted is cleared by this ruling while its status is `ruled` and the last commit
 touching this file verifies against `conformance/haqp/ruling-signers`.
+
+**Scope (added 2026-09-06 after A08 at lane `aa00d41`).** This ruling answers
+only a claim whose prose contains `read access`. Matching on attack class and
+target file alone cleared an unrelated finding in the same class and file; a
+ruling answers a claim, not a coordinate.

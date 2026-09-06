@@ -2,6 +2,7 @@
 id: R-002
 attack_class: vacuity
 target: conformance/haqp/packet.json
+claim_requires: canonical-reparse relation
 status: ruled
 ruled_by: Brian
 date: 2026-09-06
@@ -26,3 +27,8 @@ against the committed packet.
 `conformance/haqp/packet.json` and whose claim is that no canonical-reparse
 relation is declared is cleared by this ruling while its status is `ruled` and the last commit
 touching this file verifies against `conformance/haqp/ruling-signers`.
+
+**Scope (added 2026-09-06 after A08 at lane `aa00d41`).** This ruling answers
+only a claim whose prose contains `canonical-reparse relation`. Matching on attack class and
+target file alone cleared an unrelated finding in the same class and file; a
+ruling answers a claim, not a coordinate.

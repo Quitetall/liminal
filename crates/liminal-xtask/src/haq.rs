@@ -1727,6 +1727,13 @@ struct Ruling {
     id: String,
     attack_class: String,
     target: String,
+    /// Phrases that must all appear in an attempt's prose for this ruling to
+    /// answer it. Blind pass 1 at aa00d41 (A08): matching on class and file
+    /// alone cleared an unrelated second claim in the same class and file —
+    /// R-001, written for "stage reads are leakage", silently cleared a
+    /// genuine untracked-chdir defect. A ruling answers a claim, not a
+    /// coordinate.
+    claim_requires: Vec<String>,
     status: String,
     file: String,
 }
@@ -1762,10 +1769,21 @@ fn rulings(root: &Utf8Path) -> Result<Vec<Ruling>> {
                 .map(|v| v.trim().trim_matches('"').to_owned())
                 .with_context(|| format!("{file}: ruling front matter lacks {key}"))
         };
+        let requires = field("claim_requires")?;
+        anyhow::ensure!(
+            !requires.trim().is_empty(),
+            "{file}: ruling claim_requires is empty; a ruling that answers any claim in its \
+             class and file clears defects it was never shown (A08)"
+        );
         out.push(Ruling {
             id: field("id")?,
             attack_class: field("attack_class")?,
             target: field("target")?,
+            claim_requires: requires
+                .split(';')
+                .map(|phrase| phrase.trim().to_ascii_lowercase())
+                .filter(|phrase| !phrase.is_empty())
+                .collect(),
             status: field("status")?,
             file: file.strip_prefix(root).unwrap_or(&file).to_string(),
         });
@@ -1830,9 +1848,20 @@ pub fn effective_unresolved_findings_repo(root: &Utf8Path, record: &Utf8Path) ->
             continue;
         }
         let target_file = target.split(':').next().unwrap_or(target);
-        let ruled = in_force
-            .iter()
-            .any(|ruling| ruling.attack_class == class && ruling.target == target_file);
+        let prose = format!(
+            "{} {}",
+            attempt["attempt"].as_str().unwrap_or_default(),
+            attempt["observed_result"].as_str().unwrap_or_default()
+        )
+        .to_ascii_lowercase();
+        let ruled = in_force.iter().any(|ruling| {
+            ruling.attack_class == class
+                && ruling.target == target_file
+                && ruling
+                    .claim_requires
+                    .iter()
+                    .all(|phrase| prose.contains(phrase.as_str()))
+        });
         if !ruled {
             unresolved += 1;
         }
@@ -15955,6 +15984,63 @@ mod tests {
         );
     }
 
+    /// Blind pass 1 at aa00d41 (A08): a ruling matched on class and file alone
+    /// cleared an unrelated claim. It must answer the claim it was written for
+    /// and no other.
+    #[test]
+    fn a_ruling_clears_only_the_claim_it_answers() {
+        let (_scratch, root) = scratch_git_repo("haq-ruling-claim");
+        fs::create_dir_all(root.join("docs/execution/rulings")).expect("mkdir");
+        fs::create_dir_all(root.join("conformance/haqp")).expect("mkdir");
+        fs::write(root.join(RULING_SIGNERS), "brian ssh-ed25519 AAAA\n").expect("signers");
+        fs::write(
+            root.join("docs/execution/rulings/R-001.md"),
+            "---\nid: R-001\nattack_class: corpus leakage\ntarget: crates/liminal-xtask/src/haq.rs\nclaim_requires: read access\nstatus: ruled\n---\n\nReads are by design.\n",
+        )
+        .expect("ruling");
+        let ruling = &rulings(&root).expect("parse")[0];
+        assert_eq!(ruling.claim_requires, vec!["read access".to_owned()]);
+        let answered = "unauthorized read access remains accepted";
+        let unrelated = "chdir state is not tracked; the later relative write resolves incorrectly";
+        let record = |prose: &str| {
+            format!(
+                r#"{{"attempts":[{{"id":"A7","attack_class":"corpus leakage","target":"crates/liminal-xtask/src/haq.rs:1","attempt":"x","observed_result":"{prose}","classification":"verified_defect","independently_reproduced":true,"resolved":false}}],"findings":[],"independently_reproduced":[]}}"#
+            )
+        };
+        // Without a verifying signature neither is cleared; the claim filter is
+        // proved on the ruling's own predicate.
+        let prose_matches = |prose: &str| {
+            ruling
+                .claim_requires
+                .iter()
+                .all(|phrase| prose.to_ascii_lowercase().contains(phrase.as_str()))
+        };
+        assert!(prose_matches(answered), "the claim it answers");
+        assert!(
+            !prose_matches(unrelated),
+            "an unrelated claim in the same class and file"
+        );
+        let path = root.join("r.json");
+        fs::write(&path, record(unrelated)).expect("record");
+        assert_eq!(
+            effective_unresolved_findings_repo(&root, &path).expect("count"),
+            1,
+            "an unrelated claim stands"
+        );
+        // An empty claim_requires is refused outright.
+        fs::write(
+            root.join("docs/execution/rulings/R-001.md"),
+            "---\nid: R-001\nattack_class: corpus leakage\ntarget: crates/liminal-xtask/src/haq.rs\nclaim_requires:  \nstatus: ruled\n---\n\nToo broad.\n",
+        )
+        .expect("ruling");
+        let err = rulings(&root).expect_err("an empty claim filter");
+        assert!(
+            err.to_string()
+                .contains("clears defects it was never shown"),
+            "{err}"
+        );
+    }
+
     /// Rulings (grilling decision 6): a draft ruling clears nothing; a ruling
     /// only counts when its commit verifies against the pinned signers.
     #[test]
@@ -15963,7 +16049,7 @@ mod tests {
         fs::create_dir_all(root.join("docs/execution/rulings")).expect("mkdir");
         fs::write(
             root.join("docs/execution/rulings/R-999-test.md"),
-                        "---\nid: R-999\nattack_class: corpus leakage\ntarget: crates/liminal-xtask/src/haq.rs\nstatus: draft\n---\n\nA draft.\n",
+                                    "---\nid: R-999\nattack_class: corpus leakage\ntarget: crates/liminal-xtask/src/haq.rs\nclaim_requires: read access\nstatus: draft\n---\n\nA draft.\n",
         )
         .expect("ruling");
         let parsed = rulings(&root).expect("parse");
@@ -15977,7 +16063,7 @@ mod tests {
         fs::write(root.join(RULING_SIGNERS), "brian ssh-ed25519 AAAA\n").expect("signers");
         fs::write(
             root.join("docs/execution/rulings/R-999-test.md"),
-            "---\nid: R-999\nattack_class: corpus leakage\ntarget: crates/liminal-xtask/src/haq.rs\nstatus: ruled\n---\n\nRuled, unsigned.\n",
+                        "---\nid: R-999\nattack_class: corpus leakage\ntarget: crates/liminal-xtask/src/haq.rs\nclaim_requires: read access\nstatus: ruled\n---\n\nRuled, unsigned.\n",
         )
         .expect("ruling");
         for args in [
