@@ -3580,7 +3580,10 @@ fn verify_seed_classes(root: &Utf8Path, target: &str, seed_dir: &Utf8Path) -> Re
             .map_or("valid", |(class, _)| *class);
         *counts.entry(class).or_insert(0usize) += 1;
     }
-    for class in ["valid", "boundary", "truncated", "malformed", "hostile"] {
+    // "valid" is the implicit class of a seed matching no negative token; the
+    // required set is that plus every declared negative class, so adding a
+    // class to the table enforces it.
+    for class in std::iter::once("valid").chain(SEED_CLASSES.iter().map(|(class, _)| *class)) {
         anyhow::ensure!(
             counts.get(class).copied().unwrap_or(0) > 0,
             "{target}: committed seed set has no {class} seed; ADR-0020 §4 requires seeds \
@@ -3596,7 +3599,10 @@ fn verify_seed_classes(root: &Utf8Path, target: &str, seed_dir: &Utf8Path) -> Re
 }
 
 /// Write a target's classed seed set (A10). Deterministic, so the committed
-/// seeds are reproducible from this code. `graph_interchange_codec` seeds are
+/// seeds are reproducible from this code. It writes files only: the seeds
+/// become the corpus when they are `git add -f`ed (fuzz/corpus is ignored so
+/// libFuzzer's accumulation stays out) and committed, since the manifest and
+/// class checks read the tracked set. `graph_interchange_codec` seeds are
 /// transactions built by the same constructors the generated cases use;
 /// `ilrp_recovery` seeds are the byte walks its target consumes.
 pub fn write_seed_corpus_repo(root: &Utf8Path, target: &str) -> Result<()> {
@@ -8629,7 +8635,13 @@ fn scan_concurrency_primitives(root: &Utf8Path) -> Result<ConcurrencyScan> {
             // Blind pass 1 at 612cbcc (A06): this used to stop at the first
             // `#[cfg(test)]` line, so production code after an earlier test
             // module escaped the scan. The attributed item is skipped as a
-            // block (brace depth), and scanning resumes after it.
+            // block (brace depth) or, for a brace-less item, through its `;`,
+            // and scanning resumes after it. Braces are counted textually,
+            // strings and comments included: an unbalanced brace inside a
+            // test module's string literal could end the skip early (a
+            // spurious refusal, the safe direction) or late (a missed
+            // production spawn) — the module's own code is scanned, not
+            // reasoned about, and a lane refusal is the visible outcome.
             let mut skipping: Option<(usize, bool)> = None;
             for (index, line) in text.lines().enumerate() {
                 let trimmed = line.trim();
@@ -10158,6 +10170,8 @@ fn interchange_transaction(
             Vec::new(),
             65_536,
         ),
+        // `single-node` and every category the seed table lists without a
+        // dedicated shape.
         _ => {
             let payload = if rng.below(4) == 0 {
                 PayloadRef::None
