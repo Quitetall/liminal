@@ -1549,9 +1549,9 @@
    "id": "P1-M042",
    "family": "repair/ILRP/recovery",
    "operator": "threshold-plus-one",
-   "source": "crates/liminal-jurisdiction/src/ilrp.rs:557",
+   "source": "crates/liminal-jurisdiction/src/checker.rs:567",
    "requirement": "P1-R015",
-   "defect": "advance occurrence counter",
+   "defect": "shift the single-evidence threshold so a lone evidence no longer takes the single-evidence path",
    "killing_tests": [
     "P1-T31",
     "P1-T02"
@@ -1601,9 +1601,9 @@
    "id": "P1-M046",
    "family": "repair/ILRP/recovery",
    "operator": "stale-basis-acceptance",
-   "source": "crates/liminal-jurisdiction/src/checker.rs:42",
+   "source": "crates/liminal-jurisdiction/src/checker.rs:288",
    "requirement": "P1-R017",
-   "defect": "recover with stale Basis",
+   "defect": "accept a repair step whose prestate matches neither the captured basis nor the chain, recovering with a stale Basis",
    "killing_tests": [
     "P1-T33",
     "P1-T06"
@@ -2364,7 +2364,7 @@
    },
    {
     "path": "crates/liminal-source/src/file.rs",
-    "sites": 7,
+    "sites": 8,
     "reason": "atomic file replacement and directory fsync; the durable primitive ILRP is built on, not an ILRP step (F-47 A05 brought its fsync and atomic-rename sites into the census: 3 commit_if, 2 rename, 2 fsync; a crash leaves the old or the new file, never a partial one)"
    },
    {
@@ -2394,23 +2394,28 @@
    },
    {
     "path": "crates/liminal-graph/src/store/mod.rs",
-    "sites": 1,
+    "sites": 5,
     "reason": "the store's single checksummed log append (P1-M022): a crash leaves a torn tail that recovery truncates to the longest checksummed prefix (prop_torn_tail_truncates_cleanly), not state to reconcile, so it is not a registrable boundary (AM-17.8; M17.5 F-46 A05 brought it into the census)"
    },
    {
     "path": "crates/liminal-daemon/src/crash.rs",
-    "sites": 1,
+    "sites": 2,
     "reason": "the fault-injection recorder's fsync of its hit log: diagnostic state for crash-matrix evidence, not world state, so a crash mid-write loses a hit count and nothing recovery reconciles (M17.5 F-47 A05 brought fsync into the census)"
    },
    {
     "path": "crates/liminal-graph/src/store/log.rs",
-    "sites": 4,
+    "sites": 7,
     "reason": "the checksummed append log's fsyncs (record, batch, directory): a crash leaves a torn tail that recovery truncates to the longest checksummed prefix (prop_torn_tail_truncates_cleanly), not state to reconcile (AM-17.8; F-47 A05)"
    },
    {
     "path": "crates/liminal-graph/src/store/snapshot.rs",
     "sites": 2,
     "reason": "the snapshot's fsync and atomic rename: a crash before the rename leaves the previous snapshot, after it the new one; either is a consistent state the log replays onto, nothing to reconcile (AM-17.8; F-47 A05)"
+   },
+   {
+    "path": "crates/liminal-graph/src/store/asof.rs",
+    "sites": 1,
+    "reason": "durable call sites brought into the census by F-50 A05 (symbols matched by name, aliases resolved); not a registrable boundary under AM-17.8"
    }
   ],
   "deferred_to": "M17.9",

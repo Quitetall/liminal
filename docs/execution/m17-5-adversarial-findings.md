@@ -3149,3 +3149,26 @@ It is externally originated and checkable against the vendor's dashboard, which
 is the evidence a non-hostile qualification can actually produce. The residual
 is stated rather than closed — see AM-17.9, which also settles how much rigour
 this campaign spends and where.
+
+## F-50 — the fifth complete lane: eight more, and the gate's own reach
+
+**Found.** 2026-09-06, lane at `aa00d41`. Every stage passed; pass 2 clean;
+pass 1 (codex gpt-5.6-sol) reported ten verified findings. Two were answered by
+the rulings signed that day and are recorded under F-48/F-49 (A07's ruling
+mismatch became F-48's narrowing; A09 became F-49's receipts). The other eight
+held, and eight of the ten targeted `haq.rs` — the gate, not the suite, which
+is what prompted AM-17.9.
+
+| attempt | class | what was true | fix |
+|---|---|---|---|
+| A01 | vacuity | a formatter error became a `Negative` case for ANY category, so a formatter that lost nested or deep documents reclassified them and the run still reached its accepted target from the categories that still worked | only the five categories that declare malformed input may be refused; a refusal elsewhere is lost support and fails the generator |
+| A02 | shared-oracle coupling | the independence scan matched literal paths, so `use liminal_source::paragraph::parse as p; p(input)` named none of them | a `use` renaming a watched symbol makes its alias watched in that file |
+| A03 | missing negatives | the invalidation relation re-checked only the keys that already invalidated, so a `record` that did nothing passed monotonicity | the newly recorded read must now invalidate, the old ones must not have been lost, and the unread key must still not invalidate |
+| A04 | weak mutants | P1-M046 was anchored on `pub const REPAIR_STALE_BASIS: &str = "JUR053";` — deleting a diagnostic code's name changes compilation, not staleness | constants and statics are declarations, EXCEPT one binding a number: `pub const MAX_NESTING: u16 = 256;` is the canonical threshold site and stays mutable. P1-M046 re-anchored to `checker.rs:288`, the prestate/chain check; P1-M042 to `checker.rs:567`, a real single-evidence threshold |
+| A05 | fault omissions | the durable census matched `fs::rename(`, so `use std::fs::rename as mv; mv(a, b)` renamed a durable transition out of the surface | durable symbols are matched by name and an aliasing `use` adds its alias for that file; the census grew again and the packet discloses `store/log.rs` 7, `store/mod.rs` 5, `file.rs` 8, `crash.rs` 2 and `store/asof.rs` 1 |
+| A06 | nondeterminism | the concurrency tokens ended in `(`, so `let f = thread::spawn;` named none of them while spawning all the same | the symbol's mention is the signal; calling it is not required |
+| A07 | corpus leakage | a `chdir` into the locked corpus made every later relative write nameless, and resolution against the repository root put it somewhere harmless | each pid's announced cwd is remembered and its relative paths resolve there; a failed `chdir` moves nothing |
+| A10 | weak mutants | mutation runs and the `#[ignore]` check both filter by a test's LEAF name, so two tests sharing a leaf let a namesake certify a declared kill | a leaf a mutant relies on must name exactly one runnable test in the tree |
+
+**Consequences.** Packet (two mutant anchors, five disclosure counts), digests
+and canaries rebound. The campaign reruns from a new fixed base.

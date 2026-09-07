@@ -25,8 +25,8 @@ authorization, suite ratification, or access to locked acceptance inputs.
 | intended campaign ceiling | 8 hours |
 | complete post-fix qualification rerun | NOT_RUN |
 | machine inventory | `conformance/haqp/packet.json` (`cargo run -p liminal-xtask -- haq verify-inventory`) |
-| machine inventory BLAKE3 | `b1a6214b8eb79768114f1349b5bc83983895cfb61b75673902fefe558e114ba4` |
-| packet digest | `6a54f35f5000e8d777782805e8acb862b354741d75617c4c82f3c4c6c87bff0a` |
+| machine inventory BLAKE3 | `d312bc1a65afb6a4f6422966fb19bc01f29f9a60341bb0fbfa8018315cce2d66` |
+| packet digest | `aa22eff20f670220ac319096925b453937b9e8e68d4fee1968274027fe0fcb46` |
 | machine status tuple | qualification_state=not-run; qualification_stage=1a; requirements=55; tests=38; mutants=65; canaries=33; generated=5; crash_boundaries=8; reviews=2 |
 
 ## Execution lanes

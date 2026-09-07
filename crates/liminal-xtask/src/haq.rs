@@ -136,9 +136,29 @@ fn verify_oracle_independence(root: &Utf8Path) -> Result<()> {
         let text = fs::read_to_string(&path).with_context(|| format!("read {path}"))?;
         let body = item_body(&text, function)
             .with_context(|| format!("{file}: independent oracle {function} is not defined"))?;
-        for symbol in forbidden {
+        // Blind pass 1 at aa00d41 (A02): the scan matched literal paths, so
+        // `use liminal_source::paragraph::parse as p; p(input)` named none of
+        // them. A `use` that renames a forbidden symbol makes its alias
+        // forbidden too, in this file.
+        let mut watched = forbidden
+            .iter()
+            .map(|s| (*s).to_owned())
+            .collect::<Vec<_>>();
+        for line in text.lines() {
+            let Some(rest) = line.trim().strip_prefix("use ") else {
+                continue;
+            };
+            let Some((used, alias)) = rest.trim_end_matches(';').split_once(" as ") else {
+                continue;
+            };
+            let alias = alias.trim();
+            if alias != "_" && forbidden.iter().any(|symbol| used.contains(symbol)) {
+                watched.push(format!("{alias}("));
+            }
+        }
+        for symbol in &watched {
             anyhow::ensure!(
-                !body.contains(symbol),
+                !body.contains(symbol.as_str()),
                 "{file}: oracle {function} reaches the production path it judges ({symbol}); \
                  ADR-0020 §5 requires an independent oracle"
             );
@@ -350,6 +370,7 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     // must bind every declared test to a real, runnable function.
     if packet.qualification_stage == "1b" {
         verify_test_names_exist(root, &packet)?;
+        verify_killing_test_leaves_are_unambiguous(root, &packet)?;
     }
     Ok(())
 }
@@ -1205,14 +1226,23 @@ fn independent_oracle_source_invalidation(
         "extra dependency was already present before monotonicity probe: {extra:?}"
     );
     deps.record(extra.clone());
+    // Blind pass 1 at aa00d41 (A03): the relation only re-checked the keys that
+    // already invalidated, so a `record` that did nothing passed. Monotonicity
+    // is that the new read is now observed AND no old one was lost.
+    anyhow::ensure!(
+        deps.invalidated_by(extra),
+        "recording a read did not make it invalidate: {extra:?}"
+    );
     for key in expected {
-        // Re-check after recording `extra`: this is the monotonicity relation,
-        // not a duplicate of the pre-record assertion.
         anyhow::ensure!(
             deps.invalidated_by(key),
             "recording another read un-invalidated {key:?}"
         );
     }
+    anyhow::ensure!(
+        !deps.invalidated_by(unrelated),
+        "recording a read invalidated an unread key: {unrelated:?}"
+    );
     let mut witness = Vec::new();
     for key in expected.iter().chain([unrelated, extra]) {
         witness.push(u8::from(deps.invalidated_by(key)));
@@ -3811,6 +3841,65 @@ fn collect_ignored(text: &str, names: &mut BTreeSet<String>) {
     }
 }
 
+/// Blind pass 1 at aa00d41 (A10): mutation runs and the `#[ignore]` check both
+/// filter by a test's LEAF name, so two tests sharing a leaf make the filter
+/// ambiguous — an unrelated namesake could pass and certify a declared kill,
+/// or an ignored namesake could mask one. A leaf a mutant relies on must name
+/// exactly one runnable test in the tree.
+fn verify_killing_test_leaves_are_unambiguous(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    let mut leaves: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut stack = vec![root.join("conformance"), root.join("crates")];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let Ok(path) = Utf8PathBuf::from_path_buf(entry.path()) else {
+                continue;
+            };
+            if path.is_dir() {
+                if path.file_name() != Some("target") {
+                    stack.push(path);
+                }
+            } else if path.extension() == Some("rs")
+                && let Ok(text) = fs::read_to_string(&path)
+            {
+                let mut local = BTreeMap::new();
+                collect_runnable_test_functions(&text, &mut local);
+                let where_ = path.strip_prefix(root).unwrap_or(&path).to_string();
+                for name in local.keys() {
+                    leaves.entry(name.clone()).or_default().push(where_.clone());
+                }
+            }
+        }
+    }
+    let declared = packet
+        .tests
+        .iter()
+        .map(|test| (test.id.as_str(), test.name.as_str()))
+        .collect::<BTreeMap<_, _>>();
+    for mutant in &packet.mutants {
+        for test_id in &mutant.killing_tests {
+            let Some(name) = declared.get(test_id.as_str()) else {
+                continue;
+            };
+            let leaf = name.rsplit("::").next().unwrap_or(name);
+            if let Some(files) = leaves.get(leaf)
+                && files.len() > 1
+            {
+                anyhow::bail!(
+                    "{} is killed by {test_id} ({name}), whose leaf {leaf:?} names {} tests \
+                     ({files:?}); a leaf the mutation run filters on must be unique, or a \
+                     namesake can certify the kill",
+                    mutant.id,
+                    files.len()
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 fn verify_test_names_exist(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let mut runnable = BTreeMap::new();
     let mut stack = vec![root.join("conformance"), root.join("crates")];
@@ -5428,6 +5517,52 @@ struct ScopeTraceScan {
 
 const FORBIDDEN_TRACE_FRAGMENTS: [&str; 2] = ["heldout", "conformance/corpora"];
 
+/// `chdir("x") = 0` moves this pid; a failed chdir moves nothing, and a
+/// relative target moves it relative to where it already stood (A07).
+/// Give a line's relative paths the directory they were actually opened
+/// against: a directory fd if the call names one, else the pid's cwd (A07,
+/// A12). An absolute path is already anchored.
+fn anchor_relative_paths(
+    line: &str,
+    pid: u32,
+    dir_fds: &BTreeMap<(u32, i64), String>,
+    cwds: &BTreeMap<u32, String>,
+    accesses: &mut [(String, bool)],
+) {
+    let dirfd = line
+        .split_once("openat(")
+        .or_else(|| line.split_once("openat2("))
+        .and_then(|(_, rest)| rest.split(',').next())
+        .and_then(|token| token.trim().parse::<i64>().ok());
+    let base = dirfd
+        .and_then(|fd| dir_fds.get(&(pid, fd)))
+        .or_else(|| cwds.get(&pid));
+    let Some(base) = base else {
+        return;
+    };
+    for (path, _) in accesses.iter_mut() {
+        if !path.starts_with('/') {
+            *path = format!("{base}/{path}");
+        }
+    }
+}
+
+fn record_chdir(line: &str, pid: u32, cwds: &mut BTreeMap<u32, String>) {
+    if !line.contains("chdir(") || !line.trim_end().ends_with("= 0") {
+        return;
+    }
+    let Some((target, _)) = scope_trace_line_accesses(line).first().cloned() else {
+        return;
+    };
+    let resolved = if target.starts_with('/') {
+        target
+    } else {
+        cwds.get(&pid)
+            .map_or_else(|| target.clone(), |cwd| format!("{cwd}/{target}"))
+    };
+    cwds.insert(pid, resolved);
+}
+
 fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan> {
     let mut scan = ScopeTraceScan::default();
     let mut hasher = blake3::Hasher::new();
@@ -5440,6 +5575,11 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
     // completed by its `<... openat resumed>) = fd` line.
     let mut dir_fds: BTreeMap<(u32, i64), String> = BTreeMap::new();
     let mut unfinished: BTreeMap<u32, (String, bool)> = BTreeMap::new();
+    // Blind pass 1 at aa00d41 (A07): a `chdir` into the locked corpus made
+    // every later relative write nameless — no fragment, and resolution
+    // against the repository root put it somewhere harmless. The cwd each pid
+    // announces is remembered, and its relative paths resolve there.
+    let mut cwds: BTreeMap<u32, String> = BTreeMap::new();
     loop {
         buf.clear();
         if reader.read_until(b'\n', &mut buf)? == 0 {
@@ -5487,20 +5627,8 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
         }
         let mut accesses = scope_trace_line_accesses(&line);
         if let Some(pid) = pid {
-            let dirfd = line
-                .split_once("openat(")
-                .or_else(|| line.split_once("openat2("))
-                .and_then(|(_, rest)| rest.split(',').next())
-                .and_then(|token| token.trim().parse::<i64>().ok());
-            if let Some(dirfd) = dirfd
-                && let Some(dir) = dir_fds.get(&(pid, dirfd))
-            {
-                for (path, _) in &mut accesses {
-                    if !path.starts_with('/') {
-                        *path = format!("{dir}/{path}");
-                    }
-                }
-            }
+            anchor_relative_paths(&line, pid, &dir_fds, &cwds, &mut accesses);
+            record_chdir(&line, pid, &mut cwds);
             if line.contains("openat(") || line.contains("openat2(") {
                 let is_dir = line.contains("O_DIRECTORY");
                 if let Some((path, _)) = accesses.first() {
@@ -7261,6 +7389,15 @@ fn anchor_is_mutable_line(line: &str) -> bool {
         "use ",
         "pub use ",
         "pub(crate) use ",
+        // Blind pass 1 at aa00d41 (A04): P1-M046 was anchored on
+        // `pub const REPAIR_STALE_BASIS: &str = "JUR053";`. Deleting a
+        // diagnostic code's name changes compilation, not staleness semantics.
+        // A const is not always inert, though — see `binds_a_threshold`.
+        "const ",
+        "pub const ",
+        "pub(crate) const ",
+        "static ",
+        "pub static ",
     ]
     .iter()
     .any(|kw| trimmed.starts_with(kw));
@@ -7269,7 +7406,18 @@ fn anchor_is_mutable_line(line: &str) -> bool {
         && (trimmed.ends_with('{') || trimmed.ends_with(','))
         && !trimmed.contains('=')
         && !trimmed.contains('(');
-    !(declares_item || declares_variant)
+    // A constant that binds a NUMBER is the canonical threshold site:
+    // `pub const MAX_NESTING: u16 = 256;` is exactly what threshold ±1 moves,
+    // and refusing it would push the plan off the very lines §3 asks for. A
+    // constant binding a string, or an array whose length is the only number,
+    // stays a declaration: 256 can become 257, `[IntentState; 7]` cannot
+    // become 8 and still compile.
+    let binds_a_threshold = declares_item
+        && trimmed.contains("const ")
+        && trimmed
+            .split_once('=')
+            .is_some_and(|(_, value)| value.chars().any(|ch| ch.is_ascii_digit()));
+    !(declares_item || declares_variant) || binds_a_threshold
 }
 
 #[allow(
@@ -7853,9 +8001,9 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
             "let mut indegree: BTreeMap<RepairStepId, usize> =",
         ),
         (
-            "crates/liminal-jurisdiction/src/ilrp.rs",
-            557,
-            "const ALL: [IntentState; 7] = [",
+            "crates/liminal-jurisdiction/src/checker.rs",
+            567,
+            "} else if evidences.len() == 1 {",
         ),
         (
             "crates/liminal-jurisdiction/src/checker.rs",
@@ -7870,8 +8018,8 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ("crates/liminal-jurisdiction/src/ilrp.rs", 261, "Ok(())"),
         (
             "crates/liminal-jurisdiction/src/checker.rs",
-            42,
-            "pub const REPAIR_STALE_BASIS: &str = \"JUR053\";",
+            288,
+            "if !basis_ok && !chain_ok {",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
@@ -8672,13 +8820,16 @@ fn durable_transition_sites(root: &Utf8Path) -> Result<BTreeMap<String, usize>> 
     // transition could move without the scope disclosure noticing.
     // Blind pass 1 at f360e90 (A05): a direct `fs::rename` or `sync_all` is a
     // durable transition with no marker call around it, so it escaped.
-    const MARKERS: [&str; 6] = [
-        ".commit(",
-        ".commit_if(",
-        ".log.append(",
-        ".sync_all(",
-        ".sync_data(",
-        "fs::rename(",
+    // Blind pass 1 at aa00d41 (A05): `use std::fs::rename as mv; mv(a, b)`
+    // named no marker. The durable symbols are matched by name, and a `use`
+    // that renames one adds its alias for that file.
+    const DURABLE_SYMBOLS: [&str; 6] = [
+        "commit",
+        "commit_if",
+        "append",
+        "sync_all",
+        "sync_data",
+        "rename",
     ];
     let listed = git_text(root, &["ls-files", "-z", "--", "crates"])?;
     let mut sites = BTreeMap::new();
@@ -8700,13 +8851,32 @@ fn durable_transition_sites(root: &Utf8Path) -> Result<BTreeMap<String, usize>> 
                  a scope claim over a surface that was not read is worth nothing"
             )
         })?;
+        // A `use` that renames a durable symbol makes the alias a marker in
+        // this file: `use std::fs::rename as mv;` means `mv(` is a rename.
+        let mut markers = DURABLE_SYMBOLS
+            .iter()
+            .map(|symbol| format!("{symbol}("))
+            .collect::<Vec<_>>();
+        for line in text.lines() {
+            let Some(rest) = line.trim().strip_prefix("use ") else {
+                continue;
+            };
+            let Some((path, alias)) = rest.trim_end_matches(';').split_once(" as ") else {
+                continue;
+            };
+            let symbol = path.rsplit("::").next().unwrap_or(path).trim();
+            let alias = alias.trim();
+            if DURABLE_SYMBOLS.contains(&symbol) && alias != "_" {
+                markers.push(format!("{alias}("));
+            }
+        }
         let count = text
             .lines()
             .filter(|line| !line.trim_start().starts_with("//"))
             .map(|line| {
-                MARKERS
+                markers
                     .iter()
-                    .filter(|marker| line.contains(**marker))
+                    .filter(|marker| line.contains(marker.as_str()))
                     .count()
             })
             .sum::<usize>();
@@ -9135,9 +9305,12 @@ const CONCURRENCY_SCAN_EXCLUDED_CRATES: [&str; 2] = ["liminal-xtask", "liminal-s
 // product crates spawn no processes today, so the over-match is a refusal
 // that names its line, never a miss.
 const CONCURRENCY_EXECUTION_PRIMITIVES: [&str; 9] = [
-    "::spawn(",
-    ".spawn(",
-    "::scope(",
+    // Blind pass 1 at aa00d41 (A06): the trailing parenthesis meant
+    // `let f = thread::spawn;` named no token while spawning all the same.
+    // A mention of the symbol is the signal; calling it is not required.
+    "::spawn",
+    ".spawn",
+    "::scope",
     "thread::Builder",
     "tokio::",
     "rayon::",
@@ -10550,6 +10723,18 @@ fn generated_ilrp_probe() -> Result<&'static [u8]> {
 /// emit** (the CST must reproduce its input byte-for-byte) and **format
 /// idempotence**, both compared over bytes rather than parsed values.
 fn case_source_cst(rng: &mut Rng) -> Result<Case> {
+    // Blind pass 1 at aa00d41 (A01): a formatter error became a Negative case
+    // whatever the category, so a formatter that lost support for nested or
+    // deep documents reclassified them as negatives and the run still reached
+    // its accepted target from the categories that still worked. Only the
+    // categories that DECLARE malformed input may be refused.
+    const REFUSABLE: [&str; 5] = [
+        "truncated",
+        "unterminated",
+        "control-byte",
+        "invalid-utf8",
+        "hostile",
+    ];
     let category = rng.category("source/CST/formatting");
     let token = rng.word();
     let bytes = match category {
@@ -10610,12 +10795,22 @@ fn case_source_cst(rng: &mut Rng) -> Result<Case> {
     let emitted = cst.emit_lossless();
     let fmt = liminal_format::MarkdownFormatter::default();
     let Ok(once) = fmt.format(&source) else {
+        anyhow::ensure!(
+            REFUSABLE.contains(&category),
+            "the formatter refused valid-domain category {category}: a refusal there is lost \
+             support, not a negative case (source {source:?})"
+        );
         return Ok(Case::Negative {
             category,
             witness: source.into_bytes(),
         });
     };
     let Ok(twice) = fmt.format(&once) else {
+        anyhow::ensure!(
+            REFUSABLE.contains(&category),
+            "the formatter refused its own output for valid-domain category {category}: \
+             formatting is not total there (source {source:?})"
+        );
         return Ok(Case::Negative {
             category,
             witness: once.into_bytes(),
@@ -15744,7 +15939,7 @@ mod tests {
         let scan = scan_concurrency_primitives(&root).expect("scan");
         assert_eq!(
             scan.execution,
-            vec!["crates/store/src/worker.rs:1:::spawn(".to_owned()]
+            vec!["crates/store/src/worker.rs:1:::spawn".to_owned()]
         );
     }
 
@@ -15801,6 +15996,135 @@ mod tests {
         }
     }
 
+    /// Blind pass 1 at aa00d41 (A07): a `chdir` into the locked corpus made the
+    /// relative write that followed nameless, and resolution against the
+    /// repository root put it somewhere harmless.
+    #[test]
+    fn a_write_after_chdir_into_the_locked_corpus_is_refused() {
+        let (_s, root, row) = scope_fixture("canaries");
+        fs::create_dir_all(root.join("conformance/corpora/heldout")).expect("mkdir");
+        let exit = "4242 +++ exited with 0 +++\n";
+        let mut bad = row.clone();
+        rewrite_scope_trace(
+            &root,
+            &mut bad,
+            &format!(
+                "4242 chdir(\"{root}/conformance/corpora/heldout\") = 0\n\
+                 4242 openat(AT_FDCWD, \"x.md\", O_WRONLY|O_CREAT, 0644) = 3\n{exit}"
+            ),
+        );
+        let err = verify_corpus_scope_replays(&root, std::slice::from_ref(&bad), &[])
+            .expect_err("a relative write after chdir into the corpus");
+        assert!(
+            err.to_string().contains("wrote to the locked corpus"),
+            "{err}"
+        );
+
+        // A chdir somewhere harmless leaves the same write harmless.
+        let mut fine = row.clone();
+        rewrite_scope_trace(
+            &root,
+            &mut fine,
+            &format!(
+                "4242 chdir(\"{root}/fuzz\") = 0\n\
+                 4242 openat(AT_FDCWD, \"x.md\", O_WRONLY|O_CREAT, 0644) = 3\n{exit}"
+            ),
+        );
+        verify_corpus_scope_replays(&root, std::slice::from_ref(&fine), &[])
+            .expect("a write outside the locked corpus is fine");
+
+        // A failed chdir moves nothing.
+        let mut failed = row.clone();
+        rewrite_scope_trace(
+            &root,
+            &mut failed,
+            &format!(
+                "4242 chdir(\"{root}/conformance/corpora/heldout\") = -1 ENOENT (No such file)\n\
+                 4242 openat(AT_FDCWD, \"x.md\", O_WRONLY|O_CREAT, 0644) = 3\n{exit}"
+            ),
+        );
+        verify_corpus_scope_replays(&root, std::slice::from_ref(&failed), &[])
+            .expect("a chdir that failed moved no process");
+    }
+
+    /// Blind pass 1 at aa00d41 (A02): the independence scan matched literal
+    /// paths, so an aliased import of the production parser evaded it.
+    #[test]
+    fn an_aliased_production_call_in_an_oracle_is_refused() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-oracle-alias").expect("scratch");
+        let root = scratch.path().to_owned();
+        let file = root.join("crates/liminal-query/src/lib.rs");
+        fs::create_dir_all(file.parent().expect("parent")).expect("mkdir");
+        fs::write(
+            &file,
+            "use liminal_source::paragraph::parse as p;\n\
+             fn incremental_paragraph_oracle(input: &str) -> Vec<u8> {\n    p(input)\n}\n",
+        )
+        .expect("write");
+        let err = verify_oracle_independence(&root).expect_err("an aliased production call");
+        assert!(err.to_string().contains("p("), "{err}");
+    }
+
+    /// Blind pass 1 at aa00d41 (A10): mutation runs filter by a test's leaf
+    /// name, so two tests sharing a leaf let a namesake certify the kill.
+    #[test]
+    fn a_killing_test_whose_leaf_is_ambiguous_is_refused() {
+        let (_scratch, root) = scratch_git_repo("haq-leaf");
+        let mut packet = read_packet(&repo_root()).expect("packet");
+        packet.tests.truncate(1);
+        packet.tests[0].name = "laws::twinned".to_owned();
+        packet.mutants.truncate(1);
+        packet.mutants[0].killing_tests = vec![packet.tests[0].id.clone()];
+        for (index, dir) in ["conformance/tests", "crates/a/src"].iter().enumerate() {
+            fs::create_dir_all(root.join(dir)).expect("mkdir");
+            fs::write(
+                root.join(dir).join(format!("t{index}.rs")),
+                "#[test]\nfn twinned() {}\n",
+            )
+            .expect("write");
+        }
+        let err = verify_killing_test_leaves_are_unambiguous(&root, &packet)
+            .expect_err("two tests share the leaf the run filters on");
+        assert!(err.to_string().contains("must be unique"), "{err}");
+        fs::remove_file(root.join("crates/a/src/t1.rs")).expect("remove");
+        verify_killing_test_leaves_are_unambiguous(&root, &packet).expect("one leaf, one test");
+    }
+
+    /// Blind pass 1 at aa00d41 (A05): the census matched `fs::rename(`, so a
+    /// `use std::fs::rename as mv;` renamed the durable transition out of the
+    /// surface. Symbols are matched by name, and an aliasing `use` adds its
+    /// alias for that file.
+    #[test]
+    fn an_aliased_durable_call_is_still_a_durable_transition() {
+        let (_scratch, root) = scratch_git_repo("haq-durable-alias");
+        let src = root.join("crates/store/src");
+        fs::create_dir_all(&src).expect("mkdir");
+        fs::write(
+            src.join("lib.rs"),
+            "use std::fs::rename as mv;\npub fn save() { mv(\"a\", \"b\").unwrap(); }\n",
+        )
+        .expect("write");
+        for args in [
+            vec!["add", "-A"],
+            vec!["commit", "--quiet", "-m", "aliased rename"],
+        ] {
+            assert!(
+                Command::new("git")
+                    .current_dir(&root)
+                    .args(&args)
+                    .status()
+                    .expect("git")
+                    .success()
+            );
+        }
+        let sites = durable_transition_sites(&root).expect("census");
+        assert_eq!(
+            sites.get("crates/store/src/lib.rs").copied(),
+            Some(1),
+            "the aliased call is the one durable transition: {sites:?}"
+        );
+    }
+
     /// Blind pass 1 at 612cbcc (A06): production code after an earlier test
     /// module must still be scanned; the module itself must not be.
     #[test]
@@ -15817,7 +16141,7 @@ mod tests {
         let scan = scan_concurrency_primitives(&root).expect("scan");
         assert_eq!(
             scan.execution,
-            vec!["crates/w/src/lib.rs:6:::spawn(".to_owned()]
+            vec!["crates/w/src/lib.rs:6:::spawn".to_owned()]
         );
         assert_eq!(scan.sync, vec!["crates/w/src/lib.rs:9:RwLock<".to_owned()]);
     }
@@ -15995,7 +16319,7 @@ mod tests {
         let scan = scan_concurrency_primitives(&root).expect("scan");
         assert_eq!(
             scan.execution,
-            vec!["crates/w/src/lib.rs:2:::spawn(".to_owned()]
+            vec!["crates/w/src/lib.rs:2:::spawn".to_owned()]
         );
     }
 
