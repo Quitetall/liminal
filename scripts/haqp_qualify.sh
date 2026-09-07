@@ -121,7 +121,17 @@ stage() {
   return "$exit_code"
 }
 
-# Cheap lanes first: a failure here should not cost 3.5 hours to discover.
+# ADR-0020 §6: two blinded reviews, distinct model families. FIRST, not last.
+#
+# The reviewers are handed the ADR, the standing rulings, the review markdown,
+# the packet and four source files — never an evidence artifact — so nothing
+# they read is produced by the stages below, and running them first changes no
+# input, no command and no fixed base. What it changes is the cost of a
+# refusal: six lanes in a row have passed every stage and then refused on a
+# review finding, each after ~110 minutes. First, that verdict arrives in ten.
+stage reviews "" reviews "just haq-blind-review"
+
+# Then the cheap lanes: a failure here should not cost 3.5 hours to discover.
 # `ci` and `replay` are scopes the closed registry names and the lane never
 # ran; they go first so the canaries stage below writes the final canaries.json.
 stage ci          ""                                          ci          "just ci"
@@ -157,10 +167,6 @@ fi
 # The long one. Writes fuzz.json and corpus-access.json.
 stage fuzz conformance/haqp/evidence/fuzz.json fuzz \
   "scripts/haqp_fuzz_campaign.sh 1800 conformance/haqp/evidence/fuzz.json"
-
-# ADR-0020 §6: two blinded reviews, distinct model families. Last, because it
-# reads the tree the other lanes just described.
-stage reviews "" reviews "just haq-blind-review"
 
 # Fold the eight scope rows into the audit the fuzz campaign just wrote.
 python3 - "$SCOPE_ROWS" <<'MERGE'

@@ -2394,7 +2394,7 @@
    },
    {
     "path": "crates/liminal-graph/src/store/mod.rs",
-    "sites": 5,
+    "sites": 2,
     "reason": "the store's single checksummed log append (P1-M022): a crash leaves a torn tail that recovery truncates to the longest checksummed prefix (prop_torn_tail_truncates_cleanly), not state to reconcile, so it is not a registrable boundary (AM-17.8; M17.5 F-46 A05 brought it into the census)"
    },
    {
@@ -2411,11 +2411,6 @@
     "path": "crates/liminal-graph/src/store/snapshot.rs",
     "sites": 2,
     "reason": "the snapshot's fsync and atomic rename: a crash before the rename leaves the previous snapshot, after it the new one; either is a consistent state the log replays onto, nothing to reconcile (AM-17.8; F-47 A05)"
-   },
-   {
-    "path": "crates/liminal-graph/src/store/asof.rs",
-    "sites": 1,
-    "reason": "durable call sites brought into the census by F-50 A05 (symbols matched by name, aliases resolved); not a registrable boundary under AM-17.8"
    }
   ],
   "deferred_to": "M17.9",

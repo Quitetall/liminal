@@ -149,7 +149,12 @@ fn verify_oracle_independence(root: &Utf8Path) -> Result<()> {
                 if forbidden.iter().any(|watch| {
                     watch.contains(&symbol) || symbol.contains(watch.trim_end_matches('('))
                 }) {
+                    // Blind pass 1 at 5fb1b57 (A02): only the call form was
+                    // watched, so `use ...::paragraph as prod;` followed by
+                    // `prod::parse(input)` named nothing. A module alias is
+                    // used with `::`, a function alias with `(`.
                     watched.push(format!("{alias}("));
+                    watched.push(format!("{alias}::"));
                 }
             }
         }
@@ -1052,9 +1057,37 @@ fn independent_oracle_source_cst(
     emitted: &str,
     once: &str,
     twice: &str,
+    content: &str,
 ) -> Result<Vec<u8>> {
     anyhow::ensure!(emitted == source, "CST emit is not lossless for {source:?}");
     anyhow::ensure!(once == twice, "formatting is not idempotent");
+    // Blind pass 1 at 5fb1b57 (A01): those two say nothing about whether
+    // formatting KEPT the document. A formatter returning a constant is
+    // idempotent, and the lossless check never touches the formatter at all.
+    // The generated word is content, not layout: formatting may move it, never
+    // lose it. A durable-marker set would be the natural check and is nearly
+    // vacuous for this corpus, where only the malformed categories carry `{#`.
+    // Alphanumeric runs, not the raw token: a generated word can begin with
+    // markdown syntax (`- v`), and lowering `- ` into list structure is the
+    // formatter doing its job, not losing content.
+    let words = |text: &str| {
+        text.split(|ch: char| !ch.is_alphanumeric())
+            .filter(|run| run.chars().count() >= 3)
+            .map(str::to_owned)
+            .collect::<BTreeSet<_>>()
+    };
+    let lost = words(content)
+        .into_iter()
+        .filter(|word| source.contains(word.as_str()) && !once.contains(word.as_str()))
+        .collect::<Vec<_>>();
+    anyhow::ensure!(
+        lost.is_empty(),
+        "formatting dropped the document's content {lost:?}: {source:?} -> {once:?}"
+    );
+    anyhow::ensure!(
+        source.trim().is_empty() || !once.trim().is_empty(),
+        "formatting emptied a non-empty document"
+    );
     let mut witness = emitted.as_bytes().to_vec();
     witness.extend_from_slice(once.as_bytes());
     Ok(witness)
@@ -5464,6 +5497,18 @@ const TWO_PATH_SYSCALLS: [&str; 7] = [
 /// because a link INTO the locked corpus is the second-name attack. strace
 /// prints one syscall per line, so the earliest needle is the line's call.
 fn scope_trace_line_accesses(line: &str) -> Vec<(String, bool)> {
+    scope_trace_line_arguments(line)
+        .into_iter()
+        .map(|(path, write, _)| (path, write))
+        .collect()
+}
+
+/// The same, plus the directory fd each path was resolved against: the nearest
+/// preceding bare integer argument, `None` for `AT_FDCWD` and for calls that
+/// take no dirfd. Blind pass 1 at 5fb1b57 (A10, A11): only `openat`'s FIRST
+/// argument was read, so `renameat`'s destination dirfd was ignored and a
+/// descriptor opened without `O_DIRECTORY` was dropped from the map entirely.
+fn scope_trace_line_arguments(line: &str) -> Vec<(String, bool, Option<i64>)> {
     let Some((open, needle)) = FILE_SYSCALLS
         .into_iter()
         .filter_map(|needle| line.find(needle).map(|index| (index, needle)))
@@ -5481,13 +5526,22 @@ fn scope_trace_line_accesses(line: &str) -> Vec<(String, bool)> {
         1
     };
     let mut out = Vec::with_capacity(wanted);
-    let mut cursor = rest;
+    // The argument list, past the syscall name: without this the text before a
+    // path reads `openat(7`, whose last comma-separated piece is the name
+    // glued to the fd and parses as nothing.
+    let args = &rest[needle.len()..];
+    let mut cursor = args;
+    let mut consumed = 0usize;
     for _ in 0..wanted {
         let Some(start) = cursor.find('"') else { break };
         let Some(end) = cursor[start + 1..].find('"') else {
             break;
         };
-        out.push((cursor[start + 1..start + 1 + end].to_owned(), write));
+        let dirfd = args[..consumed + start]
+            .rsplit(',')
+            .find_map(|argument| argument.trim().parse::<i64>().ok());
+        out.push((cursor[start + 1..start + 1 + end].to_owned(), write, dirfd));
+        consumed += start + 1 + end + 1;
         cursor = &cursor[start + 1 + end + 1..];
     }
     out
@@ -5552,27 +5606,43 @@ fn anchor_relative_paths(
     cwds: &BTreeMap<u32, String>,
     accesses: &mut [(String, bool)],
 ) {
-    let dirfd = line
-        .split_once("openat(")
-        .or_else(|| line.split_once("openat2("))
-        .and_then(|(_, rest)| rest.split(',').next())
-        .and_then(|token| token.trim().parse::<i64>().ok());
-    let base = dirfd
-        .and_then(|fd| dir_fds.get(&(pid, fd)))
-        .or_else(|| cwds.get(&pid));
-    let Some(base) = base else {
-        return;
-    };
-    for (path, _) in accesses.iter_mut() {
-        if !path.starts_with('/') {
+    // Each path is anchored against ITS OWN dirfd — `renameat`'s destination
+    // has a different one from its source — and falls back to the pid's cwd.
+    for ((path, _), (_, _, dirfd)) in accesses.iter_mut().zip(scope_trace_line_arguments(line)) {
+        if path.starts_with('/') {
+            continue;
+        }
+        if let Some(base) = dirfd
+            .and_then(|fd| dir_fds.get(&(pid, fd)))
+            .or_else(|| cwds.get(&pid))
+        {
             *path = format!("{base}/{path}");
         }
     }
 }
 
-fn record_chdir(line: &str, pid: u32, cwds: &mut BTreeMap<u32, String>) {
-    // `fchdir(fd)` names no path; its argument would become a nonsense cwd.
-    if !line.contains("chdir(") || line.contains("fchdir(") || !line.trim_end().ends_with("= 0") {
+fn record_chdir(
+    line: &str,
+    pid: u32,
+    dir_fds: &BTreeMap<(u32, i64), String>,
+    cwds: &mut BTreeMap<u32, String>,
+) {
+    if !line.contains("chdir(") || !line.trim_end().ends_with("= 0") {
+        return;
+    }
+    // Blind pass 1 at 5fb1b57 (A07): `fchdir` was skipped, which left a STALE
+    // cwd and unanchored every relative path after it. It names a directory by
+    // fd, so the pid moves wherever that fd was opened; an fd this trace never
+    // saw opened leaves the cwd UNKNOWN rather than stale.
+    if line.contains("fchdir(") {
+        let fd = line
+            .split_once("fchdir(")
+            .and_then(|(_, rest)| rest.split(')').next())
+            .and_then(|token| token.trim().parse::<i64>().ok());
+        match fd.and_then(|fd| dir_fds.get(&(pid, fd))) {
+            Some(dir) => cwds.insert(pid, dir.clone()),
+            None => cwds.remove(&pid),
+        };
         return;
     }
     let Some((target, _)) = scope_trace_line_accesses(line).first().cloned() else {
@@ -5652,18 +5722,22 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
         let mut accesses = scope_trace_line_accesses(&line);
         if let Some(pid) = pid {
             anchor_relative_paths(&line, pid, &dir_fds, &cwds, &mut accesses);
-            record_chdir(&line, pid, &mut cwds);
-            if line.contains("openat(") || line.contains("openat2(") {
-                let is_dir = line.contains("O_DIRECTORY");
-                if let Some((path, _)) = accesses.first() {
-                    if line.contains("<unfinished ...>") {
-                        unfinished.insert(pid, (path.clone(), is_dir));
-                    } else if let Some(fd) = returned_fd {
-                        if is_dir && fd >= 0 {
-                            dir_fds.insert((pid, fd), path.clone());
-                        } else {
-                            dir_fds.remove(&(pid, fd));
-                        }
+            record_chdir(&line, pid, &dir_fds, &mut cwds);
+            // Blind pass 1 at 5fb1b57 (A10): only `O_DIRECTORY` opens were
+            // remembered, so a descriptor opened without it and later used as
+            // a dirfd resolved against nothing. Every successful open's path
+            // is remembered for its fd; one that is not a directory simply
+            // never appears as a dirfd.
+            if (line.contains("openat(") || line.contains("openat2(") || line.contains(" open("))
+                && let Some((path, _)) = accesses.first()
+            {
+                if line.contains("<unfinished ...>") {
+                    unfinished.insert(pid, (path.clone(), true));
+                } else if let Some(fd) = returned_fd {
+                    if fd >= 0 {
+                        dir_fds.insert((pid, fd), path.clone());
+                    } else {
+                        dir_fds.remove(&(pid, fd));
                     }
                 }
             }
@@ -7355,16 +7429,55 @@ fn verify_mutant_inventory(packet: &Packet) -> Result<()> {
             anyhow::bail!("{} has no killing test", mutant.id);
         }
     }
+    verify_mutation_plan_balance(&by_family, &by_operator)?;
+    Ok(())
+}
+
+/// ADR-0020 §3's shape rules for the plan: thirteen mutants per family, no
+/// operator over a quarter of the denominator, and every named operator
+/// present (blind pass 1 at 5fb1b57, A04).
+fn verify_mutation_plan_balance(
+    by_family: &BTreeMap<&str, usize>,
+    by_operator: &BTreeMap<&str, usize>,
+) -> Result<()> {
+    const REQUIRED_OPERATORS: [&str; 12] = [
+        "predicate-deletion",
+        "predicate-inversion",
+        "threshold-plus-one",
+        "threshold-minus-one",
+        "missing-enum-dispatch",
+        "success-error-substitution",
+        "stale-basis-acceptance",
+        "wrong-holder-selection",
+        "skipped-durable-transition",
+        "disabled-crash-point",
+        "ordering-nondeterminism",
+        "oracle-short-circuit",
+    ];
     for (family, count) in by_family {
-        if count != 13 {
+        if *count != 13 {
             anyhow::bail!("family {family} mutant count must be 13, got {count}");
         }
     }
     for (operator, count) in by_operator {
-        if count > 16 {
+        if *count > 16 {
             anyhow::bail!("operator {operator} supplies {count} mutants; max 16");
         }
     }
+    // Blind pass 1 at 5fb1b57 (A04): the tally only bounded operators that were
+    // PRESENT, so dropping one entirely — broadened-allow-list has a single
+    // mutant — left the plan short an operator ADR-0020 §3 names and nothing
+    // said so. The list is the ADR's, closed.
+    let missing = REQUIRED_OPERATORS
+        .into_iter()
+        .chain(["broadened-allow-list"])
+        .filter(|operator| !by_operator.contains_key(operator))
+        .collect::<Vec<_>>();
+    anyhow::ensure!(
+        missing.is_empty(),
+        "the mutation plan declares no {missing:?}; ADR-0020 §3 names every operator the plan \
+         must exercise, and an absent one cannot be killed or counted"
+    );
     Ok(())
 }
 
@@ -8884,6 +8997,37 @@ fn verify_crash_boundary_inventory(packet: &Packet) -> Result<()> {
 /// that was honest, which a human then corrects. The opposite error, silently
 /// undercounting, would let a real durable transition hide, so the bias is the
 /// one worth having.
+/// How many times `line` names one of `symbols` as a durable transition.
+///
+/// Blind pass 1 at 5fb1b57 (A05): matching `symbol(` missed a turbofish
+/// (`rename::<T>(`) and a function pointer (`let f = fs::rename;`). The symbol
+/// is matched on a word boundary and accepted when what follows is a call, a
+/// path or turbofish, or the end of a value — never when it is more
+/// identifier, so `rename_all` and `append_str` are not renames and appends.
+/// Counting occurrences rather than marker spellings keeps one call site worth
+/// one site however many spellings would match it.
+fn durable_symbol_hits(line: &str, symbols: &[String]) -> usize {
+    let identifier = |ch: char| ch.is_alphanumeric() || ch == '_';
+    let mut hits = 0;
+    for symbol in symbols {
+        for (offset, _) in line.match_indices(symbol.as_str()) {
+            if line[..offset].chars().next_back().is_some_and(identifier) {
+                continue;
+            }
+            let rest = &line[offset + symbol.len()..];
+            let follows = rest.starts_with('(')
+                || rest.starts_with("::")
+                || rest.starts_with(';')
+                || rest.starts_with(',')
+                || rest.starts_with(')');
+            if follows {
+                hits += 1;
+            }
+        }
+    }
+    hits
+}
+
 fn durable_transition_sites(root: &Utf8Path) -> Result<BTreeMap<String, usize>> {
     // Blind pass 1 at 612cbcc (A05): `inner.log.append(` is the store's durable
     // append (P1-M022 deletes it) and was outside the census, so an append-based
@@ -8922,27 +9066,27 @@ fn durable_transition_sites(root: &Utf8Path) -> Result<BTreeMap<String, usize>> 
             )
         })?;
         // A `use` that renames a durable symbol makes the alias a marker in
-        // this file: `use std::fs::rename as mv;` means `mv(` is a rename.
+        // this file: `use std::fs::rename as mv;` means `mv` is a rename.
         let mut markers = DURABLE_SYMBOLS
             .iter()
-            .map(|symbol| format!("{symbol}("))
+            .map(|symbol| (*symbol).to_owned())
             .collect::<Vec<_>>();
         for line in text.lines() {
             for (symbol, alias) in use_aliases(line) {
                 if DURABLE_SYMBOLS.contains(&symbol.as_str()) {
-                    markers.push(format!("{alias}("));
+                    markers.push(alias);
                 }
             }
         }
         let count = text
             .lines()
-            .filter(|line| !line.trim_start().starts_with("//"))
-            .map(|line| {
-                markers
-                    .iter()
-                    .filter(|marker| line.contains(marker.as_str()))
-                    .count()
+            // An import declares a name; it performs no transition. Without
+            // this the aliasing `use` line counts as a durable call itself.
+            .filter(|line| {
+                let trimmed = line.trim_start();
+                !trimmed.starts_with("//") && !trimmed.starts_with("use ")
             })
+            .map(|line| durable_symbol_hits(line, &markers))
             .sum::<usize>();
         if count > 0 {
             sites.insert(name.to_owned(), count);
@@ -9368,7 +9512,12 @@ const CONCURRENCY_SCAN_EXCLUDED_CRATES: [&str; 2] = ["liminal-xtask", "liminal-s
 // whatever path prefix reaches them; `.spawn(` also catches a builder. The
 // product crates spawn no processes today, so the over-match is a refusal
 // that names its line, never a miss.
-const CONCURRENCY_EXECUTION_PRIMITIVES: [&str; 9] = [
+const CONCURRENCY_EXECUTION_PRIMITIVES: [&str; 12] = [
+    // Blind pass 1 at 5fb1b57 (A06): the list was Rust-shaped, so a thread
+    // created through libc named nothing.
+    "pthread_create",
+    "libc::clone",
+    "clone3",
     // Blind pass 1 at aa00d41 (A06): the trailing parenthesis meant
     // `let f = thread::spawn;` named no token while spawning all the same.
     // A mention of the symbol is the signal; calling it is not required.
@@ -10880,7 +11029,7 @@ fn case_source_cst(rng: &mut Rng) -> Result<Case> {
             witness: once.into_bytes(),
         });
     };
-    let witness = independent_oracle_source_cst(&source, &emitted, &once, &twice)?;
+    let witness = independent_oracle_source_cst(&source, &emitted, &once, &twice, &token)?;
     Ok(Case::Accepted { category, witness })
 }
 

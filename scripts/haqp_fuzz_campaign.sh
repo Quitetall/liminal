@@ -235,7 +235,14 @@ done
 #
 # Builds above are serial on purpose: they share one `fuzz/target`, so cargo
 # would serialize them on its package lock regardless.
-JOBS="${HAQP_FUZZ_JOBS:-4}"
+# 7 = one core per target on this 20-core machine, so the seven 30-minute
+# budgets overlap completely and the stage costs ~31 minutes instead of ~70.
+# ADR-0020 §4 is denominated in TIME per family, which is unchanged; what
+# concurrency costs is exec DEPTH, and seven single-threaded fuzzers on twenty
+# cores contend mildly (measured: 4 jobs idle gave cst_parse 51-59M execs, the
+# same 4 jobs under an unrelated 16-thread job gave 12-17M). The recorded
+# execs make any real loss visible in the evidence.
+JOBS="${HAQP_FUZZ_JOBS:-7}"
 echo "=== fuzzing ${#TARGETS[@]} targets for ${SECS}s each, ${JOBS} at a time ==="
 running=0
 for t in "${TARGETS[@]}"; do
