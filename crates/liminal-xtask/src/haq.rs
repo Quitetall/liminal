@@ -7378,24 +7378,23 @@ fn use_aliases(line: &str) -> Vec<(String, String)> {
     let Some(rest) = line.trim().strip_prefix("use ") else {
         return Vec::new();
     };
-    let rest = rest.trim_end_matches(';');
-    let (prefix, group) = rest.split_once('{').map_or((rest, None), |(head, tail)| {
-        (head, Some(tail.trim_end_matches('}')))
-    });
-    let items = group.map_or_else(
-        || vec![rest.to_owned()],
-        |group| {
-            group
-                .split(',')
-                .map(|item| format!("{}{}", prefix.trim(), item.trim()))
-                .collect()
-        },
-    );
+    // Braces are dropped rather than parsed, so a nested group
+    // (`use a::{b::{c as d}};`) reads the same as a flat one: what matters is
+    // the trailing `symbol as alias`, and the path before it is only used for
+    // its last segment (review of d09978c).
+    let flattened = rest.trim_end_matches(';').replace(['{', '}'], "");
+    let items = flattened.split(',').map(str::trim).collect::<Vec<_>>();
     items
         .iter()
         .filter_map(|item| {
             let (path, alias) = item.split_once(" as ")?;
-            let symbol = path.rsplit("::").next().unwrap_or(path).trim().to_owned();
+            // `rsplit` always yields at least one element.
+            let symbol = path
+                .rsplit("::")
+                .next()
+                .unwrap_or_default()
+                .trim()
+                .to_owned();
             let alias = alias.trim().to_owned();
             (alias != "_").then_some((symbol, alias))
         })
@@ -7457,6 +7456,8 @@ fn anchor_is_mutable_line(line: &str) -> bool {
             let inner = value
                 .split_once('(')
                 .map_or(value, |(_, rest)| rest.trim_end_matches(')'));
+            // Strip a trailing type suffix (`256u16`) before asking whether
+            // what remains is a number.
             !value.starts_with('"')
                 && !inner.is_empty()
                 && inner
@@ -16149,6 +16150,11 @@ mod tests {
                 ("parse".to_owned(), "p".to_owned()),
                 ("other".to_owned(), "o".to_owned())
             ]
+        );
+        assert_eq!(
+            use_aliases("use a::{b::{rename as mv}};"),
+            vec![("rename".to_owned(), "mv".to_owned())],
+            "a nested group reads the same as a flat one"
         );
         assert!(use_aliases("use std::io::Write as _;").is_empty());
         assert!(use_aliases("let x = 1;").is_empty());
