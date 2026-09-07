@@ -145,15 +145,12 @@ fn verify_oracle_independence(root: &Utf8Path) -> Result<()> {
             .map(|s| (*s).to_owned())
             .collect::<Vec<_>>();
         for line in text.lines() {
-            let Some(rest) = line.trim().strip_prefix("use ") else {
-                continue;
-            };
-            let Some((used, alias)) = rest.trim_end_matches(';').split_once(" as ") else {
-                continue;
-            };
-            let alias = alias.trim();
-            if alias != "_" && forbidden.iter().any(|symbol| used.contains(symbol)) {
-                watched.push(format!("{alias}("));
+            for (symbol, alias) in use_aliases(line) {
+                if forbidden.iter().any(|watch| {
+                    watch.contains(&symbol) || symbol.contains(watch.trim_end_matches('('))
+                }) {
+                    watched.push(format!("{alias}("));
+                }
             }
         }
         for symbol in &watched {
@@ -370,8 +367,12 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     // must bind every declared test to a real, runnable function.
     if packet.qualification_stage == "1b" {
         verify_test_names_exist(root, &packet)?;
-        verify_killing_test_leaves_are_unambiguous(root, &packet)?;
     }
+    // Runs at 1a as well: it only speaks when a leaf names more than one
+    // EXISTING test, so an inventory naming future M18-M24 tests is unaffected,
+    // and an ambiguity that would let a namesake certify a kill is caught now
+    // rather than at M24 (review of c455cdf).
+    verify_killing_test_leaves_are_unambiguous(root, &packet)?;
     Ok(())
 }
 
@@ -5548,7 +5549,8 @@ fn anchor_relative_paths(
 }
 
 fn record_chdir(line: &str, pid: u32, cwds: &mut BTreeMap<u32, String>) {
-    if !line.contains("chdir(") || !line.trim_end().ends_with("= 0") {
+    // `fchdir(fd)` names no path; its argument would become a nonsense cwd.
+    if !line.contains("chdir(") || line.contains("fchdir(") || !line.trim_end().ends_with("= 0") {
         return;
     }
     let Some((target, _)) = scope_trace_line_accesses(line).first().cloned() else {
@@ -7367,6 +7369,39 @@ fn verify_mutant_inventory(packet: &Packet) -> Result<()> {
 /// ordering site. Guessing which token an operator needs produces false
 /// accusations against a mutation plan; "is this a declaration" does not.
 /// Whether a mutant is GOOD is the 1b runner's question.
+/// The aliases a `use` line introduces for the symbols it imports:
+/// `use std::fs::{rename as mv, remove_file};` yields `("rename", "mv")`.
+/// Blind-review follow-up (review of c455cdf): splitting the whole line on
+/// `" as "` mangled a brace group into an alias like `mv, remove_file}`, which
+/// matched nothing and reopened the evasion the alias scan closed.
+fn use_aliases(line: &str) -> Vec<(String, String)> {
+    let Some(rest) = line.trim().strip_prefix("use ") else {
+        return Vec::new();
+    };
+    let rest = rest.trim_end_matches(';');
+    let (prefix, group) = rest.split_once('{').map_or((rest, None), |(head, tail)| {
+        (head, Some(tail.trim_end_matches('}')))
+    });
+    let items = group.map_or_else(
+        || vec![rest.to_owned()],
+        |group| {
+            group
+                .split(',')
+                .map(|item| format!("{}{}", prefix.trim(), item.trim()))
+                .collect()
+        },
+    );
+    items
+        .iter()
+        .filter_map(|item| {
+            let (path, alias) = item.split_once(" as ")?;
+            let symbol = path.rsplit("::").next().unwrap_or(path).trim().to_owned();
+            let alias = alias.trim().to_owned();
+            (alias != "_").then_some((symbol, alias))
+        })
+        .collect()
+}
+
 fn anchor_is_mutable_line(line: &str) -> bool {
     let trimmed = line.trim();
     let declares_item = [
@@ -7414,9 +7449,21 @@ fn anchor_is_mutable_line(line: &str) -> bool {
     // become 8 and still compile.
     let binds_a_threshold = declares_item
         && trimmed.contains("const ")
-        && trimmed
-            .split_once('=')
-            .is_some_and(|(_, value)| value.chars().any(|ch| ch.is_ascii_digit()));
+        && trimmed.split_once('=').is_some_and(|(_, value)| {
+            // The VALUE must be a number, not merely contain a digit:
+            // `pub const TAG: &str = "v2";` is still a declaration (review of
+            // c455cdf). A newtype around a number counts: `RelationFlags(1)`.
+            let value = value.trim().trim_end_matches(';').trim();
+            let inner = value
+                .split_once('(')
+                .map_or(value, |(_, rest)| rest.trim_end_matches(')'));
+            !value.starts_with('"')
+                && !inner.is_empty()
+                && inner
+                    .trim_end_matches(|ch: char| ch.is_ascii_alphabetic() || ch == '_')
+                    .chars()
+                    .all(|ch| ch.is_ascii_digit() || ch == '_')
+        });
     !(declares_item || declares_variant) || binds_a_threshold
 }
 
@@ -8858,16 +8905,10 @@ fn durable_transition_sites(root: &Utf8Path) -> Result<BTreeMap<String, usize>> 
             .map(|symbol| format!("{symbol}("))
             .collect::<Vec<_>>();
         for line in text.lines() {
-            let Some(rest) = line.trim().strip_prefix("use ") else {
-                continue;
-            };
-            let Some((path, alias)) = rest.trim_end_matches(';').split_once(" as ") else {
-                continue;
-            };
-            let symbol = path.rsplit("::").next().unwrap_or(path).trim();
-            let alias = alias.trim();
-            if DURABLE_SYMBOLS.contains(&symbol) && alias != "_" {
-                markers.push(format!("{alias}("));
+            for (symbol, alias) in use_aliases(line) {
+                if DURABLE_SYMBOLS.contains(&symbol.as_str()) {
+                    markers.push(format!("{alias}("));
+                }
             }
         }
         let count = text
@@ -16090,6 +16131,40 @@ mod tests {
         verify_killing_test_leaves_are_unambiguous(&root, &packet).expect("one leaf, one test");
     }
 
+    /// Review of c455cdf: a brace group mangled the alias, and a string
+    /// constant containing a digit looked like a threshold.
+    #[test]
+    fn use_aliases_and_threshold_constants_are_read_precisely() {
+        assert_eq!(
+            use_aliases("use std::fs::rename as mv;"),
+            vec![("rename".to_owned(), "mv".to_owned())]
+        );
+        assert_eq!(
+            use_aliases("use std::fs::{rename as mv, remove_file};"),
+            vec![("rename".to_owned(), "mv".to_owned())]
+        );
+        assert_eq!(
+            use_aliases("use liminal_source::paragraph::{parse as p, other as o};"),
+            vec![
+                ("parse".to_owned(), "p".to_owned()),
+                ("other".to_owned(), "o".to_owned())
+            ]
+        );
+        assert!(use_aliases("use std::io::Write as _;").is_empty());
+        assert!(use_aliases("let x = 1;").is_empty());
+
+        // A number is a threshold; a string that merely contains one is not.
+        assert!(anchor_is_mutable_line("pub const MAX_NESTING: u16 = 256;"));
+        assert!(anchor_is_mutable_line(
+            "pub const TOMBSTONE: RelationFlags = RelationFlags(1);"
+        ));
+        assert!(!anchor_is_mutable_line("pub const TAG: &str = \"v2\";"));
+        assert!(!anchor_is_mutable_line(
+            "pub const REPAIR_STALE_BASIS: &str = \"JUR053\";"
+        ));
+        assert!(!anchor_is_mutable_line("const ALL: [IntentState; 7] = ["));
+    }
+
     /// Blind pass 1 at aa00d41 (A05): the census matched `fs::rename(`, so a
     /// `use std::fs::rename as mv;` renamed the durable transition out of the
     /// surface. Symbols are matched by name, and an aliasing `use` adds its
@@ -16101,7 +16176,7 @@ mod tests {
         fs::create_dir_all(&src).expect("mkdir");
         fs::write(
             src.join("lib.rs"),
-            "use std::fs::rename as mv;\npub fn save() { mv(\"a\", \"b\").unwrap(); }\n",
+            "use std::fs::{rename as mv, remove_file};\npub fn save() { mv(\"a\", \"b\").unwrap(); }\n",
         )
         .expect("write");
         for args in [
