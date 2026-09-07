@@ -118,7 +118,12 @@ def backend_of(model: str) -> str:
 def codex_sessions() -> set[Path]:
     """Every rollout transcript Codex has on disk, newest first at read time."""
     home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
-    return set((home / "sessions").rglob("rollout-*.jsonl"))
+    sessions = home / "sessions"
+    # The directory does not exist until the first non-ephemeral session; an
+    # absent one is an empty set, not a traceback that hides the real error.
+    if not sessions.is_dir():
+        return set()
+    return set(sessions.rglob("rollout-*.jsonl"))
 
 
 def codex_call(model: str, prompt: str) -> tuple[str, dict[str, Any]]:

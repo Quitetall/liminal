@@ -1914,6 +1914,13 @@ fn verify_review_provider_receipt(record: &ReviewRecord, record_path: &Utf8Path)
                 receipt.created > 0,
                 "a mimo receipt must carry the provider's clock"
             );
+            for key in ["prompt_tokens", "completion_tokens", "total_tokens"] {
+                anyhow::ensure!(
+                    receipt.usage.contains_key(key),
+                    "a mimo receipt must carry the provider's {key}; a changed usage envelope \
+                     must be seen here, not discovered later through a binding that moved"
+                );
+            }
             let billed = receipt
                 .usage
                 .get("total_tokens")
@@ -9550,8 +9557,6 @@ struct ReviewRecordReviewer {
     backend: String,
 }
 
-/// Findings carry model-chosen key names, so they stay untyped; ATTEMPTS are
-/// the runner's own contract and are pinned.
 /// Blind pass 1 at aa00d41 (A09): every independence field in a review record
 /// was computed by the runner, so nothing outside this machine showed that two
 /// distinct reviewers had answered. A receipt is the provider's own artifact —
@@ -9583,6 +9588,8 @@ struct ReviewProviderReceipt {
     usage: BTreeMap<String, serde_json::Value>,
 }
 
+/// Findings carry model-chosen key names, so they stay untyped; ATTEMPTS are
+/// the runner's own contract and are pinned.
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 struct ReviewRecordAttempt {
@@ -16039,13 +16046,26 @@ mod tests {
     /// answer's.
     #[test]
     fn a_review_record_binds_its_retained_raw_answer_and_refuses_waivers() {
-        let path = repo_root()
-            .join("conformance/haqp/evidence/reviews/pass2-mimo-direct-mimo-v2.5-pro.json");
-        let mut value: serde_json::Value =
-            serde_json::from_slice(&fs::read(&path).expect("record")).expect("json");
+        // Built from the fixture, not from committed evidence: a record from
+        // an earlier lane lacks today's required fields, so parsing one would
+        // fail for a reason this test is not about (review of 2bcc6cb).
+        let mut value =
+            serde_json::to_value(review_record(1, "openai", "codex")).expect("fixture record");
         value["attempts"][0]["waiver"] = serde_json::json!("*");
-        let err = serde_json::from_value::<ReviewRecord>(value).expect_err("a waiver field");
+        let err = serde_json::from_value::<ReviewRecord>(value.clone())
+            .expect_err("a waiver field inside an attempt");
         assert!(err.to_string().contains("unknown field"), "{err}");
+        // ...and a record with no provider receipt at all is refused outright.
+        value["attempts"][0]
+            .as_object_mut()
+            .expect("attempt object")
+            .remove("waiver");
+        value
+            .as_object_mut()
+            .expect("record object")
+            .remove("provider_receipt");
+        let err = serde_json::from_value::<ReviewRecord>(value).expect_err("no receipt");
+        assert!(err.to_string().contains("provider_receipt"), "{err}");
         let scratch = liminal_scratch::ScratchDir::new("haq-raw").expect("scratch");
         let root = scratch.path().to_owned();
         let record = root.join("r.json");
@@ -16141,13 +16161,31 @@ mod tests {
             .expect("receipt parses");
             row
         };
-        verify_review_provider_receipt(&mimo(r#"{"total_tokens":12}"#, 1), &path)
-            .expect("a complete mimo receipt");
-        let err = verify_review_provider_receipt(&mimo(r#"{"total_tokens":0}"#, 1), &path)
-            .expect_err("a receipt that bills nothing");
+        verify_review_provider_receipt(
+            &mimo(
+                r#"{"prompt_tokens":3,"completion_tokens":9,"total_tokens":12}"#,
+                1,
+            ),
+            &path,
+        )
+        .expect("a complete mimo receipt");
+        let err = verify_review_provider_receipt(
+            &mimo(
+                r#"{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}"#,
+                1,
+            ),
+            &path,
+        )
+        .expect_err("a receipt that bills nothing");
         assert!(err.to_string().contains("bills nothing"), "{err}");
-        let err = verify_review_provider_receipt(&mimo(r#"{"total_tokens":12}"#, 0), &path)
-            .expect_err("a receipt without the provider's clock");
+        let err = verify_review_provider_receipt(
+            &mimo(
+                r#"{"prompt_tokens":3,"completion_tokens":9,"total_tokens":12}"#,
+                0,
+            ),
+            &path,
+        )
+        .expect_err("a receipt without the provider's clock");
         assert!(err.to_string().contains("clock"), "{err}");
 
         // A backend that produces no receipt at all cannot qualify.
