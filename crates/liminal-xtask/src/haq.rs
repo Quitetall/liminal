@@ -1771,6 +1771,12 @@ struct Ruling {
     /// genuine untracked-chdir defect. A ruling answers a claim, not a
     /// coordinate.
     claim_requires: Vec<String>,
+    /// Phrases whose presence means this ruling does NOT answer the claim.
+    /// Blind pass 1 at 5fb1b57 (A08): a required phrase can be found inside a
+    /// sentence that negates it, so a ruling could suppress a defect it was
+    /// never shown. Required phrases say what a claim must be about;
+    /// excluded ones say what it must not be about.
+    claim_excludes: Vec<String>,
     status: String,
     file: String,
 }
@@ -1806,6 +1812,7 @@ fn rulings(root: &Utf8Path) -> Result<Vec<Ruling>> {
                 .map(|v| v.trim().trim_matches('"').to_owned())
                 .with_context(|| format!("{file}: ruling front matter lacks {key}"))
         };
+        let excludes = field("claim_excludes").unwrap_or_default();
         let requires = field("claim_requires")?;
         anyhow::ensure!(
             !requires.trim().is_empty(),
@@ -1817,6 +1824,11 @@ fn rulings(root: &Utf8Path) -> Result<Vec<Ruling>> {
             attack_class: field("attack_class")?,
             target: field("target")?,
             claim_requires: requires
+                .split(';')
+                .map(|phrase| phrase.trim().to_ascii_lowercase())
+                .filter(|phrase| !phrase.is_empty())
+                .collect(),
+            claim_excludes: excludes
                 .split(';')
                 .map(|phrase| phrase.trim().to_ascii_lowercase())
                 .filter(|phrase| !phrase.is_empty())
@@ -1898,6 +1910,10 @@ pub fn effective_unresolved_findings_repo(root: &Utf8Path, record: &Utf8Path) ->
                     .claim_requires
                     .iter()
                     .all(|phrase| prose.contains(phrase.as_str()))
+                && !ruling
+                    .claim_excludes
+                    .iter()
+                    .any(|phrase| prose.contains(phrase.as_str()))
         });
         if !ruled {
             unresolved += 1;
@@ -16639,11 +16655,12 @@ mod tests {
         fs::write(root.join(RULING_SIGNERS), "brian ssh-ed25519 AAAA\n").expect("signers");
         fs::write(
             root.join("docs/execution/rulings/R-001.md"),
-            "---\nid: R-001\nattack_class: corpus leakage\ntarget: crates/liminal-xtask/src/haq.rs\nclaim_requires: read access\nstatus: ruled\n---\n\nReads are by design.\n",
+            "---\nid: R-001\nattack_class: corpus leakage\ntarget: crates/liminal-xtask/src/haq.rs\nclaim_requires: read access\nclaim_excludes: chdir\nstatus: ruled\n---\n\nReads are by design.\n",
         )
         .expect("ruling");
         let ruling = &rulings(&root).expect("parse")[0];
         assert_eq!(ruling.claim_requires, vec!["read access".to_owned()]);
+        assert_eq!(ruling.claim_excludes, vec!["chdir".to_owned()]);
         let answered = "unauthorized read access remains accepted";
         let unrelated = "chdir state is not tracked; the later relative write resolves incorrectly";
         let record = |prose: &str| {
@@ -16654,15 +16671,26 @@ mod tests {
         // Without a verifying signature neither is cleared; the claim filter is
         // proved on the ruling's own predicate.
         let prose_matches = |prose: &str| {
+            let lower = prose.to_ascii_lowercase();
             ruling
                 .claim_requires
                 .iter()
-                .all(|phrase| prose.to_ascii_lowercase().contains(phrase.as_str()))
+                .all(|phrase| lower.contains(phrase.as_str()))
+                && !ruling
+                    .claim_excludes
+                    .iter()
+                    .any(|phrase| lower.contains(phrase.as_str()))
         };
         assert!(prose_matches(answered), "the claim it answers");
         assert!(
             !prose_matches(unrelated),
             "an unrelated claim in the same class and file"
+        );
+        // A08: the required phrase occurs inside a sentence that is about
+        // something else; an excluded phrase says so.
+        assert!(
+            !prose_matches("read access is fine; the chdir state is not tracked"),
+            "a claim that mentions the ruled phrase while being about something else"
         );
         let path = root.join("r.json");
         fs::write(&path, record(unrelated)).expect("record");

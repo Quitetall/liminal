@@ -3,6 +3,7 @@ id: R-002
 attack_class: vacuity
 target: conformance/haqp/packet.json
 claim_requires: canonical-reparse relation
+claim_excludes: mutation; mutant
 status: ruled
 ruled_by: Brian
 date: 2026-09-06
@@ -32,3 +33,7 @@ touching this file verifies against `conformance/haqp/ruling-signers`.
 only a claim whose prose contains `canonical-reparse relation`. Matching on attack class and
 target file alone cleared an unrelated finding in the same class and file; a
 ruling answers a claim, not a coordinate.
+
+**Scope narrowed again (2026-09-07, after A08 at lane `5fb1b57`).** A required
+phrase can occur inside a sentence that negates it, so this ruling also lists
+phrases whose presence means it does NOT answer the claim.
