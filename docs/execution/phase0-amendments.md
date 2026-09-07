@@ -104,3 +104,10 @@ M17.6; HAQP-1b runs at M24; final suite ratification follows both stages.
 No aggregate test, mutation threshold, quarantine or human authority is changed.
 Recorded in the active Phase 0 ledger because M24 remains a proposed gate work
 order; final amendment disposition remains part of Phase 0 closeout.
+
+AM-24.2 (M18–M23, migration reconciliation 2026-09-07): apply the same accepted
+ADR-0021 prerequisite correction as AM-24.1 to M18–M23, including M18/M19's
+duplicated exit-criteria wording. M17.6 authorization after HAQP-1a permits
+execution; final suite ratification follows HAQP-1b at M24. This records the
+already accepted staging rule, not a new GO, test activation, amendment
+ratification, or change to full M19 breadth, assertions, goldens or thresholds.
