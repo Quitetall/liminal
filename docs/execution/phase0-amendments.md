@@ -97,3 +97,10 @@ therefore still cannot change in the child, which is what `verify_provenance`
 exists to prevent. Four canaries pin it, including one asserting the pinned
 attribute string still matches the tree — otherwise the check passes vacuously
 against a file it no longer describes.
+
+AM-24.1 (M24, migration approved 2026-09-07): reconcile M24's opening
+prerequisite with accepted ADR-0021. Phase 1 authorization follows HAQP-1a at
+M17.6; HAQP-1b runs at M24; final suite ratification follows both stages.
+No aggregate test, mutation threshold, quarantine or human authority is changed.
+Recorded in the active Phase 0 ledger because M24 remains a proposed gate work
+order; final amendment disposition remains part of Phase 0 closeout.
