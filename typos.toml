@@ -30,6 +30,11 @@ extend-exclude = [
   # strace output, not prose: it captures truncated argv like
   # `profile.release.debug="line-tabl...` and every path on this machine.
   "conformance/haqp/evidence/access/**",
+  # Reviewer records, their raw answers and Codex session transcripts: verbatim
+  # provider output, including base64 blobs and a model's own prose. Correcting
+  # a reviewer's spelling would alter evidence the gate hashes (M17.5 F-51).
+  "conformance/haqp/evidence/reviews/**",
+  "docs/execution/reviews/**",
   "conformance/corpora/**",
   "conformance/golden/**",
   "**/snapshots/*.snap",

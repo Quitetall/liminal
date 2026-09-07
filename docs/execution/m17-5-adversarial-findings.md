@@ -3172,3 +3172,41 @@ is what prompted AM-17.9.
 
 **Consequences.** Packet (two mutant anchors, five disclosure counts), digests
 and canaries rebound. The campaign reruns from a new fixed base.
+
+## F-51 — the sixth lane: sixteen findings, none of them about the suite
+
+**Found.** 2026-09-06, lane at `5fb1b57`. Every stage passed; the campaign ran
+clean again (91 M executions on the interchange codec, zero artifacts); both
+passes carried provider receipts for the first time — a Codex rollout of 4.4 MB
+and a MiMo envelope billing 219,180 tokens. Then BOTH passes reported defects:
+pass 1 eleven, pass 2 five. Every one of the sixteen targets
+`crates/liminal-xtask/src/haq.rs`. None targets the Phase 1 suite.
+
+This is the shape AM-17.9 was written for, now with evidence rather than
+suspicion. Six of pass 1's eleven are gaps in fixes landed the same day:
+the alias scan adds `prod(` but the body calls `prod::parse(` (A02); a
+turbofish `rename::<T>(` lacks `rename(` (A05); `pthread_create` is in no
+token list (A06); `fchdir` was excluded on the previous round's advice and
+now leaves a stale cwd (A07); `renameat`'s destination is not anchored
+(A11); a dirfd whose open was not `O_DIRECTORY` is dropped (A10). Pass 2's
+five are all one observation: the verifier does not verify itself — it is not
+run under the corpus tracer, its own oracles are outside the independence
+registry, and a change to the gate is not caught by the gate.
+
+**Fixed here (class B under AM-17.9 — the record could assert something
+untrue).** A09: `verify_markdown_review_blocks` and `verify_oracle_independence`
+ran on the INVENTORY path only, so the path that judges a flipped packet
+accepted review cells disagreeing with their committed records, and an oracle
+coupled to the production path it judges. Both now run on the qualified path.
+
+**Standing.** The remaining fifteen are gate-hardening against an author who
+controls the gate. Under AM-17.9 they are class C: recorded, ruled, not
+blocking — but AM-17.9 is unratified, so they block, and the loop cannot
+terminate while every fix is new gate surface for the next pass. The decision
+is Brian's and is recorded here as open.
+
+**A08 is the one class-C finding that also weakens a ruling.** `claim_requires`
+matches by substring, so a phrase can be found inside a sentence that negates
+it, and a signed ruling could suppress a defect it does not answer. Whatever
+the termination decision, ruling scope needs a stronger predicate than
+substring containment.

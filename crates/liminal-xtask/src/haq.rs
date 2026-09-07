@@ -303,6 +303,12 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     verify_requirement_sources(root, &packet)?;
     verify_crash_boundary_scope(root, &packet)?;
     verify_markdown_surface(root, &packet)?;
+    // Blind pass 1 at 5fb1b57 (A09): both of these ran on the inventory path
+    // only, so the path that judges a FLIPPED packet — the one that matters —
+    // accepted review cells disagreeing with their records and an oracle
+    // coupled to the production path it judges.
+    verify_markdown_review_blocks(root, &packet)?;
+    verify_oracle_independence(root)?;
     require_eq(
         "qualification_state",
         &packet.qualification_state,

@@ -1,0 +1,156 @@
+```json
+{
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by removing the canonical reparse relation from the generated family relations list to test whether the verifier accepts a packet that declares no semantic canonical-reparse relation capable of detecting lost meaning",
+      "observed_result": "verifier rejected the mutation at conformance/haqp/packet.json:1 because verify_generated_inventory requires exact relation ids matching the closed registry for each family",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-query/src/lib.rs:131",
+      "attempt": "falsify crates/liminal-query/src/lib.rs:131 by adding a call to paragraph::parse inside the incremental_paragraph_oracle function body to test whether the oracle independence check catches a production-path coupling",
+      "observed_result": "verifier rejected the mutation at crates/liminal-query/src/lib.rs:131 because verify_oracle_independence scans the oracle body for forbidden symbols including paragraph::parse",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by removing all negative evidence kinds from every test row to test whether the verifier rejects a packet where critical requirements lack negative evidence",
+      "observed_result": "verifier rejected the mutation at conformance/haqp/packet.json:1 because verify_evidence_coverage requires every critical requirement to carry all five core evidence kinds including negative",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by changing the first mutant source coordinate to a function signature line that declares rather than executes behavior to test whether the verifier rejects an inapplicable mutant anchor",
+      "observed_result": "verifier rejected the mutation at conformance/haqp/packet.json:1 because verify_mutant_anchors_support_operators checks that each anchor line is a mutable line not a declaration",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by removing the ilrp/before_ack crash boundary from the crash_boundaries array to test whether the verifier rejects a packet missing a registered boundary",
+      "observed_result": "verifier rejected the mutation at conformance/haqp/packet.json:1 because verify_crash_boundary_inventory compares declared boundaries against the runtime CrashPoint registry and requires exact match",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:2847",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:2847 by replacing the BTreeSet with a HashSet in the durable_transition_sites function to test whether the verifier detects nondeterministic ordering in the crash boundary scope measurement",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:2847 because the durable surface measurement compares counts not order and the scope check uses BTreeMap for declared surface so ordering drift is not detected by the current gate",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1 by adding a direct read of conformance/corpora/heldout inside the verify_inventory_repo function to test whether the verifier detects unauthorized corpus access during inventory verification",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:1 because verify_inventory_repo does not run under strace and the corpus access audit only covers the qualification lane stages not the verifier itself",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A08",
+      "attack_class": "evidence/report drift",
+      "target": "docs/execution/phase1-suite-review.md:1",
+      "attempt": "falsify docs/execution/phase1-suite-review.md:1 by changing the machine status tuple to report 66 mutants instead of 65 to test whether the verifier catches a drift between the markdown surface and the packet inventory",
+      "observed_result": "verifier rejected the mutation at docs/execution/phase1-suite-review.md:1 because verify_markdown_surface_text recomputes the status tuple from the packet and requires exact match",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A09",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-xtask/src/haq.rs:3450",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:3450 by replacing the verify_packet_shape function body with Ok(()) to test whether any test proves the shape gate rejects bad input",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:3450 because the committed packet is not-run so verify_qualified_repo bails before reaching verify_packet_shape and the inventory gate test only asserts acceptance of the committed tree not rejection of a doctored one",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A10",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1 by making the independent_oracle_source_cst function call the production MarkdownFormatter::format on both sides of the comparison to test whether the oracle independence check catches coupling through the formatter",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:1 because the INDEPENDENT_ORACLES registry only lists crates/liminal-query/src/lib.rs and the oracle functions in haq.rs itself are not checked by verify_oracle_independence",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A11",
+      "attack_class": "weak mutants",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by setting all 65 mutants to use the predicate-deletion operator to test whether the verifier rejects operator concentration above the 25 percent ceiling",
+      "observed_result": "verifier rejected the mutation at conformance/haqp/packet.json:1 because verify_mutant_inventory checks that no single operator supplies more than 16 mutants and 65 exceeds that limit",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A12",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1 by adding a wildcard exception that skips the locked corpus alias check for all paths containing fuzz to test whether the verifier detects a broadened exception that weakens the corpus isolation guarantee",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:1 because verify_locked_corpus_has_no_aliases walks the filesystem tree and does not read any packet-controlled exception list so a code change to the verifier itself is not caught by the existing gate",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    }
+  ],
+  "findings": [
+    {
+      "id": "F01",
+      "attempt_id": "A06",
+      "description": "The durable_transition_sites function at crates/liminal-xtask/src/haq.rs:2847 uses a BTreeSet for collecting open paths but the crash boundary scope measurement compares declared site counts against measured counts. Replacing BTreeSet with HashSet would produce nondeterministic ordering in the measured surface, and while the current count-based comparison would still pass, any future ordering-sensitive check would silently accept different orderings across runs."
+    },
+    {
+      "id": "F02",
+      "attempt_id": "A07",
+      "description": "The verify_inventory_repo function at crates/liminal-xtask/src/haq.rs:1 can read the locked corpus without detection because the corpus access audit only covers qualification lane stages under strace, not the verifier process itself. A verifier that directly reads conformance/corpora/heldout during inventory verification would pass all existing checks."
+    },
+    {
+      "id": "F03",
+      "attempt_id": "A09",
+      "description": "The verify_packet_shape function at crates/liminal-xtask/src/haq.rs:3450 can be replaced with Ok(()) without any test failing because the committed packet is not-run so verify_qualified_repo bails before reaching it, and the inventory gate test only asserts acceptance of the committed tree. The shape gate is dead code to the test suite."
+    },
+    {
+      "id": "F04",
+      "attempt_id": "A10",
+      "description": "The independent oracle functions defined directly in crates/liminal-xtask/src/haq.rs:1 are not checked by verify_oracle_independence because the INDEPENDENT_ORACLES registry only lists crates/liminal-query/src/lib.rs. Making independent_oracle_source_cst call the production MarkdownFormatter would not be detected."
+    },
+    {
+      "id": "F05",
+      "attempt_id": "A12",
+      "description": "The verify_locked_corpus_has_no_aliases function at crates/liminal-xtask/src/haq.rs:1 walks the filesystem tree without any packet-controlled exception list, but a code change to the verifier itself that adds a wildcard exception for fuzz paths would weaken corpus isolation without being caught by any existing gate."
+    }
+  ],
+  "independently_reproduced": ["F01", "F02", "F03", "F04", "F05"],
+  "unresolved_verified_findings": 5,
+  "result": "fail"
+}
+```
