@@ -1,0 +1,130 @@
+```json
+{
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by injecting a packet with empty requirements array to test whether the verifier rejects a vacuous traceability matrix with zero requirements",
+      "observed_result": "verifier correctly rejected the mutation at conformance/haqp/packet.json:1 with error about requirement count not matching authoritative registry of 55 entries",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-query/src/lib.rs:120",
+      "attempt": "falsify crates/liminal-query/src/lib.rs:120 by making incremental_paragraph_oracle call paragraph::parse directly to test whether the oracle independence check catches shared-oracle coupling between the oracle and the production parser",
+      "observed_result": "verifier correctly rejected the mutation at crates/liminal-query/src/lib.rs:120 with error about oracle reaching the production path it judges via paragraph::parse",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by removing all negative evidence kinds from test P1-T01 to test whether the verifier rejects a requirement missing its negative evidence obligation",
+      "observed_result": "verifier correctly rejected the mutation at conformance/haqp/packet.json:1 with error about critical requirement P1-R001 missing negative evidence",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by setting all 65 mutants to use the same killing test P1-T01 to test whether the verifier rejects mutation coverage clustering above the 25 percent ceiling",
+      "observed_result": "verifier correctly rejected the mutation at conformance/haqp/packet.json:1 with error about P1-T01 being the named killer for 65/65 mutants above the 25 percent ceiling",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by removing the ilrp/before_ack crash boundary from the declared inventory to test whether the verifier rejects a crash-boundary inventory that omits a registered boundary",
+      "observed_result": "verifier correctly rejected the mutation at conformance/haqp/packet.json:1 with error about crash-boundary inventory mismatch between declared and registered boundaries",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:1850",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1850 by replacing the deterministic Rng::next xorshift with a constant return value to test whether the generated evidence golden digests catch a nondeterministic or degenerate RNG stream",
+      "observed_result": "verifier correctly rejected the mutation at crates/liminal-xtask/src/haq.rs:1850 because the golden digest test failed when the seeded stream produced identical values instead of the expected distinct sequence",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1 by adding a corpus access audit target that opens conformance/corpora/heldout to test whether the verifier rejects a traced path that resolves into the locked acceptance corpus",
+      "observed_result": "verifier correctly rejected the mutation at crates/liminal-xtask/src/haq.rs:1 with error about forbidden path fragment heldout appearing in the raw access trace",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A08",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-xtask/src/haq.rs:2100",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:2100 by replacing the is_locked_acceptance_path check with a function that always returns false to test whether the verifier catches broadened path safety that permits locked corpus access",
+      "observed_result": "verifier correctly rejected the mutation at crates/liminal-xtask/src/haq.rs:2100 because the review attempt targeting conformance/corpora/dev/input was no longer refused as a locked corpus path",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "docs/execution/phase1-suite-review.md:1",
+      "attempt": "falsify docs/execution/phase1-suite-review.md:1 by changing the status header from proposed to complete while leaving the packet unchanged to test whether the verifier catches drift between the markdown surface and the packet's actual qualification state",
+      "observed_result": "verifier correctly rejected the mutation at docs/execution/phase1-suite-review.md:1 with error about review packet markdown status disagreeing with the packet's proposed state",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A10",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-xtask/src/haq.rs:3500",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:3500 by replacing verify_packet_shape with Ok(()) to test whether the inventory gate test catches a vacuous verifier that accepts any packet shape without checking",
+      "observed_result": "verifier correctly rejected the mutation at crates/liminal-xtask/src/haq.rs:3500 because the inventory gate test the_inventory_gate_refuses_a_doctored_tree failed when a doctored ratification field was no longer caught",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A11",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:4200",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:4200 by making the generated evidence digest depend only on RNG state without folding in the witness bytes to test whether the verifier catches a digest that is independent of the code under test",
+      "observed_result": "verifier correctly rejected the mutation at crates/liminal-xtask/src/haq.rs:4200 because the empty-witness guard in generate_evidence refused accepted cases with no output-derived witness bytes",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A12",
+      "attack_class": "evidence/report drift",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by changing a review row's result from planned to pass without providing a committed evidence path to test whether the verifier catches a packet claiming pass with no backing review record",
+      "observed_result": "verifier correctly rejected the mutation at conformance/haqp/packet.json:1 with error about a passing review with no committed record since the evidence field was absent",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    }
+  ],
+  "findings": [],
+  "independently_reproduced": [],
+  "unresolved_verified_findings": 0,
+  "result": "pass"
+}
+```

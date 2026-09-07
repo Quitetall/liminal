@@ -1869,6 +1869,84 @@ pub fn effective_unresolved_findings_repo(root: &Utf8Path, record: &Utf8Path) ->
     Ok(unresolved)
 }
 
+/// The receipt must be the backend's own shape, and a Codex transcript must be
+/// retained beside the record and hash to what the receipt claims (F-49).
+fn verify_review_provider_receipt(record: &ReviewRecord, record_path: &Utf8Path) -> Result<()> {
+    let receipt = &record.provider_receipt;
+    require_eq(
+        "review provider_receipt backend",
+        &receipt.backend,
+        &record.reviewer.backend,
+    )?;
+    match receipt.backend.as_str() {
+        "codex" => {
+            anyhow::ensure!(
+                !receipt.session_id.trim().is_empty() && !receipt.session_file.trim().is_empty(),
+                "a codex receipt must name the session that answered"
+            );
+            require_hex_digest("review transcript_sha256", &receipt.transcript_sha256)?;
+            let transcript = record_path.with_extension("session.jsonl");
+            let bytes = fs::read(&transcript).with_context(|| {
+                format!("{transcript}: the codex transcript must be retained beside its record")
+            })?;
+            anyhow::ensure!(
+                bytes.len() as u64 == receipt.transcript_bytes,
+                "codex transcript is {} bytes, receipt claims {}",
+                bytes.len(),
+                receipt.transcript_bytes
+            );
+            require_eq(
+                "review transcript_sha256 (of the retained transcript)",
+                &format!("{:x}", Sha256::digest(&bytes)),
+                &receipt.transcript_sha256,
+            )
+        }
+        "mimo-direct" => {
+            anyhow::ensure!(
+                !receipt.response_id.trim().is_empty(),
+                "a mimo receipt must carry the provider's response id"
+            );
+            anyhow::ensure!(
+                !receipt.provider_model.trim().is_empty(),
+                "a mimo receipt must carry the model the provider says answered"
+            );
+            anyhow::ensure!(
+                receipt.created > 0,
+                "a mimo receipt must carry the provider's clock"
+            );
+            let billed = receipt
+                .usage
+                .get("total_tokens")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0);
+            anyhow::ensure!(
+                billed > 0,
+                "a mimo receipt must carry billed usage; {:?} bills nothing",
+                receipt.usage
+            );
+            Ok(())
+        }
+        other => anyhow::bail!(
+            "review backend {other:?} produced no provider receipt; ADR-0020 §6 independence \
+             rests on evidence from outside this runner (F-49)"
+        ),
+    }
+}
+
+/// SHA-256 of a record's `provider_receipt` exactly as persisted.
+fn review_receipt_sha256(record_path: &Utf8Path) -> Result<String> {
+    let value: serde_json::Value = serde_json::from_slice(
+        &fs::read(record_path).with_context(|| format!("read {record_path}"))?,
+    )
+    .with_context(|| format!("parse {record_path}"))?;
+    Ok(sha256_text(&serde_json::to_string(
+        &value
+            .get("provider_receipt")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+    )?))
+}
+
 fn verify_review_record_digests(
     root: &Utf8Path,
     record: &ReviewRecord,
@@ -1880,6 +1958,7 @@ fn verify_review_record_digests(
     )?;
     require_hex_digest("review raw_response_sha256", &record.raw_response_sha256)?;
     verify_review_raw_response(root, record_path, &record.raw_response_sha256)?;
+    verify_review_provider_receipt(record, record_path)?;
     require_hex_digest(
         "review integrity_binding_sha256",
         &record.integrity_binding_sha256,
@@ -1993,7 +2072,7 @@ fn verify_review_record(
         "review integrity_binding_sha256",
         &record.integrity_binding_sha256,
         &sha256_text(&format!(
-            "haqp-review-integrity-v2\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}",
+            "haqp-review-integrity-v3\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}",
             record.pass,
             record.reviewer.model_family,
             record.fixed_base.commit,
@@ -2001,6 +2080,7 @@ fn verify_review_record(
             record.prompt_binding_sha256,
             record.raw_response_sha256,
             review_claims_sha256(record_path)?,
+            review_receipt_sha256(record_path)?,
             record.result,
             record.unresolved_verified_findings
         )),
@@ -9451,6 +9531,8 @@ struct ReviewRecord {
     /// How many off-schema answers preceded this record (F-46).
     #[serde(default)]
     schema_retries: u32,
+    /// The provider's own evidence that the exchange happened (F-49).
+    provider_receipt: ReviewProviderReceipt,
     #[serde(default)]
     integrity_binding_sha256: String,
     isolated_session_hash: String,
@@ -9470,6 +9552,37 @@ struct ReviewRecordReviewer {
 
 /// Findings carry model-chosen key names, so they stay untyped; ATTEMPTS are
 /// the runner's own contract and are pinned.
+/// Blind pass 1 at aa00d41 (A09): every independence field in a review record
+/// was computed by the runner, so nothing outside this machine showed that two
+/// distinct reviewers had answered. A receipt is the provider's own artifact —
+/// a Codex rollout transcript, or MiMo's response envelope and billed usage.
+/// It is not unforgeable by a hostile runner; it is externally originated and
+/// checkable against the vendor, which is the evidence a non-hostile
+/// qualification can actually produce (Brian's ruling, 2026-09-06: AI reviews
+/// are inherently hostile to perfect idempotency, so the receipt attests that
+/// the exchange OCCURRED, never that it would recur).
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct ReviewProviderReceipt {
+    backend: String,
+    #[serde(default)]
+    session_file: String,
+    #[serde(default)]
+    session_id: String,
+    #[serde(default)]
+    transcript_sha256: String,
+    #[serde(default)]
+    transcript_bytes: u64,
+    #[serde(default)]
+    response_id: String,
+    #[serde(default)]
+    provider_model: String,
+    #[serde(default)]
+    created: i64,
+    #[serde(default)]
+    usage: BTreeMap<String, serde_json::Value>,
+}
+
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 struct ReviewRecordAttempt {
@@ -12299,13 +12412,31 @@ mod tests {
 
     /// The retained raw answer a fixture record's digest names (A09): a
     /// scratch directory holding `r.raw.txt`, and the record path beside it.
+    /// The transcript a fixture codex receipt attests to.
+    const FIXTURE_TRANSCRIPT: &[u8] = b"{\"type\":\"session_meta\",\"id\":\"fixture\"}\n";
+
+    /// A fixture codex receipt, in the canonical JSON the gate re-derives from
+    /// the record file: sorted keys, compact separators.
+    fn fixture_receipt_json() -> String {
+        format!(
+            r#"{{"backend":"codex","session_file":"rollout-fixture.jsonl","session_id":"fixture","transcript_bytes":{},"transcript_sha256":"{:x}"}}"#,
+            FIXTURE_TRANSCRIPT.len(),
+            Sha256::digest(FIXTURE_TRANSCRIPT)
+        )
+    }
+
     fn fixture_record_path() -> (liminal_scratch::ScratchDir, Utf8PathBuf) {
         let scratch = liminal_scratch::ScratchDir::new("haq-review-raw").expect("scratch");
         fs::write(scratch.path().join("r.raw.txt"), "fixture raw answer").expect("raw");
+        fs::write(scratch.path().join("r.session.jsonl"), FIXTURE_TRANSCRIPT).expect("transcript");
         let path = scratch.path().join("r.json");
-        // The claims the v2 binding hashes are read from this file; the
-        // fixture record's binding is computed over the same empty claims.
-        fs::write(&path, "{}").expect("record file");
+        // The claims and receipt the binding hashes are read from this file;
+        // the fixture record's binding is computed over the same bytes.
+        fs::write(
+            &path,
+            format!(r#"{{"provider_receipt":{}}}"#, fixture_receipt_json()),
+        )
+        .expect("record file");
         (scratch, path)
     }
 
@@ -12328,6 +12459,8 @@ mod tests {
             result: "pass".to_owned(),
             raw_response_sha256: sha256_text("fixture raw answer"),
             schema_retries: 0,
+            provider_receipt: serde_json::from_str(&fixture_receipt_json())
+                .expect("fixture receipt parses"),
             integrity_binding_sha256: String::new(),
             isolated_session_hash: hex_digest(format!("session:{family}:{pass}").as_bytes()),
             sanitized_prompt_hash: hex_digest(format!("prompt:{family}").as_bytes()),
@@ -12351,15 +12484,16 @@ mod tests {
             },
         };
         record.integrity_binding_sha256 = sha256_text(&format!(
-            "haqp-review-integrity-v2\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}",
+            "haqp-review-integrity-v3\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}",
             record.pass,
             record.reviewer.model_family,
             record.fixed_base.commit,
             record.fixed_base.tree,
             record.prompt_binding_sha256,
             record.raw_response_sha256,
-            // fixture_record_path writes `{}`: every claim key reads as null.
+            // fixture_record_path writes only the receipt: claim keys read null.
             sha256_text(r#"{"attempts":null,"findings":null,"independently_reproduced":null}"#),
+            sha256_text(&fixture_receipt_json()),
             record.result,
             record.unresolved_verified_findings
         ));
@@ -15961,6 +16095,67 @@ mod tests {
         fs::write(&file, "fn incremental_paragraph_oracle(input: &str) -> Vec<u8> {\n    paragraph::parse(input)\n}\n").expect("write");
         let err = verify_oracle_independence(&root).expect_err("coupled oracle");
         assert!(err.to_string().contains("paragraph::parse"), "{err}");
+    }
+
+    /// Blind pass 1 at aa00d41 (A09): nothing outside this runner showed that
+    /// two distinct reviewers answered. A receipt must be the backend's own
+    /// shape, and a codex transcript must be retained and hash to its claim.
+    #[test]
+    fn a_review_record_carries_its_provider_receipt() {
+        let (_scratch, path) = fixture_record_path();
+        let record = review_record(1, "openai", "codex");
+        verify_review_provider_receipt(&record, &path).expect("the fixture receipt verifies");
+
+        let mut wrong_backend = record.clone();
+        wrong_backend.reviewer.backend = "mimo-direct".to_owned();
+        let err = verify_review_provider_receipt(&wrong_backend, &path)
+            .expect_err("a receipt from another backend");
+        assert!(err.to_string().contains("backend"), "{err}");
+
+        let mut forged = record.clone();
+        forged.provider_receipt.transcript_sha256 = "a".repeat(64);
+        let err = verify_review_provider_receipt(&forged, &path)
+            .expect_err("a digest the retained transcript does not have");
+        assert!(err.to_string().contains("transcript_sha256"), "{err}");
+
+        let mut truncated = record.clone();
+        truncated.provider_receipt.transcript_bytes += 1;
+        let err = verify_review_provider_receipt(&truncated, &path)
+            .expect_err("a length the transcript does not have");
+        assert!(err.to_string().contains("bytes"), "{err}");
+
+        // No transcript retained at all.
+        fs::remove_file(path.with_extension("session.jsonl")).expect("remove");
+        let err = verify_review_provider_receipt(&record, &path).expect_err("no transcript");
+        assert!(
+            err.to_string().contains("retained beside its record"),
+            "{err}"
+        );
+
+        // A MiMo receipt must carry an id, a model, a clock and billed usage.
+        let mimo = |usage: &str, created: i64| -> ReviewRecord {
+            let mut row = review_record(2, "mimo", "mimo-direct");
+            row.provider_receipt = serde_json::from_str(&format!(
+                r#"{{"backend":"mimo-direct","created":{created},"provider_model":"mimo-v2.5-pro","response_id":"chatcmpl-x","usage":{usage}}}"#
+            ))
+            .expect("receipt parses");
+            row
+        };
+        verify_review_provider_receipt(&mimo(r#"{"total_tokens":12}"#, 1), &path)
+            .expect("a complete mimo receipt");
+        let err = verify_review_provider_receipt(&mimo(r#"{"total_tokens":0}"#, 1), &path)
+            .expect_err("a receipt that bills nothing");
+        assert!(err.to_string().contains("bills nothing"), "{err}");
+        let err = verify_review_provider_receipt(&mimo(r#"{"total_tokens":12}"#, 0), &path)
+            .expect_err("a receipt without the provider's clock");
+        assert!(err.to_string().contains("clock"), "{err}");
+
+        // A backend that produces no receipt at all cannot qualify.
+        let mut lamu = review_record(1, "openai", "lamu");
+        lamu.provider_receipt =
+            serde_json::from_str(r#"{"backend":"lamu"}"#).expect("receipt parses");
+        let err = verify_review_provider_receipt(&lamu, &path).expect_err("no receipt");
+        assert!(err.to_string().contains("outside this runner"), "{err}");
     }
 
     /// Blind pass 1 at 78c8f9b (A11): editing an attempt under an intact

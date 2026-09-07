@@ -115,13 +115,25 @@ def backend_of(model: str) -> str:
     return "codex" if model.startswith(CODEX_PREFIX) else "lamu"
 
 
-def codex_call(model: str, prompt: str) -> str:
+def codex_sessions() -> set[Path]:
+    """Every rollout transcript Codex has on disk, newest first at read time."""
+    home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
+    return set((home / "sessions").rglob("rollout-*.jsonl"))
+
+
+def codex_call(model: str, prompt: str) -> tuple[str, dict[str, Any]]:
     """Run one non-interactive Codex session and return its final message.
 
     ADR-0020 §6 wants two DIFFERENT model families.  Of lamu's cloud roster only
     MiMo still answers, so the second family comes from the Codex CLI, which
     authenticates against a ChatGPT account rather than an API key and is
     therefore independent of every dead key in `api-keys.env`.
+
+    Session transcripts are PERSISTED (Brian's ruling, 2026-09-06). The runner
+    used to pass `--ephemeral` to keep an untrusted model answer off disk; F-47
+    already retains that answer beside the record, so the flag only destroyed
+    the one externally-originated artifact that shows the session happened. The
+    rollout file is the codex receipt (F-49 / A09).
 
     `--output-last-message` is used rather than parsing stdout: Codex interleaves
     hook lines, tool traces and a token summary with the model's answer, and a
@@ -150,10 +162,6 @@ def codex_call(model: str, prompt: str) -> str:
             "--sandbox",
             "read-only",
             "--skip-git-repo-check",
-            # Codex persists session transcripts by default. This machine's
-            # config appears not to, but the runner must not depend on an
-            # unstated default to keep an untrusted model response off disk.
-            "--ephemeral",
             "--color",
             "never",
             "--output-last-message",
@@ -162,6 +170,7 @@ def codex_call(model: str, prompt: str) -> str:
             name,
             "-",
         ]
+        before = codex_sessions()
         completed = subprocess.run(
             argv,
             input=f"{SYSTEM}\n\n{prompt}",
@@ -174,7 +183,24 @@ def codex_call(model: str, prompt: str) -> str:
         if not last.exists():
             tail = redact((completed.stderr or completed.stdout or "").strip()[-400:])
             raise RuntimeError(f"{model}: codex wrote no final message (exit {completed.returncode}): {tail}")
-        return last.read_text()
+        # The transcript this call wrote: the one rollout that appeared while it
+        # ran. Attribution by set difference rather than by newest mtime, so a
+        # concurrent session cannot be mistaken for this one.
+        fresh = sorted(codex_sessions() - before)
+        if len(fresh) != 1:
+            raise RuntimeError(
+                f"{model}: expected exactly one new codex transcript, found {len(fresh)}; "
+                "session persistence is required (Brian's ruling, 2026-09-06)"
+            )
+        transcript = fresh[0]
+        receipt = {
+            "backend": "codex",
+            "session_file": transcript.name,
+            "session_id": transcript.stem.removeprefix("rollout-"),
+            "transcript_sha256": digest(transcript.read_bytes()),
+            "transcript_bytes": transcript.stat().st_size,
+        }
+        return last.read_text(), receipt
 
 
 def mimo_direct_call(model: str, prompt: str, *, liveness: bool = False) -> str:
@@ -237,9 +263,19 @@ def mimo_direct_call(model: str, prompt: str, *, liveness: bool = False) -> str:
         raise RuntimeError(f"{model}: direct Token Plan provider error: {detail}")
     message = response.get("choices", [{}])[0].get("message", {})
     content = message.get("content", "") or message.get("reasoning_content", "")
+    # The provider's own envelope: an id it minted, the model it says answered,
+    # its clock, and the tokens it will bill. Externally originated, and
+    # checkable against the vendor's dashboard (F-49 / A09).
+    receipt = {
+        "backend": "mimo-direct",
+        "response_id": str(response.get("id", "")),
+        "provider_model": str(response.get("model", "")),
+        "created": int(response.get("created", 0) or 0),
+        "usage": response.get("usage", {}) or {},
+    }
     if not isinstance(content, str) or not content.strip():
         raise RuntimeError(f"{model}: direct Token Plan returned no review content")
-    return content
+    return content, receipt
 
 
 def call_arguments(
@@ -258,16 +294,19 @@ def call_arguments(
     }
 
 
-def mcp_call(model: str, prompt: str, session_id: str, *, liveness: bool = False) -> str:
-    """Send `prompt` to `model` on whichever backend can reach it."""
+def mcp_call(
+    model: str, prompt: str, session_id: str, *, liveness: bool = False
+) -> tuple[str, dict[str, Any]]:
+    """Send `prompt` to `model` on whichever backend can reach it, with the
+    provider's own receipt for the exchange (F-49 / A09)."""
     if backend_of(model) == "codex":
-        text = codex_call(model, prompt)
+        text, receipt = codex_call(model, prompt)
         provider_failure(model, text)
-        return text
+        return text, receipt
     if backend_of(model) == "mimo-direct":
-        text = mimo_direct_call(model, prompt, liveness=liveness)
+        text, receipt = mimo_direct_call(model, prompt, liveness=liveness)
         provider_failure(model, text)
-        return text
+        return text, receipt
     tool, arguments = call_arguments(model, prompt, session_id, liveness=liveness)
     calls = [(tool, arguments)]
     requests = [
@@ -355,7 +394,7 @@ def mcp_call(model: str, prompt: str, session_id: str, *, liveness: bool = False
     if not text:
         raise RuntimeError(f"lamu {tool} returned empty text for {model}")
     provider_failure(model, text)
-    return text
+    return text, {"backend": "lamu"}
 
 
 def redact(text: str) -> str:
@@ -625,6 +664,13 @@ def run_pass_with_retries(
     raise ReviewSchemaFailure(f"{last} (after {SCHEMA_RETRIES} attempts)", last.raw)
 
 
+def canonical_sha256(value: Any) -> str:
+    """SHA-256 of a value in the canonical JSON the gate re-derives."""
+    return digest(
+        json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    )
+
+
 def claims_sha256(record: dict[str, Any]) -> str:
     """SHA-256 of attempts, findings and reproduced ids in canonical JSON:
     sorted keys, compact separators, UTF-8 left unescaped so serde_json's
@@ -658,7 +704,7 @@ def record_integrity_hash(*, record: dict[str, Any]) -> str:
     return digest(
         "\0".join(
             [
-                "haqp-review-integrity-v2",
+                "haqp-review-integrity-v3",
                 str(record["pass"]),
                 str(record["reviewer"]["model_family"]),
                 str(record["fixed_base"]["commit"]),
@@ -668,6 +714,9 @@ def record_integrity_hash(*, record: dict[str, Any]) -> str:
                 # F-48 (A11): the structured claims as persisted, in the same
                 # canonical JSON the gate re-derives from the record file.
                 claims_sha256(record),
+                # F-49 (A09): the provider receipt, bound so it cannot be
+                # swapped for another session's.
+                canonical_sha256(record["provider_receipt"]),
                 str(record["result"]),
                 str(record["unresolved_verified_findings"]),
             ]
@@ -731,7 +780,7 @@ def run_pass(
         f"{fixed_base['commit']}\0{fixed_base['tree']}".encode()
     )
     try:
-        raw = mcp_call(model, prompt, session_id)
+        raw, provider_receipt = mcp_call(model, prompt, session_id)
     except (RuntimeError, subprocess.SubprocessError, OSError) as exc:
         raise ProviderFailure(f"pass {2 if pass_two else 1} provider failure for {model}: {exc}") from exc
     try:
@@ -783,6 +832,11 @@ def run_pass(
             "pass_two_original_spec_only": pass_two,
         },
         "schema_retries": schema_retry,
+        # F-49 (A09): the provider's own evidence that this exchange happened —
+        # a codex rollout transcript, or MiMo's response envelope and billed
+        # usage. Neither is unforgeable by this runner; both are externally
+        # originated and checkable against the vendor.
+        "provider_receipt": provider_receipt,
         "fixed_base": fixed_base,
         "raw_response_sha256": digest(raw.encode()),
     }
@@ -810,6 +864,25 @@ def run_pass(
     # the record, verbatim, so the gate can hash it. A digest of nothing
     # retained bound the record to no answer.
     committed.with_suffix(".raw.txt").write_text(raw)
+    # A codex transcript lives in CODEX_HOME; copy it beside the record so the
+    # evidence tree is self-contained and the gate can hash what it judges.
+    if record["provider_receipt"].get("backend") == "codex":
+        home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
+        source = next(
+            (
+                path
+                for path in (home / "sessions").rglob("rollout-*.jsonl")
+                if path.name == record["provider_receipt"]["session_file"]
+            ),
+            None,
+        )
+        if source is None:
+            raise ReviewSchemaFailure(
+                f"codex transcript {record['provider_receipt']['session_file']} vanished "
+                "before it could be retained",
+                raw,
+            )
+        committed.with_suffix(".session.jsonl").write_bytes(source.read_bytes())
     return record
 
 
@@ -976,14 +1049,14 @@ def self_test() -> int:
     # outage; both paths remain fail-closed rather than continuing to manifest.
     original_mcp_call = mcp_call
     try:
-        globals()["mcp_call"] = lambda *_args: (_ for _ in ()).throw(RuntimeError("vendor unavailable"))
+        globals()["mcp_call"] = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("vendor unavailable"))
         try:
             run_pass("pass2-self-test", "m", "context", fixed, pass_two=True)
             failures.append("pass 2 provider failure was accepted")
         except ProviderFailure as exc:
             if "pass 2 provider failure" not in str(exc):
                 failures.append("pass 2 provider failure was not explicit")
-        globals()["mcp_call"] = lambda *_args: "{}"
+        globals()["mcp_call"] = lambda *_a, **_k: ("{}", {"backend": "mimo-direct", "response_id": "self-test", "provider_model": "m", "created": 1, "usage": {"total_tokens": 1}})
         try:
             run_pass("pass2-self-test", "m", "context", fixed, pass_two=True)
             failures.append("pass 2 schema failure was accepted")
@@ -993,7 +1066,7 @@ def self_test() -> int:
         # F-46: one off-schema answer is retried with the same prompt and the
         # record counts it; three in a row still refuse.
         answers = iter(["{}", body])
-        globals()["mcp_call"] = lambda *_args: next(answers)
+        globals()["mcp_call"] = lambda *_a, **_k: (next(answers), {"backend": "mimo-direct", "response_id": "self-test", "provider_model": "m", "created": 1, "usage": {"total_tokens": 1}})
         try:
             retried = run_pass_with_retries("retry-self-test", "m", "context", fixed, pass_two=True)
             if retried.get("schema_retries") != 1:
@@ -1004,7 +1077,7 @@ def self_test() -> int:
         # a self-test leaves no evidence behind.
         for stray in [*OUT.glob("retry-self-test*"), *(ROOT / "conformance/haqp/evidence/reviews").glob("retry-self-test*")]:
             stray.unlink()
-        globals()["mcp_call"] = lambda *_args: "{}"
+        globals()["mcp_call"] = lambda *_a, **_k: ("{}", {"backend": "mimo-direct", "response_id": "self-test", "provider_model": "m", "created": 1, "usage": {"total_tokens": 1}})
         try:
             run_pass_with_retries("retry-self-test", "m", "context", fixed, pass_two=True)
             failures.append("three off-schema answers were accepted")

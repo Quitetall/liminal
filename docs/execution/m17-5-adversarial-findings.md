@@ -3115,3 +3115,37 @@ findings after rulings (`haq review-unresolved`) is what the flip consults;
 the reviewer's number is recorded but does not decide. Standing rulings are
 part of the specification every reviewer is given. Both rulings are drafts
 until Brian signs them.
+
+## F-49 — provider receipts, session transcripts, and the principle for how much rigour
+
+**Found.** 2026-09-06, lane at `aa00d41`, blind pass 1 A09: "every independence
+field and binding is locally recomputable; no external provider receipt
+authenticates distinct reviewers or sessions." True as written. The runner
+computed the identity hash, the session hash and the blindness proof itself,
+discarded MiMo's response envelope, and passed `--ephemeral` to Codex, which
+means "run without persisting session files to disk" — destroying the one
+externally-originated artifact showing the session existed.
+
+**Ruling (Brian, 2026-09-06).** Turn session transcripts on. Capture provider
+envelopes and bind them. AI independent reviews are inherently hostile to
+perfect idempotency, so a receipt attests that an exchange OCCURRED; it is
+never a claim that the same review would recur.
+
+**Fix.** `--ephemeral` is gone and the Codex rollout transcript is attributed
+to its call by set difference over the sessions directory, not by newest
+mtime, then copied beside the record as `<record>.session.jsonl`. The MiMo call
+keeps the provider's envelope: its response id, the model it says answered, its
+clock and the tokens it will bill. Both land in the record as
+`provider_receipt`, typed and closed to unknown fields, and the integrity
+binding becomes v3 by adding the receipt's canonical-JSON digest, so a receipt
+cannot be swapped for another session's. The gate re-derives all of it: the
+backend must match the reviewer's, a Codex transcript must be retained and hash
+to its claimed digest and length, a MiMo receipt must carry a response id, a
+model, a clock and non-zero billed usage, and a backend that produces no
+receipt at all cannot qualify.
+
+**What this does not claim.** A receipt is not unforgeable by a hostile runner.
+It is externally originated and checkable against the vendor's dashboard, which
+is the evidence a non-hostile qualification can actually produce. The residual
+is stated rather than closed — see AM-17.9, which also settles how much rigour
+this campaign spends and where.
