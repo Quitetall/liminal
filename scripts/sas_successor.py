@@ -88,6 +88,13 @@ def ensure_no_symlink(root: Path, relative: Path, *, must_exist: bool) -> Path:
     return current
 
 
+def ensure_output_writable(root: Path, relative: Path) -> Path:
+    path = ensure_no_symlink(root, relative, must_exist=False)
+    if path.exists():
+        require(path.stat().st_nlink == 1, f"generated output is a hardlink: {relative}")
+    return path
+
+
 def object_bytes(root: Path, commit: str, path: str) -> bytes:
     safe_path(path)
     return git(root, "show", f"{commit}:{path}")
@@ -302,8 +309,8 @@ def build(root: Path) -> tuple[bytes, bytes]:
 def command(root: Path, mode: str) -> None:
     reconciliation, candidate = build(root)
     if mode == "generate":
-        reconciliation_path = ensure_no_symlink(root, RECONCILIATION, must_exist=False)
-        candidate_path = ensure_no_symlink(root, CANDIDATE, must_exist=False)
+        reconciliation_path = ensure_output_writable(root, RECONCILIATION)
+        candidate_path = ensure_output_writable(root, CANDIDATE)
         reconciliation_path.write_bytes(reconciliation)
         candidate_path.write_bytes(candidate)
     else:

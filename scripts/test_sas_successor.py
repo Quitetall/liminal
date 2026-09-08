@@ -176,6 +176,15 @@ class SuccessorCliTests(unittest.TestCase):
         successor.symlink_to(sentinel, target_is_directory=True)
         self.assert_refused("symlink", "generate")
 
+    def test_generation_refuses_hardlinked_output_without_changing_target(self):
+        candidate = self.root / "docs/migration/successor/candidate.md"
+        candidate.unlink()
+        sentinel = self.root / "hardlink-sentinel"
+        sentinel.write_text("unchanged")
+        candidate.hardlink_to(sentinel)
+        self.assert_refused("hardlink", "generate")
+        self.assertEqual(sentinel.read_text(), "unchanged")
+
     def test_missing_git_metadata_is_controlled_refusal(self):
         shutil.rmtree(self.root / ".git")
         self.assert_refused("git metadata unavailable")

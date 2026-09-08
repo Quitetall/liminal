@@ -33,7 +33,7 @@ and one-line exit status files are under the external target's
 | --- | ---: | --- |
 | `python3 scripts/sas_successor.py generate` | 0 | generated exact candidate and reconciliation |
 | `python3 scripts/sas_successor.py check` | 0 | successor integrity PASS |
-| `python3 -m unittest scripts.test_sas_successor` | 0 | 18 tests passed |
+| `python3 -m unittest scripts.test_sas_successor` | 0 | 19 tests passed |
 | `python3 -m unittest discover -s scripts -p 'test_sas_migration.py'` | 0 | 40 tests passed |
 | `env -u CARGO_TARGET_DIR just sas-successor-ci` | 0 | 503 active tests passed, 47 skipped; docs, dependency policy, inventory, and 33 canaries passed; successor checks passed |
 | `CARGO_TARGET_DIR=/mnt/4tb/tmp/liminal-sas-successor-target just gates` | 0 | declared test-surface meter ran; 503 active and 47 deferred |
@@ -62,3 +62,8 @@ claim, or prebuilt binary was altered to obtain the pass.
 These results qualify only the local mechanics of this candidate bundle against
 the accepted baseline. They do not select the candidate, dispose its T1 scope
 impacts, qualify commit `7e4ba39d`, or establish hosted CI status.
+
+After the full lane, a disposable-fixture probe demonstrated that overwriting a
+hardlinked generated output could mutate its other link. The planted public-CLI
+test first failed, then passed after generation was changed to refuse outputs
+with multiple hardlinks. The real accepted tree was never used for this probe.
