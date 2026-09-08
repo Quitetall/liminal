@@ -8,6 +8,10 @@ register, so its machine view still reports proposed. Acceptance changes
 specification authority; it does not authorize Phase 1, ratify a suite, or
 resolve a Warrant.
 
+Non-normative source history for a possible later revision is tracked in the
+[successor candidate bundle](../migration/successor/README.md). It does not
+change the accepted SAS selection or any phase status.
+
 ## Baseline and evidence
 
 Migration starts from Liminal `0d8c32a4ae1afda9808e55c3c291445aad4e3d60`,

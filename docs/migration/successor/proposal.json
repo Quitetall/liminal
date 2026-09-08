@@ -1,0 +1,19 @@
+{
+  "schema": "liminal-sas-successor/v1",
+  "status": "candidate-unregistered-unselected",
+  "candidate_version": "0.1.0-proposed.2",
+  "accepted_commit": "9e76fc99027c55ded5bd0cc61da43b0f2b68b049",
+  "accepted_sas_sha256": "53eb3ebf1616ae7017e2ed22e39acee9823c56f16b3c527f0035d769b582ec73",
+  "target_commit": "7e4ba39d",
+  "expected_modified_sources": [
+    "docs/execution/M17.md", "docs/execution/M18.md", "docs/execution/M19.md",
+    "docs/execution/M20.md", "docs/execution/M21.md", "docs/execution/M22.md",
+    "docs/execution/M23.md", "docs/execution/M24.md",
+    "docs/execution/phase0-amendments.md", "docs/execution/phase1-suite-review.md"
+  ],
+  "expected_added_candidates": [
+    "docs/execution/rulings/R-001-stage-reads-of-the-locked-corpus.md",
+    "docs/execution/rulings/R-002-canonical-reparse-relation-is-declared.md"
+  ],
+  "packet_sha256": "69522aa282956928d2b669ac855bf0046262326f8147259213914040d12fe7a5"
+}

@@ -8,6 +8,8 @@
 # durable fix rather than rewording one SHA and waiting for the next collision.
 extend-ignore-re = [
   "`[0-9a-fA-F]{7,40}`",
+  # Machine-readable proposal pins use JSON strings rather than Markdown code.
+  '"[0-9a-fA-F]{7,40}"',
   # Codegen-unit names such as `cst_parse.6be4151ba0cf3c2-cgu.0` are cited
   # verbatim in the findings (F-42); a bare hex run is an identifier, not prose.
   "[0-9a-f]{12,}",

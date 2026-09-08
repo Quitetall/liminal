@@ -47,6 +47,16 @@ sas-check:
     python3 scripts/sas_migration.py check
     python3 -m unittest discover -s scripts -p 'test_sas_migration.py'
 
+# Non-authoritative successor history bundle; does not select or accept a SAS.
+sas-successor-check:
+    python3 scripts/sas_successor.py check
+    python3 -m unittest scripts.test_sas_successor
+
+# Complete local lane for the unselected successor candidate.
+sas-successor-ci:
+    just ci
+    just sas-successor-check
+
 haq-verify:
     cargo run -p liminal-xtask -- haq verify
 
