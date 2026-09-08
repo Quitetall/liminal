@@ -38,8 +38,10 @@ and one-line exit status files are under the external target's
 | `env -u CARGO_TARGET_DIR just sas-successor-ci` | 0 | 503 active tests passed, 47 skipped; docs, dependency policy, inventory, and 33 canaries passed; successor checks passed |
 | `CARGO_TARGET_DIR=/mnt/4tb/tmp/liminal-sas-successor-target just gates` | 0 | declared test-surface meter ran; 503 active and 47 deferred |
 
-The successful full-lane log is `sas-successor-ci-final.log` with
-`sas-successor-ci-final.exit`; the gate log is `gates.log` with `gates.exit`.
+The successful post-hardlink-fix full-lane log is
+`sas-successor-ci-hardlink-final.log` with
+`sas-successor-ci-hardlink-final.exit`; the gate log is `gates.log` with
+`gates.exit`.
 
 ## Failed diagnostic attempts retained
 
