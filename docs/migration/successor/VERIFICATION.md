@@ -23,9 +23,11 @@ authorization, a GO decision, or a qualification claim for the target runtime.
 
 ## Commands and actual exits
 
-All physical Cargo output used the owned
-`/mnt/4tb/tmp/liminal-sas-successor-target` area. Durable logs and one-line exit
-status files are under its `sas-successor-logs/` directory.
+Large debug and fuzz build caches used the owned
+`/mnt/4tb/tmp/liminal-sas-successor-target` area. Small Cargo metadata and doc
+output remained in the worktree's ordinary `target/` directory. Durable logs
+and one-line exit status files are under the external target's
+`sas-successor-logs/` directory.
 
 | Command | Exit | Result |
 | --- | ---: | --- |
@@ -52,10 +54,10 @@ the verifier's canonical `fuzz/target`, so the verifier correctly found no
 The exact named test reproduced exit 100 with inherited `CARGO_TARGET_DIR`
 (`sanitizer-single.log`) and passed with exit 0 in 15.207 seconds when that
 variable was unset (`sanitizer-single-unset-target.log`). The canonical whole
-`fuzz/target` directory and the worktree `target/debug` directory were symlinked
-to the owned 4 TB target area to keep physical build output off `/home`. No HAQP
-code, accepted source, evidence claim, or prebuilt binary was altered to obtain
-the pass.
+`/var/tmp/liminal-haqp-build/9e76fc99027c55ded5bd0cc61da43b0f2b68b049/fuzz/target`
+directory and the worktree `target/debug` directory were symlinked to the owned
+4 TB target area for the large caches. No HAQP code, accepted source, evidence
+claim, or prebuilt binary was altered to obtain the pass.
 
 These results qualify only the local mechanics of this candidate bundle against
 the accepted baseline. They do not select the candidate, dispose its T1 scope
