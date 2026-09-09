@@ -3606,6 +3606,9 @@ fn derive_killing_tests(packet: &Packet, mutant: &Mutant) -> Result<Vec<String>>
         .iter()
         .filter(|test| test.evidence.iter().any(|kind| kind == observed))
         .collect();
+    // Rotation applies whether or not the operator's kind is available: the
+    // fallback candidate list is still a list, and taking its head every time
+    // is what put one test on 46% of the plan (review of `95a97b8b`).
     let primary = if observed_candidates.is_empty() {
         candidates[ordinal % candidates.len()]
     } else {
@@ -17549,6 +17552,35 @@ mod tests {
             err.to_string().contains("names no observation kind"),
             "{err}"
         );
+    }
+
+    /// AM-17.10's operator table is closed, and a mutant carrying an operator
+    /// it does not name cannot be derived at all. Caught here rather than in
+    /// the gate, where it would surface as a lane refusal.
+    #[test]
+    fn every_operator_in_the_plan_names_its_observation_kind() {
+        let packet = packet_from_repo();
+        for mutant in &packet.mutants {
+            assert!(
+                MUTANT_OBSERVATION_KIND
+                    .iter()
+                    .any(|(operator, _)| *operator == mutant.operator),
+                "{} carries operator {:?}, absent from MUTANT_OBSERVATION_KIND",
+                mutant.id,
+                mutant.operator
+            );
+        }
+        let by_id: BTreeMap<&str, &Test> =
+            packet.tests.iter().map(|t| (t.id.as_str(), t)).collect();
+        for mutant in &packet.mutants {
+            let first = by_id[mutant.killing_tests[0].as_str()];
+            let second = by_id[mutant.killing_tests[1].as_str()];
+            assert_ne!(
+                first.evidence, second.evidence,
+                "{} observes one way twice: {} and {} are both {:?}",
+                mutant.id, first.id, second.id, first.evidence
+            );
+        }
     }
 
     /// AM-17.10's primary killer is chosen by how the operator is observed.
