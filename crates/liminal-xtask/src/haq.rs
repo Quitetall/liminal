@@ -8894,7 +8894,7 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
     const SOURCE: [(&str, usize, &str); 13] = [
         (
             "crates/liminal-format/src/lib.rs",
-            375,
+            380,
             "if value.trim().is_empty()",
         ),
         (
@@ -8942,7 +8942,7 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-format/src/lib.rs",
-            368,
+            373,
             ".all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))",
         ),
     ];
@@ -17370,6 +17370,19 @@ mod tests {
             effective_unresolved_findings(&[ruling("crates/liminal-xtask/src/haq.rs")], &two, path)
                 .expect_err("a ruling that clears two findings is too broad");
         assert!(err.to_string().contains("too broad to stand"), "{err}");
+    }
+
+    /// Review of `cff54890`: `RESULT_BEARING_TABLES` is matched by exact
+    /// header, so a header it names but `RENDERED_TABLES` does not would
+    /// relax nothing and say nothing.
+    #[test]
+    fn every_result_bearing_table_is_a_rendered_table() {
+        for header in RESULT_BEARING_TABLES {
+            assert!(
+                RENDERED_TABLES.contains(&header),
+                "{header:?} relaxes a table the gate never reads"
+            );
+        }
     }
 
     /// Blind pass 1 at 91b54842 (A01): `Rng::word` reaches one- and

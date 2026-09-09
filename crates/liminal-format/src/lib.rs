@@ -123,6 +123,11 @@ fn position_free(mut json: serde_json::Value) -> serde_json::Value {
                     map.retain(|key, _| !matches!(key.as_str(), "range" | "source_map" | "basis"));
                 }
                 for (key, child) in map.iter_mut() {
+                    // `HirItem::attributes` is the only author-keyed map the
+                    // HIR serializes, and `HirValue` has no map variant, so an
+                    // author-keyed subtree is exactly one level deep. The test
+                    // below locks that; if a second such map appears, it must
+                    // be named here too.
                     strip(child, !author_keyed && key == "attributes");
                 }
             }
@@ -628,6 +633,28 @@ pub trait Formatter {
 
 #[cfg(test)]
 mod tests {
+
+    /// M17.5 F-61: `position_free` protects exactly one author-keyed map, so
+    /// this locks the schema fact that makes that sufficient — `attributes` is
+    /// the only one, and `HirValue` carries no map of its own.
+    #[test]
+    fn attributes_is_the_only_author_keyed_map_in_the_hir() {
+        let schema = include_str!("../../liminal-hir/src/schema.rs");
+        let keyed: Vec<&str> = schema
+            .lines()
+            .map(str::trim)
+            .filter(|line| line.contains("Map<String,") && line.starts_with("pub "))
+            .collect();
+        assert_eq!(
+            keyed,
+            vec!["pub attributes: BTreeMap<String, HirValue>,"],
+            "a second author-keyed map must be named in position_free"
+        );
+        assert!(
+            !schema.contains("Map(BTreeMap") && !schema.contains("Map(HashMap"),
+            "HirValue must carry no map variant, or an author-keyed subtree nests"
+        );
+    }
 
     /// M17.5 F-61: `lower` selects the explicit dialect by this marker, and
     /// `#!` is not `# `, so the heading exclusion never caught a literal
