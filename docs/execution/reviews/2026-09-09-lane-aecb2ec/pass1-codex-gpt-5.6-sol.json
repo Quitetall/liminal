@@ -1,0 +1,181 @@
+{
+  "schema_version": "haqp-blind-review-v1",
+  "pass": 1,
+  "reviewer": {
+    "model_family": "codex:gpt-5.6-sol",
+    "identity_hash": "f6cac6a769086b0c4a44f2b83d25874afa0b393a852ac730262a2f801543651c",
+    "backend": "codex"
+  },
+  "isolated_session_hash": "a67a3b5e33cdf1c08d8a69766f54b32ee2ee4aaa46372ddc2b4e4c307bcfd3f7",
+  "sanitized_prompt_hash": "9ab78cec5bdacfcf10a01bdfadcf167e612b68167e473d954286563a86c331d0",
+  "prompt_binding_sha256": "f4e99b4419a8f9705d114e7478f1fa3cae4a250c70b8124718e8e1701aa6b10b",
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-format/src/lib.rs:92",
+      "attempt": "Falsify crates/liminal-format/src/lib.rs:92 by replacing the disjunctive Basis mismatch predicate with a conjunctive predicate.",
+      "observed_result": "Regression coverage explicitly rejects the altered component-count behavior at crates/liminal-format/src/lib.rs:92 and exposes the weakened equality.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": true
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-source/src/paragraph.rs:76",
+      "attempt": "Falsify crates/liminal-source/src/paragraph.rs:76 by importing the production parser through a renamed function or module alias.",
+      "observed_result": "Oracle-independence scanning derives and rejects renamed call forms reaching crates/liminal-source/src/paragraph.rs:76 in the reviewed implementation.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": true
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-cst/src/parser.rs:142",
+      "attempt": "Falsify crates/liminal-cst/src/parser.rs:142 by deleting the rejection predicate and allowing an empty formatted tree.",
+      "observed_result": "Declared negative and formatter-law tests exercise the deleted predicate at crates/liminal-cst/src/parser.rs:142 and attribute the resulting violation.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": true
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-jurisdiction/src/ilrp.rs:274",
+      "attempt": "Falsify crates/liminal-jurisdiction/src/ilrp.rs:274 using a label-only rename falsely described as a skipped durable transition.",
+      "observed_result": "Operator validation rejects the label-only patch at crates/liminal-jurisdiction/src/ilrp.rs:274 because the durable commit call remains intact.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": true
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-jurisdiction/src/ilrp.rs:273",
+      "attempt": "Falsify crates/liminal-jurisdiction/src/ilrp.rs:273 by disabling the before-ack crash point while retaining surrounding recovery operations.",
+      "observed_result": "Declared mutation and crash-matrix checks detect the disabled injection point at crates/liminal-jurisdiction/src/ilrp.rs:273 as missing fault coverage.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": true
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-source/src/paragraph.rs:33",
+      "attempt": "Falsify crates/liminal-source/src/paragraph.rs:33 by replacing deterministic attribute ordering with iteration whose order varies between executions.",
+      "observed_result": "Replay-oriented killing tests compare deterministic output and catch ordering drift introduced at crates/liminal-source/src/paragraph.rs:33.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": true
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:2847",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:2847 by treating qualification-stage read access to the locked corpus as prohibited leakage.",
+      "observed_result": "Reproduction at crates/liminal-xtask/src/haq.rs:2847 confirms stage reads are intentionally permitted while write-class accesses remain unconditionally refused.",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": true
+    },
+    {
+      "id": "A08",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-format/src/lib.rs:353",
+      "attempt": "Falsify crates/liminal-format/src/lib.rs:353 by broadening compact identifiers to accept spaces and arbitrary punctuation bytes.",
+      "observed_result": "Invalid-identifier regression coverage forces explicit fallback and catches the broadened allowance at crates/liminal-format/src/lib.rs:353.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": true
+    },
+    {
+      "id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "conformance/haqp/packet.json:10",
+      "attempt": "Falsify conformance/haqp/packet.json:10 by adding an undeclared waiver field inside a residual-risk object and rerunning deserialization.",
+      "observed_result": "Nested residual-risk deserialization accepts the unknown waiver field at conformance/haqp/packet.json:10 because that record lacks unknown-field denial.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A10",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-source/src/paragraph.rs:76",
+      "attempt": "Falsify crates/liminal-source/src/paragraph.rs:76 by moving the production-parser call into an unwatched helper invoked by the declared oracle.",
+      "observed_result": "Body-local symbol scanning misses the transitive helper path reaching crates/liminal-source/src/paragraph.rs:76, allowing coupled expected-result construction.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A11",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-revision/src/durability.rs:38",
+      "attempt": "Falsify crates/liminal-revision/src/durability.rs:38 by introducing concurrent execution through macro expansion without lexical spawn or synchronization tokens.",
+      "observed_result": "Lexical concurrency scanning at crates/liminal-revision/src/durability.rs:38 cannot inspect expanded macro bodies, so not-applicable evidence can remain accepted.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A12",
+      "attack_class": "evidence/report drift",
+      "target": "crates/liminal-xtask/src/haq.rs:2847",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:2847 by claiming a resolution commit whose verification command succeeds only on the later current checkout.",
+      "observed_result": "Resolution verification at crates/liminal-xtask/src/haq.rs:2847 executes against current repository state instead of checking out the claimed resolution commit.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    }
+  ],
+  "findings": [
+    {
+      "id": "F01",
+      "attempt_id": "A09"
+    },
+    {
+      "id": "F02",
+      "attempt_id": "A10"
+    },
+    {
+      "id": "F03",
+      "attempt_id": "A11"
+    },
+    {
+      "id": "F04",
+      "attempt_id": "A12"
+    }
+  ],
+  "independently_reproduced": [
+    "F01",
+    "F02",
+    "F03",
+    "F04"
+  ],
+  "unresolved_verified_findings": 4,
+  "result": "fail",
+  "blindness_proof": {
+    "ephemeral_session_requested": false,
+    "session_state": "fresh-codex-session",
+    "prior_pass_artifact_supplied": false,
+    "pass_two_original_spec_only": false
+  },
+  "schema_retries": 0,
+  "provider_receipt": {
+    "backend": "codex",
+    "session_file": "rollout-2026-09-09T04-59-08-01a08564-7369-72d1-a144-2980ca5b3f67.jsonl",
+    "session_id": "2026-09-09T04-59-08-01a08564-7369-72d1-a144-2980ca5b3f67",
+    "transcript_sha256": "90b21c26566023e7d2e2180befcfb60a1ec7d9092b9f50de4a618041653a48bb",
+    "transcript_bytes": 3567791
+  },
+  "fixed_base": {
+    "commit": "aecb2ec7c1877520af7ff030c9524f115d10113a",
+    "tree": "4fe13b4bdfcb1958aec87a2f53806db04b330482",
+    "clean": true
+  },
+  "raw_response_sha256": "d6b0d629f9a1d5155d5e4f7e3adba361898565c2e87f172e108f914fa5144aa0",
+  "integrity_binding_sha256": "72012dd4aa41465b4bf477e6cf7bff180fe0f262644b708f7890223d4b7d0270"
+}

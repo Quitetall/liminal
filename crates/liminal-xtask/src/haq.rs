@@ -130,12 +130,57 @@ fn item_body<'a>(text: &'a str, name: &str) -> Option<&'a str> {
     Some(&rest[..end])
 }
 
+/// Every function in `text` reachable from `name`, concatenated. A helper the
+/// oracle calls is part of the oracle for ADR-0020 §5: independence that one
+/// hop defeats is not independence.
+fn oracle_reachable_body(text: &str, name: &str) -> String {
+    let defined = text
+        .lines()
+        .filter_map(|line| {
+            let trimmed = line.trim_start();
+            let rest = trimmed
+                .strip_prefix("fn ")
+                .or_else(|| trimmed.strip_prefix("pub fn "))
+                .or_else(|| trimmed.strip_prefix("async fn "))?;
+            let end = rest.find(['(', '<'])?;
+            Some(rest[..end].to_owned())
+        })
+        .collect::<BTreeSet<_>>();
+    let mut seen = BTreeSet::new();
+    let mut queue = vec![name.to_owned()];
+    let mut combined = String::new();
+    while let Some(current) = queue.pop() {
+        if !seen.insert(current.clone()) {
+            continue;
+        }
+        let Some(body) = item_body(text, &current) else {
+            continue;
+        };
+        combined.push_str(body);
+        combined.push('\n');
+        for callee in &defined {
+            if !seen.contains(callee) && body.contains(&format!("{callee}(")) {
+                queue.push(callee.clone());
+            }
+        }
+    }
+    combined
+}
+
 fn verify_oracle_independence(root: &Utf8Path) -> Result<()> {
     for (file, function, forbidden) in INDEPENDENT_ORACLES {
         let path = root.join(file);
         let text = fs::read_to_string(&path).with_context(|| format!("read {path}"))?;
-        let body = item_body(&text, function)
-            .with_context(|| format!("{file}: independent oracle {function} is not defined"))?;
+        // Blind pass 1 at aecb2ec7 (A10): only the oracle's own body was
+        // scanned, so `fn helper(x) { paragraph::parse(x) }` called from the
+        // oracle reached the production path through one hop and named
+        // nothing. The body is the transitive closure now: the oracle plus
+        // every function defined in the same file that it reaches.
+        anyhow::ensure!(
+            item_body(&text, function).is_some(),
+            "{file}: independent oracle {function} is not defined"
+        );
+        let body = oracle_reachable_body(&text, function);
         // Blind pass 1 at aa00d41 (A02): the scan matched literal paths, so
         // `use liminal_source::paragraph::parse as p; p(input)` named none of
         // them. A `use` that renames a forbidden symbol makes its alias
@@ -2312,9 +2357,15 @@ const RESOLUTION_COMMANDS: [(&str, &[&str]); 4] = [
 ];
 
 /// The registry's commands are the project's own gates, run with the gate's
-/// environment and working directory and no timeout: they are what CI runs, so
-/// a hang here is a hang in CI, visible either way (review of `e490671`).
-fn verify_resolution_command_ran(root: &Utf8Path, who: &str, evidence_text: &str) -> Result<()> {
+/// environment and no timeout: they are what CI runs, so a hang here is a hang
+/// in CI, visible either way (review of `e490671`). The working directory is a
+/// disposable worktree at the commit the receipt names, never the live tree.
+fn verify_resolution_command_ran(
+    root: &Utf8Path,
+    who: &str,
+    evidence_text: &str,
+    commit: &str,
+) -> Result<()> {
     let claimed = evidence_text
         .lines()
         .find_map(|line| line.trim_start().strip_prefix("verification_command:"))
@@ -2332,14 +2383,34 @@ fn verify_resolution_command_ran(root: &Utf8Path, who: &str, evidence_text: &str
             )
         })?;
     let (program, rest) = argv.split_first().context("registry command is empty")?;
-    let status = Command::new(program)
+    // Blind pass 1 at aecb2ec7 (A12): the command ran against the working
+    // tree, so a receipt claiming a finding was resolved at some commit was
+    // answered by whether the command passes at HEAD. Reachability was
+    // checked and the commit then ignored. It runs in a disposable worktree
+    // checked out at the claimed commit now, which is what the receipt says.
+    let scratch = liminal_scratch::ScratchDir::new("haq-resolution-replay")?;
+    let worktree = scratch.path().to_owned();
+    let add = Command::new("git")
         .current_dir(root)
+        .args(["worktree", "add", "--detach", "--quiet"])
+        .arg(&worktree)
+        .arg(commit)
+        .output()?;
+    anyhow::ensure!(
+        add.status.success(),
+        "{who}: resolution replay worktree add at {commit} failed: {}",
+        String::from_utf8_lossy(&add.stderr).trim()
+    );
+    let mut guard = WorktreeGuard::new(root, &worktree);
+    let status = Command::new(program)
+        .current_dir(&worktree)
         .args(rest)
         .status()
-        .with_context(|| format!("{who}: run resolution verification {claimed:?}"))?;
+        .with_context(|| format!("{who}: run resolution verification {claimed:?} at {commit}"))?;
+    guard.remove()?;
     anyhow::ensure!(
         status.success(),
-        "{who}: resolution claims {claimed:?} exited zero; it exited {status}"
+        "{who}: resolution claims {claimed:?} exited zero at {commit}; it exited {status}"
     );
     Ok(())
 }
@@ -2826,7 +2897,7 @@ fn verify_review_resolution(
                 .any(|line| line.trim() == "verification_exit_code: 0"),
         "{who}: resolution evidence must include a passing verification command receipt"
     );
-    verify_resolution_command_ran(root, who, &evidence_text)?;
+    verify_resolution_command_ran(root, who, &evidence_text, &resolution.commit)?;
     let mut hasher = Sha256::new();
     hasher.update(&evidence_bytes);
     let digest = format!("{:x}", hasher.finalize());
@@ -9825,6 +9896,7 @@ struct Packet {
 
 /// The fixed base a qualification run was taken from.
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 struct Provenance {
     /// Fixed clean source/evidence commit. The metadata packet is committed as
     /// its child, avoiding impossible self-referential commit hashing.
@@ -10046,6 +10118,68 @@ struct ConcurrentEvidence {
 /// Crates outside the qualified surfaces: the gate itself and the scratch
 /// test scaffold. Closed list, so an addition is a visible decision.
 const CONCURRENCY_SCAN_EXCLUDED_CRATES: [&str; 2] = ["liminal-xtask", "liminal-scratch"];
+/// Blind pass 1 at aecb2ec7 (A11): a lexical scan cannot see inside a macro
+/// that expands to a spawn. Today none can. The scanned crates depend on
+/// exactly these external crates, neither of which exports a macro that
+/// spawns, and a macro defined inside a scanned crate carries the primitive
+/// in its own body, where the scan reads it. The list is closed so a new
+/// dependency asks the question again instead of answering it silently.
+///
+/// What each is: `serde`, `serde_json`, `thiserror`, `anyhow`, `clap` and
+/// `uuid` export derive and formatting macros that expand to no execution;
+/// `tracing`'s macros record spans in the calling thread. `blake3` is taken at
+/// default features, so its optional `rayon` thread pool is not compiled in.
+/// `ropey`, `rowan`, `camino`, `crc32fast`, `fs4` and `toml` export no macro
+/// that spawns.
+const CONCURRENCY_SCAN_ALLOWED_DEPENDENCIES: [&str; 14] = [
+    "anyhow",
+    "blake3",
+    "camino",
+    "clap",
+    "crc32fast",
+    "fs4",
+    "ropey",
+    "rowan",
+    "serde",
+    "serde_json",
+    "thiserror",
+    "toml",
+    "tracing",
+    "uuid",
+];
+
+/// The external crates `manifest` depends on at run time, workspace members
+/// excluded. Dev-dependencies are excluded too: the scan reads `src/` only,
+/// which a dev-dependency cannot reach.
+fn runtime_external_dependencies(manifest: &Utf8Path) -> Result<BTreeSet<String>> {
+    let text = fs::read_to_string(manifest).with_context(|| format!("read {manifest}"))?;
+    let mut section = String::new();
+    let mut out = BTreeSet::new();
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if let Some(name) = trimmed.strip_prefix('[').and_then(|r| r.strip_suffix(']')) {
+            section.clear();
+            section.push_str(name);
+            continue;
+        }
+        let last = section.rsplit('.').next().unwrap_or_default();
+        if last != "dependencies" || section.contains("dev-") || section.contains("build-") {
+            continue;
+        }
+        let Some((key, _)) = trimmed.split_once('=') else {
+            continue;
+        };
+        let key = key.trim().trim_matches('"');
+        // `serde.workspace = true` names the crate before the dot.
+        let key = key.split('.').next().unwrap_or(key);
+        if key.is_empty() || key.starts_with('#') || key.starts_with("liminal") {
+            continue;
+        }
+        out.insert(key.to_owned());
+    }
+    Ok(out)
+}
+
 /// Tokens that mean code runs concurrently.
 // Blind pass 1 at f360e90 (A06): `use std::thread as th; th::spawn(..)` named
 // no listed token. The spawn and scope calls are matched by their call shape,
@@ -10118,6 +10252,19 @@ fn scan_concurrency_primitives(root: &Utf8Path) -> Result<ConcurrencyScan> {
         };
         if CONCURRENCY_SCAN_EXCLUDED_CRATES.contains(&name) || !member_dir.join("src").is_dir() {
             continue;
+        }
+        let manifest = member_dir.join("Cargo.toml");
+        if manifest.is_file() {
+            let external = runtime_external_dependencies(&manifest)?;
+            let unknown = external
+                .iter()
+                .filter(|dep| !CONCURRENCY_SCAN_ALLOWED_DEPENDENCIES.contains(&dep.as_str()))
+                .cloned()
+                .collect::<Vec<_>>();
+            anyhow::ensure!(
+                unknown.is_empty(),
+                "{name} depends on {unknown:?}, outside the closed list the concurrency scan                  reasons about; a dependency may export a macro that spawns, which a lexical                  scan cannot see. Decide, then widen CONCURRENCY_SCAN_ALLOWED_DEPENDENCIES"
+            );
         }
         let mut files = Vec::new();
         walk(&member_dir.join("src"), &mut files)?;
@@ -10211,6 +10358,7 @@ struct CampaignRun {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 struct ResidualRisk {
     id: String,
     owner: String,
@@ -10277,6 +10425,7 @@ struct Mutant {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 struct DispositionConcurrence {
     reviewer: String,
     record: String,
@@ -10284,6 +10433,7 @@ struct DispositionConcurrence {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct MutantPatch {
     file: String,
     before: String,
@@ -10370,6 +10520,7 @@ struct Generated {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 struct GeneratedOracleDeclaration {
     id: String,
     source: String,

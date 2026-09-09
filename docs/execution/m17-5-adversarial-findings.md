@@ -3389,3 +3389,43 @@ source/CST/formatting family: 20,000 accepted, 0 discarded, no refusal. A
 negative test pins the new reach — a formatter that drops the one-character
 token `q` is refused, and one that keeps it is accepted. Under the old filter
 that test could not fail.
+
+## F-58 — the tenth lane: four defects, and none of them in a scanner's arithmetic
+
+**Found.** 2026-09-09, lane at `aecb2ec7`. Pass 2 clean; pass 1 twelve attempts,
+**four** classified `verified_defect` and all four independently reproduced —
+the first lane where every claimed defect carried a reproduction. Stopped at the
+reviews stage. Records and receipts under
+`docs/execution/reviews/2026-09-09-lane-aecb2ec/`.
+
+The four are a different species from F-55 through F-57. Those were scanners
+miscounting braces. These are gates that check the wrong thing.
+
+| attempt | class | what was true | fix |
+|---|---|---|---|
+| A09 | evidence/report drift | `ResidualRisk` carried no `deny_unknown_fields`, so a packet could add `"waiver": ...` to a risk row and the gate would parse past it. A sweep found five such structs against thirty-nine that already denied — a convention with holes, not a decision | all five now deny: `Provenance`, `ResidualRisk`, `DispositionConcurrence`, `MutantPatch`, `GeneratedOracleDeclaration` |
+| A10 | shared-oracle coupling | `verify_oracle_independence` scanned the oracle's own body only. `fn helper(x) { paragraph::parse(x) }` called from the oracle reached the production path it judges through one hop and named nothing | the body is the transitive closure: the oracle plus every function in the same file it reaches |
+| A11 | nondeterminism | claimed a macro could expand to a spawn the lexical scan cannot see | **false positive**, and now a durable one — see below |
+| A12 | evidence/report drift | `verify_resolution_command_ran` checked that the resolution commit was reachable, then ran the command against the working tree. A receipt saying "resolved at X, `ci` passed" was answered by whether `ci` passes at HEAD | the command runs in a disposable worktree checked out at the commit the receipt names |
+
+**A11 and what a false positive is worth.** No macro available to the product
+crates expands to a spawn: a macro defined inside a scanned crate carries the
+primitive in its own body where the scan reads it, and the external crates
+export none. But that answer held by accident — nothing stopped a future
+dependency from changing it silently. The scan now refuses any scanned crate
+whose runtime dependencies fall outside a closed list of fourteen, each named
+with what it is: derive and formatting macros that expand to no execution,
+`tracing` recording spans in the calling thread, `blake3` at default features
+so its optional `rayon` pool is not compiled in. A new dependency asks the
+question again instead of answering it.
+
+Writing the list found that the first enumeration of it was wrong — a hand
+survey missed every workspace-inherited dependency, the `serde.workspace = true`
+form, and reported two where there are fourteen. The gate's own parser found
+the rest, which is the argument for putting the count in the gate.
+
+**A12 is the one that matters most.** Every other check in the resolution path
+was already commit-bound: reachability, evidence digests, the coordinate. The
+command — the only part that actually re-executes anything — was not. A
+resolution could name a commit whose fix was later reverted and still verify,
+because the gate asked HEAD.

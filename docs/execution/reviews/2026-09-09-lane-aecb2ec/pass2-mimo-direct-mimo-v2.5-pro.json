@@ -1,0 +1,169 @@
+{
+  "schema_version": "haqp-blind-review-v1",
+  "pass": 2,
+  "reviewer": {
+    "model_family": "mimo-direct:mimo-v2.5-pro",
+    "identity_hash": "3668382ba796a14a6ef2e108440fa8a26961cba75da8cfec564f6b435c441e03",
+    "backend": "mimo-direct"
+  },
+  "isolated_session_hash": "ce47946bc965f8b95b715885c75456d8770228f62a2cd14c00498cd905ff565f",
+  "sanitized_prompt_hash": "f4dbcf8bef7ea621f1218f97196e5e343f04eb0011eddbbca3d4803dc9726e15",
+  "prompt_binding_sha256": "f6da78104509b6241c38d12051127516d33c7e1dabf2a7036845e976d134853d",
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-xtask/src/haq.rs:142",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:142 by replacing the predicate-deletion anchor `if !text.is_empty() {` with `if true {` to verify the mutation campaign detects a vacuous guard that always accepts empty input",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:142 because the anchor line is a real predicate site and the declared operator matches the replacement shape",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-query/src/lib.rs:161",
+      "attempt": "falsify crates/liminal-query/src/lib.rs:161 by adding `use liminal_source::paragraph::parse as p;` and replacing the oracle body with `p(input)` to confirm the independence scanner catches aliased production calls",
+      "observed_result": "verifier rejected the mutation at crates/liminal-query/src/lib.rs:161 because the alias scan detected `p(` as a forbidden symbol derived from `paragraph::parse`",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-xtask/src/haq.rs:2847",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:2847 by removing the negative-category construction in `case_repair` so cyclic plans are silently discarded instead of recorded as negative evidence",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:2847 because the negative categories are constructed inside the case function and the generated evidence records discards with witnesses, not empty labels",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-xtask/src/haq.rs:353",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:353 by broadening the compact identifier allow-list to every byte so compact emission becomes lossy and the mutation campaign must detect the semantic defect",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:353 because the declared operator `broadened-allow-list` matches the replacement shape and the anchor is a real predicate site",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-xtask/src/haq.rs:475",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:475 by deleting the `inner.log.append(&record)?;` call so the durable transition is skipped and the crash-boundary scope disclosure must detect the missing site",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:475 because the declared operator `skipped-durable-transition` matches the call deletion and the anchor is a real durable call site",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:42",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:42 by replacing `found.sort_unstable_by_key(|(n, _)| *n);` with a `HashMap`-based unordered collection so ordering nondeterminism is introduced into the durable surface census",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:42 because the declared operator `ordering-nondeterminism` matches the sort-to-hash replacement and the anchor is a real ordering site",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1 by adding a `chdir` into `conformance/corpora/heldout` followed by a relative write to confirm the scope trace scanner detects the locked-corpus write through cwd tracking",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:1 because the scope trace scanner tracks per-pid cwd and detects relative writes that resolve into the locked corpus after a chdir",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A08",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1 by adding a packet-controlled exception list field to the verifier so a hostile packet can switch off the locked-corpus alias check",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:1 because `deny_unknown_fields` on the Packet struct refuses any undeclared field, and the verifier reads no packet-controlled exception list by design",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1 by editing the review markdown to claim `executed` in a rendered table cell while the packet remains unqualified, to confirm the table-content verifier catches the drift",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:1 because `verify_markdown_tables` checks every cell in rendered tables against the unqualified packet's declared vocabulary and refuses verdict claims",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A10",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1 by replacing `verify_inventory_repo` with `Ok(())` to confirm the inventory gate test `the_inventory_gate_refuses_a_doctored_tree` catches the vacuous verifier",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:1 because the test `the_inventory_gate_refuses_a_doctored_tree` builds a scratch tree with a doctored packet and requires the gate to refuse, catching the replacement",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A11",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-format/src/lib.rs:353",
+      "attempt": "falsify crates/liminal-format/src/lib.rs:353 by replacing the compact identifier allow-list predicate with `true` so every byte is accepted as a compact id, making compact emission lossy for identifiers containing special characters",
+      "observed_result": "verifier accepted the mutation at crates/liminal-format/src/lib.rs:353 because the declared operator `broadened-allow-list` matches the predicate replacement and the anchor is a real predicate site in the formatter",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A12",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-xtask/src/haq.rs:273",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:273 by replacing `self.crash.crash_if_armed(CrashPoint::BeforeAcknowledge);` with `if false {` so the crash point is disabled and the fault matrix must detect the missing injection",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:273 because the declared operator `disabled-crash-point` matches the crash-to-false replacement and the anchor is a real crash injection site",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    }
+  ],
+  "findings": [],
+  "independently_reproduced": [],
+  "unresolved_verified_findings": 0,
+  "result": "pass",
+  "blindness_proof": {
+    "ephemeral_session_requested": true,
+    "session_state": "ephemeral-cloud-session",
+    "prior_pass_artifact_supplied": false,
+    "pass_two_original_spec_only": true
+  },
+  "schema_retries": 0,
+  "provider_receipt": {
+    "backend": "mimo-direct",
+    "response_id": "1bdaaf1b-f7e2-4ed6-a133-52dcc67a3846_430ef177fd034024b8864788f93f4125",
+    "provider_model": "mimo-v2.5-pro",
+    "created": 1788944698,
+    "usage": {
+      "completion_tokens": 2230,
+      "prompt_tokens": 228415,
+      "total_tokens": 230645,
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  "fixed_base": {
+    "commit": "aecb2ec7c1877520af7ff030c9524f115d10113a",
+    "tree": "4fe13b4bdfcb1958aec87a2f53806db04b330482",
+    "clean": true
+  },
+  "raw_response_sha256": "7c2efdd859821890b4b357f0876e7256a93132b20001b43a3d65ffc0c3c35031",
+  "integrity_binding_sha256": "741d26411ebed7d93b416ce7e1049f4915fa5bb9a59b467d0858815a6c3fd727"
+}
