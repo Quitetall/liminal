@@ -3210,3 +3210,53 @@ matches by substring, so a phrase can be found inside a sentence that negates
 it, and a signed ruling could suppress a defect it does not answer. Whatever
 the termination decision, ruling scope needs a stronger predicate than
 substring containment.
+
+## F-53 — lane 5fb1b57 closed: twelve fixed, two ruled, two rejected
+
+**Disposition of all sixteen.** Under AM-17.9, ratified 2026-09-07.
+
+| finding | class | disposition |
+|---|---|---|
+| P1-A01 vacuity | A | fixed (F-52): the CST oracle asserted lossless emit and idempotence, both satisfied by a formatter returning a constant; it now requires the document's words to survive |
+| P1-A02, P2-A10 shared-oracle coupling | A | fixed (F-52): module aliases watched, and the five oracles in `haq.rs` added to the independence registry |
+| P1-A04 weak mutants | A | fixed (F-52): every operator ADR-0020 §3 names must appear in the plan |
+| P1-A05, P1-A11 fault omissions | A | fixed (F-52): durable symbols matched on a word boundary; each path anchored to its own dirfd |
+| P1-A06 nondeterminism | A | fixed (F-52): `pthread_create`, `libc::clone`, `clone3` |
+| P1-A07, P1-A10 corpus leakage | A | fixed (F-52): `fchdir` moves the pid; every successful open is remembered |
+| P1-A08 exception broadening | B | fixed (`e67eda2`): rulings gained `claim_excludes` |
+| P1-A09, P1-A12 evidence/report drift | B | fixed (F-51, F-52): the qualified path runs the record-agreement and oracle checks; an anchor no longer matches the registry's own string literal |
+| **P2-A07 corpus leakage** | **C** | **ruled: R-003** — the verifier is not traced by itself |
+| **P2-A12 exception broadening** | **C** | **ruled: R-004** — a change to the gate is not caught by the gate |
+| **P2-A06 nondeterminism** | — | **ruled incorrect: R-006** — a per-file census has no order to drift |
+| **P2-A09 vacuity** | — | **ruled incorrect: R-005** — false on both halves |
+
+**The two rejections, verified against `5fb1b576` — the exact tree the reviewer
+read, not today's.**
+
+P2-A09 claimed that "the committed packet is not-run so `verify_qualified_repo`
+bails before reaching `verify_packet_shape`, and the inventory gate test only
+asserts acceptance of the committed tree, not rejection of a doctored one."
+Both halves are false in that tree. `verify_qualified_repo` calls
+`verify_packet_shape` as its first check after `read_packet`, which itself has
+no early return; and `the_inventory_gate_refuses_a_doctored_tree` is present,
+doctoring a copied tree and requiring the refusal.
+
+P2-A06 claimed the durable-surface measurement "compares counts not order",
+leaving ordering drift undetected. The census is a map from file path to the
+number of durable transitions in that file. Order is not a property it has:
+reordering two `commit_if` calls inside one file changes neither which file
+performs durable transitions nor how many, so there is nothing for the check to
+miss. The cited coordinate, `haq.rs:2847`, is a doc comment about mutant kill
+attribution and does not carry the claim either.
+
+Both are cleared by ruling, which is the mechanism grilling decision 6
+(2026-09-03) provides for a finding ruled INCORRECT — the same device R-002
+used, and distinct from R-003 and R-004, which set aside findings that are
+true. The reviewer's ~20-30% false-positive rate is why every finding is opened
+at its line before anything moves.
+
+**Standing residual after this lane.** Two class-C findings, both saying the
+same thing in different words: the gate cannot be its own adversary. R-003 and
+R-004 state the residual rather than closing it. What narrows it is external —
+reviewed commits, signed rulings, a fixed base bound into every record, and the
+reviewers' sight of `haq.rs` itself.
