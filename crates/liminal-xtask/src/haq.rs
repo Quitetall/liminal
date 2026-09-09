@@ -130,6 +130,58 @@ fn item_body<'a>(text: &'a str, name: &str) -> Option<&'a str> {
     Some(&rest[..end])
 }
 
+/// Every definition of `name` in `text`. All of them, not the first: a crate's
+/// modules concatenate here, and two modules may name a function alike.
+fn item_bodies<'a>(text: &'a str, name: &str) -> Vec<&'a str> {
+    let needle = format!("fn {name}(");
+    let mut out = Vec::new();
+    let mut from = 0;
+    while let Some(offset) = text[from..].find(&needle) {
+        let start = from + offset;
+        let rest = &text[start..];
+        let end = rest.find("\n}\n").map_or(rest.len(), |index| index + 2);
+        out.push(&rest[..end]);
+        from = start + needle.len();
+    }
+    out
+}
+
+/// The crate's own sources, concatenated, for the crate owning `file`. Blind
+/// pass 1 at c29bc0ea (A02): the closure followed same-file functions only, so
+/// a helper one module away carried the oracle to the production path it
+/// judges and named nothing.
+fn crate_sources(root: &Utf8Path, file: &str) -> Result<String> {
+    let path = root.join(file);
+    let Some(src) = path.parent() else {
+        return fs::read_to_string(&path).with_context(|| format!("read {path}"));
+    };
+    let mut stack = vec![src.to_owned()];
+    let mut files = Vec::new();
+    while let Some(dir) = stack.pop() {
+        let mut entries = fs::read_dir(dir.as_std_path())
+            .with_context(|| format!("read {dir}"))?
+            .map(|entry| entry.map(|e| e.path()))
+            .collect::<std::io::Result<Vec<_>>>()?;
+        entries.sort();
+        for entry in entries {
+            let entry = Utf8PathBuf::from_path_buf(entry)
+                .map_err(|p| anyhow::anyhow!("non-UTF-8 path {}", p.display()))?;
+            if entry.is_dir() {
+                stack.push(entry);
+            } else if entry.extension() == Some("rs") {
+                files.push(entry);
+            }
+        }
+    }
+    files.sort();
+    let mut combined = String::new();
+    for file in files {
+        combined.push_str(&fs::read_to_string(&file).with_context(|| format!("read {file}"))?);
+        combined.push('\n');
+    }
+    Ok(combined)
+}
+
 /// Every function in `text` reachable from `name`, concatenated. A helper the
 /// oracle calls is part of the oracle for ADR-0020 §5: independence that one
 /// hop defeats is not independence.
@@ -175,14 +227,13 @@ fn oracle_reachable_body(text: &str, name: &str) -> String {
         if !seen.insert(current.clone()) {
             continue;
         }
-        let Some(body) = item_body(text, &current) else {
-            continue;
-        };
-        combined.push_str(body);
-        combined.push('\n');
-        for callee in &defined {
-            if !seen.contains(callee) && body.contains(&format!("{callee}(")) {
-                queue.push(callee.clone());
+        for body in item_bodies(text, &current) {
+            combined.push_str(body);
+            combined.push('\n');
+            for callee in &defined {
+                if !seen.contains(callee) && body.contains(&format!("{callee}(")) {
+                    queue.push(callee.clone());
+                }
             }
         }
     }
@@ -192,7 +243,14 @@ fn oracle_reachable_body(text: &str, name: &str) -> String {
 fn verify_oracle_independence(root: &Utf8Path) -> Result<()> {
     for (file, function, forbidden) in INDEPENDENT_ORACLES {
         let path = root.join(file);
-        let text = fs::read_to_string(&path).with_context(|| format!("read {path}"))?;
+        anyhow::ensure!(
+            path.is_file(),
+            "{file}: independent oracle {function} has no source file"
+        );
+        // The scanned body spans the crate, so the aliases must too: a `use`
+        // that renames a forbidden symbol in another module renames it for
+        // code that is now inside the body being judged.
+        let text = crate_sources(root, file)?;
         // Blind pass 1 at aecb2ec7 (A10): only the oracle's own body was
         // scanned, so `fn helper(x) { paragraph::parse(x) }` called from the
         // oracle reached the production path through one hop and named
@@ -1392,6 +1450,7 @@ fn independent_oracle_source_cst(
         if has_content { "has" } else { "has no" }
     );
     let mut previous_end = 0usize;
+    let mut kinds = Vec::new();
     for block in &coarse.blocks {
         let start = usize::try_from(block.range.start).unwrap_or(usize::MAX);
         let end = usize::try_from(block.range.end).unwrap_or(usize::MAX);
@@ -1405,11 +1464,48 @@ fn independent_oracle_source_cst(
                 .is_some_and(|text| text.lines().any(|line| !line.trim().is_empty())),
             "coarse block {start}..{end} holds no content"
         );
+        // Blind pass 1 at c29bc0ea (A01): the scan's ranges were judged and
+        // its classification was not, so `coarse_parse` could label every
+        // block alike and no generated case would notice. The kind is
+        // re-derived from the block's own first line, never read back from
+        // the production classifier ADR-0020 §5 forbids this oracle to reach.
+        let text = source.get(start..end).unwrap_or_default();
+        let first = text.lines().next().unwrap_or_default().trim_start();
+        let expected = if first.starts_with("```") {
+            "fence"
+        } else if first.starts_with('#') {
+            "heading"
+        } else if first.starts_with('-') || first.starts_with("* ") {
+            "list"
+        } else if first.starts_with('@') {
+            "directive"
+        } else if first.starts_with("![") || first.contains("](") {
+            "resource-reference"
+        } else {
+            "paragraph-like"
+        };
+        let actual = match block.coarse_kind {
+            liminal_cst::CoarseKind::Fence => "fence",
+            liminal_cst::CoarseKind::Heading => "heading",
+            liminal_cst::CoarseKind::List => "list",
+            liminal_cst::CoarseKind::Directive => "directive",
+            liminal_cst::CoarseKind::ResourceReference => "resource-reference",
+            liminal_cst::CoarseKind::ParagraphLike => "paragraph-like",
+            liminal_cst::CoarseKind::DocumentRoot => "document-root",
+            liminal_cst::CoarseKind::EmbeddedLanguage => "embedded-language",
+            liminal_cst::CoarseKind::Unknown => "unknown",
+        };
+        anyhow::ensure!(
+            actual == expected,
+            "coarse block {start}..{end} is classified {actual}, not {expected}: {text:?}"
+        );
+        kinds.push(actual);
         previous_end = end;
     }
     let mut witness = emitted.as_bytes().to_vec();
     witness.extend_from_slice(once.as_bytes());
     witness.extend_from_slice(format!("coarse:{}", coarse.blocks.len()).as_bytes());
+    witness.extend_from_slice(kinds.join(",").as_bytes());
     Ok(witness)
 }
 
@@ -2234,10 +2330,22 @@ pub fn effective_unresolved_findings_repo(root: &Utf8Path, record: &Utf8Path) ->
         .into_iter()
         .filter(|ruling| ruling_in_force(root, ruling).unwrap_or(false))
         .collect::<Vec<_>>();
+    effective_unresolved_findings(&in_force, &value, record)
+}
+
+/// The count, given the rulings already established to be in force. Split from
+/// the repository walk so the clearance rules can be exercised without a
+/// signing key: a rule the tests cannot reach is a rule nothing checks.
+fn effective_unresolved_findings(
+    in_force: &[Ruling],
+    value: &serde_json::Value,
+    record: &Utf8Path,
+) -> Result<u64> {
     // Counted from each attempt's own flags, not through the findings list:
     // a verified, reproduced attempt the reviewer forgot to list as a finding
     // is still unresolved.
     let mut unresolved = 0u64;
+    let mut cleared: BTreeMap<String, u64> = BTreeMap::new();
     for attempt in value["attempts"].as_array().into_iter().flatten() {
         let class = attempt["attack_class"].as_str().unwrap_or_default();
         let target = attempt["target"].as_str().unwrap_or_default();
@@ -2256,21 +2364,44 @@ pub fn effective_unresolved_findings_repo(root: &Utf8Path, record: &Utf8Path) ->
             attempt["observed_result"].as_str().unwrap_or_default()
         )
         .to_ascii_lowercase();
-        let ruled = in_force.iter().any(|ruling| {
-            ruling.attack_class == class
-                && ruling.target == target_file
-                && ruling
-                    .claim_requires
-                    .iter()
-                    .all(|phrase| prose.contains(phrase.as_str()))
-                && !ruling
-                    .claim_excludes
-                    .iter()
-                    .any(|phrase| prose.contains(phrase.as_str()))
-        });
-        if !ruled {
+        // Blind pass 1 at c29bc0ea (A08): a ruling matched on class, file and
+        // prose substrings, so an unrelated defect in the same file whose
+        // wording happened to carry the required phrases was cleared in
+        // silence. Two things changed. A ruling that names a coordinate is
+        // held to it, not merely to the file. And a ruling clears at most one
+        // attempt per record: matching a second is evidence the phrases are
+        // too broad, and the answer to that is a refusal, not two clearances.
+        let matched = in_force
+            .iter()
+            .filter(|ruling| {
+                ruling.attack_class == class
+                    && if ruling.target.contains(':') {
+                        ruling.target == target
+                    } else {
+                        ruling.target == target_file
+                    }
+                    && ruling
+                        .claim_requires
+                        .iter()
+                        .all(|phrase| prose.contains(phrase.as_str()))
+                    && !ruling
+                        .claim_excludes
+                        .iter()
+                        .any(|phrase| prose.contains(phrase.as_str()))
+            })
+            .collect::<Vec<_>>();
+        for ruling in &matched {
+            *cleared.entry(ruling.id.clone()).or_insert(0u64) += 1;
+        }
+        if matched.is_empty() {
             unresolved += 1;
         }
+    }
+    for (id, count) in &cleared {
+        anyhow::ensure!(
+            *count <= 1,
+            "ruling {id} cleared {count} separate findings in {record}; a ruling answers one              claim, so phrases matching more than one are too broad to stand"
+        );
     }
     Ok(unresolved)
 }
@@ -8641,8 +8772,8 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-cst/src/parser.rs",
-            8,
-            "pub const MAX_NESTING: u16 = 256;",
+            206,
+            "let suffix = &line[marker + 2..];",
         ),
         (
             "crates/liminal-cst/src/parser.rs",
@@ -15028,7 +15159,7 @@ mod tests {
         const GOLDENS: [(&str, &str); 5] = [
             (
                 "source/CST/formatting",
-                "ef9ad7e2e09e20c04929520c9774238eb7a723be4910c876100bd13b8b35a5f2",
+                "06b9c71073be3f9e25de26b67bf24079d4617744e3e75049ef55d809af13698c",
             ),
             (
                 "graph/interchange codecs",
@@ -17020,6 +17151,69 @@ mod tests {
             !body.contains("other_thing("),
             "a function the oracle never reaches is not"
         );
+    }
+
+    /// Blind pass 1 at c29bc0ea (A08): a ruling matched on class, file and
+    /// prose, so an unrelated defect in the same file could be cleared by
+    /// wording alone. A ruling that names a coordinate is held to it, and no
+    /// ruling clears two findings in one record.
+    #[test]
+    fn a_ruling_is_held_to_its_coordinate_and_clears_one_finding() {
+        let ruling = |target: &str| Ruling {
+            id: "R-900".to_owned(),
+            attack_class: "corpus leakage".to_owned(),
+            target: target.to_owned(),
+            claim_requires: vec!["read access".to_owned()],
+            claim_excludes: Vec::new(),
+            status: "ruled".to_owned(),
+            file: "docs/execution/rulings/R-900.md".to_owned(),
+        };
+        let attempt = |id: &str, target: &str, prose: &str| {
+            format!(
+                r#"{{"id":"{id}","attack_class":"corpus leakage","target":"{target}","attempt":"a","observed_result":"{prose}","classification":"verified_defect","independently_reproduced":true,"resolved":false}}"#
+            )
+        };
+        let record = |attempts: &[String]| -> serde_json::Value {
+            serde_json::from_str(&format!(r#"{{"attempts":[{}]}}"#, attempts.join(",")))
+                .expect("record")
+        };
+        let path = Utf8Path::new("r.json");
+        let here = "crates/liminal-xtask/src/haq.rs:120";
+        let elsewhere = "crates/liminal-xtask/src/haq.rs:900";
+
+        // A file-level ruling still answers the claim it was written for.
+        let one = record(&[attempt(
+            "A1",
+            here,
+            "unauthorized read access remains accepted",
+        )]);
+        assert_eq!(
+            effective_unresolved_findings(&[ruling("crates/liminal-xtask/src/haq.rs")], &one, path)
+                .expect("count"),
+            0
+        );
+
+        // Named to a coordinate, it does not reach a different line.
+        assert_eq!(
+            effective_unresolved_findings(&[ruling(elsewhere)], &one, path).expect("count"),
+            1,
+            "a ruling naming another line answers nothing here"
+        );
+        assert_eq!(
+            effective_unresolved_findings(&[ruling(here)], &one, path).expect("count"),
+            0,
+            "a ruling naming this line answers it"
+        );
+
+        // Two findings whose prose both match is the broad-phrase failure.
+        let two = record(&[
+            attempt("A1", here, "unauthorized read access remains accepted"),
+            attempt("A2", elsewhere, "a second defect: read access is unchecked"),
+        ]);
+        let err =
+            effective_unresolved_findings(&[ruling("crates/liminal-xtask/src/haq.rs")], &two, path)
+                .expect_err("a ruling that clears two findings is too broad");
+        assert!(err.to_string().contains("too broad to stand"), "{err}");
     }
 
     /// Blind pass 1 at 91b54842 (A01): `Rng::word` reaches one- and

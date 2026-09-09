@@ -1042,12 +1042,12 @@
    "id": "P1-M003",
    "family": "source/CST/formatting",
    "operator": "threshold-plus-one",
-   "source": "crates/liminal-cst/src/parser.rs:8",
+   "source": "crates/liminal-cst/src/parser.rs:206",
    "requirement": "P1-R002",
-   "defect": "shift span end forward",
+   "defect": "shift the span end off the closing brace",
    "killing_tests": [
-    "P1-T17",
-    "P1-T03"
+    "P1-T11",
+    "P1-T10"
    ],
    "disposition": "predeclared"
   },

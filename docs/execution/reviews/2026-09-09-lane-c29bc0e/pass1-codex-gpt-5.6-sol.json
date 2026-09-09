@@ -1,0 +1,193 @@
+{
+  "schema_version": "haqp-blind-review-v1",
+  "pass": 1,
+  "reviewer": {
+    "model_family": "codex:gpt-5.6-sol",
+    "identity_hash": "f6cac6a769086b0c4a44f2b83d25874afa0b393a852ac730262a2f801543651c",
+    "backend": "codex"
+  },
+  "isolated_session_hash": "8347d69314510ac124e73dd5f7d0a7621ce93f8f0246cfaa4b54fc296bc4f506",
+  "sanitized_prompt_hash": "33b18b0915e25b34e98c1e53a1fa71c51777b191f1b8db4672e309f3d70fff26",
+  "prompt_binding_sha256": "568efdfb5f5c19a83d604a098c8e8fdc538973b4bfb4d4c9a807006cefd71b77",
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-cst/src/lib.rs:66",
+      "attempt": "falsify crates/liminal-cst/src/lib.rs:66 by returning ParagraphLike for every block while preserving ranges and source bytes",
+      "observed_result": "inspection shows generated CST checks can accept altered classification at crates/liminal-cst/src/lib.rs:66 because coarse_kind is not independently asserted",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1 by routing a generated oracle through a production helper defined in another source file",
+      "observed_result": "the independence closure at crates/liminal-xtask/src/haq.rs:1 follows same-file functions only and therefore omits cross-file production helpers",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-format/src/lib.rs:353",
+      "attempt": "falsify crates/liminal-format/src/lib.rs:353 by accepting spaces and punctuation inside compact identifier markers",
+      "observed_result": "explicit invalid-identifier negatives reject the broadened grammar at crates/liminal-format/src/lib.rs:353 and require explicit-surface fallback",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-cst/src/parser.rs:8",
+      "attempt": "falsify crates/liminal-cst/src/parser.rs:8 by comparing the declared span-shift defect with the actual threshold mutation site",
+      "observed_result": "the packet accepts crates/liminal-cst/src/parser.rs:8 using only a threshold-plus-one label without proving the declared span-end semantic defect",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-jurisdiction/src/ilrp.rs:273",
+      "attempt": "falsify crates/liminal-jurisdiction/src/ilrp.rs:273 by disabling the before-ack crash injection while retaining the durable acknowledgement",
+      "observed_result": "the registered boundary and crash-injection binding checks detect the missing point at crates/liminal-jurisdiction/src/ilrp.rs:273",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-source/src/paragraph.rs:33",
+      "attempt": "falsify crates/liminal-source/src/paragraph.rs:33 by emitting attributes through nondeterministic iteration instead of stable ordering",
+      "observed_result": "deterministic replay and byte comparison expose ordering drift introduced at crates/liminal-source/src/paragraph.rs:33",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1 by treating qualification-stage read access to the locked corpus as prohibited leakage",
+      "observed_result": "the claim at crates/liminal-xtask/src/haq.rs:1 is reproduced but false because R-001 explicitly permits stage reads while forbidding writes",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    },
+    {
+      "id": "A08",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1 by submitting an unrelated defect sentence containing a ruling-required phrase but no excluded phrase",
+      "observed_result": "substring claim matching at crates/liminal-xtask/src/haq.rs:1 can clear unrelated prose whenever required words appear without enumerated exclusions",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "docs/execution/phase1-suite-review.md:1",
+      "attempt": "falsify docs/execution/phase1-suite-review.md:1 by replacing a NOT_RUN table cell with an unsupported passed verdict",
+      "observed_result": "the markdown verifier rejects the unsupported verdict at docs/execution/phase1-suite-review.md:1 while the packet remains unqualified",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A10",
+      "attack_class": "vacuity",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by claiming no canonical-reparse relation exists to detect constant formatter output",
+      "observed_result": "the premise at conformance/haqp/packet.json:1 is false because P1-T02 declares canonical round-trip comparison over semantic document equality",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    },
+    {
+      "id": "A11",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-query/src/lib.rs:1",
+      "attempt": "falsify crates/liminal-query/src/lib.rs:1 by directly calling paragraph::parse from the incremental paragraph oracle",
+      "observed_result": "the forbidden-symbol registry detects direct production-parser coupling at crates/liminal-query/src/lib.rs:1 and refuses the oracle",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A12",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1 by reordering durable transitions without changing the declared per-file transition counts",
+      "observed_result": "the claim at crates/liminal-xtask/src/haq.rs:1 is reproduced but false because the checked census intentionally models path-count facts, not sequence",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    }
+  ],
+  "findings": [
+    {
+      "id": "F01",
+      "attempt_id": "A01",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-cst/src/lib.rs:66",
+      "summary": "Generated CST evidence does not independently verify coarse block classification."
+    },
+    {
+      "id": "F02",
+      "attempt_id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "summary": "Oracle reachability analysis stops at file boundaries and permits cross-file production coupling."
+    },
+    {
+      "id": "F03",
+      "attempt_id": "A04",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-cst/src/parser.rs:8",
+      "summary": "Mutant validation does not prove that the declared semantic defect matches the anchored mutation."
+    },
+    {
+      "id": "F04",
+      "attempt_id": "A08",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "summary": "Substring-based ruling matching can suppress unrelated verified findings."
+    }
+  ],
+  "independently_reproduced": [
+    "F01",
+    "F02",
+    "F03",
+    "F04"
+  ],
+  "unresolved_verified_findings": 4,
+  "result": "fail",
+  "blindness_proof": {
+    "ephemeral_session_requested": false,
+    "session_state": "fresh-codex-session",
+    "prior_pass_artifact_supplied": false,
+    "pass_two_original_spec_only": false
+  },
+  "schema_retries": 0,
+  "provider_receipt": {
+    "backend": "codex",
+    "session_file": "rollout-2026-09-09T05-30-48-01a08581-7198-76e0-8dee-5ef3f46ed7fe.jsonl",
+    "session_id": "2026-09-09T05-30-48-01a08581-7198-76e0-8dee-5ef3f46ed7fe",
+    "transcript_sha256": "fc8862e49e94e70e9c954e1282113fef1dc56f88f87e521b0cf452a25a344855",
+    "transcript_bytes": 3584993
+  },
+  "fixed_base": {
+    "commit": "c29bc0ea8fc03ec2c71c173a922941ee39938f31",
+    "tree": "dbc0a45bcfe2fd563e0cff6a9fe351416e38094b",
+    "clean": true
+  },
+  "raw_response_sha256": "b5f59631273f27ae656d1eda74f926f95498ae64755906d90f592f6f2157e9a8",
+  "integrity_binding_sha256": "764f4fd71e21945419e9e43c159883b7dd77db88ff5ef452e8f4bd808e5b6c4a"
+}

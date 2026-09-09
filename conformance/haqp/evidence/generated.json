@@ -1,6 +1,6 @@
 {
   "schema_version": "haqp-generated-v3-negative-categories",
-  "artifact_blake3": "79f041ed9a39872ea8ace6ad70c9eb6aa00b63da83c6e0295a7caaadde63f725",
+  "artifact_blake3": "c2522120a841b9edd445a7b9f48b6f510b9d649f4c0d1d49c3d725ea84cc2e64",
   "rows": [
     {
       "family": "source/CST/formatting",
@@ -9,7 +9,7 @@
       "discards": 0,
       "negatives": 22956,
       "seed": 11400714819323198485,
-      "evidence_hash": "4f96c1bbb58bfbf136f6b66e92a1029e919d32a90635d1d025ec87efca1af43e",
+      "evidence_hash": "4769963f64efd904b912bc07379efc6aba4867c12b49ee3411269b9d6ca3999e",
       "category_counts": {
         "boundary-offset": 7720,
         "comment": 7650,
@@ -33,67 +33,67 @@
           "relation": "lossless_emit",
           "oracle_id": "oracle:source_CST_formatting",
           "result": "pass",
-          "artifact_blake3": "7f493f8950bd83643c2114d171ef53aed76c186b82017a538628c32400f35d08"
+          "artifact_blake3": "e10677062c9877a0dd89fdc37d0e317affb214a05a7fe723362260141d4da20e"
         },
         {
           "relation": "format_idempotence",
           "oracle_id": "oracle:source_CST_formatting",
           "result": "pass",
-          "artifact_blake3": "64955ecf276c036ae6d93dd82b8bce1bf21688b02b50fd428db5d5e874b4df3c"
+          "artifact_blake3": "b542bf208833714113bda906eb1728a731a3d0375fb0327bfee5ec1683e47d03"
         }
       ],
       "oracle": {
         "id": "oracle:source_CST_formatting",
         "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_cst",
         "independent": true,
-        "relation_matrix_blake3": "4b13fcd06f00db173605314247923fe4ceb0e3e743d05fe91407b5ec0fcc453e"
+        "relation_matrix_blake3": "8c2cf5c00a862f412592fcac070f55d1bc2d6726a01e5f3b8655d636969983c1"
       }
     },
     {
       "family": "graph/interchange codecs",
       "accepted": 100000,
-      "attempts": 266440,
+      "attempts": 266897,
       "discards": 0,
-      "negatives": 166440,
+      "negatives": 166897,
       "seed": 11400713719811571110,
-      "evidence_hash": "801f9f6ce8baebba58346ccbb8af4da46661977589b9f1b2bdb3cd70835694e5",
+      "evidence_hash": "45d8787eeec254ea81d17c0740ff89e63e3417ddd1ae689f74865df1f4425588",
       "category_counts": {
-        "comment": 16856,
-        "cycle": 16686,
-        "dag": 16671,
-        "deep": 16615,
-        "duplicate-id": 16564,
-        "empty": 16592,
-        "external-value": 16691,
-        "hostile": 16929,
-        "invalid-json": 16513,
-        "large-payload": 16658,
-        "missing-node": 16602,
-        "single-edge": 16608,
-        "single-node": 16725,
-        "truncated-json": 16448,
-        "unknown-kind": 16559,
-        "wide": 16723
+        "comment": 16397,
+        "cycle": 16650,
+        "dag": 16643,
+        "deep": 16516,
+        "duplicate-id": 16732,
+        "empty": 16802,
+        "external-value": 16795,
+        "hostile": 16760,
+        "invalid-json": 16784,
+        "large-payload": 16518,
+        "missing-node": 16646,
+        "single-edge": 16652,
+        "single-node": 16925,
+        "truncated-json": 16663,
+        "unknown-kind": 16668,
+        "wide": 16746
       },
       "relations": [
         {
           "relation": "byte_canonical_stability",
           "oracle_id": "oracle:graph_interchange_codecs",
           "result": "pass",
-          "artifact_blake3": "646f796ce338ca99f8cbaed94575b8e3ef37a282d9a6bbb20da04a6c1023ad1c"
+          "artifact_blake3": "783ccdac6f61d43a0778c63e7bfe302dc9b183408713a81d1ec476013dc12256"
         },
         {
           "relation": "field_fidelity",
           "oracle_id": "oracle:graph_interchange_codecs",
           "result": "pass",
-          "artifact_blake3": "6f6ae4f7699290def88e27eb0f1d784ae00c91805e283142ee118cda38ba5028"
+          "artifact_blake3": "f21a45ea24235d083f5ba7727fd9d6817016b588dedfbbcf16b2dae32f9f766d"
         }
       ],
       "oracle": {
         "id": "oracle:graph_interchange_codecs",
         "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_graph",
         "independent": true,
-        "relation_matrix_blake3": "72508f7245cd01cb5101ab08dced592d7a1002da58ea19bafb6dff1be4de8971"
+        "relation_matrix_blake3": "8d33d5a8cc2e638dd03bef2e82e254fab351ffada5a30978c082708ab8b8e7b5"
       }
     },
     {
@@ -103,7 +103,7 @@
       "discards": 0,
       "negatives": 33537,
       "seed": 11400717018346454899,
-      "evidence_hash": "d2ceb73a224375330a67ca5dfd4e471e1ac38ba37f077a13e23f62680a958d65",
+      "evidence_hash": "752526d9c9f4c44fa14a87b521b69cd017efb2ffb6d01c98bd8d43113ff5dfed",
       "category_counts": {
         "boundary-span": 8489,
         "commute": 8351,
@@ -127,74 +127,74 @@
           "relation": "identity_merge",
           "oracle_id": "oracle:transforms_projections",
           "result": "pass",
-          "artifact_blake3": "41de87042f0ae2475091dd0133c0965a297e3dc6c1e721b5028074f2b1ea983e"
+          "artifact_blake3": "eef7bb761591b63c2cf5920765304ccc9c5f11e623b8fc9b20942127d3c6d8b0"
         },
         {
           "relation": "outcome_class_symmetry",
           "oracle_id": "oracle:transforms_projections",
           "result": "pass",
-          "artifact_blake3": "2d57e91175843b3e0e57afe8f4f7daa003aa170f718f1c105289b29448ae3150"
+          "artifact_blake3": "5fbeb77218d8d267c6fb7a314bdc7c26ce7c4c8b46b9a0c5ffef4f1cab71b662"
         }
       ],
       "oracle": {
         "id": "oracle:transforms_projections",
         "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_transform",
         "independent": true,
-        "relation_matrix_blake3": "4d0121957c3e83354b4f0ba4ac5625fa22bb815c2424b58d72ba758191fe8abc"
+        "relation_matrix_blake3": "43b667d97c9e815beefcfcdbdac3f450536a9b79b29917e8bfa6e0dac5a10152"
       }
     },
     {
       "family": "repair/ILRP/recovery",
       "accepted": 100000,
-      "attempts": 106434,
-      "discards": 269,
-      "negatives": 6165,
+      "attempts": 121748,
+      "discards": 248,
+      "negatives": 21500,
       "seed": 11400715918834825484,
-      "evidence_hash": "ee3e1d1e4f97948639535910c411ecf06ce0cb9572a31e9fd3ed5a0d2262383f",
+      "evidence_hash": "33b66802ead05e0c58d6c0b3ea6db0e9d43bded1a47f28846f97ffba8d89a904",
       "category_counts": {
-        "applying": 6324,
-        "boundary": 6116,
-        "committed": 6078,
-        "contested": 6330,
-        "cycle": 6165,
-        "duplicate-ack": 6189,
-        "external-applied": 6306,
-        "file-step": 6249,
-        "finalizing": 6351,
-        "graph-step": 6381,
-        "hostile": 6198,
-        "missing-step": 6243,
-        "needs-review": 6334,
-        "poststate": 6325,
-        "prepared": 6182,
-        "truncated-intent": 6251,
-        "two-step": 6412
+        "applying": 7041,
+        "boundary": 7231,
+        "committed": 7117,
+        "contested": 7220,
+        "cycle": 7203,
+        "duplicate-ack": 7169,
+        "external-applied": 7197,
+        "file-step": 7180,
+        "finalizing": 7325,
+        "graph-step": 7103,
+        "hostile": 7109,
+        "missing-step": 7186,
+        "needs-review": 7161,
+        "poststate": 7148,
+        "prepared": 7067,
+        "truncated-intent": 7111,
+        "two-step": 7180
       },
       "relations": [
         {
           "relation": "dependency_order",
           "oracle_id": "oracle:repair_ILRP_recovery",
           "result": "pass",
-          "artifact_blake3": "75a9249cddc7d48131a54fbf722a9481b1fbc63f5ae20dc29f9d5e17ebe39d84"
+          "artifact_blake3": "e010d4673450ad9c1c4561e9d13ec36d2107cb8eeefbd968b64345958b6d319a"
         },
         {
           "relation": "permutation_invariance",
           "oracle_id": "oracle:repair_ILRP_recovery",
           "result": "pass",
-          "artifact_blake3": "7750f94aeb030e19276b812a36eeb5b41edc49661a8d3fa1f90ea9c68392c768"
+          "artifact_blake3": "173ad334b3989879c5927389e8131c252ad9150c2c6638ebaf4421ee72e41807"
         },
         {
           "relation": "independent_edge_check",
           "oracle_id": "oracle:repair_ILRP_recovery",
           "result": "pass",
-          "artifact_blake3": "05fe02f5035d64c24100808b123c9aa7c19a41482667a0d0433d4018acff67f2"
+          "artifact_blake3": "0daeeaf5e7a863dbea55f2624b7ea368e9abfad8349c179b96824b84b2ce792d"
         }
       ],
       "oracle": {
         "id": "oracle:repair_ILRP_recovery",
         "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_repair",
         "independent": true,
-        "relation_matrix_blake3": "2fa60c867410be764505a7423687fc3497fbd797357e1998a72c1e9dfb7b78ef"
+        "relation_matrix_blake3": "f06ef5a01132827a6cb991b0cee6a166508d974e9993cdca0f02e4950ff1074c"
       }
     },
     {

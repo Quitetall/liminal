@@ -3429,3 +3429,41 @@ was already commit-bound: reachability, evidence digests, the coordinate. The
 command — the only part that actually re-executes anything — was not. A
 resolution could name a commit whose fix was later reverted and still verify,
 because the gate asked HEAD.
+
+## F-59 — the eleventh lane: the checks that were never asked to be right
+
+**Found.** 2026-09-09, lane at `c29bc0ea`. Pass 2 clean; pass 1 twelve attempts,
+four `verified_defect`, all four independently reproduced — the second lane in a
+row where every claim carried a reproduction. Stopped at the reviews stage.
+Records and receipts under `docs/execution/reviews/2026-09-09-lane-c29bc0e/`.
+
+| attempt | class | what was true | fix |
+|---|---|---|---|
+| A01 | vacuity | the metamorphic oracle judged `coarse_parse`'s ranges — in bounds, non-overlapping, non-blank — and never its classification. `coarse_parse` could label every block alike and 100,000 generated cases would not notice | the kind is re-derived from each block's own first line and compared, and the classifications join the witness so a case binds them |
+| A02 | shared-oracle coupling | the independence closure F-58 built followed same-file functions only, so a helper one module away carried the oracle to the production path it judges | the closure spans the crate's sources, and every definition of a name is taken, not the first: two modules may name a function alike |
+| A04 | weak mutants | P1-M003 declared `threshold-plus-one` on `pub const MAX_NESTING: u16 = 256;` with the defect "shift span end forward" — which is not what moving a nesting limit does — and named P1-T17 and P1-T03 as killers, neither of which constructs 256-deep nesting. P1-M002 already covers that constant's comparison | re-anchored to `parser.rs:206`, where `marker + 2` becomes `marker + 3`, moving the span end off the closing brace and panicking on a line that ends in `{#`. Killers are P1-T11 and P1-T10, both covering P1-R002 |
+| A08 | exception broadening | a ruling matched on attack class, target **file** and prose substrings, so an unrelated defect in the same file whose wording carried the required phrases was cleared in silence | a ruling that names a coordinate is held to it; and a ruling clears at most one finding per record, because matching a second is evidence the phrases are too broad |
+
+**A08 was already visible in the rulings themselves.** R-004 lists
+`deny_unknown_fields`, `undeclared`, `waiver` and `packet.json` among its
+exclusions — phrases added reactively, each after a near miss. Five of the six
+rulings target `haq.rs`, the largest file in the repository. The mechanism was
+being kept honest by hand, one exclusion at a time, which is not a mechanism.
+Capping a ruling at one clearance turns the next over-broad phrase into a
+refusal instead of a silent pass, which is AM-17.9's fourth principle applied to
+the escape hatch itself.
+
+**A04 is the second mutant whose operator and anchor disagreed.** F-55 found
+`threshold-plus-one` assigned to a family with no numeric threshold. This one
+had a threshold but the wrong one: the declared defect described a span, the
+anchor was a depth limit, and the named killers exercised neither. Both survived
+because the packet's operator, anchor, defect text and killing tests were each
+checked for presence and never against each other.
+
+**Measured.** 100,000 generated cases per family after the oracle change:
+100,000 accepted in every family, 248 discarded in repair/ILRP/recovery (0.20%,
+its standing rate). The independent classifier agrees with production on every
+generated document, so the new check refuses nothing it should not. The
+`effective_unresolved_findings` count was split from the signature walk so both
+new clearance rules are exercised by tests without a signing key — a rule the
+tests cannot reach is a rule nothing checks.

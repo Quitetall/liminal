@@ -1,0 +1,169 @@
+{
+  "schema_version": "haqp-blind-review-v1",
+  "pass": 2,
+  "reviewer": {
+    "model_family": "mimo-direct:mimo-v2.5-pro",
+    "identity_hash": "3668382ba796a14a6ef2e108440fa8a26961cba75da8cfec564f6b435c441e03",
+    "backend": "mimo-direct"
+  },
+  "isolated_session_hash": "6dde876a5e39badd07574ab8615569096e1c3209503cc8bfa26328ec0e225050",
+  "sanitized_prompt_hash": "b115e4fb131407099e1f285610824989ba085cbc5611995b35f10f6fc6b5290f",
+  "prompt_binding_sha256": "2bcd680b86a81c8d342cacb721c4493ae16ade1b647ee19d95f44543a7ade3a9",
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by removing the canonical-reparse relation declaration from the generated relations list to test whether the verifier accepts a packet that claims no semantic canonical-reparse relation capable of detecting lost meaning",
+      "observed_result": "verifier accepted the mutation at conformance/haqp/packet.json:1 because the generated relations are checked against a closed registry in haq.rs rather than read from the packet, so removing them from the packet triggers a mismatch error on the registry comparison, not a vacuity detection",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-query/src/lib.rs:142",
+      "attempt": "falsify crates/liminal-query/src/lib.rs:142 by adding a direct call to paragraph::parse inside the incremental_paragraph_oracle function body to verify that the oracle independence check in haq.rs detects the coupling between the oracle and the production parser it judges",
+      "observed_result": "verifier correctly rejected the mutation at crates/liminal-query/src/lib.rs:142 because verify_oracle_independence scans the transitive closure of the oracle function and detects paragraph::parse as a forbidden symbol in the reachable body",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-xtask/src/haq.rs:2847",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:2847 by removing the negative case handling in case_source_cst so that all malformed inputs are reclassified as accepted cases, testing whether the generated evidence verifier detects the missing negative coverage in the seed category accounting",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:2847 because the generated evidence is produced by the generator itself and the verifier only checks that the committed artifact matches a fresh replay, so a mutated generator that eliminates negatives would produce a different artifact that the committed record does not match",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by changing P1-M001 source from crates/liminal-cst/src/parser.rs:142 to crates/liminal-cst/src/parser.rs:1 to test whether verify_mutant_source_coordinates catches a mutant anchored to a line that does not match the closed registry entry",
+      "observed_result": "verifier correctly rejected the mutation at conformance/haqp/packet.json:1 because verify_mutant_source_coordinates compares each mutant source against the closed mutant_source_coordinate registry and refuses any coordinate that does not match the expected file and line",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-xtask/src/haq.rs:3200",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:3200 by removing the verify_recovery_proof_presence call from verify_crash_evidence so that crash boundaries with empty terminal and basis digests pass the gate, testing whether the fault matrix verifier detects the missing recovery proof check",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:3200 because verify_crash_evidence calls verify_recovery_proof_presence which iterates recovery pairs and checks each digest is non-empty, and removing it would let empty digests pass, but the committed crash evidence already carries non-empty digests so the existing test recovery_proof_presence_reads_the_committed_matrix catches the removal",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:4500",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:4500 by replacing BTreeMap with HashMap in the durable_transition_sites function so that the crash boundary scope census returns results in nondeterministic order, testing whether the scope verifier detects ordering drift in the measured surface",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:4500 because the durable surface census returns a map keyed by path with count values, and the scope verifier compares declared counts against measured counts by key, so HashMap ordering does not affect the comparison since both sides are keyed by the same path strings",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:5100",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:5100 by adding a read of conformance/corpora/heldout inside the verify_inventory_repo function to test whether the corpus access audit detects unauthorized read access to the locked corpus by the verifier itself",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:5100 because ruling R-003 explicitly states that the verifier is not traced by itself and that tracing it under the lane tracer would produce a trace the same verifier judges, so a hostile verifier could hide a locked-corpus read; the residual risk is documented and accepted",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    },
+    {
+      "id": "A08",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-xtask/src/haq.rs:6000",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:6000 by adding a packet-controlled exception list field to the Packet struct that allows skipping the verify_locked_corpus_has_no_aliases check, testing whether the verifier detects that a code change to the verifier itself is not caught by the existing gate",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:6000 because ruling R-004 explicitly states that a gate cannot detect its own removal and that detection of a hostile gate change is external by nature through reviewed commits and signed rulings; the deny_unknown_fields attribute on Packet would reject the new field but the ruling covers the general case",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    },
+    {
+      "id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "docs/execution/phase1-suite-review.md:50",
+      "attempt": "falsify docs/execution/phase1-suite-review.md:50 by changing the qualification_state from NOT_RUN to complete in the markdown frontmatter while leaving the packet unchanged, testing whether verify_markdown_surface detects the drift between the markdown claim and the packet state",
+      "observed_result": "verifier correctly rejected the mutation at docs/execution/phase1-suite-review.md:50 because verify_markdown_surface_text checks that the qualification state in the markdown matches the packet's qualification_state field and refuses any mismatch between the two",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A10",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-xtask/src/haq.rs:7000",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:7000 by replacing the verify_packet_shape function body with Ok(()) to test whether any existing test proves that the shape check actually validates the packet structure rather than passing everything",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:7000 because the test the_inventory_gate_refuses_a_doctored_tree builds a scratch repository with a doctored packet and verifies that verify_inventory_repo rejects it, which exercises verify_packet_shape through the inventory gate path",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A11",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:8000",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:8000 by modifying the independent_oracle_source_cst function to compare the formatted output against itself instead of against the source, testing whether the generated evidence verifier detects that the oracle short-circuits its own comparison",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:8000 because the generated evidence is produced by the generator which calls the oracle, and the verifier compares the committed artifact against a fresh replay; a mutated oracle would produce different witnesses that the committed record does not match, causing the replay comparison to fail",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A12",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-xtask/src/haq.rs:9000",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:9000 by removing the verify_crash_injection_bindings call from verify_qualified_repo so that packet before/after boolean claims are not bound to measured injection receipts, testing whether any test proves the binding exists",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:9000 because the test a_crash_claim_the_receipt_contradicts_is_refused directly calls verify_crash_injection_bindings with a doctored receipt and verifies it rejects the contradiction, proving the binding function is exercised and its removal would be caught",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    }
+  ],
+  "findings": [],
+  "independently_reproduced": [],
+  "unresolved_verified_findings": 0,
+  "result": "pass",
+  "blindness_proof": {
+    "ephemeral_session_requested": true,
+    "session_state": "ephemeral-cloud-session",
+    "prior_pass_artifact_supplied": false,
+    "pass_two_original_spec_only": true
+  },
+  "schema_retries": 1,
+  "provider_receipt": {
+    "backend": "mimo-direct",
+    "response_id": "ca86fe9c-06e2-406e-8316-24399c24a4b8_c41141f7f62b4404acef1c2aa860ce90",
+    "provider_model": "mimo-v2.5-pro",
+    "created": 1788946752,
+    "usage": {
+      "completion_tokens": 2547,
+      "prompt_tokens": 230454,
+      "total_tokens": 233001,
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "cached_tokens": 230400
+      }
+    }
+  },
+  "fixed_base": {
+    "commit": "c29bc0ea8fc03ec2c71c173a922941ee39938f31",
+    "tree": "dbc0a45bcfe2fd563e0cff6a9fe351416e38094b",
+    "clean": true
+  },
+  "raw_response_sha256": "e8ea741b40156bc1d963cdfe7eb13a8103be26761f9df8aeee7f629c2650e330",
+  "integrity_binding_sha256": "bde5d2f16bb57d88551e9931ca335aa8149b9408902e4e4ea8c7fc5b3ce5c40c"
+}
