@@ -139,7 +139,7 @@
     "gate": "markdown",
     "violation": "remove packet digest",
     "expected_failure": "review packet markdown missing packet digest",
-    "observed_failure": "review packet markdown missing packet digest 90bb08e221ec2026ba043d8b23b140280891b1ab4dd9c824618e6371963b5a20",
+    "observed_failure": "review packet markdown missing packet digest edff1c2f7ff116af3febd8d94eeecfc4144adee4703007b5c7be93f060f35d35",
     "caught": true,
     "mutation_semantics": "remove baseline packet digest from markdown"
   },
@@ -291,7 +291,7 @@
     "id": "C33",
     "gate": "crash boundary scope",
     "violation": "understate the deferred durable surface by one site",
-    "expected_failure": "crash_boundary_scope declares",
+    "expected_failure": "crash_boundary_scope declares a durable surface smaller than tracked source",
     "observed_failure": "crash_boundary_scope declares a durable surface smaller than tracked source",
     "caught": true,
     "mutation_semantics": "crash_boundary_scope.deferred[0].sites -= 1"

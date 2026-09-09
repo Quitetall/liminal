@@ -3539,3 +3539,60 @@ shifted `is_compact_id` down, so P1-M013's line-based coordinate stopped naming
 its own text and the closed registry caught it. Line coordinates are brittle by
 construction; the registry is what makes the brittleness loud instead of
 silent.
+
+## F-62 — the fourteenth lane: seven, and one of them is about the other four
+
+**Found.** 2026-09-09, lane at `a53f6a4d`. Pass 2 clean; pass 1 twelve attempts,
+**seven** `verified_defect`, all reproduced. Records under
+`docs/execution/reviews/2026-09-09-lane-a53f6a4/`.
+
+Three are fixed here. Four are one finding, and it is not mine to fix.
+
+### Fixed
+
+| attempt | class | what was true | fix |
+|---|---|---|---|
+| A01 | vacuity | the CST coarse classifier made every `#`-prefixed first line a Heading, including `#!liminal-explicit-v1`, which selects a dialect and is not a heading | a heading is a run of `#` then a space, which is the formatter's own rule |
+| A03 | missing negatives | the same classifier made `-not-a-list` a List: `-` alone, while `*` already required its space | `- ` or `* `, symmetric |
+| A12 | exception broadening | canary C33's declared expected failure was `crash_boundary_scope declares`, a prefix shared by two other messages from the same verifier | the prefix names its own family, and C32 and C33 — the only two canaries that took any error as proof — now assert the refusal they actually provoke |
+
+**A12 was hiding something worse than a loose prefix.** Pinning C33 to the
+refusal it provokes showed that the refusal is a count mismatch —
+`crash_boundary_scope declares 21 durable transition(s), source has 22` — while
+the canary reported the different sentence it had been written to report. The
+canary was matching its own hand-written prose, and the truncated prefix is why
+that went unnoticed for thirty-three canaries' worth of green.
+
+### Not fixed: the mutation plan's second killer is positional
+
+A02, A04, A05 and A06 each say the same thing about a different mutant: the
+declared killing tests cannot exercise the mutated code. Golden-render and
+hostile-HTML tests named for a graph-store checkpoint. Formatter interruption
+and idempotence named for an ILRP before-ack fault. Fuzz replay and conditional
+migration named for graph-log byte order.
+
+Checking the whole plan rather than the four:
+
+- **60 of 65** mutants name a killing test that does not cover the mutant's own
+  declared requirement.
+- **61 of 65** have a second killing test whose index in the packet's test list
+  is a simple function of the mutant's own position — `P1-M004`→`P1-T04`,
+  `P1-M005`→`P1-T05`, `P1-M006`→`P1-T06`, then the cycle repeats.
+
+The second killer of nearly every mutant was assigned by counting, not by
+asking what the test does. F-55, F-59 and F-61 each found one mutant whose
+operator, anchor, defect and killers disagreed and re-anchored it by hand. Those
+were not three accidents; they were three samples from a plan whose killer
+column was generated.
+
+**Why this is escalated rather than fixed.** Deciding what relation a killing
+test must bear to its mutant is qualification semantics under ADR-0020 §3, and
+Protocol §3 says not to improvise those. Requirement coverage is the one
+relation checkable from the packet alone, and enforcing it would invalidate 60
+of 65 rows — which is a decision about the plan, not a repair to it. The
+alternative, that a killer must be a test that executes the mutated file, is not
+derivable from the packet and is exactly what HAQP-1b's mutation evaluation
+measures by running the mutants.
+
+This is a class A finding under AM-17.9: the suite cannot see a defect it
+declares itself able to see. It blocks.

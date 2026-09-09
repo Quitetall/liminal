@@ -70,11 +70,17 @@ pub fn emit(document: &CstDocument) -> &str {
 fn block(source: &str, start: usize, end: usize) -> OpaqueBlock {
     let text = &source[start..end];
     let first = text.lines().next().unwrap_or_default().trim_start();
+    // M17.5 F-62: `#` alone made every hash-prefixed line a heading, including
+    // `#!liminal-explicit-v1`, which selects a dialect and is not a heading.
+    // `-` alone made `-not-a-list` a list while `*` already required its
+    // space. Both now match the formatter's own rule: a marker, then a space.
+    let hashes = first.chars().take_while(|ch| *ch == '#').count();
+    let heading = hashes > 0 && first[hashes..].starts_with(' ');
     let coarse_kind = if first.starts_with("```") {
         CoarseKind::Fence
-    } else if first.starts_with('#') {
+    } else if heading {
         CoarseKind::Heading
-    } else if first.starts_with('-') || first.starts_with("* ") {
+    } else if first.starts_with("- ") || first.starts_with("* ") {
         CoarseKind::List
     } else if first.starts_with('@') {
         CoarseKind::Directive

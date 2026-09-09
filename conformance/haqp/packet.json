@@ -2087,7 +2087,7 @@
    "id": "C33",
    "gate": "crash boundary scope",
    "violation": "understate the deferred durable surface by one site",
-   "expected_failure": "crash_boundary_scope declares",
+   "expected_failure": "crash_boundary_scope declares a durable surface smaller than tracked source",
    "result": "predeclared"
   }
  ],

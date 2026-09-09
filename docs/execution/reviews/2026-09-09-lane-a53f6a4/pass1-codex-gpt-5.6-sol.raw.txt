@@ -1,0 +1,165 @@
+{
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-cst/src/lib.rs:75",
+      "attempt": "Falsify crates/liminal-cst/src/lib.rs:75 using an explicit-dialect marker beginning with hash-bang.",
+      "observed_result": "At crates/liminal-cst/src/lib.rs:75 every hash-prefixed first line becomes Heading, including the non-heading explicit-dialect marker.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-jurisdiction/src/ilrp.rs:301",
+      "attempt": "Falsify crates/liminal-jurisdiction/src/ilrp.rs:301 by replacing the recovery comparison oracle with a self-comparison.",
+      "observed_result": "Packet assigns crates/liminal-jurisdiction/src/ilrp.rs:301 only formatter-malformed and incremental-compiler killers, neither independently observes recovery digest equality.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-cst/src/lib.rs:77",
+      "attempt": "Falsify crates/liminal-cst/src/lib.rs:77 with a paragraph beginning hyphen without required following whitespace.",
+      "observed_result": "At crates/liminal-cst/src/lib.rs:77 starts_with('-') classifies '-not-a-list' as List despite missing list-marker whitespace.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-graph/src/store/mod.rs:475",
+      "attempt": "Falsify crates/liminal-graph/src/store/mod.rs:475 by deleting the declared codec durable-checkpoint operation.",
+      "observed_result": "Packet maps crates/liminal-graph/src/store/mod.rs:475 to hostile HTML rendering and golden rendering tests, which do not exercise graph-store checkpoint persistence.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-jurisdiction/src/ilrp.rs:273",
+      "attempt": "Falsify crates/liminal-jurisdiction/src/ilrp.rs:273 by disabling the before-ack crash injection point.",
+      "observed_result": "Packet assigns crates/liminal-jurisdiction/src/ilrp.rs:273 only formatter interruption and formatter idempotence killers, omitting an ILRP before-ack fault observation.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-graph/src/store/log.rs:42",
+      "attempt": "Falsify crates/liminal-graph/src/store/log.rs:42 by introducing nondeterministic ordering in graph-log emission.",
+      "observed_result": "Packet maps crates/liminal-graph/src/store/log.rs:42 to generic fuzz replay and conditional migration tests without a graph-log byte-order assertion.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:1 by treating qualification-stage read access to the locked corpus as prohibited leakage.",
+      "observed_result": "Claim at crates/liminal-xtask/src/haq.rs:1 is answered by R-001: stage read access is permitted while write-class access remains forbidden.",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": true
+    },
+    {
+      "id": "A08",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:1 because a verifier code change cannot be detected by that same verifier.",
+      "observed_result": "Claim at crates/liminal-xtask/src/haq.rs:1 is explicitly classified by R-004 as externally governed self-verifier risk, not an in-check defect.",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": true
+    },
+    {
+      "id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "docs/execution/phase1-suite-review.md:165",
+      "attempt": "Falsify docs/execution/phase1-suite-review.md:165 by comparing the C01 row width against its declared canary-table header.",
+      "observed_result": "At docs/execution/phase1-suite-review.md:165 the extra table cell is rejected by the implemented rendered-table width verification.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": true
+    },
+    {
+      "id": "A10",
+      "attack_class": "vacuity",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "Falsify conformance/haqp/packet.json:1 by alleging that no canonical-reparse relation exists for semantic-loss detection.",
+      "observed_result": "Claim at conformance/haqp/packet.json:1 is contradicted by declared P1-T02 and P1-T04 canonical round-trip coverage documented in R-002.",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": true
+    },
+    {
+      "id": "A11",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:2847",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:2847 by alleging that count-based durable-surface comparison loses required transition ordering.",
+      "observed_result": "At crates/liminal-xtask/src/haq.rs:2847 no ordered invariant exists; R-006 confirms the surface is a deterministic per-file count census.",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": true
+    },
+    {
+      "id": "A12",
+      "attack_class": "exception broadening",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "Falsify conformance/haqp/packet.json:1 by substituting an unrelated crash-scope error sharing C33's broad expected prefix.",
+      "observed_result": "At conformance/haqp/packet.json:1 C33 expects only 'crash_boundary_scope declares', so prefix matching can accept multiple non-exact failure reasons.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    }
+  ],
+  "findings": [
+    {
+      "id": "F01",
+      "attempt_id": "A01"
+    },
+    {
+      "id": "F02",
+      "attempt_id": "A02"
+    },
+    {
+      "id": "F03",
+      "attempt_id": "A03"
+    },
+    {
+      "id": "F04",
+      "attempt_id": "A04"
+    },
+    {
+      "id": "F05",
+      "attempt_id": "A05"
+    },
+    {
+      "id": "F06",
+      "attempt_id": "A06"
+    },
+    {
+      "id": "F07",
+      "attempt_id": "A12"
+    }
+  ],
+  "independently_reproduced": [
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05",
+    "F06",
+    "F07"
+  ],
+  "unresolved_verified_findings": 7,
+  "result": "fail"
+}

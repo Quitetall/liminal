@@ -1496,11 +1496,12 @@ fn verify_coarse_scan(
         // rule itself being wrong, because the rule is what it restates.
         let text = source.get(start..end).unwrap_or_default();
         let first = text.lines().next().unwrap_or_default().trim_start();
+        let hash_marks = first.chars().take_while(|ch| *ch == '#').count();
         let expected = if first.starts_with("```") {
             "fence"
-        } else if first.starts_with('#') {
+        } else if hash_marks > 0 && first[hash_marks..].starts_with(' ') {
             "heading"
-        } else if first.starts_with('-') || first.starts_with("* ") {
+        } else if first.starts_with("- ") || first.starts_with("* ") {
             "list"
         } else if first.starts_with('@') {
             "directive"
@@ -11266,8 +11267,16 @@ fn run_qualification_canary(root: &Utf8Path, packet: &Packet, id: &str) -> Resul
             .first_mut()
             .context("C33 needs at least one deferred durable surface to understate")?;
         surface.sites -= 1;
-        verify_crash_boundary_scope(root, &candidate)
+        let refusal = verify_crash_boundary_scope(root, &candidate)
             .expect_err("crash-boundary scope canary must fail closed");
+        // Blind pass 1 at a53f6a4d (A12): a canary that accepts any error
+        // proves the gate refused something, not that it refused THIS.
+        anyhow::ensure!(
+            refusal
+                .to_string()
+                .contains("durable transition(s), source has"),
+            "C33 refused for another reason: {refusal}"
+        );
         anyhow::bail!(
             "crash_boundary_scope declares a durable surface smaller than tracked source"
         );
@@ -11276,8 +11285,14 @@ fn run_qualification_canary(root: &Utf8Path, packet: &Packet, id: &str) -> Resul
         let path = root.join("conformance/haqp/evidence/concurrency.json");
         let mut evidence: ConcurrentEvidence = serde_json::from_slice(&fs::read(&path)?)?;
         evidence.source_tree = "0".repeat(40);
-        verify_concurrency_evidence_record(root, packet, &evidence)
+        let refusal = verify_concurrency_evidence_record(root, packet, &evidence)
             .expect_err("concurrency provenance canary must fail closed");
+        anyhow::ensure!(
+            refusal
+                .to_string()
+                .contains("concurrency source provenance does not match committed tree"),
+            "C32 refused for another reason: {refusal}"
+        );
         anyhow::bail!("concurrency provenance does not match committed tree");
     }
     match id {
@@ -11516,7 +11531,10 @@ fn canary_expected_prefix(id: &str) -> Result<&'static str> {
         "C30" => "risk RISK-001 has empty evidence",
         "C31" => "corpus scope command does not cover lane",
         "C32" => "concurrency provenance does not match committed tree",
-        "C33" => "crash_boundary_scope declares",
+        // Blind pass 1 at a53f6a4d (A12): the bare prefix also matched two
+        // other messages from this same verifier, so an unrelated refusal
+        // would have read as this canary's catch.
+        "C33" => "crash_boundary_scope declares a durable surface smaller than tracked source",
         _ => anyhow::bail!("unknown canary {id}"),
     })
 }
@@ -15315,7 +15333,7 @@ mod tests {
         const GOLDENS: [(&str, &str); 5] = [
             (
                 "source/CST/formatting",
-                "cebe63227f25142b13ae20cd18d45f1a60e5692a01f675fc93ca4c6a3bfc6abd",
+                "4f06b08b36c1dd0ab73302756b44f7c77ee6b3559022c427b51c0291a01b2d0c",
             ),
             (
                 "graph/interchange codecs",
