@@ -138,22 +138,30 @@ fn oracle_reachable_body(text: &str, name: &str) -> String {
         .lines()
         .filter_map(|line| {
             let trimmed = line.trim_start();
-            // Review of f4d42d3: `pub(crate) fn helper` named no prefix, so
-            // a helper declared that way was missing from the closure and the
-            // oracle could reach production through it.
             // Review of f4d42d3: `pub(crate) fn helper` named no prefix, so a
             // helper declared that way was missing from the closure and the
             // oracle could reach production through it. Review of 4bc26b6d:
             // the first fix tested `pub(...)` as a whole-prefix alternative,
-            // which `pub(crate) async fn` fails on both arms. Every word
-            // before the `fn` is checked instead, so the qualifiers compose.
+            // which `pub(crate) async fn` fails on both arms. Review of
+            // `39de4daa`: a per-word check still missed `pub(in crate::x) fn`,
+            // which splits into two words. The restriction is removed as a
+            // span, then the remaining qualifiers are checked word by word.
+            // `unsafe` is among them because adding a helper to the closure
+            // can only add refusals; dropping one is the direction that lets
+            // an oracle reach production unnoticed.
             let rest = trimmed
                 .split_once("fn ")
                 .filter(|(before, _)| {
-                    before.split_whitespace().all(|word| {
-                        matches!(word, "pub" | "async" | "const" | "unsafe")
-                            || (word.starts_with("pub(") && word.ends_with(')'))
-                    })
+                    let mut qualifiers = (*before).to_owned();
+                    while let Some(start) = qualifiers.find("pub(") {
+                        let Some(offset) = qualifiers[start..].find(')') else {
+                            break;
+                        };
+                        qualifiers.replace_range(start..=start + offset, "");
+                    }
+                    qualifiers
+                        .split_whitespace()
+                        .all(|word| matches!(word, "pub" | "async" | "const" | "unsafe"))
                 })
                 .map(|(_, rest)| rest)?;
             let end = rest.find(['(', '<'])?;
@@ -16999,7 +17007,8 @@ mod tests {
             "fn oracle(x: u8) -> u8 {\n    helper(x)\n}\n\n",
             "pub(crate) fn helper(x: u8) -> u8 {\n    deeper(x)\n}\n\n",
             "pub(crate) async fn deeper(x: u8) -> u8 {\n    later(x)\n}\n\n",
-            "pub(super) const fn later(x: u8) -> u8 {\n    forbidden_path(x)\n}\n\n",
+            "pub(super) const fn later(x: u8) -> u8 {\n    innermost(x)\n}\n\n",
+            "pub(in crate::inner) unsafe fn innermost(x: u8) -> u8 {\n    forbidden_path(x)\n}\n\n",
             "fn unrelated() -> u8 {\n    other_thing()\n}\n",
         );
         let body = oracle_reachable_body(text, "oracle");
