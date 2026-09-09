@@ -449,12 +449,14 @@ fn markdown_table_rows<'a>(text: &'a str, header: &str) -> Option<Vec<Vec<&'a st
 fn verify_markdown_tables(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let path = root.join("docs/execution/phase1-suite-review.md");
     let text = fs::read_to_string(&path).with_context(|| format!("read {path}"))?;
-    if packet.provenance.is_some() {
-        // A qualified packet's tables are rendered from evidence; the canary
-        // table and the review blocks are re-derived by their own checks, and
-        // the rest are bound by the packet digest this markdown carries.
-        return Ok(());
-    }
+    // Blind pass 1 at ee646f8c (A09): this returned here for any qualified
+    // packet, on the reasoning that "the rest are bound by the packet digest
+    // this markdown carries". They are not. The digest binds the packet;
+    // editing a cell of this markdown leaves it untouched, so every table
+    // outside the review blocks went unchecked the moment provenance existed.
+    // Qualification changes exactly one thing: the flip may write results. So
+    // the shapes are checked either way, and only the value rule relaxes.
+    let qualified = packet.provenance.is_some();
     let mut declared = BTreeSet::new();
     for mutant in &packet.mutants {
         declared.insert(mutant.family.clone());
@@ -518,7 +520,7 @@ fn verify_markdown_tables(root: &Utf8Path, packet: &Packet) -> Result<()> {
                     .split(|ch: char| !ch.is_ascii_alphabetic())
                     .any(|word| VERDICT_VOCABULARY.contains(&word));
             anyhow::ensure!(
-                !VERDICT_VOCABULARY.contains(&value.as_str()) && !smuggled,
+                qualified || (!VERDICT_VOCABULARY.contains(&value.as_str()) && !smuggled),
                 "review markdown claims {value:?} while the packet is unqualified; only the \
                  flip may write a verdict, and it runs on a qualified packet"
             );
@@ -550,7 +552,7 @@ fn verify_markdown_tables(root: &Utf8Path, packet: &Packet) -> Result<()> {
                 // Cells are markdown: an identifier is spelled in backticks.
                 let value = cell.trim().trim_matches('`').trim();
                 anyhow::ensure!(
-                    cell_claims_nothing(value) || declared.contains(value),
+                    qualified || cell_claims_nothing(value) || declared.contains(value),
                     "review markdown table {header:?} claims {value:?}, which the unqualified \
                      packet does not declare; only the flip may write a result, and it runs \
                      on a qualified packet"
@@ -1388,52 +1390,13 @@ fn verify_oracle_source_coordinate(root: &Utf8Path, source: &str, family: &str) 
 
 /// Independent source/CST oracle. It compares raw observed bytes, not parser
 /// equality or a formatter-owned snapshot.
-fn independent_oracle_source_cst(
+/// The coarse scan judged against the source directly, never against the fine
+/// parse: presence, ranges, classification and the hash relation. Returns the
+/// classifications and hashes so the case witness binds them.
+fn verify_coarse_scan(
     source: &str,
-    emitted: &str,
-    once: &str,
-    twice: &str,
-    content: &str,
     coarse: &liminal_cst::CstDocument,
-) -> Result<Vec<u8>> {
-    anyhow::ensure!(emitted == source, "CST emit is not lossless for {source:?}");
-    anyhow::ensure!(once == twice, "formatting is not idempotent");
-    // Blind pass 1 at 5fb1b57 (A01): those two say nothing about whether
-    // formatting KEPT the document. A formatter returning a constant is
-    // idempotent, and the lossless check never touches the formatter at all.
-    // The generated word is content, not layout: formatting may move it, never
-    // lose it. A durable-marker set would be the natural check and is nearly
-    // vacuous for this corpus, where only the malformed categories carry `{#`.
-    // Alphanumeric runs, not the raw token: a generated word can begin with
-    // markdown syntax (`- v`), and lowering `- ` into list structure is the
-    // formatter doing its job, not losing content.
-    // Blind pass 1 at 91b54842 (A01): the runs were filtered to three
-    // characters and up. `Rng::word` draws one to twelve characters from an
-    // alphabet holding `-`, `_` and a space, so `a`, `x y` and `a-b` are all
-    // reachable tokens with no run that long — for those the survival check
-    // had nothing to check and a formatter could drop the content outright.
-    // Every non-empty run counts now. The dialect numbers nothing (an ordered
-    // block is the keyword `ordered`, never `1.`), so no digit legitimately
-    // disappears, and a one-character run is weak rather than false: it fires
-    // only when that character is absent from the whole output.
-    let words = |text: &str| {
-        text.split(|ch: char| !ch.is_alphanumeric())
-            .filter(|run| !run.is_empty())
-            .map(str::to_owned)
-            .collect::<BTreeSet<_>>()
-    };
-    let lost = words(content)
-        .into_iter()
-        .filter(|word| source.contains(word.as_str()) && !once.contains(word.as_str()))
-        .collect::<Vec<_>>();
-    anyhow::ensure!(
-        lost.is_empty(),
-        "formatting dropped the document's content {lost:?}: {source:?} -> {once:?}"
-    );
-    anyhow::ensure!(
-        source.trim().is_empty() || !once.trim().is_empty(),
-        "formatting emptied a non-empty document"
-    );
+) -> Result<(Vec<&'static str>, Vec<String>)> {
     // The coarse scan is judged against the source directly, never against
     // the fine parse: a document with a non-blank line has at least one block,
     // every block's range lies inside the source and holds no blank line, and
@@ -1451,6 +1414,9 @@ fn independent_oracle_source_cst(
     );
     let mut previous_end = 0usize;
     let mut kinds = Vec::new();
+    let mut hashes = Vec::new();
+    let mut by_text: BTreeMap<&str, String> = BTreeMap::new();
+    let mut by_hash: BTreeMap<String, &str> = BTreeMap::new();
     for block in &coarse.blocks {
         let start = usize::try_from(block.range.start).unwrap_or(usize::MAX);
         let end = usize::try_from(block.range.end).unwrap_or(usize::MAX);
@@ -1507,13 +1473,83 @@ fn independent_oracle_source_cst(
             actual == expected,
             "coarse block {start}..{end} is classified {actual}, not {expected}: {text:?}"
         );
+        // Blind pass 1 at ee646f8c (A01): ranges and kinds were judged and the
+        // block hash was not, so a hash that ignored its bytes went unseen.
+        // Checked as a relation rather than a value: equal text hashes alike,
+        // different text does not. That catches a constant or text-blind hash
+        // without this oracle restating the digest production computes.
+        let digest = format!("{:?}", block.hash);
+        if let Some(seen) = by_text.insert(text, digest.clone()) {
+            anyhow::ensure!(
+                seen == digest,
+                "coarse blocks with identical text hash differently: {text:?}"
+            );
+        }
+        if let Some(seen) = by_hash.insert(digest.clone(), text) {
+            anyhow::ensure!(
+                seen == text,
+                "coarse blocks with different text share hash {digest}: {seen:?} and {text:?}"
+            );
+        }
         kinds.push(actual);
+        hashes.push(digest);
         previous_end = end;
     }
+    Ok((kinds, hashes))
+}
+
+fn independent_oracle_source_cst(
+    source: &str,
+    emitted: &str,
+    once: &str,
+    twice: &str,
+    content: &str,
+    coarse: &liminal_cst::CstDocument,
+) -> Result<Vec<u8>> {
+    anyhow::ensure!(emitted == source, "CST emit is not lossless for {source:?}");
+    anyhow::ensure!(once == twice, "formatting is not idempotent");
+    // Blind pass 1 at 5fb1b57 (A01): those two say nothing about whether
+    // formatting KEPT the document. A formatter returning a constant is
+    // idempotent, and the lossless check never touches the formatter at all.
+    // The generated word is content, not layout: formatting may move it, never
+    // lose it. A durable-marker set would be the natural check and is nearly
+    // vacuous for this corpus, where only the malformed categories carry `{#`.
+    // Alphanumeric runs, not the raw token: a generated word can begin with
+    // markdown syntax (`- v`), and lowering `- ` into list structure is the
+    // formatter doing its job, not losing content.
+    // Blind pass 1 at 91b54842 (A01): the runs were filtered to three
+    // characters and up. `Rng::word` draws one to twelve characters from an
+    // alphabet holding `-`, `_` and a space, so `a`, `x y` and `a-b` are all
+    // reachable tokens with no run that long — for those the survival check
+    // had nothing to check and a formatter could drop the content outright.
+    // Every non-empty run counts now. The dialect numbers nothing (an ordered
+    // block is the keyword `ordered`, never `1.`), so no digit legitimately
+    // disappears, and a one-character run is weak rather than false: it fires
+    // only when that character is absent from the whole output.
+    let words = |text: &str| {
+        text.split(|ch: char| !ch.is_alphanumeric())
+            .filter(|run| !run.is_empty())
+            .map(str::to_owned)
+            .collect::<BTreeSet<_>>()
+    };
+    let lost = words(content)
+        .into_iter()
+        .filter(|word| source.contains(word.as_str()) && !once.contains(word.as_str()))
+        .collect::<Vec<_>>();
+    anyhow::ensure!(
+        lost.is_empty(),
+        "formatting dropped the document's content {lost:?}: {source:?} -> {once:?}"
+    );
+    anyhow::ensure!(
+        source.trim().is_empty() || !once.trim().is_empty(),
+        "formatting emptied a non-empty document"
+    );
+    let (kinds, hashes) = verify_coarse_scan(source, coarse)?;
     let mut witness = emitted.as_bytes().to_vec();
     witness.extend_from_slice(once.as_bytes());
     witness.extend_from_slice(format!("coarse:{}", coarse.blocks.len()).as_bytes());
     witness.extend_from_slice(kinds.join(",").as_bytes());
+    witness.extend_from_slice(hashes.join(",").as_bytes());
     Ok(witness)
 }
 
@@ -8128,8 +8164,35 @@ fn verify_mutation_plan_balance(
 /// Blind-review follow-up (review of c455cdf): splitting the whole line on
 /// `" as "` mangled a brace group into an alias like `mv, remove_file}`, which
 /// matched nothing and reopened the evasion the alias scan closed.
+/// `line` with a leading item visibility removed: `pub`, `pub(crate)`,
+/// `pub(super)`, `pub(in crate::x)`. Unchanged when it carries none, and
+/// unchanged for an identifier that merely starts with those letters.
+fn without_visibility(line: &str) -> &str {
+    let trimmed = line.trim();
+    let Some(rest) = trimmed.strip_prefix("pub") else {
+        return trimmed;
+    };
+    let rest = if let Some(open) = rest.strip_prefix('(') {
+        match open.find(')') {
+            Some(close) => &open[close + 1..],
+            None => return trimmed,
+        }
+    } else {
+        rest
+    };
+    if rest.starts_with(char::is_whitespace) {
+        rest.trim_start()
+    } else {
+        trimmed
+    }
+}
+
 fn use_aliases(line: &str) -> Vec<(String, String)> {
-    let Some(rest) = line.trim().strip_prefix("use ") else {
+    // Blind pass 1 at ee646f8c (A10, A11): `pub use x::y as z;` is a `use`
+    // with a visibility in front, and stripping only `use ` meant the alias
+    // bound nothing — in the oracle's independence scan and in the durable
+    // transition census, which share this parser.
+    let Some(rest) = without_visibility(line).strip_prefix("use ") else {
         return Vec::new();
     };
     // Braces are dropped rather than parsed, so a nested group
@@ -9555,6 +9618,51 @@ fn verify_not_applicable_against_implementation(
     )
 }
 
+/// The not-applicable branch: no schedules, the reserved-phase reason, the
+/// declared anchor, and a coordinate bound to this qualification's commit.
+fn verify_not_applicable_concurrency(
+    root: &Utf8Path,
+    packet: &Packet,
+    evidence: &ConcurrentEvidence,
+) -> Result<()> {
+    require_eq("concurrency mode", &evidence.mode, "not_applicable")?;
+    require_eq(
+        "concurrency source_anchor",
+        &evidence.source_anchor,
+        "docs/execution/M21.md:13",
+    )?;
+    anyhow::ensure!(
+        evidence.schedules.is_empty(),
+        "not-applicable concurrency evidence must contain no schedules"
+    );
+    verify_not_applicable_against_implementation(root, evidence)?;
+    anyhow::ensure!(
+        evidence.reason.contains("reserved for Phase 6")
+            && evidence.reason.contains("no concurrent implementation"),
+        "not-applicable concurrency evidence must state why schedule exploration is absent"
+    );
+    verify_git_coordinate(
+        root,
+        &evidence.source_commit,
+        &evidence.source_tree,
+        &evidence.source_anchor,
+        "concurrency",
+    )?;
+    // Blind pass 1 at ee646f8c (A12): the coordinate was checked to exist
+    // and never checked to be THIS qualification's. The applicable branch
+    // below binds it to the packet; not-applicable evidence returned
+    // first, which is how F-40's stale August source_commit rode into
+    // every later lane.
+    if let Some(provenance) = &packet.provenance {
+        require_eq(
+            "concurrency source_commit",
+            &evidence.source_commit,
+            &provenance.fixed_commit,
+        )?;
+    }
+    Ok(())
+}
+
 fn verify_concurrency_evidence_record(
     root: &Utf8Path,
     packet: &Packet,
@@ -9572,30 +9680,7 @@ fn verify_concurrency_evidence_record(
         &packet.concurrent_code,
     )?;
     if !applicable {
-        require_eq("concurrency mode", &evidence.mode, "not_applicable")?;
-        require_eq(
-            "concurrency source_anchor",
-            &evidence.source_anchor,
-            "docs/execution/M21.md:13",
-        )?;
-        anyhow::ensure!(
-            evidence.schedules.is_empty(),
-            "not-applicable concurrency evidence must contain no schedules"
-        );
-        verify_not_applicable_against_implementation(root, evidence)?;
-        anyhow::ensure!(
-            evidence.reason.contains("reserved for Phase 6")
-                && evidence.reason.contains("no concurrent implementation"),
-            "not-applicable concurrency evidence must state why schedule exploration is absent"
-        );
-        verify_git_coordinate(
-            root,
-            &evidence.source_commit,
-            &evidence.source_tree,
-            &evidence.source_anchor,
-            "concurrency",
-        )?;
-        return Ok(());
+        return verify_not_applicable_concurrency(root, packet, evidence);
     }
     require_eq("concurrency mode", &evidence.mode, "executed")?;
     anyhow::ensure!(
@@ -15169,7 +15254,7 @@ mod tests {
         const GOLDENS: [(&str, &str); 5] = [
             (
                 "source/CST/formatting",
-                "06b9c71073be3f9e25de26b67bf24079d4617744e3e75049ef55d809af13698c",
+                "239055afff7f7b775b32c93d2396079768bdd97c1fc4383625b71d6b16d0fb16",
             ),
             (
                 "graph/interchange codecs",

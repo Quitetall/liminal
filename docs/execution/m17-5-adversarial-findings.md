@@ -3467,3 +3467,36 @@ generated document, so the new check refuses nothing it should not. The
 `effective_unresolved_findings` count was split from the signature walk so both
 new clearance rules are exercised by tests without a signing key — a rule the
 tests cannot reach is a rule nothing checks.
+
+## F-60 — the twelfth lane: five, and a gate that stopped checking once it passed
+
+**Found.** 2026-09-09, lane at `ee646f8c`. Pass 2 clean; pass 1 twelve attempts,
+**five** `verified_defect`, all reproduced. Third consecutive lane where every
+claim carried a reproduction. Records under
+`docs/execution/reviews/2026-09-09-lane-ee646f8/`.
+
+| attempt | class | what was true | fix |
+|---|---|---|---|
+| A01 | vacuity | the oracle judged `coarse_parse`'s ranges and, since F-59, its kinds — never the block hash. A hash that ignored its bytes went unseen | a relation, not a value: equal text hashes alike, different text does not. That catches a constant or text-blind hash without restating the digest production computes, and the hashes join the witness |
+| A09 | evidence/report drift | `verify_markdown_tables` returned `Ok(())` for any packet with provenance, on the reasoning that the tables were "bound by the packet digest this markdown carries" | they are not. The digest binds the packet; editing a cell of the markdown leaves it untouched. Shapes are checked in both states now, and only the value and verdict rules relax on qualification |
+| A10 | shared-oracle coupling | `use_aliases` stripped `use ` only, so `pub use paragraph::parse as p;` bound no alias and the oracle could reach production through it | the visibility is removed first: `pub`, `pub(crate)`, `pub(in crate::x)` |
+| A11 | fault omissions | the durable-transition census shares that parser, so a `pub use`-renamed durable operation was missing from the measured sites | same fix, both scanners |
+| A12 | evidence/report drift | not-applicable concurrency evidence had its git coordinate checked for existence and returned before the branch that binds it to the packet's `fixed_commit` | the not-applicable branch binds it too |
+
+**A09 is the one to keep.** The gate had a clause that switched most of itself
+off at exactly the moment it mattered — once the packet carried provenance,
+which is to say once it was qualified. The justification was written down and
+was false, and being written down is why it survived: a comment asserting the
+digest bound the markdown read like a reason. Qualification changes one thing —
+the flip may write results — so one rule relaxes, not the whole function.
+
+**A12 is F-40 again, in the branch F-40 did not touch.** The stale August
+`source_commit` that rode into every later lane was caught for the applicable
+path. The not-applicable path, which is the path this packet actually takes,
+returned before the check.
+
+**A10 and A11 are one defect counted twice**, which is worth noting: the
+independence scan and the durable census share `use_aliases`, so a parser that
+could not read `pub use` blinded two different gates. Every scanner in this file
+that reads Rust reads it by hand, and each hand-written reader has now been
+wrong at least once.
