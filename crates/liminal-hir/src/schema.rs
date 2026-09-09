@@ -270,11 +270,16 @@ pub fn validate_source_map(map: &SourceMap, source_len: u64) -> Result<(), HirEr
     Ok(())
 }
 
+/// The marker that selects the explicit dialect. Shared so the code that
+/// DETECTS it and the code that must refuse to emit a literal spelling it
+/// cannot drift apart (M17.5 F-61).
+pub const EXPLICIT_DIALECT_MARKER: &str = "#!liminal-explicit-v1";
+
 /// Lower one M18 lossless parse into deterministic minimal HIR.
 pub fn lower(cst: &Parse, dialect: SourceDialect) -> Result<LoweredHir, HirError> {
     let source = cst.emit_lossless();
     let end = u64::try_from(source.len()).expect("usize fits u64");
-    let explicit = source.starts_with("#!liminal-explicit-v1");
+    let explicit = source.starts_with(EXPLICIT_DIALECT_MARKER);
     if matches!(dialect, SourceDialect::ExplicitV1) && !explicit {
         return Err(HirError::InvalidSourceMap(
             "explicit dialect requires #!liminal-explicit-v1 marker".to_owned(),

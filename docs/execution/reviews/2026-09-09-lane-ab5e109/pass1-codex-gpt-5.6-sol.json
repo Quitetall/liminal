@@ -1,0 +1,201 @@
+{
+  "schema_version": "haqp-blind-review-v1",
+  "pass": 1,
+  "reviewer": {
+    "model_family": "codex:gpt-5.6-sol",
+    "identity_hash": "f6cac6a769086b0c4a44f2b83d25874afa0b393a852ac730262a2f801543651c",
+    "backend": "codex"
+  },
+  "isolated_session_hash": "e6bb9db109c21d2e22b54762542b206d6e8d07d458ee89ee4cd76d44c6e4f580",
+  "sanitized_prompt_hash": "4fa23fabbca3648593d1f744432a6c4b93721199952680ca14db895c43076367",
+  "prompt_binding_sha256": "df44beb60d992f87e16b354756b2a1b3757dc520ef34648cbdc9c6f020c3e99f",
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-format/src/lib.rs:80",
+      "attempt": "Falsify crates/liminal-format/src/lib.rs:80 by placing semantic HIR attributes named basis, range, or source_map on otherwise distinguishable documents.",
+      "observed_result": "Inspection of crates/liminal-format/src/lib.rs:80 shows position_free recursively deletes every object key with those names, including user attributes, allowing semantic differences to compare equal.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:112",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:112 by routing a declared generated oracle through production helpers outside the single registered oracle entry.",
+      "observed_result": "Inspection of crates/liminal-xtask/src/haq.rs:112 shows INDEPENDENT_ORACLES contains one query oracle while packet declares five generated oracle sources, leaving four without this dependency scan.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-format/src/lib.rs:353",
+      "attempt": "Falsify crates/liminal-format/src/lib.rs:353 with a compact paragraph whose literal equals the explicit-dialect sentinel #!liminal-explicit-v1.",
+      "observed_result": "Inspection of crates/liminal-format/src/lib.rs:353 shows compact-literal exclusions reject ordinary headings but not the exact explicit-dialect sentinel, permitting dialect reinterpretation during reparse.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-cst/src/parser.rs:142",
+      "attempt": "Falsify crates/liminal-cst/src/parser.rs:142 by replacing its behavior with an empty formatted tree and checking the two declared killing tests.",
+      "observed_result": "Packet inspection for crates/liminal-cst/src/parser.rs:142 assigns only an out-of-bounds edit test and formatter-idempotence test; constant empty output remains idempotent and neither declared test establishes semantic preservation.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-cli/src/format.rs:73",
+      "attempt": "Falsify crates/liminal-cli/src/format.rs:73 by demanding ILRP-style reconciliation evidence for interruption around atomic file replacement.",
+      "observed_result": "Packet rationale at crates/liminal-cli/src/format.rs:73 identifies atomic replacement with file and directory durability, leaving either old or new complete state rather than reconciliation state.",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-query/src/lib.rs:64",
+      "attempt": "Falsify crates/liminal-query/src/lib.rs:64 by permuting independent original-offset edits and seeking order-dependent application results.",
+      "observed_result": "Source at crates/liminal-query/src/lib.rs:64 sorts edits by descending start and end coordinates and rejects complete overlap sets, explicitly removing caller-order dependence.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:2847",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:2847 with an absolute O_WRONLY open directly beneath conformance/corpora/heldout.",
+      "observed_result": "Repository test coverage associated with crates/liminal-xtask/src/haq.rs:2847 constructs that exact write-class trace and requires the corpus-scope verifier to reject it as a locked-corpus write.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A08",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-format/src/lib.rs:353",
+      "attempt": "Falsify crates/liminal-format/src/lib.rs:353 by broadening compact identifier acceptance to spaces, punctuation, and arbitrary bytes.",
+      "observed_result": "Source at crates/liminal-format/src/lib.rs:353 uses a closed nonempty ASCII alphanumeric, underscore, and hyphen grammar; malformed identifiers force explicit emission.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "crates/liminal-xtask/src/haq.rs:550",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:550 by altering qualified review-markdown result cells while leaving packet digest and table widths unchanged.",
+      "observed_result": "Inspection of crates/liminal-xtask/src/haq.rs:550 shows qualified state bypasses the cell-value restriction, while most rendered tables are not re-derived from qualified evidence artifacts.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A10",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-source/src/view.rs:38",
+      "attempt": "Falsify crates/liminal-source/src/view.rs:38 by supplying bytes whose content hash differs from the SourceBasis declared by the caller.",
+      "observed_result": "Source and packet evidence for crates/liminal-source/src/view.rs:38 retain an explicit content-hash mismatch predicate, so the stale or forged basis input is rejected.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A11",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-jurisdiction/src/ilrp.rs:273",
+      "attempt": "Falsify crates/liminal-jurisdiction/src/ilrp.rs:273 by disabling the before_ack crash point and looking for an undeclared fault-matrix gap.",
+      "observed_result": "Packet records crates/liminal-jurisdiction/src/ilrp.rs:273 as disabled-crash-point mutant P1-M049 and declares both before_ack and after_ack boundaries with before and after injection.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A12",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:2847",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:2847 by reordering durable calls within one file while preserving the declared per-file site count.",
+      "observed_result": "Ruling evidence for crates/liminal-xtask/src/haq.rs:2847 establishes that this registry is a deterministic path-to-count census, not an ordered transition protocol.",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    }
+  ],
+  "findings": [
+    {
+      "id": "F01",
+      "attempt_id": "A01",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-format/src/lib.rs:80",
+      "summary": "Semantic equality deletes user-controlled attributes whose names collide with positional metadata names."
+    },
+    {
+      "id": "F02",
+      "attempt_id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:112",
+      "summary": "Oracle-independence dependency scanning covers only one of five packet-declared generated oracles."
+    },
+    {
+      "id": "F03",
+      "attempt_id": "A03",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-format/src/lib.rs:353",
+      "summary": "Compact emission does not exclude a literal equal to the explicit-dialect sentinel."
+    },
+    {
+      "id": "F04",
+      "attempt_id": "A04",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-cst/src/parser.rs:142",
+      "summary": "Declared killing tests do not substantively distinguish the mutant's constant-empty behavior."
+    },
+    {
+      "id": "F05",
+      "attempt_id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "crates/liminal-xtask/src/haq.rs:550",
+      "summary": "Qualified markdown cells can drift from underlying evidence while retaining valid shape and packet digest."
+    }
+  ],
+  "independently_reproduced": [
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05"
+  ],
+  "unresolved_verified_findings": 5,
+  "result": "fail",
+  "blindness_proof": {
+    "ephemeral_session_requested": false,
+    "session_state": "fresh-codex-session",
+    "prior_pass_artifact_supplied": false,
+    "pass_two_original_spec_only": false
+  },
+  "schema_retries": 0,
+  "provider_receipt": {
+    "backend": "codex",
+    "session_file": "rollout-2026-09-09T15-15-45-01a08798-fc8e-7813-b8fc-6ce2e268a5b6.jsonl",
+    "session_id": "2026-09-09T15-15-45-01a08798-fc8e-7813-b8fc-6ce2e268a5b6",
+    "transcript_sha256": "8e3ebfac109b205273d655ea7bfcc052f1f2fb670397529e6f06182d42b14f9f",
+    "transcript_bytes": 3629124
+  },
+  "fixed_base": {
+    "commit": "ab5e109acec89300957da3a1b5d2129c008e8af9",
+    "tree": "c38b9bc26b04b860d599c18ae294ae5768f0b661",
+    "clean": true
+  },
+  "raw_response_sha256": "4a52ebae1de792af8c036c2dc9c2e7cf83f328d7eb1438331fb611c6e9272584",
+  "integrity_binding_sha256": "511a84cca90456568ed39a496e4ff410b6d77701db690641f0faf88194764a40"
+}

@@ -3500,3 +3500,42 @@ independence scan and the durable census share `use_aliases`, so a parser that
 could not read `pub use` blinded two different gates. Every scanner in this file
 that reads Rust reads it by hand, and each hand-written reader has now been
 wrong at least once.
+
+## F-61 — the thirteenth lane: two defects in the product, not the gate
+
+**Found.** 2026-09-09, lane at `ab5e109a`. Pass 2 clean; pass 1 twelve attempts,
+five `verified_defect`, all reproduced. Records under
+`docs/execution/reviews/2026-09-09-lane-ab5e109/`.
+
+Two of the five are in shipped code rather than in the qualifier. That is a
+first, and it is the outcome the campaign was for.
+
+| attempt | class | what was true | fix |
+|---|---|---|---|
+| A01 | vacuity | `position_free`, which strips source positions before comparing two documents for semantic equality, removed every object key named `range`, `source_map` or `basis` at every depth. `HirItem::attributes` is a `BTreeMap<String, HirValue>` keyed by the author, so a document carrying an attribute named `range` had it deleted from BOTH sides — two documents differing only there compared equal, and the round-trip and idempotence laws would accept losing it | positions are stripped structurally, never inside a map the author keys |
+| A03 | missing negatives | `is_compact_literal` refuses literals that the compact parser would reinterpret — headings, fences, quotes, lists. `lower` selects the explicit dialect by `source.starts_with("#!liminal-explicit-v1")`, and `#!` is not `# `, so the heading exclusion never saw it. A literal spelling the marker, emitted compactly, reparses as a different dialect: a different HIR from the same bytes | the marker is now a shared constant used by both the detector and the exclusion, so they cannot drift, and a literal spelling it forces explicit emission |
+| A02 | shared-oracle coupling | `INDEPENDENT_ORACLES` held the query oracle alone while the packet declared five generated oracles besides it. Four of six ran with no independence scan at all | all six registered, each forbidden list naming the production entry points its own case builder exercises |
+| A04 | weak mutants | P1-M001 declared predicate-deletion on `if !text.is_empty() {` in the CST parser. Deleting that guard emits an empty token for empty input, which `emit_lossless` renders identically — the mutant is not weak, it is equivalent. Its killers were formatter idempotence, which a constant-empty parser satisfies, and a rope-bounds negative test | re-anchored to `is_compact_literal`'s guard, where deleting the predicate emits a literal the compact parser normalizes; killers P1-T02 and P1-T10, both covering P1-R004 |
+| A09 | evidence/report drift | F-60's fix relaxed the cell-value rule for every table once the packet was qualified. Ten of the twelve rendered tables are derived from the packet and read the same before and after | only the two result-bearing tables relax |
+
+**A02's forbidden lists took three tries, and the failures were informative.**
+Declaring `serde_json::from_slice` forbidden to the interchange oracle refused
+it immediately — the codec under test IS a serde round trip, so decoding is how
+that oracle reads anything, and forbidding it would have asserted something
+untrue about the design. Declaring `invalidated_by(` forbidden to the
+invalidation oracle refused it too: that call is the oracle's observation, and
+the coupling would be deriving the EXPECTED set from production, which arrives
+as a parameter. A forbidden list is a claim about a design, and two of the five
+first drafts were false claims.
+
+**A04 is the third mutant whose operator and anchor disagreed**, and the worst
+of the three: F-55's had an operator with no site, F-59's had the wrong
+threshold, and this one is very likely equivalent — no test could kill it
+because deleting the guard changes nothing observable. A mutant that cannot be
+killed inflates the denominator of any kill rate computed later.
+
+**Re-anchoring product code moved two other anchors.** Editing `position_free`
+shifted `is_compact_id` down, so P1-M013's line-based coordinate stopped naming
+its own text and the closed registry caught it. Line coordinates are brittle by
+construction; the registry is what makes the brittleness loud instead of
+silent.

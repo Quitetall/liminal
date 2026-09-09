@@ -109,16 +109,61 @@ pub fn packet_digest_repo(root: &Utf8Path) -> Result<String> {
 /// (ADR-0020 §5). Closed list: (file, function, forbidden symbols). Blind pass 1
 /// at 78c8f9b (A02): the comment on `incremental_paragraph_oracle` said it does
 /// not call `paragraph::parse`, and nothing enforced it.
-const INDEPENDENT_ORACLES: [(&str, &str, &[&str]); 1] = [(
-    "crates/liminal-query/src/lib.rs",
-    "incremental_paragraph_oracle",
-    &[
-        "paragraph::parse",
-        "ParagraphCompiler",
-        "liminal_source::paragraph",
-        "IncrementalCompiler",
-    ],
-)];
+/// Blind pass 1 at ab5e109a (A02): this held the query oracle alone while the
+/// packet declared five generated oracles besides it, so four of the six ran
+/// with no independence scan at all. Each forbidden list names the production
+/// entry points its own case builder exercises — the paths the oracle judges
+/// and must not re-run.
+const INDEPENDENT_ORACLES: [(&str, &str, &[&str]); 6] = [
+    (
+        "crates/liminal-xtask/src/haq.rs",
+        "independent_oracle_source_cst",
+        &[
+            "liminal_cst::parse",
+            "liminal_cst::coarse_parse",
+            "MarkdownFormatter",
+            ".format(",
+        ],
+    ),
+    (
+        "crates/liminal-xtask/src/haq.rs",
+        // The codec under test IS a serde round trip, so decoding is how this
+        // oracle reads anything at all; forbidding that would assert something
+        // untrue about the design. What it must not do is rebuild the expected
+        // value from the builder that produced the case.
+        "independent_oracle_interchange",
+        &["interchange_transaction("],
+    ),
+    (
+        "crates/liminal-xtask/src/haq.rs",
+        "independent_oracle_source_transform",
+        &["merge::three_way", "three_way("],
+    ),
+    (
+        "crates/liminal-xtask/src/haq.rs",
+        "independent_oracle_source_repair",
+        &["liminal_jurisdiction::"],
+    ),
+    (
+        "crates/liminal-xtask/src/haq.rs",
+        // `invalidated_by` is what this oracle observes, not what couples it:
+        // a metamorphic oracle for an invalidation property has to ask the
+        // query. The coupling would be deriving the EXPECTED set from
+        // production, and that set arrives as a parameter.
+        "independent_oracle_source_invalidation",
+        &["graph_key("],
+    ),
+    (
+        "crates/liminal-query/src/lib.rs",
+        "incremental_paragraph_oracle",
+        &[
+            "paragraph::parse",
+            "ParagraphCompiler",
+            "liminal_source::paragraph",
+            "IncrementalCompiler",
+        ],
+    ),
+];
 
 /// The body of `name` in `text`: from its `fn` line to the first line that is a
 /// bare `}` at column zero — under rustfmt only a top-level item closes there,
@@ -384,6 +429,16 @@ const VERDICT_VOCABULARY: [&str; 12] = [
 
 const ACTIVATION_VOCABULARY: [&str; 2] = ["Phase 1", "Conditional: first persisted-format ADR"];
 
+/// The rendered tables whose cells change when the lane runs. Blind pass 1 at
+/// ab5e109a (A09): relaxing the cell rule for every table on qualification was
+/// still far too much — ten of the twelve are derived from the packet and read
+/// the same before and after, so only these two may hold a value the packet
+/// does not declare.
+const RESULT_BEARING_TABLES: [&str; 2] = [
+    "| Family | Planned | Executed |",
+    "| Family | Relations and results |",
+];
+
 const RENDERED_TABLES: [&str; 12] = [
     "| Requirement ID | Kind |",
     "| Test ID | Exact test |",
@@ -551,8 +606,9 @@ fn verify_markdown_tables(root: &Utf8Path, packet: &Packet) -> Result<()> {
             for cell in row {
                 // Cells are markdown: an identifier is spelled in backticks.
                 let value = cell.trim().trim_matches('`').trim();
+                let renders_results = qualified && RESULT_BEARING_TABLES.contains(&header);
                 anyhow::ensure!(
-                    qualified || cell_claims_nothing(value) || declared.contains(value),
+                    renders_results || cell_claims_nothing(value) || declared.contains(value),
                     "review markdown table {header:?} claims {value:?}, which the unqualified \
                      packet does not declare; only the flip may write a result, and it runs \
                      on a qualified packet"
@@ -8837,9 +8893,9 @@ fn integer_delta(before: &str, after: &str) -> Option<i64> {
 fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static str)> {
     const SOURCE: [(&str, usize, &str); 13] = [
         (
-            "crates/liminal-cst/src/parser.rs",
-            142,
-            "if !text.is_empty() {",
+            "crates/liminal-format/src/lib.rs",
+            375,
+            "if value.trim().is_empty()",
         ),
         (
             "crates/liminal-cst/src/parser.rs",
@@ -8886,7 +8942,7 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-format/src/lib.rs",
-            353,
+            368,
             ".all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))",
         ),
     ];
@@ -15088,8 +15144,10 @@ mod tests {
         for rel in [
             "conformance/haqp/packet.json",
             "docs/execution/phase1-suite-review.md",
-            // The inventory gate reads the independent oracle (F-48 A02).
+            // The inventory gate reads the independent oracles (F-48 A02), and
+            // since F-61 five of the six live in this file.
             "crates/liminal-query/src/lib.rs",
+            "crates/liminal-xtask/src/haq.rs",
         ] {
             let dest = root.join(rel);
             fs::create_dir_all(dest.parent().expect("parent")).expect("mkdir");
@@ -17479,10 +17537,35 @@ mod tests {
 
     /// Blind pass 1 at aa00d41 (A02): the independence scan matched literal
     /// paths, so an aliased import of the production parser evaded it.
+    /// The gate's own oracles, written independently, so a scratch fixture
+    /// exercising the query oracle is not refused for the five that live in
+    /// this file and are not part of what the fixture is testing.
+    fn write_independent_gate_oracles(root: &Utf8Path) {
+        let file = root.join("crates/liminal-xtask/src/haq.rs");
+        fs::create_dir_all(file.parent().expect("parent")).expect("mkdir");
+        let mut text = String::new();
+        for name in [
+            "independent_oracle_source_cst",
+            "independent_oracle_interchange",
+            "independent_oracle_source_transform",
+            "independent_oracle_source_repair",
+            "independent_oracle_source_invalidation",
+        ] {
+            use std::fmt::Write as _;
+            writeln!(
+                text,
+                "fn {name}(input: &str) -> usize {{\n    input.len()\n}}"
+            )
+            .expect("write to a String");
+        }
+        fs::write(&file, text).expect("write");
+    }
+
     #[test]
     fn an_aliased_production_call_in_an_oracle_is_refused() {
         let scratch = liminal_scratch::ScratchDir::new("haq-oracle-alias").expect("scratch");
         let root = scratch.path().to_owned();
+        write_independent_gate_oracles(&root);
         let file = root.join("crates/liminal-query/src/lib.rs");
         fs::create_dir_all(file.parent().expect("parent")).expect("mkdir");
         fs::write(
@@ -17903,6 +17986,7 @@ mod tests {
         verify_oracle_independence(&repo_root()).expect("the committed oracle is independent");
         let scratch = liminal_scratch::ScratchDir::new("haq-oracle").expect("scratch");
         let root = scratch.path().to_owned();
+        write_independent_gate_oracles(&root);
         let file = root.join("crates/liminal-query/src/lib.rs");
         fs::create_dir_all(file.parent().expect("parent")).expect("mkdir");
         fs::write(&file, "fn incremental_paragraph_oracle(input: &str) -> Vec<u8> {\n    paragraph::parse(input)\n}\n").expect("write");

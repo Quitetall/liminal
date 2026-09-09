@@ -1016,12 +1016,12 @@
    "id": "P1-M001",
    "family": "source/CST/formatting",
    "operator": "predicate-deletion",
-   "source": "crates/liminal-cst/src/parser.rs:142",
-   "requirement": "P1-R001",
-   "defect": "accept empty formatted tree",
+   "source": "crates/liminal-format/src/lib.rs:375",
+   "requirement": "P1-R004",
+   "defect": "emit a literal the compact parser would normalize",
    "killing_tests": [
-    "P1-T09",
-    "P1-T01"
+    "P1-T02",
+    "P1-T10"
    ],
    "disposition": "predeclared"
   },
@@ -1172,7 +1172,7 @@
    "id": "P1-M013",
    "family": "source/CST/formatting",
    "operator": "broadened-allow-list",
-   "source": "crates/liminal-format/src/lib.rs:353",
+   "source": "crates/liminal-format/src/lib.rs:368",
    "requirement": "P1-R016",
    "defect": "broaden the compact identifier allow-list to every byte, making compact emission lossy",
    "killing_tests": [

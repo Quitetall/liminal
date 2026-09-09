@@ -109,17 +109,32 @@ impl PartialEq for Phase1Document {
 /// fields, the source map and the source basis, which all move under
 /// reformatting while the meaning stays.
 fn position_free(mut json: serde_json::Value) -> serde_json::Value {
-    fn strip(value: &mut serde_json::Value) {
+    // M17.5 F-61: the strip used to apply to every object at every depth by
+    // key name. `HirItem::attributes` is a `BTreeMap<String, HirValue>` whose
+    // keys are the author's, so a document carrying an attribute named
+    // `range`, `source_map` or `basis` had it removed from both sides and two
+    // documents differing only there compared equal — the round-trip and
+    // idempotence laws would accept losing that attribute. Position keys are
+    // stripped structurally now, never inside a map the author names.
+    fn strip(value: &mut serde_json::Value, author_keyed: bool) {
         match value {
             serde_json::Value::Object(map) => {
-                map.retain(|key, _| !matches!(key.as_str(), "range" | "source_map" | "basis"));
-                map.values_mut().for_each(strip);
+                if !author_keyed {
+                    map.retain(|key, _| !matches!(key.as_str(), "range" | "source_map" | "basis"));
+                }
+                for (key, child) in map.iter_mut() {
+                    strip(child, !author_keyed && key == "attributes");
+                }
             }
-            serde_json::Value::Array(items) => items.iter_mut().for_each(strip),
+            serde_json::Value::Array(items) => {
+                for item in items {
+                    strip(item, author_keyed);
+                }
+            }
             _ => {}
         }
     }
-    strip(&mut json);
+    strip(&mut json, false);
     json
 }
 impl Eq for Phase1Document {}
@@ -386,6 +401,12 @@ fn is_compact_literal(value: &str) -> bool {
             .get(heading_end..)
             .is_some_and(|rest| rest.starts_with(' ')))
         || first_trimmed.starts_with("```")
+        // M17.5 F-61: `lower` picks the dialect by whether the source starts
+        // with this marker, and `#!` is not `# `, so the heading exclusion
+        // never saw it. A literal spelling it, emitted compactly, comes back
+        // as an explicit-dialect document — a different HIR from the same
+        // bytes, which is the projection this whole list exists to refuse.
+        || first_trimmed.starts_with(liminal_hir::EXPLICIT_DIALECT_MARKER)
         || lines.iter().all(|line| line.trim_start().starts_with('>'))
         || lines
             .iter()
@@ -607,6 +628,54 @@ pub trait Formatter {
 
 #[cfg(test)]
 mod tests {
+
+    /// M17.5 F-61: `lower` selects the explicit dialect by this marker, and
+    /// `#!` is not `# `, so the heading exclusion never caught a literal
+    /// spelling it. Emitted compactly, it reparses as a different dialect.
+    #[test]
+    fn a_literal_spelling_the_dialect_marker_forces_explicit_emission() {
+        assert!(
+            !is_compact_literal(liminal_hir::EXPLICIT_DIALECT_MARKER),
+            "a literal that reparses as another dialect is not compact-safe"
+        );
+        assert!(
+            !is_compact_literal(&format!(
+                "{}\nand more",
+                liminal_hir::EXPLICIT_DIALECT_MARKER
+            )),
+            "the marker on the first line is enough to change the dialect"
+        );
+        assert!(
+            is_compact_literal("ordinary text"),
+            "ordinary text is still compact-safe"
+        );
+    }
+
+    /// M17.5 F-61: `HirItem::attributes` is keyed by the author, so a
+    /// position strip that matched key names at any depth deleted an
+    /// attribute the author named `range` from both sides of the comparison.
+    #[test]
+    fn an_author_named_attribute_is_not_stripped_as_a_position() {
+        let document = |value: &str| {
+            serde_json::json!({
+                "range": {"start": 0, "end": 1},
+                "items": [{
+                    "range": {"start": 2, "end": 3},
+                    "attributes": {"range": value, "basis": "kept"}
+                }]
+            })
+        };
+        let one = position_free(document("one"));
+        let two = position_free(document("two"));
+        assert_ne!(
+            one, two,
+            "an attribute the author named `range` is content, not a position"
+        );
+        assert!(one.get("range").is_none(), "a structural range still goes");
+        assert!(one["items"][0].get("range").is_none());
+        assert_eq!(one["items"][0]["attributes"]["basis"], "kept");
+    }
+
     use super::*;
 
     // ── M17.5 A7: `basis_semantic_eq` / `component_address_eq` survivors ──
