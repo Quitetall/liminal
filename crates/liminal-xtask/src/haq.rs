@@ -235,8 +235,11 @@ fn expected_review_rows(record: &ReviewRecord) -> [(&'static str, String); 11] {
 /// The activation values the review markdown's test table may use. The packet
 /// carries no activation field, so this column is editorial and its vocabulary
 /// is closed (A09).
-/// Words the flip writes only when an artifact says so. While the packet is
-/// unqualified no cell anywhere in the review markdown may BE one of them —
+/// Words the flip writes only when an artifact says so. Matched against the
+/// WHOLE cell, never as a substring, so a descriptive cell that happens to
+/// contain "executed" is not a claim; the tables these guard hold identifiers
+/// and results, not prose. While the packet is unqualified no cell anywhere in
+/// the review markdown may BE one of them —
 /// the content tables are checked cell by cell above, and this catches the
 /// `Field | Value` blocks the flip also fills (A09).
 const VERDICT_VOCABULARY: [&str; 12] = [
@@ -275,10 +278,16 @@ const RENDERED_TABLES: [&str; 12] = [
 /// quarantined behind Phase 1 authorization (AM-17.2).
 fn cell_claims_nothing(cell: &str) -> bool {
     let cell = cell.trim();
+    // `NOT_RUN — prohibited` and `QUARANTINED (AM-17.2)` carry a reason after
+    // the marker, so the marker is a prefix. A reason may not smuggle a
+    // verdict past the whole-cell check below (review of `a5c27fc`).
+    let annotated = (cell.starts_with("NOT_RUN ") || cell.starts_with("QUARANTINED"))
+        && !cell
+            .split(|ch: char| !ch.is_ascii_alphabetic())
+            .any(|word| VERDICT_VOCABULARY.contains(&word.to_ascii_lowercase().as_str()));
     cell.is_empty()
         || cell == "NOT_RUN"
-        || cell.starts_with("NOT_RUN ")
-        || cell.starts_with("QUARANTINED")
+        || annotated
         || cell.chars().all(|ch| ch == '-' || ch == ':')
 }
 
@@ -376,8 +385,15 @@ fn verify_markdown_tables(root: &Utf8Path, packet: &Packet) -> Result<()> {
         }
         for cell in trimmed.trim_matches('|').split('|') {
             let value = cell.trim().trim_matches('`').trim().to_ascii_lowercase();
+            // A cell IS a verdict, or annotates a marker with one: both
+            // `| pass |` and `| NOT_RUN — passed |` claim a result the lane
+            // has not recorded (review of `a5c27fc`).
+            let smuggled = (value.starts_with("not_run") || value.starts_with("quarantined"))
+                && value
+                    .split(|ch: char| !ch.is_ascii_alphabetic())
+                    .any(|word| VERDICT_VOCABULARY.contains(&word));
             anyhow::ensure!(
-                !VERDICT_VOCABULARY.contains(&value.as_str()),
+                !VERDICT_VOCABULARY.contains(&value.as_str()) && !smuggled,
                 "review markdown claims {value:?} while the packet is unqualified; only the \
                  flip may write a verdict, and it runs on a qualified packet"
             );
@@ -16458,6 +16474,11 @@ mod tests {
                 "| qualification state | NOT_RUN |",
                 "| qualification state | complete |",
                 "a status verdict",
+            ),
+            (
+                "| locked acceptance corpora touched | NOT_RUN — prohibited |",
+                "| locked acceptance corpora touched | NOT_RUN — passed |",
+                "a verdict smuggled behind the marker",
             ),
         ] {
             let doctored = original.replacen(from, to, 1);
