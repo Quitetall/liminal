@@ -3359,3 +3359,33 @@ whether a lane or a review is what surfaces it.
 emits. The block-comment case spans lines a per-line scanner never sees. The
 resolution registry's commands run with the gate's environment and no timeout
 because they are the project's own gates: a hang there is a hang in CI.
+
+## F-57 — the ninth lane: a survival check with nothing to check
+
+**Found.** 2026-09-09, lane at `91b54842`. Pass 2 clean; pass 1 twelve attempts,
+two classified `verified_defect`, three self-classified false positives. The
+lane was stopped at the reviews stage — pass 1 failed, so the flip could only
+refuse, and the remaining stages had no verdict to add.
+
+Receipts: a Codex rollout and a MiMo envelope, both preserved under
+`docs/execution/reviews/2026-09-09-lane-91b5484/`.
+
+| attempt | class | what was true | fix |
+|---|---|---|---|
+| A01 | vacuity | the content-survival check filtered alphanumeric runs to three characters and up. `Rng::word` draws one to twelve characters from an alphabet holding `-`, `_` and a space, so `a`, `x y` and `a-b` are reachable tokens with no run that long — for those the check had nothing to check, and a formatter could drop the generated content outright | every non-empty run counts. The dialect numbers nothing, so no digit legitimately disappears; a one-character run is weak rather than false, firing only when the character is absent from the whole output |
+| A06 | nondeterminism | claimed the concurrency scan never expands aliases for `pthread_create`, so a thread could be created without naming a listed token | **false positive.** `use libc::pthread_create as pc;` names the symbol on its own `use` line, and the scan reads every non-comment line. Reaching the symbol without writing it needs a name built at runtime, which no product crate does |
+
+**What verifying A06 then found.** The concurrency scan skips a `#[cfg(test)]`
+module by counting braces, and its own comment conceded the count was textual —
+"an unbalanced brace inside a test module's string literal could end the skip
+early (a spurious refusal, the safe direction) or late (a missed production
+spawn)". Late is not the safe direction. It now counts with `structural_braces`,
+the same scanner F-56 built for the mutant anchor screen, and matches
+`#[cfg(test)]` with whitespace normalized. Two scanners, one defect, found on
+consecutive days from opposite directions.
+
+**Cost of the A01 fix, measured not asserted.** 20,000 generated cases in the
+source/CST/formatting family: 20,000 accepted, 0 discarded, no refusal. A
+negative test pins the new reach — a formatter that drops the one-character
+token `q` is refused, and one that keeps it is accepted. Under the old filter
+that test could not fail.

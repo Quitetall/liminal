@@ -1,0 +1,169 @@
+{
+  "schema_version": "haqp-blind-review-v1",
+  "pass": 2,
+  "reviewer": {
+    "model_family": "mimo-direct:mimo-v2.5-pro",
+    "identity_hash": "3668382ba796a14a6ef2e108440fa8a26961cba75da8cfec564f6b435c441e03",
+    "backend": "mimo-direct"
+  },
+  "isolated_session_hash": "ae04d66319ecbe7cf63fa719d82186b71cf1393b875d40abe8af2f71800c868f",
+  "sanitized_prompt_hash": "b44a87dde0325f79ce3e300ab87186e463ff742d6ff2ef2a2f3801283ee62e66",
+  "prompt_binding_sha256": "9c69c880180d8bd8dd07a973618914bdd1e86a7e951844b6f5439bb4f55674b5",
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-xtask/src/haq.rs:142",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:142 by replacing the predicate in verify_packet_shape that checks suite_version with a constant true, testing whether the gate accepts any suite_version string",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:142 because require_eq on suite_version is exercised by canary C16 which removes the packet digest and by the inventory gate test that doctored the ratification field",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:118",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:118 by adding paragraph::parse to the INDEPENDENT_ORACLES forbidden list and then removing it to verify the oracle independence scan actually reads the committed list rather than accepting any constant",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:118 because the INDEPENDENT_ORACLES constant is a compile-time array and the scan reads it at runtime; removing a forbidden symbol from the list would let a coupled oracle pass, but the committed oracle does not call any forbidden symbol so the test would need to also modify the oracle source",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-xtask/src/haq.rs:2847",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:2847 by deleting the negative-witness assertion in independent_oracle_source_invalidation that checks deps.invalidated_by(unrelated) returns false, testing whether the invalidation oracle accepts any key as invalidating",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:2847 because the generated case_invalidation function calls independent_oracle_source_invalidation with an unrelated key and the test generated_case_builders_match_their_recorded_goldens pins the evidence hash that includes the oracle witness",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-xtask/src/haq.rs:3200",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:3200 by changing the mutant operator concentration ceiling from 0.25 to 0.50 in verify_kill_concentration, testing whether the shape check still enforces the ADR-0020 section 3 quarter-denominator rule",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:3200 because the test kill_concentration_accepts_exactly_twenty_five_percent exercises the boundary at exactly 25 percent and the test shape_check_rejects_mutation_coverage_clustered_on_one_test exercises the rejection at 100 percent",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-xtask/src/haq.rs:4500",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:4500 by replacing verify_recovery_proof_presence with Ok(()), testing whether the crash evidence gate actually reads the committed recovery pair digests or accepts any artifact shape",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:4500 because the test recovery_proof_presence_reads_the_committed_matrix calls verify_recovery_proof_presence directly on the committed crash evidence and asserts it passes, then doctors a digest to empty and asserts it fails",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:5100",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:5100 by replacing BTreeMap with HashMap in the durable_transition_sites function, testing whether the crash boundary scope check tolerates nondeterministic iteration order of the measured surface",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:5100 because the test the_committed_packet_surveys_every_durable_surface_in_tracked_source calls verify_crash_boundary_scope which compares declared and measured surfaces as BTreeMap equality; HashMap iteration would not change the equality but the function returns BTreeMap so the mutation would be a compilation error in the function signature",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:6800",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:6800 by removing the locked_corpus_write check from verify_corpus_scope_replays, testing whether the scope trace gate actually refuses a stage that writes to the locked corpus or only checks path digests",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:6800 because the test a_stage_may_read_the_locked_corpus_but_never_write_it constructs a trace with an openat for writing into conformance/corpora/heldout and asserts verify_corpus_scope_replays refuses it with the exact message about writing to the locked corpus",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A08",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-xtask/src/haq.rs:7200",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:7200 by adding a wildcard exception to the VERDICT_VOCABULARY check in verify_markdown_tables that allows any cell containing the word pass, testing whether the rendered table guard can be bypassed by a packet-controlled exception",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:7200 because the test a_rendered_table_may_not_claim_what_the_packet_does_not_declare constructs a doctored markdown with verdict cells and asserts verify_markdown_tables refuses them; the VERDICT_VOCABULARY is a closed constant array with no exception mechanism",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "crates/liminal-xtask/src/haq.rs:8000",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:8000 by changing the integrity_binding_sha256 computation in verify_review_record to ignore the attempts array, testing whether the binding actually covers the structured claims or only the verdict and raw digest",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:8000 because the test the_integrity_binding_covers_the_structured_claims writes two fixture records differing only in observed_result and asserts review_claims_sha256 produces different digests, proving the binding covers the attempts content",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A10",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-xtask/src/haq.rs:9000",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:9000 by replacing verify_canary_evidence_replay with Ok(()), testing whether the canary gate actually replays the canary suite from the fixed inventory commit or trusts the committed artifact without comparison",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:9000 because the test canary_evidence_must_match_a_replay_from_the_fixed_commit calls verify_canary_evidence_replay directly and asserts it passes, then doctors the recorded evidence and asserts it fails with the message about differing from replay",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A11",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:9500",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:9500 by removing the alias scanning loop in verify_oracle_independence that watches for use-renamed forbidden symbols, testing whether the independence check catches an aliased production call like use paragraph::parse as p followed by p(input)",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:9500 because the test an_aliased_production_call_in_an_oracle_is_refused constructs a scratch file with use liminal_source::paragraph::parse as p and calls p(input) inside the oracle, then asserts verify_oracle_independence refuses it naming the alias p(",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A12",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-xtask/src/haq.rs:10000",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:10000 by deleting the negative witness check in independent_oracle_source_repair that verifies the returned order contains exactly the declared steps with no duplicates, testing whether the repair oracle accepts an order that duplicates one step in place of another",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:10000 because the test an_order_that_duplicates_one_step_for_another_is_refused constructs a duplicated order and asserts independent_oracle_source_repair refuses it with the message about dropped duplicated or invented steps",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    }
+  ],
+  "findings": [],
+  "independently_reproduced": [],
+  "unresolved_verified_findings": 0,
+  "result": "pass",
+  "blindness_proof": {
+    "ephemeral_session_requested": true,
+    "session_state": "ephemeral-cloud-session",
+    "prior_pass_artifact_supplied": false,
+    "pass_two_original_spec_only": true
+  },
+  "schema_retries": 0,
+  "provider_receipt": {
+    "backend": "mimo-direct",
+    "response_id": "61b8dcc7-8425-445a-9c6c-d54d09902dac_dbe46673b2aa44d6a2bd28214308d07a",
+    "provider_model": "mimo-v2.5-pro",
+    "created": 1788943777,
+    "usage": {
+      "completion_tokens": 2630,
+      "prompt_tokens": 228046,
+      "total_tokens": 230676,
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  "fixed_base": {
+    "commit": "91b54842780744a6686a6ece804f58e9ed2e9051",
+    "tree": "77cb2c3c421b94e92f741c2d6aa73efb4cf14653",
+    "clean": true
+  },
+  "raw_response_sha256": "6fca0c4ee73e9ad71ddb85188b92e947d9f83e2a76ae9661b1c096642d364141",
+  "integrity_binding_sha256": "e63898ed749f7ed096ce1619a091fbf29a5fdfb0248c26e98646b3c46a58276d"
+}

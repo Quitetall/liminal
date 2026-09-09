@@ -1282,9 +1282,18 @@ fn independent_oracle_source_cst(
     // Alphanumeric runs, not the raw token: a generated word can begin with
     // markdown syntax (`- v`), and lowering `- ` into list structure is the
     // formatter doing its job, not losing content.
+    // Blind pass 1 at 91b54842 (A01): the runs were filtered to three
+    // characters and up. `Rng::word` draws one to twelve characters from an
+    // alphabet holding `-`, `_` and a space, so `a`, `x y` and `a-b` are all
+    // reachable tokens with no run that long — for those the survival check
+    // had nothing to check and a formatter could drop the content outright.
+    // Every non-empty run counts now. The dialect numbers nothing (an ordered
+    // block is the keyword `ordered`, never `1.`), so no digit legitimately
+    // disappears, and a one-character run is weak rather than false: it fires
+    // only when that character is absent from the whole output.
     let words = |text: &str| {
         text.split(|ch: char| !ch.is_alphanumeric())
-            .filter(|run| run.chars().count() >= 3)
+            .filter(|run| !run.is_empty())
             .map(str::to_owned)
             .collect::<BTreeSet<_>>()
     };
@@ -10119,18 +10128,18 @@ fn scan_concurrency_primitives(root: &Utf8Path) -> Result<ConcurrencyScan> {
             // `#[cfg(test)]` line, so production code after an earlier test
             // module escaped the scan. The attributed item is skipped as a
             // block (brace depth) or, for a brace-less item, through its `;`,
-            // and scanning resumes after it. Braces are counted textually,
-            // strings and comments included: an unbalanced brace inside a
-            // test module's string literal could end the skip early (a
-            // spurious refusal, the safe direction) or late (a missed
-            // production spawn) — the module's own code is scanned, not
-            // reasoned about, and a lane refusal is the visible outcome.
+            // and scanning resumes after it. F-56: braces used to be
+            // counted textually, strings and comments included, so an
+            // unbalanced brace inside a test module could end the skip late
+            // and hide a production spawn. Only structural braces count now,
+            // the same scanner the mutant anchor screen uses.
             let mut skipping: Option<(usize, bool)> = None;
             for (index, line) in text.lines().enumerate() {
                 let trimmed = line.trim();
                 if let Some((depth, entered)) = skipping.as_mut() {
-                    *depth += line.matches('{').count();
-                    let closes = line.matches('}').count();
+                    let structural = structural_braces(line);
+                    *depth += structural.matches('{').count();
+                    let closes = structural.matches('}').count();
                     if *depth > 0 {
                         *entered = true;
                     }
@@ -10140,7 +10149,7 @@ fn scan_concurrency_primitives(root: &Utf8Path) -> Result<ConcurrencyScan> {
                     }
                     continue;
                 }
-                if trimmed == "#[cfg(test)]" {
+                if trimmed.replace(' ', "") == "#[cfg(test)]" {
                     skipping = Some((0, false));
                     continue;
                 }
@@ -16812,6 +16821,23 @@ mod tests {
         // The untouched copy still verifies, so the refusals above are earned.
         fs::write(scratch_root.join(rel), &original).expect("write");
         verify_markdown_tables(&scratch_root, &packet).expect("an unmodified copy verifies");
+    }
+
+    /// Blind pass 1 at 91b54842 (A01): `Rng::word` reaches one- and
+    /// two-character tokens, and the survival check skipped them entirely.
+    #[test]
+    fn a_short_token_must_survive_formatting_too() {
+        let source = "alpha q beta\n";
+        let coarse = liminal_cst::coarse_parse(source);
+        let dropped = "alpha beta\n";
+        let err = independent_oracle_source_cst(source, source, dropped, dropped, "q", &coarse)
+            .expect_err("a formatter that drops a one-character token loses content");
+        assert!(
+            err.to_string().contains("dropped the document's content"),
+            "refused for the wrong reason: {err}"
+        );
+        independent_oracle_source_cst(source, source, source, source, "q", &coarse)
+            .expect("a formatter that keeps the token is accepted");
     }
 
     /// Review of `e490671`: braces inside a comment or a string are text, and
