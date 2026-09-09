@@ -403,7 +403,24 @@ fn verify_markdown_tables(root: &Utf8Path, packet: &Packet) -> Result<()> {
         let Some(rows) = markdown_table_rows(&text, header) else {
             anyhow::bail!("review markdown has no table {header:?}");
         };
+        // The HEADER's width, not the first row's: the finding was a row with
+        // surplus cells beneath a narrower header, which comparing rows to
+        // each other would not see.
+        let width = text
+            .lines()
+            .find(|line| line.trim_start().starts_with(header))
+            .map(|line| line.trim().trim_matches('|').split('|').count())
+            .unwrap_or_default();
         for row in rows {
+            // Blind pass 1 at 9eca4f0 (A09): cell VALUES were checked but not
+            // how many there were, so a row could carry surplus cells beneath
+            // a narrower header and read as a different claim.
+            anyhow::ensure!(
+                row.len() == width,
+                "review markdown table {header:?} has a row of {} cells under a {width}-cell \
+                 header",
+                row.len()
+            );
             for cell in row {
                 // Cells are markdown: an identifier is spelled in backticks.
                 let value = cell.trim().trim_matches('`').trim();
@@ -1252,6 +1269,7 @@ fn independent_oracle_source_cst(
     once: &str,
     twice: &str,
     content: &str,
+    coarse: &liminal_cst::CstDocument,
 ) -> Result<Vec<u8>> {
     anyhow::ensure!(emitted == source, "CST emit is not lossless for {source:?}");
     anyhow::ensure!(once == twice, "formatting is not idempotent");
@@ -1282,8 +1300,40 @@ fn independent_oracle_source_cst(
         source.trim().is_empty() || !once.trim().is_empty(),
         "formatting emptied a non-empty document"
     );
+    // The coarse scan is judged against the source directly, never against
+    // the fine parse: a document with a non-blank line has at least one block,
+    // every block's range lies inside the source and holds no blank line, and
+    // the blocks do not overlap (A01).
+    anyhow::ensure!(
+        coarse.source == source,
+        "coarse_parse changed the source it was given"
+    );
+    let has_content = source.lines().any(|line| !line.trim().is_empty());
+    anyhow::ensure!(
+        has_content != coarse.blocks.is_empty(),
+        "coarse_parse found {} blocks for a document that {} content",
+        coarse.blocks.len(),
+        if has_content { "has" } else { "has no" }
+    );
+    let mut previous_end = 0usize;
+    for block in &coarse.blocks {
+        let start = usize::try_from(block.range.start).unwrap_or(usize::MAX);
+        let end = usize::try_from(block.range.end).unwrap_or(usize::MAX);
+        anyhow::ensure!(
+            start < end && end <= source.len() && start >= previous_end,
+            "coarse block {start}..{end} is empty, out of range, or overlaps its predecessor"
+        );
+        anyhow::ensure!(
+            source
+                .get(start..end)
+                .is_some_and(|text| text.lines().any(|line| !line.trim().is_empty())),
+            "coarse block {start}..{end} holds no content"
+        );
+        previous_end = end;
+    }
     let mut witness = emitted.as_bytes().to_vec();
     witness.extend_from_slice(once.as_bytes());
+    witness.extend_from_slice(format!("coarse:{}", coarse.blocks.len()).as_bytes());
     Ok(witness)
 }
 
@@ -2234,6 +2284,54 @@ fn review_receipt_sha256(record_path: &Utf8Path) -> Result<String> {
     )?))
 }
 
+/// The commands a resolution receipt may claim, and the gate RUNS the one it
+/// claims (A09/A10 at 9eca4f0).
+///
+/// Before this, a receipt naming any command with a self-authored
+/// `verification_exit_code: 0` was accepted without the command ever being
+/// executed — the resolution asserted its own success. The command is drawn
+/// from a closed registry rather than run as written: executing arbitrary text
+/// out of an evidence file would hand whoever wrote the file this process.
+const RESOLUTION_COMMANDS: [(&str, &[&str]); 4] = [
+    ("just ci", &["just", "ci"]),
+    ("just haq-inventory", &["just", "haq-inventory"]),
+    ("just haq-canaries", &["just", "haq-canaries"]),
+    (
+        "cargo nextest run --workspace --all-features",
+        &["cargo", "nextest", "run", "--workspace", "--all-features"],
+    ),
+];
+
+fn verify_resolution_command_ran(root: &Utf8Path, who: &str, evidence_text: &str) -> Result<()> {
+    let claimed = evidence_text
+        .lines()
+        .find_map(|line| line.trim_start().strip_prefix("verification_command:"))
+        .map(str::trim)
+        .unwrap_or_default();
+    let argv = RESOLUTION_COMMANDS
+        .iter()
+        .find(|(name, _)| *name == claimed)
+        .map(|(_, argv)| *argv)
+        .with_context(|| {
+            format!(
+                "{who}: resolution claims verification command {claimed:?}, which is not one the \
+                 gate can run; the registry is closed so a receipt cannot name a command that \
+                 exists only in its own text"
+            )
+        })?;
+    let (program, rest) = argv.split_first().context("registry command is empty")?;
+    let status = Command::new(program)
+        .current_dir(root)
+        .args(rest)
+        .status()
+        .with_context(|| format!("{who}: run resolution verification {claimed:?}"))?;
+    anyhow::ensure!(
+        status.success(),
+        "{who}: resolution claims {claimed:?} exited zero; it exited {status}"
+    );
+    Ok(())
+}
+
 fn verify_review_record_digests(
     root: &Utf8Path,
     record: &ReviewRecord,
@@ -2716,6 +2814,7 @@ fn verify_review_resolution(
                 .any(|line| line.trim() == "verification_exit_code: 0"),
         "{who}: resolution evidence must include a passing verification command receipt"
     );
+    verify_resolution_command_ran(root, who, &evidence_text)?;
     let mut hasher = Sha256::new();
     hasher.update(&evidence_bytes);
     let digest = format!("{:x}", hasher.finalize());
@@ -5826,6 +5925,44 @@ fn clone_child_pid(line: &str) -> Option<u32> {
     child.parse::<u32>().ok().filter(|pid| *pid > 0)
 }
 
+/// The (source, duplicate) descriptor pair a successful `dup`, `dup2`, `dup3`
+/// or `fcntl(F_DUPFD)` line reports (A07). strace prints the new descriptor as
+/// the return value.
+/// Blind pass 1 at 9eca4f0 (A07): only open-derived descriptors were tracked,
+/// so `dup`ing a locked directory fd and writing through the duplicate
+/// anchored against nothing. A duplicate names what its source named.
+fn record_duplicated_fd(
+    line: &str,
+    pid: u32,
+    returned_fd: Option<i64>,
+    dir_fds: &mut BTreeMap<(u32, i64), String>,
+) {
+    if let Some((from, to)) = duplicated_fd(line, returned_fd)
+        && let Some(dir) = dir_fds.get(&(pid, from)).cloned()
+    {
+        dir_fds.insert((pid, to), dir);
+    }
+}
+
+fn duplicated_fd(line: &str, returned_fd: Option<i64>) -> Option<(i64, i64)> {
+    let to = returned_fd.filter(|fd| *fd >= 0)?;
+    let call = ["dup(", "dup2(", "dup3(", "fcntl("]
+        .into_iter()
+        .find(|name| line.contains(name))?;
+    if call == "fcntl(" && !line.contains("F_DUPFD") {
+        return None;
+    }
+    let args = line.split_once(call)?.1;
+    let from = args
+        .split(',')
+        .next()?
+        .trim_end_matches(')')
+        .trim()
+        .parse::<i64>()
+        .ok()?;
+    Some((from, to))
+}
+
 fn record_chdir(
     line: &str,
     pid: u32,
@@ -5956,6 +6093,7 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
                 }
             }
             record_chdir(&line, pid, &dir_fds, &mut cwds);
+            record_duplicated_fd(&line, pid, returned_fd, &mut dir_fds);
             // Blind pass 1 at 5fb1b57 (A10): only `O_DIRECTORY` opens were
             // remembered, so a descriptor opened without it and later used as
             // a dirfd resolved against nothing. Every successful open's path
@@ -7784,6 +7922,10 @@ fn anchor_is_mutable_line(line: &str) -> bool {
         "trait ",
         "pub trait ",
         "impl ",
+        // Blind pass 1 at 9eca4f0 (A05): `impl<C: CrashInjector> CrashInjector
+        // for &C {` starts with `impl<`, not `impl `, so a generic impl header
+        // read as behaviour.
+        "impl<",
         "mod ",
         "pub mod ",
         "type ",
@@ -7833,7 +7975,43 @@ fn anchor_is_mutable_line(line: &str) -> bool {
                     .chars()
                     .all(|ch| ch.is_ascii_digit() || ch == '_')
         });
-    !(declares_item || declares_variant) || binds_a_threshold
+    // Blind pass 1 at 9eca4f0 (A11): a multi-line signature's continuation —
+    // `) -> Result<WorkspaceBasis, PerspectiveError> {` — begins with none of
+    // the keywords above and so read as behaviour. A line that closes a
+    // parameter list and opens a body is still a declaration.
+    let continues_signature = trimmed.starts_with(')')
+        && (trimmed.ends_with('{') || trimmed.ends_with(';') || trimmed.contains("->"));
+    !(declares_item || declares_variant || continues_signature) || binds_a_threshold
+}
+
+/// Whether `line` in `text` falls inside a `#[cfg(test)]` item.
+///
+/// Blind pass 1 at 9eca4f0 (A12): P1-M053 was anchored on
+/// `assert!(!deps.invalidated_by(&b));` inside `mod tests`. Deleting that
+/// predicate mutates the ORACLE, so killing it measures the test's own
+/// assertion rather than the product's invalidation behaviour — the shared-
+/// oracle defect this campaign exists to catch, declared as a mutant.
+fn line_is_inside_test_code(text: &str, line: usize) -> bool {
+    let mut depth = 0i32;
+    let mut in_test = false;
+    let mut test_depth = 0i32;
+    for (index, source) in text.lines().enumerate() {
+        let trimmed = source.trim();
+        if index + 1 == line {
+            return in_test;
+        }
+        if !in_test && trimmed == "#[cfg(test)]" {
+            in_test = true;
+            test_depth = depth;
+            continue;
+        }
+        depth += i32::try_from(source.matches('{').count()).unwrap_or(0);
+        depth -= i32::try_from(source.matches('}').count()).unwrap_or(0);
+        if in_test && depth <= test_depth && trimmed.contains('}') {
+            in_test = false;
+        }
+    }
+    false
 }
 
 #[allow(
@@ -8032,6 +8210,14 @@ fn verify_mutant_anchors_support_operators(root: &Utf8Path, packet: &Packet) -> 
             .lines()
             .nth(line.saturating_sub(1))
             .with_context(|| format!("{} anchors {file}:{line}, past end of file", mutant.id))?;
+        if line_is_inside_test_code(&text, line) {
+            inapplicable.push(format!(
+                "{} declares {:?} at {file}:{line}, which is inside test code: mutating an \
+                 assertion measures the ORACLE, not the product",
+                mutant.id, mutant.operator
+            ));
+            continue;
+        }
         if !anchor_is_mutable_line(anchor) {
             inapplicable.push(format!(
                 "{} declares {:?} at {file}:{line}, which is a declaration, not \
@@ -8381,13 +8567,13 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-source/src/file.rs",
-            204,
-            "let obs = staged.commit_if(None).unwrap();",
+            92,
+            "fs::rename(&self.staged, &self.target)?;",
         ),
         (
             "crates/liminal-source/src/file.rs",
-            203,
-            "assert!(!target.exists(), \"staging must not touch the target\");",
+            84,
+            "if found != expected_pre {",
         ),
         (
             "crates/liminal-source/src/merge.rs",
@@ -8401,8 +8587,8 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-source/src/file.rs",
-            252,
-            "assert!(!staged_path.exists());",
+            144,
+            "if path.is_dir() {",
         ),
     ];
     const REPAIR: [(&str, usize, &str); 13] = [
@@ -8413,8 +8599,8 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-jurisdiction/src/repair.rs",
-            214,
-            "let mut indegree: BTreeMap<RepairStepId, usize> =",
+            253,
+            "if order.len() == plan.steps.len() {",
         ),
         (
             "crates/liminal-jurisdiction/src/checker.rs",
@@ -8449,8 +8635,8 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            207,
-            "impl<C: CrashInjector> CrashInjector for &C {",
+            273,
+            "self.crash.crash_if_armed(CrashPoint::BeforeAcknowledge);",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
@@ -8471,8 +8657,8 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
     const BASIS: [(&str, usize, &str); 13] = [
         (
             "crates/liminal-revision/src/deps.rs",
-            45,
-            "assert!(!deps.invalidated_by(&b));",
+            28,
+            "self.read.contains(changed)",
         ),
         (
             "crates/liminal-revision/src/durability.rs",
@@ -8480,9 +8666,9 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
             "BasisComponent::ObjectContent { .. } | BasisComponent::GitCommit { .. } => {",
         ),
         (
-            "crates/liminal-revision/src/inputs.rs",
-            171,
-            ".insert(key.clone(), buffer_component(neovim, nbuf, 1));",
+            "crates/liminal-revision/src/durability.rs",
+            38,
+            "| BasisComponent::ExternalRevision { .. } => Durability::Low,",
         ),
         (
             "crates/liminal-revision/src/durability.rs",
@@ -8511,8 +8697,8 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-revision/src/inputs.rs",
-            192,
-            "!matches!(comp, BasisComponent::BufferGeneration { .. }),",
+            55,
+            "if let Some(working) = inputs.working.get(client) {",
         ),
         (
             "crates/liminal-revision/src/inputs.rs",
@@ -8526,8 +8712,8 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-revision/src/inputs.rs",
-            41,
-            ") -> Result<WorkspaceBasis, PerspectiveError> {",
+            103,
+            "BasisComponent::BufferGeneration { buffer, .. } if *buffer == selected",
         ),
         (
             "crates/liminal-revision/src/inputs.rs",
@@ -11239,6 +11425,11 @@ fn case_source_cst(rng: &mut Rng) -> Result<Case> {
     };
     let cst = liminal_cst::parse(&view);
     let emitted = cst.emit_lossless();
+    // Blind pass 1 at 9eca4f0 (A01): the campaign exercised `parse` only, so
+    // `coarse_parse` — the other public entry point, the one that must never
+    // reject — could return empty block metadata for every input and no
+    // generated case would notice.
+    let coarse = liminal_cst::coarse_parse(&source);
     let fmt = liminal_format::MarkdownFormatter::default();
     let Ok(once) = fmt.format(&source) else {
         anyhow::ensure!(
@@ -11262,7 +11453,7 @@ fn case_source_cst(rng: &mut Rng) -> Result<Case> {
             witness: once.into_bytes(),
         });
     };
-    let witness = independent_oracle_source_cst(&source, &emitted, &once, &twice, &token)?;
+    let witness = independent_oracle_source_cst(&source, &emitted, &once, &twice, &token, &coarse)?;
     Ok(Case::Accepted { category, witness })
 }
 
@@ -14540,7 +14731,7 @@ mod tests {
         const GOLDENS: [(&str, &str); 5] = [
             (
                 "source/CST/formatting",
-                "4324cebe6403bbbcb899a7557fd6871eed0a76f3edcdbd6430f464fd12822b26",
+                "ef9ad7e2e09e20c04929520c9774238eb7a723be4910c876100bd13b8b35a5f2",
             ),
             (
                 "graph/interchange codecs",
@@ -16492,6 +16683,19 @@ mod tests {
                 "{why}: {err}"
             );
         }
+
+        // A row wider than its header claims something the header cannot name.
+        let wide = original.replacen(
+            "| source/CST/formatting | 13 | NOT_RUN |",
+            "| source/CST/formatting | 13 | NOT_RUN | NOT_RUN |",
+            1,
+        );
+        assert_ne!(wide, original);
+        fs::write(scratch_root.join(rel), &wide).expect("write");
+        let err = verify_markdown_tables(&scratch_root, &packet)
+            .expect_err("a row wider than its header")
+            .to_string();
+        assert!(err.contains("cell") && err.contains("header"), "{err}");
 
         // The untouched copy still verifies, so the refusals above are earned.
         fs::write(scratch_root.join(rel), &original).expect("write");

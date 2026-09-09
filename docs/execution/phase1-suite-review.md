@@ -25,8 +25,8 @@ authorization, suite ratification, or access to locked acceptance inputs.
 | intended campaign ceiling | 8 hours |
 | complete post-fix qualification rerun | NOT_RUN |
 | machine inventory | `conformance/haqp/packet.json` (`cargo run -p liminal-xtask -- haq verify-inventory`) |
-| machine inventory BLAKE3 | `5258adb7c4e28a8c5607751f24cdb7bf624bb467f69c21f40286c8e2e5d57788` |
-| packet digest | `41993963276fc9004436a209a79d874bdeb808d88a7d7e518f4fd860de116129` |
+| machine inventory BLAKE3 | `085c1c7628eff2c86c5a51a06c34f5ba171743b3aa30c0803dca9cfc4ad220c4` |
+| packet digest | `a6952b4a6da05fb9523aca3bf108eeb56cd79d5244fcefa771936bd8b4e3b2fc` |
 | machine status tuple | qualification_state=not-run; qualification_stage=1a; requirements=55; tests=38; mutants=65; canaries=33; generated=5; crash_boundaries=8; reviews=2 |
 
 ## Execution lanes
@@ -230,11 +230,11 @@ been filled by mapping a recorded result onto a column it did not belong to
 
 | Family | Relations and results | Relation-matrix hash | Result |
 |---|---|---|---|
-| source/CST/formatting | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
-| graph/interchange codecs | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
-| transforms/projections | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
-| repair/ILRP/recovery | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
-| Basis/revision/query invalidation | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+| source/CST/formatting | NOT_RUN | NOT_RUN | NOT_RUN |
+| graph/interchange codecs | NOT_RUN | NOT_RUN | NOT_RUN |
+| transforms/projections | NOT_RUN | NOT_RUN | NOT_RUN |
+| repair/ILRP/recovery | NOT_RUN | NOT_RUN | NOT_RUN |
+| Basis/revision/query invalidation | NOT_RUN | NOT_RUN | NOT_RUN |
 
 Any crash, panic, timeout, memory error, divergence, or minimized failure fails
 the campaign. Minimized artifacts become named regression fixtures before full
@@ -260,7 +260,7 @@ examples, or separately implemented oracles.
 
 | Boundary ID | Registration coordinate | Durable transition | Declared-before injection | Declared-after injection | Runtime discovered | Inventory match | Recovery-twice evidence | Raw hash | Result |
 |---|---|---|---|---|---|---|---|---|---|
-| NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+| NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
 
 ## Independent adversarial review records
 

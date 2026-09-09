@@ -3291,3 +3291,44 @@ run before the flip. A qualified packet's tables are bound by the packet digest
 the markdown carries and by the canary and review-block checks. Closing the
 remainder — re-deriving each rendered table from its evidence artifact after
 the flip — is recorded here as the next piece of this species, not as done.
+
+## F-55 — the eighth lane: the reviewer finally attacked the suite
+
+**Found.** 2026-09-09, lane at `9eca4f0`. Pass 2 clean; pass 1 nine findings.
+The count went up from two, and the reason matters: for the first time the
+findings are mostly about the SUITE — the mutation plan and the campaign's
+coverage — rather than the gate's own scanners. Five of the nine say a declared
+mutant cannot be applied or cannot be killed by the tests that name it.
+
+| attempt | class | what was true | fix |
+|---|---|---|---|
+| A01 | vacuity | the generated campaign called `liminal_cst::parse` only, so `coarse_parse` — the other public entry point, the one that must never reject — could return empty block metadata for every input and no case would notice | every source case now runs `coarse_parse` too, judged against the SOURCE and not against the fine parse: a document with content has at least one block, each block's range lies inside the source and holds content, and blocks do not overlap |
+| A04 | weak mutants | P1-M041 declared predicate-inversion on `let mut indegree: BTreeMap<..> =`, which has no predicate | re-anchored to `repair.rs:253`, `if order.len() == plan.steps.len() {` |
+| A05 | fault omissions | P1-M049 declared disabled-crash-point on `impl<C: CrashInjector> CrashInjector for &C {`, an impl header. The mutability screen listed `"impl "` with a space, so a GENERIC impl read as behaviour | `impl<` joins the declaration list; P1-M049 re-anchored to `ilrp.rs:273`, a real `crash_if_armed` call |
+| A06 | nondeterminism | P1-M020's ordering mutant on the store log's sort named P1-T29 and P1-T04 as killers — rendered-output basis and malformed-source round-trip, neither of which exercises log ordering | killers re-pointed to P1-T34 and P1-T08, replay determinism and snapshot migration |
+| A07 | corpus leakage | descriptor tracking followed opens but not duplication, so `dup`ing a locked directory fd and writing through the duplicate anchored against nothing | `dup`, `dup2`, `dup3` and `fcntl(F_DUPFD)` give the duplicate what its source named |
+| A09 | evidence/report drift | table cell VALUES were checked but not how many cells a row had. The metamorphic-relation table in the committed markdown had a four-column header over ten-cell rows | a row must have exactly its header's width, and the committed table was corrected |
+| A10 | evidence/report drift | a resolution receipt naming any command with a self-authored `verification_exit_code: 0` was accepted without the command ever running — the resolution asserted its own success | the command must come from a closed registry and the gate RUNS it. Closed rather than executed as written: running arbitrary text out of an evidence file would hand whoever wrote the file this process |
+| A11 | weak mutants | P1-M064 declared stale-basis-acceptance on `) -> Result<WorkspaceBasis, PerspectiveError> {`, a multi-line signature's continuation, which begins with none of the screened keywords | a line that closes a parameter list and opens a body is a declaration; P1-M064 re-anchored to `inputs.rs:103` |
+| A12 | missing negatives | P1-M053 was anchored on `assert!(!deps.invalidated_by(&b));` inside `mod tests`. Killing it would measure the ORACLE, not the product — the shared-oracle defect this campaign exists to catch, declared as a mutant | anchors inside `#[cfg(test)]` items are refused |
+
+**What the new screen then found on its own.** A12 named one mutant in test
+code. Running the strengthened check over the whole plan found **eight** bad
+anchors, not the three the reviewer cited: six mutants sat inside `mod tests`
+(P1-M035, P1-M036, P1-M039, P1-M053, P1-M055, P1-M061) and two on declarations
+(P1-M049, P1-M064). All were re-anchored to production sites, packet and closed
+registry in lockstep.
+
+P1-M055 could not simply move: it declared `threshold-plus-one`, and the
+Basis/revision/query invalidation family has no numeric threshold anywhere in
+its production code. An operator had been assigned to a family with no site for
+it. It is now `missing-enum-dispatch` at `durability.rs:38`, a real dispatch
+arm; `threshold-plus-one` still appears five times elsewhere, so §3's operator
+list stays satisfied.
+
+**Why this lane is the encouraging one.** Seven lanes of findings were almost
+entirely about the gate. This one reached past the gate into the plan the gate
+judges, and what it found there was real: a quarter of one family's mutants
+measuring test assertions instead of the product. That is the failure mode
+ADR-0020 §3 exists to prevent, and it survived seven lanes because nothing
+checked whether an anchor was production code.

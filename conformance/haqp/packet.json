@@ -1267,8 +1267,8 @@
    "requirement": "P1-R010",
    "defect": "ordering nondeterminism seeded at the anchored site",
    "killing_tests": [
-    "P1-T29",
-    "P1-T04"
+    "P1-T34",
+    "P1-T08"
    ],
    "disposition": "predeclared"
   },
@@ -1458,7 +1458,7 @@
    "id": "P1-M035",
    "family": "transforms/projections",
    "operator": "skipped-durable-transition",
-   "source": "crates/liminal-source/src/file.rs:204",
+   "source": "crates/liminal-source/src/file.rs:92",
    "requirement": "P1-R015",
    "defect": "skip projection journal record",
    "killing_tests": [
@@ -1471,7 +1471,7 @@
    "id": "P1-M036",
    "family": "transforms/projections",
    "operator": "predicate-deletion",
-   "source": "crates/liminal-source/src/file.rs:203",
+   "source": "crates/liminal-source/src/file.rs:84",
    "requirement": "P1-R015",
    "defect": "predicate deletion seeded at the anchored site",
    "killing_tests": [
@@ -1510,7 +1510,7 @@
    "id": "P1-M039",
    "family": "transforms/projections",
    "operator": "predicate-deletion",
-   "source": "crates/liminal-source/src/file.rs:252",
+   "source": "crates/liminal-source/src/file.rs:144",
    "requirement": "P1-R016",
    "defect": "predicate deletion seeded at the anchored site",
    "killing_tests": [
@@ -1536,7 +1536,7 @@
    "id": "P1-M041",
    "family": "repair/ILRP/recovery",
    "operator": "predicate-inversion",
-   "source": "crates/liminal-jurisdiction/src/repair.rs:214",
+   "source": "crates/liminal-jurisdiction/src/repair.rs:253",
    "requirement": "P1-R015",
    "defect": "invert idempotent recovery equality",
    "killing_tests": [
@@ -1640,7 +1640,7 @@
    "id": "P1-M049",
    "family": "repair/ILRP/recovery",
    "operator": "disabled-crash-point",
-   "source": "crates/liminal-jurisdiction/src/ilrp.rs:207",
+   "source": "crates/liminal-jurisdiction/src/ilrp.rs:273",
    "requirement": "P1-R015",
    "defect": "disable before_ack point",
    "killing_tests": [
@@ -1692,7 +1692,7 @@
    "id": "P1-M053",
    "family": "Basis/revision/query invalidation",
    "operator": "predicate-deletion",
-   "source": "crates/liminal-revision/src/deps.rs:45",
+   "source": "crates/liminal-revision/src/deps.rs:28",
    "requirement": "P1-R017",
    "defect": "delete invalidation predicate",
    "killing_tests": [
@@ -1717,10 +1717,10 @@
   {
    "id": "P1-M055",
    "family": "Basis/revision/query invalidation",
-   "operator": "threshold-plus-one",
-   "source": "crates/liminal-revision/src/inputs.rs:171",
+   "operator": "missing-enum-dispatch",
+   "source": "crates/liminal-revision/src/durability.rs:38",
    "requirement": "P1-R018",
-   "defect": "advance revision clock",
+   "defect": "drop an arm of the durability dispatch so a component class is silently misclassified",
    "killing_tests": [
     "P1-T23",
     "P1-T07"
@@ -1796,7 +1796,7 @@
    "id": "P1-M061",
    "family": "Basis/revision/query invalidation",
    "operator": "predicate-deletion",
-   "source": "crates/liminal-revision/src/inputs.rs:192",
+   "source": "crates/liminal-revision/src/inputs.rs:55",
    "requirement": "P1-R015",
    "defect": "predicate deletion seeded at the anchored site",
    "killing_tests": [
@@ -1835,7 +1835,7 @@
    "id": "P1-M064",
    "family": "Basis/revision/query invalidation",
    "operator": "stale-basis-acceptance",
-   "source": "crates/liminal-revision/src/inputs.rs:41",
+   "source": "crates/liminal-revision/src/inputs.rs:103",
    "requirement": "P1-R017",
    "defect": "stale basis acceptance seeded at the anchored site",
    "killing_tests": [
