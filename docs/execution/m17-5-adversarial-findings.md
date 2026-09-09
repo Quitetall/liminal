@@ -3260,3 +3260,34 @@ same thing in different words: the gate cannot be its own adversary. R-003 and
 R-004 state the residual rather than closing it. What narrows it is external —
 reviewed commits, signed rulings, a fixed base bound into every record, and the
 reviewers' sight of `haq.rs` itself.
+
+## F-54 — the seventh lane: two findings, and the reviews-first payoff
+
+**Found.** 2026-09-09, lane at `e09ae5e`, the first with the blind reviews
+running FIRST. Both passes answered in about six minutes: pass 2 clean, pass 1
+two findings — down from sixteen at `5fb1b57` and ten at `aa00d41`. The lane
+was stopped there rather than spending the remaining ~50 minutes on stages
+whose verdict could not change the flip. That is the whole point of the
+reordering, and it paid on its first use.
+
+Both receipts landed: a 2.1 MB Codex rollout and a MiMo envelope billing
+222,881 tokens.
+
+| attempt | class | what was true | fix |
+|---|---|---|---|
+| A07 | corpus leakage | the cwd and directory-fd maps are keyed per pid and were never inherited, so a parent that `chdir`'d into the locked corpus and then forked left the CHILD unanchored: its relative write carried no forbidden text and resolved against nothing | a successful `clone`/`clone3`/`fork`/`vfork` copies the parent's cwd and its open descriptors to the child pid, which is what the kernel does; a failed clone creates no child |
+| A09 | evidence/report drift | the gate checked headers, the packet digest, the status tuple, the canary table and the review blocks — and nothing else. Twelve further tables are rendered from artifacts, so a human-facing cell could claim a result no artifact supports while every checked thing stayed valid | while the packet is unqualified, a cell in those twelve tables may carry only what the PACKET declares (family names, predeclared counts, requirement and test identifiers, the ADR's 30-minute budget, a closed activation vocabulary), and no cell in ANY table may BE a verdict word. Column headers are exempt, since `Executed` there names a column rather than claiming one |
+
+A09 is class B under AM-17.9 — the record could assert something untrue — and
+it is the third time this species has appeared: F-45 caught the review cells
+unverified, F-51 caught the check running on the inventory path but not the
+qualified one, and this catches the tables neither reached. The pattern is
+worth naming: every artifact the flip WRITES needs a check that re-derives it,
+and adding a renderer without adding its check is how the record drifts.
+
+**Note on the qualified path.** These twelve tables are re-derived only in the
+unqualified state, which is the state every reviewer sees, since the reviews
+run before the flip. A qualified packet's tables are bound by the packet digest
+the markdown carries and by the canary and review-block checks. Closing the
+remainder — re-deriving each rendered table from its evidence artifact after
+the flip — is recorded here as the next piece of this species, not as done.

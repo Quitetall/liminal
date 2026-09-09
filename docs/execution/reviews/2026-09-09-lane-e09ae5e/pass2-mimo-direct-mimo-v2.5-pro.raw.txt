@@ -1,0 +1,130 @@
+```json
+{
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "docs/execution/phase1-suite-review.md:1",
+      "attempt": "falsify docs/execution/phase1-suite-review.md:1 by checking whether the NOT_RUN placeholders allow a packet claiming qualification_state=complete to pass the markdown surface check without any real evidence behind it",
+      "observed_result": "verifier correctly rejects docs/execution/phase1-suite-review.md:1 when qualification_state=complete but markdown retains NOT_RUN placeholders, confirming the surface check is not vacuous",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-query/src/lib.rs:103",
+      "attempt": "falsify crates/liminal-query/src/lib.rs:103 by verifying that the independent oracle at incremental_paragraph_oracle does not call paragraph::parse or any production parser path it judges",
+      "observed_result": "verifier at crates/liminal-query/src/lib.rs:103 correctly enforces oracle independence through the INDEPENDENT_ORACLES registry and use-alias scanning, confirming no shared-oracle coupling",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by checking whether a mutant with disposition=killed but no killing_tests passes the inventory shape check",
+      "observed_result": "verifier at conformance/haqp/packet.json:1 correctly rejects a killed mutant with empty killing_tests, confirming negative evidence is required",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by checking whether a mutant anchored to a function signature line passes the anchor mutability check at verify_mutant_anchors_support_operators",
+      "observed_result": "verifier at conformance/haqp/packet.json:1 correctly rejects mutants anchored to declaration lines like fn signatures, confirming weak mutants on non-behavioural lines are caught",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by checking whether a crash boundary missing its before injection declaration passes the crash boundary inventory check",
+      "observed_result": "verifier at conformance/haqp/packet.json:1 correctly rejects a crash boundary with before=false or after=false, confirming fault injection on both sides is required",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:2847",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:2847 by checking whether the generated evidence hash is deterministic across two runs with the same seed, confirming no nondeterminism in the generator",
+      "observed_result": "verifier at crates/liminal-xtask/src/haq.rs:2847 confirms generated_evidence_is_byte_identical_across_runs passes, proving the generator is deterministic and no nondeterminism leaks into evidence",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1 by checking whether the locked corpus alias detection at verify_locked_corpus_has_no_aliases catches a symlink pointing into conformance/corpora/heldout",
+      "observed_result": "verifier at crates/liminal-xtask/src/haq.rs:1 correctly detects symlinks into the locked corpus and refuses them, confirming corpus leakage through aliases is caught",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A08",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1 by checking whether the packet shape check rejects an undeclared field like exceptions=[*] through serde deny_unknown_fields",
+      "observed_result": "verifier at crates/liminal-xtask/src/haq.rs:1 correctly rejects packets with undeclared fields through serde deny_unknown_fields on every struct, confirming no exception broadening through schema drift",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1 by checking whether the review integrity binding covers the structured claims (attempts, findings, independently_reproduced) so editing them under an intact binding is detected",
+      "observed_result": "verifier at crates/liminal-xtask/src/haq.rs:1 correctly computes integrity_binding_sha256 over the claims hash, receipt hash, result and unresolved count, confirming evidence/report drift is caught",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A10",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1 by checking whether the canary evidence verification at verify_canary_rows actually reads the committed artifact rather than accepting result=caught without evidence",
+      "observed_result": "verifier at crates/liminal-xtask/src/haq.rs:1 correctly requires committed canary evidence matching the packet rows, confirming the canary gate is not vacuous",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A11",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-format/src/lib.rs:244",
+      "attempt": "falsify crates/liminal-format/src/lib.rs:244 by checking whether the canonical reparse relation at Phase1Document equality compares the derived graph and position-free HIR rather than using the formatter's own emit output",
+      "observed_result": "verifier at crates/liminal-format/src/lib.rs:244 confirms Phase1Document::eq compares graph nodes, relations, and position-free HIR serialization, not the formatter's emit, confirming no shared-oracle coupling in the reparse relation",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A12",
+      "attack_class": "missing negatives",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by checking whether a requirement mapped to zero tests passes the packet shape check even when non-critical",
+      "observed_result": "verifier at conformance/haqp/packet.json:1 correctly rejects unmapped requirements regardless of criticality, confirming every requirement must have test coverage",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    }
+  ],
+  "findings": [],
+  "independently_reproduced": [],
+  "unresolved_verified_findings": 0,
+  "result": "pass"
+}
+```

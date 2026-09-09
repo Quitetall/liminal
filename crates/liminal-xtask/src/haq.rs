@@ -227,6 +227,182 @@ fn expected_review_rows(record: &ReviewRecord) -> [(&'static str, String); 11] {
     ]
 }
 
+/// Every content table the flip renders from an artifact, by its header's
+/// leading columns. Blind pass 1 at e09ae5e (A09): the gate checked headers,
+/// the packet digest, the status tuple, the canary table and the review
+/// blocks, and nothing else — so a human-facing cell in any of these could
+/// claim a result no artifact supports while every checked thing stayed valid.
+/// The activation values the review markdown's test table may use. The packet
+/// carries no activation field, so this column is editorial and its vocabulary
+/// is closed (A09).
+/// Words the flip writes only when an artifact says so. While the packet is
+/// unqualified no cell anywhere in the review markdown may BE one of them —
+/// the content tables are checked cell by cell above, and this catches the
+/// `Field | Value` blocks the flip also fills (A09).
+const VERDICT_VOCABULARY: [&str; 12] = [
+    "pass",
+    "passed",
+    "fail",
+    "failed",
+    "caught",
+    "missed",
+    "killed",
+    "survived",
+    "executed",
+    "complete",
+    "ratified",
+    "authorized",
+];
+
+const ACTIVATION_VOCABULARY: [&str; 2] = ["Phase 1", "Conditional: first persisted-format ADR"];
+
+const RENDERED_TABLES: [&str; 12] = [
+    "| Requirement ID | Kind |",
+    "| Test ID | Exact test |",
+    "| Requirement ID | Positive tests |",
+    "| Class/boundary ID | Source coordinate |",
+    "| Abuse ID | Trigger/input |",
+    "| Fault ID | Registered boundary |",
+    "| Family | Planned | Executed |",
+    "| Mutant ID | Family | Operator |",
+    "| HAQP family | Accepted target |",
+    "| Family | Relations and results |",
+    "| Surface | Primary implementation |",
+    "| Boundary ID | Registration coordinate |",
+];
+
+/// A cell that asserts nothing: the lane has not run, or the surface is
+/// quarantined behind Phase 1 authorization (AM-17.2).
+fn cell_claims_nothing(cell: &str) -> bool {
+    let cell = cell.trim();
+    cell.is_empty()
+        || cell == "NOT_RUN"
+        || cell.starts_with("NOT_RUN ")
+        || cell.starts_with("QUARANTINED")
+        || cell.chars().all(|ch| ch == '-' || ch == ':')
+}
+
+/// The rows of the table whose header starts with `header`, each split into
+/// trimmed cells. The separator row is dropped.
+fn markdown_table_rows<'a>(text: &'a str, header: &str) -> Option<Vec<Vec<&'a str>>> {
+    let start = text.find(header)?;
+    let mut rows = Vec::new();
+    for line in text[start..].lines().skip(1) {
+        if !line.starts_with('|') {
+            break;
+        }
+        let cells = line
+            .trim_matches('|')
+            .split('|')
+            .map(str::trim)
+            .collect::<Vec<_>>();
+        if cells
+            .iter()
+            .all(|cell| cell.chars().all(|ch| ch == '-' || ch == ':'))
+        {
+            continue;
+        }
+        rows.push(cells);
+    }
+    Some(rows)
+}
+
+/// While the packet is unqualified, a rendered table may carry only what the
+/// PACKET already declares — family names, predeclared counts, the declared
+/// fuzz budget — and otherwise must claim nothing. The flip is the only thing
+/// that may write a result, and it runs only on a qualified packet, so any
+/// other value in these tables is drift (A09).
+fn verify_markdown_tables(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    let path = root.join("docs/execution/phase1-suite-review.md");
+    let text = fs::read_to_string(&path).with_context(|| format!("read {path}"))?;
+    if packet.provenance.is_some() {
+        // A qualified packet's tables are rendered from evidence; the canary
+        // table and the review blocks are re-derived by their own checks, and
+        // the rest are bound by the packet digest this markdown carries.
+        return Ok(());
+    }
+    let mut declared = BTreeSet::new();
+    for mutant in &packet.mutants {
+        declared.insert(mutant.family.clone());
+    }
+    for row in &packet.generated {
+        declared.insert(row.family.clone());
+        declared.insert(row.accepted.to_string());
+    }
+    let mut by_family = BTreeMap::<&str, usize>::new();
+    for mutant in &packet.mutants {
+        *by_family.entry(mutant.family.as_str()).or_default() += 1;
+    }
+    for count in by_family.values() {
+        declared.insert(count.to_string());
+    }
+    // The declared per-family fuzz budget, as the markdown spells it. ADR-0020
+    // §4 fixes 30 minutes per family; the packet names the targets, and the
+    // minutes are derived from the campaign, so the constant is the ADR's.
+    declared.insert("30 minutes".to_owned());
+    // The packet carries no `activation` field, so the markdown's activation
+    // column is editorial. It is a CLOSED vocabulary rather than free text: a
+    // new value is a visible decision, not drift.
+    for activation in ACTIVATION_VOCABULARY {
+        declared.insert((*activation).to_owned());
+    }
+    for requirement in &packet.requirements {
+        declared.insert(requirement.id.clone());
+    }
+    for test in &packet.tests {
+        declared.insert(test.id.clone());
+        declared.insert(test.name.clone());
+    }
+    // No cell in ANY table may be a verdict while the packet is unqualified.
+    let lines = text.lines().collect::<Vec<_>>();
+    for (index, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if !trimmed.starts_with('|') {
+            continue;
+        }
+        // A header row names its columns — "Executed", "Killed", "Survived"
+        // are column NAMES there, not claims. A header is the row a separator
+        // follows.
+        let is_header = lines.get(index + 1).is_some_and(|next| {
+            let next = next.trim();
+            next.starts_with('|')
+                && next
+                    .trim_matches('|')
+                    .chars()
+                    .all(|ch| matches!(ch, '-' | ':' | '|' | ' '))
+        });
+        if is_header {
+            continue;
+        }
+        for cell in trimmed.trim_matches('|').split('|') {
+            let value = cell.trim().trim_matches('`').trim().to_ascii_lowercase();
+            anyhow::ensure!(
+                !VERDICT_VOCABULARY.contains(&value.as_str()),
+                "review markdown claims {value:?} while the packet is unqualified; only the \
+                 flip may write a verdict, and it runs on a qualified packet"
+            );
+        }
+    }
+    for header in RENDERED_TABLES {
+        let Some(rows) = markdown_table_rows(&text, header) else {
+            anyhow::bail!("review markdown has no table {header:?}");
+        };
+        for row in rows {
+            for cell in row {
+                // Cells are markdown: an identifier is spelled in backticks.
+                let value = cell.trim().trim_matches('`').trim();
+                anyhow::ensure!(
+                    cell_claims_nothing(value) || declared.contains(value),
+                    "review markdown table {header:?} claims {value:?}, which the unqualified \
+                     packet does not declare; only the flip may write a result, and it runs \
+                     on a qualified packet"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 fn verify_markdown_review_blocks(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let text = fs::read_to_string(root.join("docs/execution/phase1-suite-review.md"))
         .context("read the review markdown")?;
@@ -296,6 +472,7 @@ pub fn verify_inventory_repo(root: &Utf8Path) -> Result<()> {
     verify_packet_statuses(&packet, inventory_statuses())?;
     verify_markdown_surface(root, &packet)?;
     verify_markdown_review_blocks(root, &packet)?;
+    verify_markdown_tables(root, &packet)?;
     verify_oracle_independence(root)?;
     Ok(())
 }
@@ -313,6 +490,7 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
     // accepted review cells disagreeing with their records and an oracle
     // coupled to the production path it judges.
     verify_markdown_review_blocks(root, &packet)?;
+    verify_markdown_tables(root, &packet)?;
     verify_oracle_independence(root)?;
     require_eq(
         "qualification_state",
@@ -5620,6 +5798,18 @@ fn anchor_relative_paths(
     }
 }
 
+/// The child pid a successful `clone`, `fork` or `vfork` line reports, if any.
+/// strace prints the new pid as the call's return value (A07).
+fn clone_child_pid(line: &str) -> Option<u32> {
+    let names = ["clone(", "clone3(", "fork(", "vfork("];
+    if !names.iter().any(|name| line.contains(name)) {
+        return None;
+    }
+    let child = line.rsplit(" = ").next()?.trim();
+    let child = child.split_whitespace().next()?;
+    child.parse::<u32>().ok().filter(|pid| *pid > 0)
+}
+
 fn record_chdir(
     line: &str,
     pid: u32,
@@ -5731,6 +5921,24 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
             .map(|(path, write, _)| (path, write))
             .collect::<Vec<_>>();
         if let Some(pid) = pid {
+            // Blind pass 1 at e09ae5e (A07): the cwd and dirfd maps are keyed
+            // per pid and were never inherited, so a parent that chdir'd into
+            // the locked corpus and then forked left the CHILD unanchored —
+            // its relative write carried no forbidden text and resolved
+            // against nothing. A child begins life with its parent's working
+            // directory and its open descriptors.
+            if let Some(child) = clone_child_pid(&line) {
+                if let Some(cwd) = cwds.get(&pid).cloned() {
+                    cwds.insert(child, cwd);
+                }
+                let inherited = dir_fds
+                    .range((pid, i64::MIN)..=(pid, i64::MAX))
+                    .map(|((_, fd), dir)| (*fd, dir.clone()))
+                    .collect::<Vec<_>>();
+                for (fd, dir) in inherited {
+                    dir_fds.insert((child, fd), dir);
+                }
+            }
             record_chdir(&line, pid, &dir_fds, &mut cwds);
             // Blind pass 1 at 5fb1b57 (A10): only `O_DIRECTORY` opens were
             // remembered, so a descriptor opened without it and later used as
@@ -16216,6 +16424,115 @@ mod tests {
         for _ in 0..64 {
             case_transform(&mut rng).expect("the merge is total over shaped negatives");
         }
+    }
+
+    /// Blind pass 1 at e09ae5e (A09): the gate checked headers, the packet
+    /// digest, the status tuple, the canary table and the review blocks, so a
+    /// human-facing cell in any other rendered table could claim a result no
+    /// artifact supports while everything checked stayed valid.
+    #[test]
+    fn a_rendered_table_may_not_claim_what_the_packet_does_not_declare() {
+        let root = repo_root();
+        let packet = read_packet(&root).expect("packet");
+        verify_markdown_tables(&root, &packet).expect("the committed markdown is derivable");
+
+        let scratch = liminal_scratch::ScratchDir::new("haq-tables").expect("scratch");
+        let scratch_root = scratch.path().to_owned();
+        let rel = "docs/execution/phase1-suite-review.md";
+        fs::create_dir_all(scratch_root.join("docs/execution")).expect("mkdir");
+        let original = fs::read_to_string(root.join(rel)).expect("markdown");
+
+        // None of these is derivable from an unqualified packet.
+        for (from, to, why) in [
+            (
+                "| source/CST/formatting | 13 | NOT_RUN |",
+                "| source/CST/formatting | 13 | executed |",
+                "an execution claim",
+            ),
+            (
+                "| NOT_RUN | NOT_RUN | NOT_RUN |",
+                "| pass | pass | pass |",
+                "a verdict",
+            ),
+            (
+                "| qualification state | NOT_RUN |",
+                "| qualification state | complete |",
+                "a status verdict",
+            ),
+        ] {
+            let doctored = original.replacen(from, to, 1);
+            assert_ne!(doctored, original, "the fixture must change: {why}");
+            fs::write(scratch_root.join(rel), &doctored).expect("write");
+            let err = verify_markdown_tables(&scratch_root, &packet)
+                .expect_err(why)
+                .to_string();
+            assert!(
+                err.contains("does not declare") || err.contains("while the packet is unqualified"),
+                "{why}: {err}"
+            );
+        }
+
+        // The untouched copy still verifies, so the refusals above are earned.
+        fs::write(scratch_root.join(rel), &original).expect("write");
+        verify_markdown_tables(&scratch_root, &packet).expect("an unmodified copy verifies");
+    }
+
+    /// Blind pass 1 at e09ae5e (A07): a parent that chdir'd into the locked
+    /// corpus and then forked left the child unanchored, so the child's
+    /// relative write named nothing forbidden and resolved against nothing.
+    #[test]
+    fn a_forked_child_inherits_the_working_directory_it_was_given() {
+        let (_s, root, row) = scope_fixture("canaries");
+        fs::create_dir_all(root.join("conformance/corpora/heldout")).expect("mkdir");
+        let exit = "4242 +++ exited with 0 +++\n";
+        let mut bad = row.clone();
+        rewrite_scope_trace(
+            &root,
+            &mut bad,
+            &format!(
+                "4242 chdir(\"{root}/conformance/corpora/heldout\") = 0\n\
+                 4242 clone(child_stack=NULL, flags=CLONE_CHILD_CLEARTID) = 4243\n\
+                 4243 openat(AT_FDCWD, \"x.md\", O_WRONLY|O_CREAT, 0644) = 3\n{exit}"
+            ),
+        );
+        let err = verify_corpus_scope_replays(&root, std::slice::from_ref(&bad), &[])
+            .expect_err("a forked child writing into the locked corpus");
+        assert!(
+            err.to_string().contains("wrote to the locked corpus"),
+            "{err}"
+        );
+
+        // A descriptor the parent opened is inherited too.
+        let mut by_fd = row.clone();
+        rewrite_scope_trace(
+            &root,
+            &mut by_fd,
+            &format!(
+                "4242 openat(AT_FDCWD, \"{root}/conformance/corpora/heldout\", O_RDONLY|O_DIRECTORY) = 7\n\
+                 4242 clone(child_stack=NULL) = 4244\n\
+                 4244 openat(7, \"x.md\", O_WRONLY|O_CREAT, 0644) = 8\n{exit}"
+            ),
+        );
+        let err = verify_corpus_scope_replays(&root, std::slice::from_ref(&by_fd), &[])
+            .expect_err("a child writing through an inherited directory fd");
+        assert!(
+            err.to_string().contains("wrote to the locked corpus"),
+            "{err}"
+        );
+
+        // A clone that failed creates no child to inherit anything.
+        assert_eq!(
+            clone_child_pid("4242 clone(child_stack=NULL) = -1 EAGAIN"),
+            None
+        );
+        assert_eq!(
+            clone_child_pid("4242 clone(child_stack=NULL) = 4243"),
+            Some(4243)
+        );
+        assert_eq!(
+            clone_child_pid("4242 openat(AT_FDCWD, \"x\", O_RDONLY) = 3"),
+            None
+        );
     }
 
     /// Blind pass 1 at aa00d41 (A07): a `chdir` into the locked corpus made the

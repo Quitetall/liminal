@@ -1,0 +1,171 @@
+{
+  "schema_version": "haqp-blind-review-v1",
+  "pass": 1,
+  "reviewer": {
+    "model_family": "codex:gpt-5.6-sol",
+    "identity_hash": "f6cac6a769086b0c4a44f2b83d25874afa0b393a852ac730262a2f801543651c",
+    "backend": "codex"
+  },
+  "isolated_session_hash": "10b00dc29f976c45cad691f0973d8229fd38c9246a539235907780dff60ff6b6",
+  "sanitized_prompt_hash": "b1cf70bb911800c82dd0c0ff7e5c01ea2e69918bc57521e01c15bd53e9b1e641",
+  "prompt_binding_sha256": "70867b7cb656181f88cf2147ea47f4dc6599f27a57c7c9f9b71f484928e87166",
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-format/src/lib.rs:353",
+      "attempt": "Falsify crates/liminal-format/src/lib.rs:353 by broadening compact identifier acceptance and checking whether lossy compact emission remains eligible.",
+      "observed_result": "Verifier contract rejects broadening at crates/liminal-format/src/lib.rs:353 through closed mutant coordinate, operator validation, and compact round-trip checks.",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-query/src/lib.rs:1",
+      "attempt": "Falsify crates/liminal-query/src/lib.rs:1 by routing incremental oracle through production paragraph parser using a renamed import alias.",
+      "observed_result": "Independence scan at crates/liminal-query/src/lib.rs:1 watches forbidden production paths and derived aliases, causing coupled oracle source to fail verification.",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "Falsify conformance/haqp/packet.json:1 by removing malformed evidence mappings while preserving positive tests and total test count.",
+      "observed_result": "Coverage verification rejects conformance/haqp/packet.json:1 because every critical requirement must retain positive, negative, malformed, basis, and replay evidence.",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-cst/src/parser.rs:142",
+      "attempt": "Falsify crates/liminal-cst/src/parser.rs:142 by replacing its semantic predicate mutant with an unrelated compiling single-line edit.",
+      "observed_result": "Closed coordinate and operator checks reject crates/liminal-cst/src/parser.rs:142 when patch semantics do not implement declared predicate deletion.",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "Falsify conformance/haqp/packet.json:1 by deleting one registered crash boundary while retaining passing crash evidence counts.",
+      "observed_result": "Exact declared, runtime, authoritative, scenario, and replay boundary comparisons reject omitted boundary at conformance/haqp/packet.json:1.",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:1 by changing seeded generator behavior while preserving declared seeds and case totals.",
+      "observed_result": "Generated evidence replay and recorded golden digests at crates/liminal-xtask/src/haq.rs:1 expose changed deterministic output despite unchanged counts.",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:1 with parent chdir into locked corpus, child creation, then child-relative write lacking forbidden path text.",
+      "observed_result": "Trace-state inspection at crates/liminal-xtask/src/haq.rs:1 shows cwd and directory-fd maps are keyed per PID but never inherited on clone or fork, so child-relative locked-corpus write can evade detection.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A08",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:1 by treating qualification-stage read access to locked corpus as prohibited leakage.",
+      "observed_result": "Reproduction confirms crates/liminal-xtask/src/haq.rs:1 permits stage read access under signed R-001 scope while still refusing writes and carved-fuzzer touches.",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    },
+    {
+      "id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "docs/execution/phase1-suite-review.md:1",
+      "attempt": "Falsify docs/execution/phase1-suite-review.md:1 by changing mutation, generated, fuzz, crash, or conclusion table values without changing packet digest or checked review rows.",
+      "observed_result": "Verifier inspection confirms docs/execution/phase1-suite-review.md:1 has many human-facing table cells not re-derived or compared; arbitrary non-NOT_RUN values can drift while checked headers, digest, tuple, canaries, and review blocks remain valid.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A10",
+      "attack_class": "exception broadening",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "Falsify conformance/haqp/packet.json:1 by adding wildcard exceptions or row-level waiver fields outside declared packet schema.",
+      "observed_result": "Serde deny_unknown_fields rejects undeclared exception and waiver fields at conformance/haqp/packet.json:1 before qualification claims are evaluated.",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A11",
+      "attack_class": "evidence/report drift",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:1 by editing structured review attempts while retaining original raw-response and integrity digests.",
+      "observed_result": "Canonical claims digest recomputation at crates/liminal-xtask/src/haq.rs:1 rejects changed attempts, findings, or reproduced identifiers under stale integrity binding.",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A12",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-jurisdiction/src/ilrp.rs:274",
+      "attempt": "Falsify crates/liminal-jurisdiction/src/ilrp.rs:274 by renaming acknowledgement label while claiming durable acknowledgement persistence was skipped.",
+      "observed_result": "Operator validation rejects crates/liminal-jurisdiction/src/ilrp.rs:274 because commit_intent call remains present, making label-only change an invalid skipped-transition mutant.",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-01",
+      "attempt_id": "A07"
+    },
+    {
+      "id": "F-02",
+      "attempt_id": "A09"
+    }
+  ],
+  "independently_reproduced": [
+    "F-01",
+    "F-02"
+  ],
+  "unresolved_verified_findings": 2,
+  "result": "fail",
+  "blindness_proof": {
+    "ephemeral_session_requested": false,
+    "session_state": "fresh-codex-session",
+    "prior_pass_artifact_supplied": false,
+    "pass_two_original_spec_only": false
+  },
+  "schema_retries": 0,
+  "provider_receipt": {
+    "backend": "codex",
+    "session_file": "rollout-2026-09-09T03-37-29-01a08519-b534-71e1-af76-6acaceee8f95.jsonl",
+    "session_id": "2026-09-09T03-37-29-01a08519-b534-71e1-af76-6acaceee8f95",
+    "transcript_sha256": "06c74b4526de7411a137e2ce74cf5b4d8692b86d6fee2493e1b45aa4bd45fbe1",
+    "transcript_bytes": 2055852
+  },
+  "fixed_base": {
+    "commit": "e09ae5e028772f69f2243b7841850e294f5729a9",
+    "tree": "6d0800e5b3870d433775b0064e9dcea10a2b71f7",
+    "clean": true
+  },
+  "raw_response_sha256": "d222157d32ce9098d3fc869a86735b0fbf19a966d733623f83d58de8dc09242e",
+  "integrity_binding_sha256": "592daa663a0a1bd9e1a78555eaeae058037ebdf267b41dc1a4224195ee2b9232"
+}
