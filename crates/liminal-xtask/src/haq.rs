@@ -8026,28 +8026,94 @@ fn line_is_inside_test_code(text: &str, line: usize) -> bool {
     false
 }
 
-/// `line` with its line comment and string and character literals removed, so
-/// only braces that structure the code remain.
+/// `line` with its line comment and its string, raw-string and character
+/// literals removed, so only braces that structure the code remain.
+///
+/// A `'` opens a character literal only when it closes within one escape
+/// sequence. Otherwise it introduces a lifetime, and reading `Formatter<'_>`
+/// as an unterminated literal would swallow the `{` that follows it.
 fn structural_braces(line: &str) -> String {
+    let chars: Vec<char> = line.chars().collect();
     let mut out = String::with_capacity(line.len());
-    let mut chars = line.chars().peekable();
-    let mut quote: Option<char> = None;
-    while let Some(ch) = chars.next() {
-        if let Some(open) = quote {
-            if ch == '\\' {
-                chars.next();
-            } else if ch == open {
-                quote = None;
-            }
-        } else if ch == '/' && chars.peek() == Some(&'/') {
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '/' && chars.get(i + 1) == Some(&'/') {
             break;
-        } else if ch == '"' || ch == '\'' {
-            quote = Some(ch);
-        } else {
-            out.push(ch);
         }
+        if let Some(after) = skip_raw_string(&chars, i) {
+            i = after;
+            continue;
+        }
+        if chars[i] == '"' {
+            i = skip_string(&chars, i);
+            continue;
+        }
+        if let Some(after) = skip_char_literal(&chars, i) {
+            i = after;
+            continue;
+        }
+        out.push(chars[i]);
+        i += 1;
     }
     out
+}
+
+/// The index past a raw string starting at `at` (`r"..."`, `br#"..."#`), or
+/// `None` if one does not start there. An unterminated literal runs to the
+/// end of the line, which is what a trailing `r#"` in real source does.
+fn skip_raw_string(chars: &[char], at: usize) -> Option<usize> {
+    let mut i = at;
+    if chars.get(i) == Some(&'b') {
+        i += 1;
+    }
+    if chars.get(i) != Some(&'r') {
+        return None;
+    }
+    i += 1;
+    let hashes = chars[i..].iter().take_while(|c| **c == '#').count();
+    i += hashes;
+    if chars.get(i) != Some(&'"') {
+        return None;
+    }
+    i += 1;
+    while i < chars.len() {
+        if chars[i] == '"' && chars[i + 1..].iter().take(hashes).all(|c| *c == '#') {
+            return Some(i + 1 + hashes);
+        }
+        i += 1;
+    }
+    Some(chars.len())
+}
+
+/// The index past the string literal opening at `at`, or the end of the line.
+fn skip_string(chars: &[char], at: usize) -> usize {
+    let mut i = at + 1;
+    while i < chars.len() {
+        match chars[i] {
+            '\\' => i += 2,
+            '"' => return i + 1,
+            _ => i += 1,
+        }
+    }
+    chars.len()
+}
+
+/// The index past the character literal opening at `at`, or `None` when the
+/// quote introduces a lifetime rather than a literal.
+fn skip_char_literal(chars: &[char], at: usize) -> Option<usize> {
+    if chars.get(at) != Some(&'\'') {
+        return None;
+    }
+    if chars.get(at + 1) == Some(&'\\') {
+        // Past the backslash and the character it escapes: in `'\''` the quote
+        // at `at + 2` is the escaped character, not the terminator.
+        let close = chars.get(at + 3..)?.iter().position(|c| *c == '\'')?;
+        return Some(at + 4 + close);
+    }
+    if chars.get(at + 2) == Some(&'\'') {
+        return Some(at + 3);
+    }
+    None
 }
 
 #[allow(
@@ -16757,6 +16823,16 @@ mod tests {
         );
 
         assert_eq!(structural_braces("let s = \"}\"; // {"), "let s = ; ");
+        assert!(
+            structural_braces("fn fmt(&self, f: &mut Formatter<'_>) -> Result {").contains('{'),
+            "a lifetime is not an unterminated character literal"
+        );
+        assert!(!structural_braces("let brace = '}';").contains('}'));
+        assert!(!structural_braces("let brace = b'{';").contains('{'));
+        assert!(!structural_braces("let esc = '\\'';").contains('\''));
+        assert!(!structural_braces("let nl = '\\n'; let u = '\\u{7d}';").contains('}'));
+        assert_eq!(structural_braces("let s = r#\"// }\"#; {"), "let s = ; {");
+        assert!(!structural_braces("let s = br\"}\";").contains('}'));
         assert!(!anchor_is_mutable_line(") -> Result<Basis, Error> {"));
         assert!(!anchor_is_mutable_line(") {"));
         assert!(
