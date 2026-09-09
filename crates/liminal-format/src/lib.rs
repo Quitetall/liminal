@@ -640,10 +640,25 @@ mod tests {
     #[test]
     fn attributes_is_the_only_author_keyed_map_in_the_hir() {
         let schema = include_str!("../../liminal-hir/src/schema.rs");
+        // Any visibility, not just `pub`: a `pub(crate)` or private field is
+        // serialized the same way and would be just as author-keyed. A field
+        // declaration is `name: ...Map<String,` after the visibility; the
+        // `&mut` form is a function parameter, not a field. Line-oriented, so
+        // a type split across lines would escape — rustfmt keeps these on one.
         let keyed: Vec<&str> = schema
             .lines()
             .map(str::trim)
-            .filter(|line| line.contains("Map<String,") && line.starts_with("pub "))
+            .filter(|line| {
+                let after_visibility = line
+                    .split_once(' ')
+                    .filter(|(first, _)| first.starts_with("pub"))
+                    .map_or(*line, |(_, rest)| rest);
+                after_visibility.contains("Map<String,")
+                    && !after_visibility.contains('&')
+                    && after_visibility.split_once(": ").is_some_and(|(name, _)| {
+                        !name.is_empty() && name.chars().all(|ch| ch.is_alphanumeric() || ch == '_')
+                    })
+            })
             .collect();
         assert_eq!(
             keyed,
