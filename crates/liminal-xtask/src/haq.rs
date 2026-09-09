@@ -5600,15 +5600,14 @@ const FORBIDDEN_TRACE_FRAGMENTS: [&str; 2] = ["heldout", "conformance/corpora"];
 /// against: a directory fd if the call names one, else the pid's cwd (A07,
 /// A12). An absolute path is already anchored.
 fn anchor_relative_paths(
-    line: &str,
     pid: u32,
     dir_fds: &BTreeMap<(u32, i64), String>,
     cwds: &BTreeMap<u32, String>,
-    accesses: &mut [(String, bool)],
+    arguments: &mut [(String, bool, Option<i64>)],
 ) {
     // Each path is anchored against ITS OWN dirfd — `renameat`'s destination
     // has a different one from its source — and falls back to the pid's cwd.
-    for ((path, _), (_, _, dirfd)) in accesses.iter_mut().zip(scope_trace_line_arguments(line)) {
+    for (path, _, dirfd) in arguments.iter_mut() {
         if path.starts_with('/') {
             continue;
         }
@@ -5719,9 +5718,19 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
                 dir_fds.remove(&(pid, fd));
             }
         }
-        let mut accesses = scope_trace_line_accesses(&line);
+        // Parsed ONCE and carried: `anchor_relative_paths` used to re-parse the
+        // line and zip positionally against this vector, which is only safe
+        // while the two parses agree on how many entries they yield (review of
+        // `7e4ba39`). Passing the dirfds through removes the coupling.
+        let mut arguments = scope_trace_line_arguments(&line);
         if let Some(pid) = pid {
-            anchor_relative_paths(&line, pid, &dir_fds, &cwds, &mut accesses);
+            anchor_relative_paths(pid, &dir_fds, &cwds, &mut arguments);
+        }
+        let accesses = arguments
+            .into_iter()
+            .map(|(path, write, _)| (path, write))
+            .collect::<Vec<_>>();
+        if let Some(pid) = pid {
             record_chdir(&line, pid, &dir_fds, &mut cwds);
             // Blind pass 1 at 5fb1b57 (A10): only `O_DIRECTORY` opens were
             // remembered, so a descriptor opened without it and later used as
@@ -7440,7 +7449,7 @@ fn verify_mutation_plan_balance(
     by_family: &BTreeMap<&str, usize>,
     by_operator: &BTreeMap<&str, usize>,
 ) -> Result<()> {
-    const REQUIRED_OPERATORS: [&str; 12] = [
+    const REQUIRED_OPERATORS: [&str; 13] = [
         "predicate-deletion",
         "predicate-inversion",
         "threshold-plus-one",
@@ -7453,6 +7462,7 @@ fn verify_mutation_plan_balance(
         "disabled-crash-point",
         "ordering-nondeterminism",
         "oracle-short-circuit",
+        "broadened-allow-list",
     ];
     for (family, count) in by_family {
         if *count != 13 {
@@ -7470,7 +7480,6 @@ fn verify_mutation_plan_balance(
     // said so. The list is the ADR's, closed.
     let missing = REQUIRED_OPERATORS
         .into_iter()
-        .chain(["broadened-allow-list"])
         .filter(|operator| !by_operator.contains_key(operator))
         .collect::<Vec<_>>();
     anyhow::ensure!(
