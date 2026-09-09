@@ -1469,6 +1469,9 @@ fn independent_oracle_source_cst(
         // block alike and no generated case would notice. The kind is
         // re-derived from the block's own first line, never read back from
         // the production classifier ADR-0020 §5 forbids this oracle to reach.
+        // What this catches is the classifier drifting from its rule — a
+        // mutation, a reordered branch, a dropped case. It cannot catch the
+        // rule itself being wrong, because the rule is what it restates.
         let text = source.get(start..end).unwrap_or_default();
         let first = text.lines().next().unwrap_or_default().trim_start();
         let expected = if first.starts_with("```") {
@@ -1484,6 +1487,10 @@ fn independent_oracle_source_cst(
         } else {
             "paragraph-like"
         };
+        // `DocumentRoot`, `EmbeddedLanguage` and `Unknown` are declared by the
+        // enum and produced by nothing the coarse scan does. If one appears,
+        // the scan has grown a rule this oracle was never given, and saying so
+        // is more use than a mismatch that reads like a misclassification.
         let actual = match block.coarse_kind {
             liminal_cst::CoarseKind::Fence => "fence",
             liminal_cst::CoarseKind::Heading => "heading",
@@ -1491,9 +1498,10 @@ fn independent_oracle_source_cst(
             liminal_cst::CoarseKind::Directive => "directive",
             liminal_cst::CoarseKind::ResourceReference => "resource-reference",
             liminal_cst::CoarseKind::ParagraphLike => "paragraph-like",
-            liminal_cst::CoarseKind::DocumentRoot => "document-root",
-            liminal_cst::CoarseKind::EmbeddedLanguage => "embedded-language",
-            liminal_cst::CoarseKind::Unknown => "unknown",
+            other => anyhow::bail!(
+                "coarse block {start}..{end} is classified {other:?}, a kind the coarse scan \
+                 did not emit when this oracle was written: {text:?}"
+            ),
         };
         anyhow::ensure!(
             actual == expected,
@@ -2400,7 +2408,9 @@ fn effective_unresolved_findings(
     for (id, count) in &cleared {
         anyhow::ensure!(
             *count <= 1,
-            "ruling {id} cleared {count} separate findings in {record}; a ruling answers one              claim, so phrases matching more than one are too broad to stand"
+            "ruling {id} cleared {count} separate findings in {record}; a ruling \
+                 answers one claim, so phrases matching more than one are too \
+                 broad to stand"
         );
     }
     Ok(unresolved)
