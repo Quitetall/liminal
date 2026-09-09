@@ -2302,6 +2302,9 @@ const RESOLUTION_COMMANDS: [(&str, &[&str]); 4] = [
     ),
 ];
 
+/// The registry's commands are the project's own gates, run with the gate's
+/// environment and working directory and no timeout: they are what CI runs, so
+/// a hang here is a hang in CI, visible either way (review of `e490671`).
 fn verify_resolution_command_ran(root: &Utf8Path, who: &str, evidence_text: &str) -> Result<()> {
     let claimed = evidence_text
         .lines()
@@ -5952,6 +5955,8 @@ fn duplicated_fd(line: &str, returned_fd: Option<i64>) -> Option<(i64, i64)> {
     if call == "fcntl(" && !line.contains("F_DUPFD") {
         return None;
     }
+    // strace prints these as `dup2(3, 7) = 7` — integer arguments only, so the
+    // first comma-separated piece is the source descriptor.
     let args = line.split_once(call)?.1;
     let from = args
         .split(',')
@@ -7979,8 +7984,11 @@ fn anchor_is_mutable_line(line: &str) -> bool {
     // `) -> Result<WorkspaceBasis, PerspectiveError> {` — begins with none of
     // the keywords above and so read as behaviour. A line that closes a
     // parameter list and opens a body is still a declaration.
-    let continues_signature = trimmed.starts_with(')')
-        && (trimmed.ends_with('{') || trimmed.ends_with(';') || trimmed.contains("->"));
+    // `) -> Result<..> {` and `) {` continue a signature. A bare `);` does NOT:
+    // it terminates any multi-line call, which is behaviour, and refusing it
+    // would push legitimate anchors off real code (review of `e490671`).
+    let continues_signature =
+        trimmed.starts_with(')') && (trimmed.contains("->") || trimmed.ends_with('{'));
     !(declares_item || declares_variant || continues_signature) || binds_a_threshold
 }
 
@@ -8000,18 +8008,46 @@ fn line_is_inside_test_code(text: &str, line: usize) -> bool {
         if index + 1 == line {
             return in_test;
         }
-        if !in_test && trimmed == "#[cfg(test)]" {
+        if !in_test && trimmed.replace(' ', "") == "#[cfg(test)]" {
             in_test = true;
             test_depth = depth;
             continue;
         }
-        depth += i32::try_from(source.matches('{').count()).unwrap_or(0);
-        depth -= i32::try_from(source.matches('}').count()).unwrap_or(0);
-        if in_test && depth <= test_depth && trimmed.contains('}') {
+        // Braces inside a comment or a string literal are text, not structure:
+        // one `// weird }` would close the test module early and let a
+        // test-code anchor read as production (review of `e490671`).
+        let structural = structural_braces(source);
+        depth += i32::try_from(structural.matches('{').count()).unwrap_or(0);
+        depth -= i32::try_from(structural.matches('}').count()).unwrap_or(0);
+        if in_test && depth <= test_depth && structural.contains('}') {
             in_test = false;
         }
     }
     false
+}
+
+/// `line` with its line comment and string and character literals removed, so
+/// only braces that structure the code remain.
+fn structural_braces(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut chars = line.chars().peekable();
+    let mut quote: Option<char> = None;
+    while let Some(ch) = chars.next() {
+        if let Some(open) = quote {
+            if ch == '\\' {
+                chars.next();
+            } else if ch == open {
+                quote = None;
+            }
+        } else if ch == '/' && chars.peek() == Some(&'/') {
+            break;
+        } else if ch == '"' || ch == '\'' {
+            quote = Some(ch);
+        } else {
+            out.push(ch);
+        }
+    }
+    out
 }
 
 #[allow(
@@ -16700,6 +16736,33 @@ mod tests {
         // The untouched copy still verifies, so the refusals above are earned.
         fs::write(scratch_root.join(rel), &original).expect("write");
         verify_markdown_tables(&scratch_root, &packet).expect("an unmodified copy verifies");
+    }
+
+    /// Review of `e490671`: braces inside a comment or a string are text, and
+    /// a bare `);` terminates a call rather than continuing a signature.
+    #[test]
+    fn test_code_detection_and_signature_screening_read_only_structure() {
+        let text = "fn prod() {\n    let s = \"}}}\"; // }\n}\n#[cfg(test)]\nmod tests {\n    fn t() {\n        assert!(x);\n    }\n}\n";
+        assert!(
+            !line_is_inside_test_code(text, 2),
+            "a string's braces are not structure"
+        );
+        assert!(
+            line_is_inside_test_code(text, 7),
+            "the assertion is inside the test module"
+        );
+        assert!(
+            !line_is_inside_test_code(text, 1),
+            "production is not test code"
+        );
+
+        assert_eq!(structural_braces("let s = \"}\"; // {"), "let s = ; ");
+        assert!(!anchor_is_mutable_line(") -> Result<Basis, Error> {"));
+        assert!(!anchor_is_mutable_line(") {"));
+        assert!(
+            anchor_is_mutable_line(");"),
+            "a call's terminator is behaviour, not a signature"
+        );
     }
 
     /// Blind pass 1 at e09ae5e (A07): a parent that chdir'd into the locked
