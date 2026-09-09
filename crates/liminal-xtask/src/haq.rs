@@ -138,10 +138,19 @@ fn oracle_reachable_body(text: &str, name: &str) -> String {
         .lines()
         .filter_map(|line| {
             let trimmed = line.trim_start();
+            // Review of f4d42d3: `pub(crate) fn helper` named no prefix, so
+            // a helper declared that way was missing from the closure and the
+            // oracle could reach production through it.
             let rest = trimmed
-                .strip_prefix("fn ")
-                .or_else(|| trimmed.strip_prefix("pub fn "))
-                .or_else(|| trimmed.strip_prefix("async fn "))?;
+                .split_once("fn ")
+                .filter(|(before, _)| {
+                    before.is_empty()
+                        || before
+                            .split_whitespace()
+                            .all(|word| word == "pub" || word == "async" || word == "const")
+                        || before.trim_end().ends_with(')') && before.starts_with("pub(")
+                })
+                .map(|(_, rest)| rest)?;
             let end = rest.find(['(', '<'])?;
             Some(rest[..end].to_owned())
         })
@@ -10263,7 +10272,10 @@ fn scan_concurrency_primitives(root: &Utf8Path) -> Result<ConcurrencyScan> {
                 .collect::<Vec<_>>();
             anyhow::ensure!(
                 unknown.is_empty(),
-                "{name} depends on {unknown:?}, outside the closed list the concurrency scan                  reasons about; a dependency may export a macro that spawns, which a lexical                  scan cannot see. Decide, then widen CONCURRENCY_SCAN_ALLOWED_DEPENDENCIES"
+                "{name} depends on {unknown:?}, outside the closed list the \
+                 concurrency scan reasons about; a dependency may export a \
+                 macro that spawns, which a lexical scan cannot see. Decide, \
+                 then widen CONCURRENCY_SCAN_ALLOWED_DEPENDENCIES"
             );
         }
         let mut files = Vec::new();
@@ -16972,6 +16984,26 @@ mod tests {
         // The untouched copy still verifies, so the refusals above are earned.
         fs::write(scratch_root.join(rel), &original).expect("write");
         verify_markdown_tables(&scratch_root, &packet).expect("an unmodified copy verifies");
+    }
+
+    /// Review of `f4d42d3`: a `pub(crate)` helper named no prefix the closure
+    /// recognised, so the oracle could reach production through it.
+    #[test]
+    fn the_oracle_closure_follows_helpers_whatever_their_visibility() {
+        let text = concat!(
+            "fn oracle(x: u8) -> u8 {\n    helper(x)\n}\n\n",
+            "pub(crate) fn helper(x: u8) -> u8 {\n    forbidden_path(x)\n}\n\n",
+            "fn unrelated() -> u8 {\n    other_thing()\n}\n",
+        );
+        let body = oracle_reachable_body(text, "oracle");
+        assert!(
+            body.contains("forbidden_path("),
+            "a pub(crate) helper is part of the oracle: {body}"
+        );
+        assert!(
+            !body.contains("other_thing("),
+            "a function the oracle never reaches is not"
+        );
     }
 
     /// Blind pass 1 at 91b54842 (A01): `Rng::word` reaches one- and
