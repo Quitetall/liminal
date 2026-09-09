@@ -17558,7 +17558,7 @@ mod tests {
     /// it does not name cannot be derived at all. Caught here rather than in
     /// the gate, where it would surface as a lane refusal.
     #[test]
-    fn every_operator_in_the_plan_names_its_observation_kind() {
+    fn the_operator_table_is_closed_and_every_killer_pair_observes_two_ways() {
         let packet = packet_from_repo();
         for mutant in &packet.mutants {
             assert!(
@@ -17573,8 +17573,20 @@ mod tests {
         let by_id: BTreeMap<&str, &Test> =
             packet.tests.iter().map(|t| (t.id.as_str(), t)).collect();
         for mutant in &packet.mutants {
-            let first = by_id[mutant.killing_tests[0].as_str()];
-            let second = by_id[mutant.killing_tests[1].as_str()];
+            assert_eq!(
+                mutant.killing_tests.len(),
+                2,
+                "{} names {} killing tests; AM-17.10 derives a pair",
+                mutant.id,
+                mutant.killing_tests.len()
+            );
+            let named = |id: &str| {
+                *by_id
+                    .get(id)
+                    .unwrap_or_else(|| panic!("{} names killing test {id}, undeclared", mutant.id))
+            };
+            let first = named(&mutant.killing_tests[0]);
+            let second = named(&mutant.killing_tests[1]);
             assert_ne!(
                 first.evidence, second.evidence,
                 "{} observes one way twice: {} and {} are both {:?}",
