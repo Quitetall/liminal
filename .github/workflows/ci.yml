@@ -24,6 +24,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # SAS migration verifies exact historical source bytes.
+      - run: python3 scripts/sas_migration.py check
+      - run: python3 -m unittest discover -s scripts -p 'test_sas_migration.py'
       - run: rustup toolchain install # reads rust-toolchain.toml; single source of truth
       - run: cargo fmt --all --check
       - uses: taiki-e/install-action@v2

@@ -1,0 +1,34 @@
+schema: "oh.war/milestones/v1"
+
+milestones:
+  - id: "M1"
+    title: "Bounded delivery and refusal evidence collected"
+    stage_refs: ["STAGE-001", "STAGE-002", "STAGE-003", "STAGE-004"]
+    obligation_refs: ["OBL-001", "OBL-002"]
+
+  - id: "M2"
+    title: "Independent evidence and actual scoped decisions established"
+    depends_on: ["M1"]
+    obligation_refs: ["OBL-003"]
+
+stages:
+  - id: "STAGE-001"
+    title: "Implement the single CST-backed formatter and fold valid, malformed, semantic-preservation, and double-format assertions into the existing gate"
+    executor_kind: "agent"
+    responsibility_tier: "T2"
+
+  - id: "STAGE-002"
+    title: "Add `lim fmt` with ordered preflight and per-file atomic replacement"
+    executor_kind: "agent"
+    responsibility_tier: "T2"
+
+  - id: "STAGE-003"
+    title: "Extend `lim check` and add `lim expand` through the same pipeline"
+    executor_kind: "agent"
+    responsibility_tier: "T2"
+
+  - id: "STAGE-004"
+    title: "Reconcile the milestone meter"
+    executor_kind: "agent"
+    responsibility_tier: "T4"
+
