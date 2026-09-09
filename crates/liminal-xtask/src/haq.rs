@@ -1478,7 +1478,10 @@ fn verify_coarse_scan(
         // Checked as a relation rather than a value: equal text hashes alike,
         // different text does not. That catches a constant or text-blind hash
         // without this oracle restating the digest production computes.
-        let digest = format!("{:?}", block.hash);
+        // `to_hex`, not `{:?}`: the witness is a durable digest, and keying it
+        // on a Debug impl would move it if that impl were ever reformatted
+        // (review of 98f65011).
+        let digest = block.hash.to_hex();
         if let Some(seen) = by_text.insert(text, digest.clone()) {
             anyhow::ensure!(
                 seen == digest,
@@ -15254,7 +15257,7 @@ mod tests {
         const GOLDENS: [(&str, &str); 5] = [
             (
                 "source/CST/formatting",
-                "239055afff7f7b775b32c93d2396079768bdd97c1fc4383625b71d6b16d0fb16",
+                "cebe63227f25142b13ae20cd18d45f1a60e5692a01f675fc93ca4c6a3bfc6abd",
             ),
             (
                 "graph/interchange codecs",
