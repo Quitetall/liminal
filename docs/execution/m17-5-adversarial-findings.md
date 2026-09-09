@@ -3332,3 +3332,30 @@ judges, and what it found there was real: a quarter of one family's mutants
 measuring test assertions instead of the product. That is the failure mode
 ADR-0020 §3 exists to prevent, and it survived seven lanes because nothing
 checked whether an anchor was production code.
+
+## F-56 — the screen that reads test modules could not read Rust
+
+**Found.** 2026-09-09, in the external review of `e490671` and the pass over
+its own follow-up. Not a lane finding: two defects in the anchor screen F-55
+had just added, caught before the ninth lane started.
+
+| what was true | fix |
+|---|---|
+| `continues_signature` matched `trimmed.starts_with(')') && trimmed.ends_with(';')`, which is a bare `);` — the terminator of every multi-line call in the codebase. Behaviour anchors would have been refused as declarations | a signature continuation contains `->` or ends `{`; `);` is behaviour |
+| `line_is_inside_test_code` counted every `{` and `}`, including those inside line comments and string literals. One `// weird }` closes the test module early and a test-code anchor reads as production | only structural braces count, via a new `structural_braces` |
+| `structural_braces` then opened a character literal at every `'`. A lifetime never closes one, so `Formatter<'_>) -> Result {` lost its brace. Eighteen lines in the anchor-bearing files pair an odd `'` count with a brace | a `'` opens a literal only when it closes within one escape sequence; raw and byte strings are recognised with their hash counts |
+| in the first draft of the escape handling, `'\''`'s quote at `at + 2` is the escaped character, not the terminator, so the scan resumed mid-literal | the search starts past the escaped character; `'\u{7d}'` is covered |
+
+**Why it is recorded.** Every one of these undercounts brace depth, and brace
+depth is the whole signal deciding whether an anchor is production code. The
+screen that caught six mutants measuring test assertions was itself unable to
+parse the language it screened. It was added and reviewed in the same day, so
+nothing downstream ever depended on the wrong answer — but a screen this load-
+bearing earning a pass on a scanner that mistakes `Formatter<'_>` for an
+unterminated literal is the species of defect this campaign exists to find,
+whether a lane or a review is what surfaces it.
+
+**Nits not taken.** `#[cfg( test )]` with inner spaces is not syntax rustfmt
+emits. The block-comment case spans lines a per-line scanner never sees. The
+resolution registry's commands run with the gate's environment and no timeout
+because they are the project's own gates: a hang there is a hang in CI.

@@ -8077,7 +8077,17 @@ fn skip_raw_string(chars: &[char], at: usize) -> Option<usize> {
     }
     i += 1;
     while i < chars.len() {
-        if chars[i] == '"' && chars[i + 1..].iter().take(hashes).all(|c| *c == '#') {
+        // Counted, not `all`: on a tail shorter than `hashes` an `all` is
+        // vacuously true, which would close the literal on a quote that does
+        // not terminate it.
+        if chars[i] == '"'
+            && chars[i + 1..]
+                .iter()
+                .take(hashes)
+                .filter(|c| **c == '#')
+                .count()
+                == hashes
+        {
             return Some(i + 1 + hashes);
         }
         i += 1;
