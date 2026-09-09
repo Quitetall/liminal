@@ -1021,7 +1021,7 @@
    "defect": "emit a literal the compact parser would normalize",
    "killing_tests": [
     "P1-T02",
-    "P1-T10"
+    "P1-T09"
    ],
    "disposition": "predeclared"
   },
@@ -1033,8 +1033,8 @@
    "requirement": "P1-R001",
    "defect": "invert the nesting-overflow predicate so over-deep input is never reported",
    "killing_tests": [
-    "P1-T13",
-    "P1-T02"
+    "P1-T09",
+    "P1-T10"
    ],
    "disposition": "predeclared"
   },
@@ -1046,8 +1046,8 @@
    "requirement": "P1-R002",
    "defect": "shift the span end off the closing brace",
    "killing_tests": [
-    "P1-T11",
-    "P1-T10"
+    "P1-T10",
+    "P1-T11"
    ],
    "disposition": "predeclared"
   },
@@ -1059,8 +1059,8 @@
    "requirement": "P1-R002",
    "defect": "shift span end backward",
    "killing_tests": [
-    "P1-T09",
-    "P1-T04"
+    "P1-T10",
+    "P1-T11"
    ],
    "disposition": "predeclared"
   },
@@ -1072,8 +1072,8 @@
    "requirement": "P1-R003",
    "defect": "drop trivia token kind",
    "killing_tests": [
-    "P1-T14",
-    "P1-T05"
+    "P1-T10",
+    "P1-T11"
    ],
    "disposition": "predeclared"
   },
@@ -1085,8 +1085,8 @@
    "requirement": "P1-R004",
    "defect": "treat malformed parse as clean success",
    "killing_tests": [
-    "P1-T17",
-    "P1-T06"
+    "P1-T09",
+    "P1-T10"
    ],
    "disposition": "predeclared"
   },
@@ -1099,7 +1099,7 @@
    "defect": "reuse source basis after edit",
    "killing_tests": [
     "P1-T11",
-    "P1-T07"
+    "P1-T12"
    ],
    "disposition": "predeclared"
   },
@@ -1111,8 +1111,8 @@
    "requirement": "P1-R006",
    "defect": "classify source node as graph-native",
    "killing_tests": [
-    "P1-T15",
-    "P1-T08"
+    "P1-T11",
+    "P1-T12"
    ],
    "disposition": "predeclared"
   },
@@ -1125,7 +1125,7 @@
    "defect": "skip per-file atomic replacement checkpoint",
    "killing_tests": [
     "P1-T22",
-    "P1-T01"
+    "P1-T07"
    ],
    "disposition": "predeclared"
   },
@@ -1137,8 +1137,8 @@
    "requirement": "P1-R015",
    "defect": "treat a failed formatting stage as success, dropping the error after the checkpoint is abandoned",
    "killing_tests": [
-    "P1-T10",
-    "P1-T02"
+    "P1-T17",
+    "P1-T18"
    ],
    "disposition": "predeclared"
   },
@@ -1150,8 +1150,8 @@
    "requirement": "P1-R003",
    "defect": "emit unordered attributes",
    "killing_tests": [
-    "P1-T16",
-    "P1-T03"
+    "P1-T12",
+    "P1-T01"
    ],
    "disposition": "predeclared"
   },
@@ -1163,8 +1163,8 @@
    "requirement": "P1-R004",
    "defect": "replace ID-presence oracle branch with a constant",
    "killing_tests": [
-    "P1-T18",
-    "P1-T04"
+    "P1-T02",
+    "P1-T09"
    ],
    "disposition": "predeclared"
   },
@@ -1177,7 +1177,7 @@
    "defect": "broaden the compact identifier allow-list to every byte, making compact emission lossy",
    "killing_tests": [
     "P1-T17",
-    "P1-T01"
+    "P1-T18"
    ],
    "disposition": "predeclared"
   },
@@ -1189,8 +1189,8 @@
    "requirement": "P1-R008",
    "defect": "invert graph flag containment predicate",
    "killing_tests": [
-    "P1-T27",
-    "P1-T06"
+    "P1-T13",
+    "P1-T14"
    ],
    "disposition": "predeclared"
   },
@@ -1203,7 +1203,7 @@
    "defect": "invert node-presence check",
    "killing_tests": [
     "P1-T13",
-    "P1-T07"
+    "P1-T14"
    ],
    "disposition": "predeclared"
   },
@@ -1215,8 +1215,8 @@
    "requirement": "P1-R009",
    "defect": "advance relation count",
    "killing_tests": [
-    "P1-T27",
-    "P1-T08"
+    "P1-T14",
+    "P1-T15"
    ],
    "disposition": "predeclared"
   },
@@ -1228,8 +1228,8 @@
    "requirement": "P1-R009",
    "defect": "drop relation count",
    "killing_tests": [
-    "P1-T13",
-    "P1-T01"
+    "P1-T14",
+    "P1-T15"
    ],
    "disposition": "predeclared"
   },
@@ -1241,8 +1241,8 @@
    "requirement": "P1-R010",
    "defect": "drop edge kind dispatch",
    "killing_tests": [
-    "P1-T28",
-    "P1-T02"
+    "P1-T14",
+    "P1-T15"
    ],
    "disposition": "predeclared"
   },
@@ -1255,7 +1255,7 @@
    "defect": "accept invalid interchange payload",
    "killing_tests": [
     "P1-T13",
-    "P1-T03"
+    "P1-T14"
    ],
    "disposition": "predeclared"
   },
@@ -1267,8 +1267,8 @@
    "requirement": "P1-R010",
    "defect": "ordering nondeterminism seeded at the anchored site",
    "killing_tests": [
-    "P1-T34",
-    "P1-T08"
+    "P1-T16",
+    "P1-T03"
    ],
    "disposition": "predeclared"
   },
@@ -1281,7 +1281,7 @@
    "defect": "resolve EXTERNAL_VALUE ungoverned",
    "killing_tests": [
     "P1-T15",
-    "P1-T05"
+    "P1-T16"
    ],
    "disposition": "predeclared"
   },
@@ -1293,8 +1293,8 @@
    "requirement": "P1-R015",
    "defect": "omit codec checkpoint record",
    "killing_tests": [
-    "P1-T28",
-    "P1-T06"
+    "P1-T22",
+    "P1-T07"
    ],
    "disposition": "predeclared"
   },
@@ -1306,8 +1306,8 @@
    "requirement": "P1-R015",
    "defect": "threshold plus one seeded at the anchored site",
    "killing_tests": [
-    "P1-T14",
-    "P1-T07"
+    "P1-T18",
+    "P1-T19"
    ],
    "disposition": "predeclared"
   },
@@ -1319,8 +1319,8 @@
    "requirement": "P1-R009",
    "defect": "threshold minus one seeded at the anchored site",
    "killing_tests": [
-    "P1-T30",
-    "P1-T08"
+    "P1-T14",
+    "P1-T15"
    ],
    "disposition": "predeclared"
   },
@@ -1333,7 +1333,7 @@
    "defect": "missing enum dispatch seeded at the anchored site",
    "killing_tests": [
     "P1-T14",
-    "P1-T01"
+    "P1-T15"
    ],
    "disposition": "predeclared"
   },
@@ -1345,8 +1345,8 @@
    "requirement": "P1-R011",
    "defect": "success error substitution seeded at the anchored site",
    "killing_tests": [
-    "P1-T27",
-    "P1-T02"
+    "P1-T13",
+    "P1-T14"
    ],
    "disposition": "predeclared"
   },
@@ -1358,8 +1358,8 @@
    "requirement": "P1-R013",
    "defect": "skip transform equality law",
    "killing_tests": [
-    "P1-T27",
-    "P1-T03"
+    "P1-T06",
+    "P1-T17"
    ],
    "disposition": "predeclared"
   },
@@ -1371,8 +1371,8 @@
    "requirement": "P1-R013",
    "defect": "invert projection inclusion",
    "killing_tests": [
-    "P1-T13",
-    "P1-T04"
+    "P1-T17",
+    "P1-T18"
    ],
    "disposition": "predeclared"
   },
@@ -1384,8 +1384,8 @@
    "requirement": "P1-R014",
    "defect": "advance patch offset",
    "killing_tests": [
-    "P1-T27",
-    "P1-T05"
+    "P1-T18",
+    "P1-T19"
    ],
    "disposition": "predeclared"
   },
@@ -1397,8 +1397,8 @@
    "requirement": "P1-R014",
    "defect": "retreat patch offset",
    "killing_tests": [
-    "P1-T13",
-    "P1-T06"
+    "P1-T18",
+    "P1-T19"
    ],
    "disposition": "predeclared"
   },
@@ -1410,8 +1410,8 @@
    "requirement": "P1-R013",
    "defect": "drop transform variant",
    "killing_tests": [
-    "P1-T28",
-    "P1-T07"
+    "P1-T18",
+    "P1-T19"
    ],
    "disposition": "predeclared"
   },
@@ -1423,8 +1423,8 @@
    "requirement": "P1-R016",
    "defect": "treat rejected transform as success",
    "killing_tests": [
-    "P1-T13",
-    "P1-T08"
+    "P1-T17",
+    "P1-T18"
    ],
    "disposition": "predeclared"
   },
@@ -1436,8 +1436,8 @@
    "requirement": "P1-R017",
    "defect": "accept a source whose content hash no longer matches its declared basis",
    "killing_tests": [
-    "P1-T29",
-    "P1-T01"
+    "P1-T25",
+    "P1-T26"
    ],
    "disposition": "predeclared"
   },
@@ -1449,8 +1449,8 @@
    "requirement": "P1-R014",
    "defect": "choose external holder for projection",
    "killing_tests": [
-    "P1-T15",
-    "P1-T02"
+    "P1-T19",
+    "P1-T20"
    ],
    "disposition": "predeclared"
   },
@@ -1462,8 +1462,8 @@
    "requirement": "P1-R015",
    "defect": "skip projection journal record",
    "killing_tests": [
-    "P1-T28",
-    "P1-T03"
+    "P1-T22",
+    "P1-T07"
    ],
    "disposition": "predeclared"
   },
@@ -1475,8 +1475,8 @@
    "requirement": "P1-R015",
    "defect": "predicate deletion seeded at the anchored site",
    "killing_tests": [
-    "P1-T14",
-    "P1-T04"
+    "P1-T07",
+    "P1-T17"
    ],
    "disposition": "predeclared"
   },
@@ -1488,8 +1488,8 @@
    "requirement": "P1-R013",
    "defect": "permute independent transform order",
    "killing_tests": [
-    "P1-T30",
-    "P1-T05"
+    "P1-T20",
+    "P1-T21"
    ],
    "disposition": "predeclared"
   },
@@ -1501,8 +1501,8 @@
    "requirement": "P1-R014",
    "defect": "compare incremental render to itself",
    "killing_tests": [
-    "P1-T14",
-    "P1-T06"
+    "P1-T06",
+    "P1-T17"
    ],
    "disposition": "predeclared"
   },
@@ -1514,8 +1514,8 @@
    "requirement": "P1-R016",
    "defect": "predicate deletion seeded at the anchored site",
    "killing_tests": [
-    "P1-T27",
-    "P1-T07"
+    "P1-T04",
+    "P1-T17"
    ],
    "disposition": "predeclared"
   },
@@ -1527,8 +1527,8 @@
    "requirement": "P1-R015",
    "defect": "delete recovery terminal check",
    "killing_tests": [
-    "P1-T31",
-    "P1-T08"
+    "P1-T07",
+    "P1-T17"
    ],
    "disposition": "predeclared"
   },
@@ -1541,7 +1541,7 @@
    "defect": "invert idempotent recovery equality",
    "killing_tests": [
     "P1-T17",
-    "P1-T01"
+    "P1-T18"
    ],
    "disposition": "predeclared"
   },
@@ -1553,8 +1553,8 @@
    "requirement": "P1-R015",
    "defect": "shift the single-evidence threshold so a lone evidence no longer takes the single-evidence path",
    "killing_tests": [
-    "P1-T31",
-    "P1-T02"
+    "P1-T18",
+    "P1-T19"
    ],
    "disposition": "predeclared"
   },
@@ -1566,8 +1566,8 @@
    "requirement": "P1-R015",
    "defect": "retreat occurrence counter",
    "killing_tests": [
-    "P1-T17",
-    "P1-T03"
+    "P1-T18",
+    "P1-T19"
    ],
    "disposition": "predeclared"
   },
@@ -1579,8 +1579,8 @@
    "requirement": "P1-R015",
    "defect": "drop Finalizing recovery branch",
    "killing_tests": [
-    "P1-T32",
-    "P1-T04"
+    "P1-T18",
+    "P1-T19"
    ],
    "disposition": "predeclared"
   },
@@ -1593,7 +1593,7 @@
    "defect": "commit contested repair",
    "killing_tests": [
     "P1-T17",
-    "P1-T05"
+    "P1-T18"
    ],
    "disposition": "predeclared"
   },
@@ -1605,8 +1605,8 @@
    "requirement": "P1-R017",
    "defect": "accept a repair step whose prestate matches neither the captured basis nor the chain, recovering with a stale Basis",
    "killing_tests": [
-    "P1-T33",
-    "P1-T06"
+    "P1-T25",
+    "P1-T26"
    ],
    "disposition": "predeclared"
   },
@@ -1619,7 +1619,7 @@
    "defect": "apply graph step as file step",
    "killing_tests": [
     "P1-T19",
-    "P1-T07"
+    "P1-T20"
    ],
    "disposition": "predeclared"
   },
@@ -1631,8 +1631,8 @@
    "requirement": "P1-R015",
    "defect": "skip ack persistence",
    "killing_tests": [
-    "P1-T32",
-    "P1-T08"
+    "P1-T22",
+    "P1-T07"
    ],
    "disposition": "predeclared"
   },
@@ -1644,8 +1644,8 @@
    "requirement": "P1-R015",
    "defect": "disable before_ack point",
    "killing_tests": [
-    "P1-T21",
-    "P1-T01"
+    "P1-T22",
+    "P1-T07"
    ],
    "disposition": "predeclared"
   },
@@ -1657,8 +1657,8 @@
    "requirement": "P1-R015",
    "defect": "recover steps unordered",
    "killing_tests": [
-    "P1-T34",
-    "P1-T02"
+    "P1-T20",
+    "P1-T21"
    ],
    "disposition": "predeclared"
   },
@@ -1670,8 +1670,8 @@
    "requirement": "P1-R015",
    "defect": "compare recovery digest to itself",
    "killing_tests": [
-    "P1-T18",
-    "P1-T03"
+    "P1-T07",
+    "P1-T17"
    ],
    "disposition": "predeclared"
   },
@@ -1683,7 +1683,7 @@
    "requirement": "P1-R016",
    "defect": "disabled crash point seeded at the anchored site",
    "killing_tests": [
-    "P1-T31",
+    "P1-T22",
     "P1-T04"
    ],
    "disposition": "predeclared"
@@ -1696,8 +1696,8 @@
    "requirement": "P1-R017",
    "defect": "delete invalidation predicate",
    "killing_tests": [
-    "P1-T23",
-    "P1-T05"
+    "P1-T07",
+    "P1-T23"
    ],
    "disposition": "predeclared"
   },
@@ -1709,8 +1709,8 @@
    "requirement": "P1-R017",
    "defect": "invert revision freshness check",
    "killing_tests": [
-    "P1-T35",
-    "P1-T06"
+    "P1-T23",
+    "P1-T24"
    ],
    "disposition": "predeclared"
   },
@@ -1722,8 +1722,8 @@
    "requirement": "P1-R018",
    "defect": "drop an arm of the durability dispatch so a component class is silently misclassified",
    "killing_tests": [
-    "P1-T23",
-    "P1-T07"
+    "P1-T24",
+    "P1-T25"
    ],
    "disposition": "predeclared"
   },
@@ -1735,8 +1735,8 @@
    "requirement": "P1-R018",
    "defect": "stale basis acceptance seeded at the anchored site",
    "killing_tests": [
-    "P1-T35",
-    "P1-T08"
+    "P1-T25",
+    "P1-T26"
    ],
    "disposition": "predeclared"
   },
@@ -1749,7 +1749,7 @@
    "defect": "drop BasisPerspective variant",
    "killing_tests": [
     "P1-T24",
-    "P1-T01"
+    "P1-T25"
    ],
    "disposition": "predeclared"
   },
@@ -1761,8 +1761,8 @@
    "requirement": "P1-R016",
    "defect": "accept invalid revision query",
    "killing_tests": [
-    "P1-T35",
-    "P1-T02"
+    "P1-T17",
+    "P1-T18"
    ],
    "disposition": "predeclared"
   },
@@ -1775,7 +1775,7 @@
    "defect": "serve query from stale Basis",
    "killing_tests": [
     "P1-T25",
-    "P1-T03"
+    "P1-T26"
    ],
    "disposition": "predeclared"
   },
@@ -1787,8 +1787,8 @@
    "requirement": "P1-R019",
    "defect": "stale basis acceptance seeded at the anchored site",
    "killing_tests": [
-    "P1-T37",
-    "P1-T04"
+    "P1-T25",
+    "P1-T26"
    ],
    "disposition": "predeclared"
   },
@@ -1800,8 +1800,8 @@
    "requirement": "P1-R015",
    "defect": "predicate deletion seeded at the anchored site",
    "killing_tests": [
-    "P1-T24",
-    "P1-T05"
+    "P1-T07",
+    "P1-T17"
    ],
    "disposition": "predeclared"
   },
@@ -1813,8 +1813,8 @@
    "requirement": "P1-R015",
    "defect": "missing enum dispatch seeded at the anchored site",
    "killing_tests": [
-    "P1-T36",
-    "P1-T06"
+    "P1-T18",
+    "P1-T19"
    ],
    "disposition": "predeclared"
   },
@@ -1826,8 +1826,8 @@
    "requirement": "P1-R018",
    "defect": "success error substitution seeded at the anchored site",
    "killing_tests": [
-    "P1-T26",
-    "P1-T07"
+    "P1-T23",
+    "P1-T24"
    ],
    "disposition": "predeclared"
   },
@@ -1839,8 +1839,8 @@
    "requirement": "P1-R017",
    "defect": "stale basis acceptance seeded at the anchored site",
    "killing_tests": [
-    "P1-T36",
-    "P1-T08"
+    "P1-T25",
+    "P1-T26"
    ],
    "disposition": "predeclared"
   },
@@ -1853,7 +1853,7 @@
    "defect": "predicate inversion seeded at the anchored site",
    "killing_tests": [
     "P1-T23",
-    "P1-T01"
+    "P1-T24"
    ],
    "disposition": "predeclared"
   }

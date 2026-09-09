@@ -3543,15 +3543,114 @@ fn verify_qualification_stage(packet: &Packet) -> Result<()> {
 /// `killed`. It is deliberately unsatisfiable today, and that is the correct
 /// state: the mutation requirement is GATED on the Phase 1 milestones writing
 /// their tests, not on anything M17.5 can produce.
+/// How each mutation operator is observed. AM-17.10: a killer is derived, not
+/// declared, and the primary killer is the test whose evidence kind is the way
+/// this operator's defect shows itself. Closed table — a new operator must
+/// name its observation here before the plan can carry it.
+const MUTANT_OBSERVATION_KIND: [(&str, &str); 13] = [
+    ("broadened-allow-list", "negative"),
+    ("disabled-crash-point", "recovery"),
+    ("missing-enum-dispatch", "malformed"),
+    ("oracle-short-circuit", "positive"),
+    ("ordering-nondeterminism", "replay"),
+    ("predicate-deletion", "positive"),
+    ("predicate-inversion", "negative"),
+    ("skipped-durable-transition", "recovery"),
+    ("stale-basis-acceptance", "basis"),
+    ("success-error-substitution", "negative"),
+    ("threshold-minus-one", "malformed"),
+    ("threshold-plus-one", "malformed"),
+    ("wrong-holder-selection", "basis"),
+];
+
+/// The killing tests AM-17.10 derives for `mutant`: the candidates are the
+/// tests the packet maps to its requirement, in packet order; the primary is
+/// the first candidate observed the way this operator shows itself; the
+/// secondary is the first remaining candidate of a different evidence kind.
+/// Each fallback is to the next candidate, never outside the requirement.
+fn derive_killing_tests(packet: &Packet, mutant: &Mutant) -> Result<Vec<String>> {
+    // Position among the mutants sharing this requirement. F-05 caps any one
+    // test at a quarter of the plan, and a rule that always picked the first
+    // apt candidate put P1-T07 on 46% of it. Rotation spreads the claim across
+    // the tests that defend the requirement instead of piling it on the first.
+    let ordinal = packet
+        .mutants
+        .iter()
+        .take_while(|other| other.id != mutant.id)
+        .filter(|other| other.requirement == mutant.requirement)
+        .count();
+    let observed = MUTANT_OBSERVATION_KIND
+        .iter()
+        .find(|(operator, _)| *operator == mutant.operator)
+        .map(|(_, kind)| *kind)
+        .with_context(|| {
+            format!(
+                "{} carries operator {:?}, which names no observation kind; AM-17.10 requires \
+                 one before the plan can carry the operator",
+                mutant.id, mutant.operator
+            )
+        })?;
+    let candidates: Vec<&Test> = packet
+        .tests
+        .iter()
+        .filter(|test| test.requirements.contains(&mutant.requirement))
+        .collect();
+    anyhow::ensure!(
+        candidates.len() >= 2,
+        "{} names requirement {}, which {} test(s) defend; a pair of killers needs two",
+        mutant.id,
+        mutant.requirement,
+        candidates.len()
+    );
+    let observed_candidates: Vec<&&Test> = candidates
+        .iter()
+        .filter(|test| test.evidence.iter().any(|kind| kind == observed))
+        .collect();
+    let primary = if observed_candidates.is_empty() {
+        candidates[ordinal % candidates.len()]
+    } else {
+        observed_candidates[ordinal % observed_candidates.len()]
+    };
+    let start = candidates
+        .iter()
+        .position(|test| test.id == primary.id)
+        .context("the primary is one of the candidates")?;
+    let after = |step: usize| candidates[(start + step) % candidates.len()];
+    let secondary = (1..candidates.len())
+        .map(after)
+        .find(|test| test.evidence != primary.evidence)
+        .unwrap_or_else(|| after(1));
+    Ok(vec![primary.id.clone(), secondary.id.clone()])
+}
+
+/// Print the killing tests AM-17.10 derives for every mutant, so the packet is
+/// transcribed from the same implementation the gate verifies against rather
+/// than from a second one that could disagree.
+pub fn derive_killers_repo(root: &Utf8Path) -> Result<String> {
+    let packet = read_packet(root)?;
+    let mut out = String::new();
+    for mutant in &packet.mutants {
+        let derived = derive_killing_tests(&packet, mutant)?;
+        out.push_str(&serde_json::to_string(&serde_json::json!({
+            "id": mutant.id,
+            "killing_tests": derived,
+        }))?);
+        out.push('\n');
+    }
+    Ok(out)
+}
+
 fn verify_mutant_killing_tests(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    // AM-17.10: the column is derived for every mutant, whatever its
+    // disposition, and is checked before the clauses that inspect only killed
+    // ones. This function used to return here when nothing was killed, so at
+    // stage 1a — where all 65 mutants are predeclared — it read nothing at
+    // all, and a generated killer column rode through fourteen lanes.
     let killed: Vec<&Mutant> = packet
         .mutants
         .iter()
         .filter(|mutant| mutant.disposition == "killed")
         .collect();
-    if killed.is_empty() {
-        return Ok(());
-    }
     let by_id: BTreeMap<&str, &Test> = packet
         .tests
         .iter()
@@ -3580,6 +3679,25 @@ fn verify_mutant_killing_tests(root: &Utf8Path, packet: &Packet) -> Result<()> {
                 );
             }
         }
+    }
+    // AM-17.10: every mutant's column is derived, whatever its disposition.
+    // Checked last so a kill witnessed by an ignored or missing test reports
+    // that, rather than being answered by the derivation. The clauses above
+    // inspect only `killed` mutants, which is why a plan of 65 predeclared
+    // mutants carried a generated killer column through fourteen lanes with
+    // no gate reading it at all.
+    for mutant in &packet.mutants {
+        let derived = derive_killing_tests(packet, mutant)?;
+        anyhow::ensure!(
+            mutant.killing_tests == derived,
+            "{} names killing tests {:?}; AM-17.10 derives {:?} from requirement {} and \
+             operator {:?}",
+            mutant.id,
+            mutant.killing_tests,
+            derived,
+            mutant.requirement,
+            mutant.operator
+        );
     }
     Ok(())
 }
@@ -17401,6 +17519,70 @@ mod tests {
                 "{header:?} relaxes a table the gate never reads"
             );
         }
+    }
+
+    /// AM-17.10: the killer column is derived, so a hand-authored one is
+    /// refused however plausible it looks — 38 of 65 mutants once had neither
+    /// killer covering their own requirement and no gate read the column,
+    /// because the checks below it inspect only `killed` mutants.
+    #[test]
+    fn a_hand_authored_killer_column_is_refused() {
+        let packet = packet_from_repo();
+        verify_mutant_killing_tests(&repo_root(), &packet)
+            .expect("the committed column is the derived one");
+
+        let mut doctored = packet.clone();
+        let victim = &mut doctored.mutants[0];
+        let derived = victim.killing_tests.clone();
+        // A test that exists and defends the same requirement, but is not the
+        // one the rule derives: plausible by eye, refused by construction.
+        victim.killing_tests = vec![derived[1].clone(), derived[0].clone()];
+        let err = verify_mutant_killing_tests(&repo_root(), &doctored)
+            .expect_err("a reordered pair is not the derived pair");
+        assert!(err.to_string().contains("AM-17.10 derives"), "{err}");
+
+        let mut unknown = packet.clone();
+        unknown.mutants[0].operator = "invented-operator".to_owned();
+        let err = verify_mutant_killing_tests(&repo_root(), &unknown)
+            .expect_err("an operator with no observation kind");
+        assert!(
+            err.to_string().contains("names no observation kind"),
+            "{err}"
+        );
+    }
+
+    /// AM-17.10's primary killer is chosen by how the operator is observed.
+    #[test]
+    fn the_derived_primary_matches_the_operators_observation_kind() {
+        let packet = packet_from_repo();
+        let by_id: BTreeMap<&str, &Test> =
+            packet.tests.iter().map(|t| (t.id.as_str(), t)).collect();
+        let mut checked = 0usize;
+        for mutant in &packet.mutants {
+            let observed = MUTANT_OBSERVATION_KIND
+                .iter()
+                .find(|(operator, _)| *operator == mutant.operator)
+                .map(|(_, kind)| *kind)
+                .expect("every operator names its observation");
+            let defends_with_that_kind = packet.tests.iter().any(|test| {
+                test.requirements.contains(&mutant.requirement)
+                    && test.evidence.iter().any(|kind| kind == observed)
+            });
+            if !defends_with_that_kind {
+                continue;
+            }
+            let primary = by_id[mutant.killing_tests[0].as_str()];
+            assert!(
+                primary.evidence.iter().any(|kind| kind == observed),
+                "{}: operator {:?} is observed by {observed}, primary {} is {:?}",
+                mutant.id,
+                mutant.operator,
+                primary.id,
+                primary.evidence
+            );
+            checked += 1;
+        }
+        assert!(checked > 20, "only {checked} mutants exercised the rule");
     }
 
     /// Blind pass 1 at 91b54842 (A01): `Rng::word` reaches one- and

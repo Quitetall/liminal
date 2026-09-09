@@ -3596,3 +3596,59 @@ measures by running the mutants.
 
 This is a class A finding under AM-17.9: the suite cannot see a defect it
 declares itself able to see. It blocks.
+
+## F-63 — the killer column, re-derived
+
+**Ruled.** 2026-09-09. Brian's answer to F-62's escalation: re-derive all 65
+killer pairs against a written rule. Recorded as AM-17.10.
+
+**What the measurement showed, once taken properly.** F-62 reported that 60 of
+65 mutants named a killer not covering their requirement. Checking both
+positions rather than one: **38 of 65 had neither killer covering it**, 23 had
+only the first, 9 only the second, and 5 had both. The column was not
+half-right; it was arbitrary.
+
+**Why no gate saw it.** `verify_mutant_killing_tests` opens by collecting the
+mutants whose disposition is `killed` and returning `Ok(())` when that list is
+empty. At stage 1a every mutant is `predeclared`, so the function read nothing
+at all. Fourteen lanes of blind review, thirty-three canaries and a closed
+source registry sat above a check that had never executed a line of its body.
+
+**The rule that was possible, and the one that was not.** The first draft of
+AM-17.10 required a coverage matrix proving each killer executes the mutated
+file. That is unimplementable at 1a and I discovered it by trying: building the
+workspace under `-C instrument-coverage` and listing the instrumented tests
+showed **none of the 38 declared tests exist**. AM-17.4 already records this —
+27 unwritten, 8 `#[ignore]`d — so execution proof belongs to HAQP-1b with the
+kill measurement. The amendment was rewritten before it was committed, which is
+the only reason it is not now a rule nothing can satisfy.
+
+**The rule as ratified.** Candidates are the tests the packet maps to the
+mutant's requirement, in packet order. The primary killer is the candidate
+whose evidence kind is how that operator's defect shows itself — a
+`skipped-durable-transition` by `recovery`, an `ordering-nondeterminism` by
+`replay`, a `stale-basis-acceptance` by `basis`, a `broadened-allow-list` by
+`negative` — from a closed operator table. The secondary is the next candidate
+of a different evidence kind, so the pair spans two ways of observing. Both
+fall back to the next candidate, never outside the requirement.
+
+**Rotation, and why it is not the thing it replaced.** The first implementation
+always took the first apt candidate, which put P1-T07 on 46% of the plan and
+tripped F-05's existing 25% clustering ceiling — a gate from an earlier lane
+catching this one. Selection now rotates by the mutant's position among those
+sharing its requirement. That is positional, like the column it replaces, with
+one difference that is the whole difference: it rotates within the tests that
+defend the requirement, not across a list of tests chosen for nothing.
+
+**Result.** 64 of 65 pairs changed. Zero killers now fail to cover their
+mutant's requirement, 22 distinct pairs across 65 mutants, and the heaviest
+test carries 15 of 65 against a ceiling of 16. `verify_mutant_killing_tests`
+recomputes the column for every mutant and refuses any packet that differs, so
+it cannot be authored freely again — a reordered pair, which is the most
+plausible-looking doctoring available, is refused by construction.
+
+**What this still does not claim.** Not that the named test would fail under
+the mutation, and not that it executes the mutated file. Both are measurements,
+both need the suite to exist, and both remain HAQP-1b under RISK-001. What
+closed here is narrower and was worse: a column that named tests which do not
+defend the requirement the mutant attacks.

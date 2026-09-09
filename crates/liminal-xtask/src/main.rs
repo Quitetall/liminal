@@ -46,6 +46,12 @@ fn main() -> Result<()> {
                     )?
                 );
             }
+            HaqCommand::DeriveKillers => {
+                print!(
+                    "{}",
+                    liminal_xtask::haq::derive_killers_repo(&liminal_xtask::repo_root()?)?
+                );
+            }
             HaqCommand::PacketDigest => {
                 println!(
                     "{}",
@@ -156,6 +162,8 @@ enum HaqCommand {
     /// that got that wrong would disagree only sometimes, which is worse than
     /// disagreeing always.
     PacketDigest,
+    /// Print the killing tests AM-17.10 derives for every mutant.
+    DeriveKillers,
     /// Run deterministic generated evidence for all five HAQP families.
     Generate {
         /// Accepted cases per family (qualification uses 100000).
