@@ -276,7 +276,12 @@ fn oracle_reachable_body(text: &str, name: &str) -> String {
             combined.push_str(body);
             combined.push('\n');
             for callee in &defined {
-                if !seen.contains(callee) && body.contains(&format!("{callee}(")) {
+                // Blind pass 1 at `6b36bbb9` (A01): only the CALL form was
+                // followed, so `let h = helper; h(input)` carried the oracle
+                // to a body the closure never entered — the same value
+                // indirection that defeated the alias scan one lane earlier.
+                // Naming a function at all pulls its body in.
+                if !seen.contains(callee) && mentions_word(body, callee) {
                     queue.push(callee.clone());
                 }
             }
@@ -498,27 +503,47 @@ fn cell_claims_nothing(cell: &str) -> bool {
 
 /// The rows of the table whose header starts with `header`, each split into
 /// trimmed cells. The separator row is dropped.
-fn markdown_table_rows<'a>(text: &'a str, header: &str) -> Option<Vec<Vec<&'a str>>> {
-    let start = text.find(header)?;
-    let mut rows = Vec::new();
-    for line in text[start..].lines().skip(1) {
-        if !line.starts_with('|') {
-            break;
-        }
-        let cells = line
-            .trim_matches('|')
-            .split('|')
-            .map(str::trim)
-            .collect::<Vec<_>>();
-        if cells
-            .iter()
-            .all(|cell| cell.chars().all(|ch| ch == '-' || ch == ':'))
-        {
+/// Every table under `header`, with the width its own header line declares.
+/// Blind pass 1 at `6b36bbb9` (A03): this found the FIRST header and stopped,
+/// so a second table spelling the same header was never read — its rows could
+/// claim anything. A document may render a header more than once, so all of
+/// them are returned and each is judged against its own header's width.
+fn markdown_tables<'a>(text: &'a str, header: &str) -> Vec<(usize, Vec<Vec<&'a str>>)> {
+    let mut tables = Vec::new();
+    for (offset, _) in text.match_indices(header) {
+        let is_line_start = text[..offset]
+            .chars()
+            .next_back()
+            .is_none_or(|previous| previous == '\n');
+        if !is_line_start {
             continue;
         }
-        rows.push(cells);
+        let mut lines = text[offset..].lines();
+        let width = lines
+            .next()
+            .map(|line| line.trim().trim_matches('|').split('|').count())
+            .unwrap_or_default();
+        let mut rows = Vec::new();
+        for line in lines {
+            if !line.starts_with('|') {
+                break;
+            }
+            let cells = line
+                .trim_matches('|')
+                .split('|')
+                .map(str::trim)
+                .collect::<Vec<_>>();
+            if cells
+                .iter()
+                .all(|cell| cell.chars().all(|ch| ch == '-' || ch == ':'))
+            {
+                continue;
+            }
+            rows.push(cells);
+        }
+        tables.push((width, rows));
     }
-    Some(rows)
+    tables
 }
 
 /// While the packet is unqualified, a rendered table may carry only what the
@@ -607,37 +632,36 @@ fn verify_markdown_tables(root: &Utf8Path, packet: &Packet) -> Result<()> {
         }
     }
     for header in RENDERED_TABLES {
-        let Some(rows) = markdown_table_rows(&text, header) else {
-            anyhow::bail!("review markdown has no table {header:?}");
-        };
+        let tables = markdown_tables(&text, header);
+        anyhow::ensure!(
+            !tables.is_empty(),
+            "review markdown has no table {header:?}"
+        );
         // The HEADER's width, not the first row's: the finding was a row with
         // surplus cells beneath a narrower header, which comparing rows to
-        // each other would not see.
-        let width = text
-            .lines()
-            .find(|line| line.trim_start().starts_with(header))
-            .map(|line| line.trim().trim_matches('|').split('|').count())
-            .unwrap_or_default();
-        for row in rows {
-            // Blind pass 1 at 9eca4f0 (A09): cell VALUES were checked but not
-            // how many there were, so a row could carry surplus cells beneath
-            // a narrower header and read as a different claim.
-            anyhow::ensure!(
-                row.len() == width,
-                "review markdown table {header:?} has a row of {} cells under a {width}-cell \
-                 header",
-                row.len()
-            );
-            for cell in row {
-                // Cells are markdown: an identifier is spelled in backticks.
-                let value = cell.trim().trim_matches('`').trim();
-                let renders_results = qualified && RESULT_BEARING_TABLES.contains(&header);
+        // each other would not see. Each table brings its own.
+        for (width, rows) in tables {
+            for row in rows {
+                // Blind pass 1 at 9eca4f0 (A09): cell VALUES were checked but not
+                // how many there were, so a row could carry surplus cells beneath
+                // a narrower header and read as a different claim.
                 anyhow::ensure!(
-                    renders_results || cell_claims_nothing(value) || declared.contains(value),
-                    "review markdown table {header:?} claims {value:?}, which the unqualified \
+                    row.len() == width,
+                    "review markdown table {header:?} has a row of {} cells under a {width}-cell \
+                 header",
+                    row.len()
+                );
+                for cell in row {
+                    // Cells are markdown: an identifier is spelled in backticks.
+                    let value = cell.trim().trim_matches('`').trim();
+                    let renders_results = qualified && RESULT_BEARING_TABLES.contains(&header);
+                    anyhow::ensure!(
+                        renders_results || cell_claims_nothing(value) || declared.contains(value),
+                        "review markdown table {header:?} claims {value:?}, which the unqualified \
                      packet does not declare; only the flip may write a result, and it runs \
                      on a qualified packet"
-                );
+                    );
+                }
             }
         }
     }
@@ -18045,6 +18069,43 @@ mod tests {
                 "the inventory path does not call {gate}, so a plan defect costs a whole lane"
             );
         }
+    }
+
+    /// Blind pass 1 at `6b36bbb9` (A03): the table lookup found the FIRST
+    /// header and stopped, so a second table spelling the same header was
+    /// never read and its rows could claim anything.
+    #[test]
+    fn every_table_under_a_header_is_read_not_only_the_first() {
+        let header = "| Family | Planned | Executed |";
+        let text = format!(
+            "{header}\n|---|---|---|\n| a | 1 | 2 |\n\nprose\n\n{header}\n|---|---|---|\n| b | 3 | 4 |\n"
+        );
+        let tables = markdown_tables(&text, header);
+        assert_eq!(tables.len(), 2, "both tables are read");
+        assert_eq!(tables[0].1[0], vec!["a", "1", "2"]);
+        assert_eq!(tables[1].1[0], vec!["b", "3", "4"]);
+        assert_eq!(tables[0].0, 3, "each table brings its own header width");
+
+        // A header mentioned mid-sentence is prose, not a table.
+        let inline = format!("see {header} above\n");
+        assert!(markdown_tables(&inline, header).is_empty());
+    }
+
+    /// Blind pass 1 at `6b36bbb9` (A01): the oracle closure followed only the
+    /// CALL form, so `let h = helper; h(input)` reached a body it never read.
+    #[test]
+    fn the_oracle_closure_follows_a_helper_named_as_a_value() {
+        let text = concat!(
+            "fn oracle(x: u8) -> u8 {\n    let h = helper;\n    h(x)\n}\n\n",
+            "fn helper(x: u8) -> u8 {\n    forbidden_path(x)\n}\n\n",
+            "fn unrelated() -> u8 {\n    other_thing()\n}\n",
+        );
+        let body = oracle_reachable_body(text, "oracle");
+        assert!(
+            body.contains("forbidden_path("),
+            "naming a function is reaching it: {body}"
+        );
+        assert!(!body.contains("other_thing("));
     }
 
     /// AM-17.10's primary killer is chosen by how the operator is observed.
