@@ -285,6 +285,17 @@ fn oracle_reachable_body(text: &str, name: &str) -> String {
     combined
 }
 
+/// Whether `text` uses `word` as a whole identifier. `contains` would match a
+/// one-letter alias inside every other identifier in the file.
+fn mentions_word(text: &str, word: &str) -> bool {
+    text.match_indices(word).any(|(at, _)| {
+        let before = text[..at].chars().next_back();
+        let after = text[at + word.len()..].chars().next();
+        let boundary = |ch: Option<char>| !ch.is_some_and(|c| c.is_alphanumeric() || c == '_');
+        boundary(before) && boundary(after)
+    })
+}
+
 fn verify_oracle_independence(root: &Utf8Path) -> Result<()> {
     for (file, function, forbidden) in INDEPENDENT_ORACLES {
         let path = root.join(file);
@@ -310,6 +321,7 @@ fn verify_oracle_independence(root: &Utf8Path) -> Result<()> {
         // `use liminal_source::paragraph::parse as p; p(input)` named none of
         // them. A `use` that renames a forbidden symbol makes its alias
         // forbidden too, in this file.
+        let mut watched_words: Vec<String> = Vec::new();
         let mut watched = forbidden
             .iter()
             .map(|s| (*s).to_owned())
@@ -325,6 +337,12 @@ fn verify_oracle_independence(root: &Utf8Path) -> Result<()> {
                     // used with `::`, a function alias with `(`.
                     watched.push(format!("{alias}("));
                     watched.push(format!("{alias}::"));
+                    // Blind pass 1 at `aeed70f9` (A02): only the call and
+                    // module forms were watched, so `let q = p; q(input)`
+                    // reached the production path under a name the scan had
+                    // never heard of. The bare alias is watched as a WORD, so
+                    // handing it to anything at all is the signal.
+                    watched_words.push(alias);
                 }
             }
         }
@@ -333,6 +351,13 @@ fn verify_oracle_independence(root: &Utf8Path) -> Result<()> {
                 !body.contains(symbol.as_str()),
                 "{file}: oracle {function} reaches the production path it judges ({symbol}); \
                  ADR-0020 §5 requires an independent oracle"
+            );
+        }
+        for word in &watched_words {
+            anyhow::ensure!(
+                !mentions_word(&body, word),
+                "{file}: oracle {function} names the aliased production path it judges \
+                 ({word}); ADR-0020 §5 requires an independent oracle"
             );
         }
     }
@@ -2564,8 +2589,14 @@ fn verify_review_provider_receipt(record: &ReviewRecord, record_path: &Utf8Path)
             let declared = meta["payload"]["session_id"]
                 .as_str()
                 .context("codex session_meta carries no session_id")?;
+            // Codex names a rollout `<timestamp>-<uuid>` and its `session_meta`
+            // carries the bare uuid, so the receipt's id either IS the declared
+            // id or ends with it after a separator. Review of `bba803d4`: a
+            // bare `ends_with` would also accept `xfixture` for `fixture`,
+            // which is a different session.
             anyhow::ensure!(
-                receipt.session_id.ends_with(declared),
+                receipt.session_id == declared
+                    || receipt.session_id.ends_with(&format!("-{declared}")),
                 "receipt names session {:?}, retained transcript is session {declared:?}",
                 receipt.session_id
             );
@@ -6655,23 +6686,24 @@ fn open_evidence_reader(path: &Utf8Path) -> Result<Box<dyn std::io::BufRead>> {
 /// link is neither — it is a second name for the same inode, so writing
 /// through one outside the corpus mutates corpus bytes under an innocent path.
 /// Identity is read from directory metadata; no corpus file is opened.
-fn locked_corpus_identities(root: &Utf8Path) -> BTreeSet<(u64, u64)> {
+fn locked_corpus_identities(root: &Utf8Path) -> Result<BTreeSet<(u64, u64)>> {
     use std::os::unix::fs::MetadataExt as _;
     let corpora = root.join("conformance/corpora");
     let mut identities = BTreeSet::new();
     if !corpora.is_dir() {
-        return identities;
+        return Ok(identities);
     }
     let mut stack = vec![corpora];
     while let Some(dir) = stack.pop() {
-        let Ok(entries) = fs::read_dir(dir.as_std_path()) else {
-            continue;
-        };
+        // Review of `bba803d4`: skipping an unreadable directory returned a
+        // partial set, and a hard link to a file inside it would then pass. A
+        // corpus this cannot enumerate is a corpus it cannot protect.
+        let entries = fs::read_dir(dir.as_std_path())
+            .with_context(|| format!("enumerate the locked corpus at {dir}"))?;
         for entry in entries.flatten() {
             let path = entry.path();
-            let Ok(metadata) = fs::symlink_metadata(&path) else {
-                continue;
-            };
+            let metadata = fs::symlink_metadata(&path)
+                .with_context(|| format!("stat {} in the locked corpus", path.display()))?;
             if metadata.is_dir() {
                 if let Ok(dir) = Utf8PathBuf::from_path_buf(path) {
                     stack.push(dir);
@@ -6681,7 +6713,7 @@ fn locked_corpus_identities(root: &Utf8Path) -> BTreeSet<(u64, u64)> {
             }
         }
     }
-    identities
+    Ok(identities)
 }
 
 fn locked_corpus_write(
@@ -6691,7 +6723,7 @@ fn locked_corpus_write(
 ) -> Result<Option<String>> {
     let canonical_root = fs::canonicalize(root.as_std_path())
         .with_context(|| format!("{label}: canonicalize repository root"))?;
-    let identities = locked_corpus_identities(root);
+    let identities = locked_corpus_identities(root)?;
     for lexical in candidates {
         let path = Path::new(lexical);
         // Blind pass 1 at 78c8f9b (A12): a relative write from a subdirectory,
@@ -17881,6 +17913,25 @@ mod tests {
             "{err}"
         );
 
+        // A suffix is not an identity: `xfixture` is a different session from
+        // `fixture`, and only a separator makes the codex `<ts>-<uuid>` form.
+        fs::write(scratch.path().join("r.session.jsonl"), FIXTURE_TRANSCRIPT).expect("transcript");
+        let mut suffix = record.clone();
+        suffix.provider_receipt.session_id = "xfixture".to_owned();
+        suffix.provider_receipt.session_file = "rollout-xfixture.jsonl".to_owned();
+        let err = verify_review_provider_receipt(&suffix, &path)
+            .expect_err("a session id that merely ends with the declared one");
+        assert!(
+            err.to_string().contains("retained transcript is session"),
+            "{err}"
+        );
+        let mut separated = record.clone();
+        separated.provider_receipt.session_id = "2026-09-10T06-56-23-fixture".to_owned();
+        separated.provider_receipt.session_file =
+            "rollout-2026-09-10T06-56-23-fixture.jsonl".to_owned();
+        verify_review_provider_receipt(&separated, &path)
+            .expect("the codex <timestamp>-<uuid> form is the same session");
+
         // A rollout that does not open with its own metadata at all.
         fs::write(
             scratch.path().join("r.session.jsonl"),
@@ -17894,6 +17945,33 @@ mod tests {
         let err = verify_review_provider_receipt(&headless, &path)
             .expect_err("a rollout with no session_meta");
         assert!(err.to_string().contains("opens with session_meta"), "{err}");
+    }
+
+    /// Blind pass 1 at `aeed70f9` (A02): the alias scan watched the call and
+    /// module forms, so `let q = p; q(input)` reached production under a name
+    /// the scan had never heard of.
+    #[test]
+    fn an_alias_handed_on_as_a_value_is_refused() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-oracle-value").expect("scratch");
+        let root = scratch.path().to_owned();
+        write_independent_gate_oracles(&root);
+        let file = root.join("crates/liminal-query/src/lib.rs");
+        fs::create_dir_all(file.parent().expect("parent")).expect("mkdir");
+        fs::write(
+            &file,
+            "use liminal_source::paragraph::parse as p;\n\
+             fn incremental_paragraph_oracle(input: &str) -> Vec<u8> {\n\
+             \x20   let q = p;\n    q(input)\n}\n",
+        )
+        .expect("write");
+        let err = verify_oracle_independence(&root).expect_err("an alias handed on as a value");
+        assert!(err.to_string().contains("aliased production path"), "{err}");
+
+        assert!(mentions_word("let q = p;", "p"));
+        assert!(
+            !mentions_word("let paragraphs = split(input);", "p"),
+            "a one-letter alias must not match inside every identifier"
+        );
     }
 
     /// AM-17.10's primary killer is chosen by how the operator is observed.
