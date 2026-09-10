@@ -37,3 +37,14 @@ ruling answers a claim, not a coordinate.
 **Scope narrowed again (2026-09-07, after A08 at lane `5fb1b57`).** A required
 phrase can occur inside a sentence that negates it, so this ruling also lists
 phrases whose presence means it does NOT answer the claim.
+
+**In force from 2026-09-10.** Brian authorised signing on 2026-09-07; the key
+registered in `conformance/haqp/ruling-signers` was not loaded in the agent
+until today, so the ruling was committed unsigned and cleared nothing in the
+meantime. The commit carrying this line is the signed one, and `ruling_in_force`
+reads the last commit to touch this file.
+
+**Narrowed again (2026-09-09, after A08 at lane `c29bc0ea`).** A ruling that
+names a coordinate is now held to it rather than to the file, and no ruling may
+clear more than one finding in a record: matching a second is evidence the
+phrases are too broad, and the answer to that is a refusal.
