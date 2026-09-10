@@ -71,6 +71,7 @@ fn main() -> anyhow::Result<()> {
                 .push(serde_json::json!({
                     "scenario": id.clone(),
                     "occurrence": case.occurrence,
+                    "first_terminals": case.first_terminals.clone(),
                     "first_recovery_digest": case.first_recovery_digest.clone(),
                     "second_recovery_digest": case.second_recovery_digest.clone(),
                     "first_terminal_digest": case.first_terminal_digest.clone(),

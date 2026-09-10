@@ -201,6 +201,13 @@ pub struct CrashCaseEvidence {
     pub boundary: String,
     /// Occurrence index in scenario baseline trace.
     pub occurrence: u64,
+    /// The terminal states recovery actually reached, by name and in order.
+    /// M17.5 F-66 (A06): the digests below prove recovery is repeatable and
+    /// residue-free, and a digest cannot say WHICH state was reached — so a
+    /// recovery that resolved every boundary wrongly but consistently
+    /// satisfied them. The names travel to the gate, which holds its own
+    /// table of what each boundary must reach.
+    pub first_terminals: Vec<String>,
     /// World digest after first recovery.
     pub first_recovery_digest: String,
     /// World digest after second recovery.
@@ -391,6 +398,46 @@ impl ToyRun {
         })
     }
 
+    /// The pre-intent-commit case: before the intent is durable there is
+    /// nothing to recover, so recovery must find no terminal, stay idempotent,
+    /// and leave no staged file behind.
+    fn pre_intent_case(
+        run: &Self,
+        label: &str,
+        point: String,
+        occurrence: u64,
+        r1: RecoveryReport,
+    ) -> anyhow::Result<CrashCaseEvidence> {
+        anyhow::ensure!(
+            r1.terminals.is_empty(),
+            "crash matrix [{label}]: before first intent commit must leave no recoverable intent"
+        );
+        let r2 = run.recover()?;
+        anyhow::ensure!(
+            r2.world_digest == r1.world_digest && r2.terminals == r1.terminals,
+            "crash matrix [{label}]: recovery idempotence failed before first intent commit"
+        );
+        let staged = liminal_source::scan_staged(&run.root)?;
+        anyhow::ensure!(
+            staged.is_empty(),
+            "crash matrix [{label}]: {} staged files remain after pre-intent crash",
+            staged.len()
+        );
+        Ok(CrashCaseEvidence {
+            boundary: point,
+            occurrence,
+            first_terminals: terminal_names(&r1.terminals),
+            first_recovery_digest: r1.world_digest,
+            second_recovery_digest: r2.world_digest,
+            first_terminal_digest: terminal_digest(&r1.terminals)?,
+            second_terminal_digest: terminal_digest(&r2.terminals)?,
+            first_basis_digest: r1.basis_digest,
+            second_basis_digest: r2.basis_digest,
+            first_effect_digest: r1.effect_digest,
+            second_effect_digest: r2.effect_digest,
+        })
+    }
+
     /// The full derived crash matrix for one scenario: baseline → for every
     /// observed `(point, occurrence)`: crash, recover, assert terminal +
     /// no hidden half-state + recovery idempotence (world digests equal on a
@@ -426,33 +473,9 @@ impl ToyRun {
             // First recovery.
             let r1 = run.recover()?;
             if point == "ilrp/before_intent_commit" {
-                anyhow::ensure!(
-                    r1.terminals.is_empty(),
-                    "crash matrix [{label}]: before first intent commit must leave no recoverable intent"
-                );
-                let r2 = run.recover()?;
-                anyhow::ensure!(
-                    r2.world_digest == r1.world_digest && r2.terminals == r1.terminals,
-                    "crash matrix [{label}]: recovery idempotence failed before first intent commit"
-                );
-                let staged = liminal_source::scan_staged(&run.root)?;
-                anyhow::ensure!(
-                    staged.is_empty(),
-                    "crash matrix [{label}]: {} staged files remain after pre-intent crash",
-                    staged.len()
-                );
-                evidence.cases.push(CrashCaseEvidence {
-                    boundary: point,
-                    occurrence,
-                    first_recovery_digest: r1.world_digest,
-                    second_recovery_digest: r2.world_digest,
-                    first_terminal_digest: terminal_digest(&r1.terminals)?,
-                    second_terminal_digest: terminal_digest(&r2.terminals)?,
-                    first_basis_digest: r1.basis_digest,
-                    second_basis_digest: r2.basis_digest,
-                    first_effect_digest: r1.effect_digest,
-                    second_effect_digest: r2.effect_digest,
-                });
+                evidence
+                    .cases
+                    .push(Self::pre_intent_case(&run, &label, point, occurrence, r1)?);
                 continue;
             }
             anyhow::ensure!(
@@ -498,6 +521,7 @@ impl ToyRun {
             evidence.cases.push(CrashCaseEvidence {
                 boundary: point,
                 occurrence,
+                first_terminals: terminal_names(&r1.terminals),
                 first_recovery_digest: r1.world_digest,
                 second_recovery_digest: r2.world_digest,
                 first_terminal_digest: terminal_digest(&r1.terminals)?,
@@ -523,6 +547,11 @@ impl ToyRun {
     pub fn trace_path(&self) -> Utf8PathBuf {
         self.root.join("crash-trace.log")
     }
+}
+
+/// Terminal states by name, in the order recovery reached them.
+fn terminal_names(terminals: &[IntentState]) -> Vec<String> {
+    terminals.iter().map(|state| format!("{state:?}")).collect()
 }
 
 fn terminal_digest(terminals: &[IntentState]) -> anyhow::Result<String> {

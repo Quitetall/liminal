@@ -845,6 +845,73 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
 /// could ever read it back: the artifact said `pass`, the packet said
 /// `registered`, and `haq verify-inventory` exited 0 with no one comparing the
 /// two. The packet's crash rows were pure assertion.
+/// What ILRP recovery must reach from each registered crash boundary, read off
+/// the protocol rather than off the run. Blind pass 1 at `6b36bbb9` (A06): the
+/// evidence carried digests, which prove recovery is repeatable and leaves no
+/// residue and cannot say WHICH state it repeatably reached, and the only
+/// terminal expectation was one string declared by the scenario the harness
+/// itself runs. A recovery resolving every boundary wrongly but consistently
+/// satisfied all of it.
+///
+/// The protocol decides these, not the implementation: before the intent is
+/// durable there is nothing to recover, so recovery must find no terminal at
+/// all; once it is durable the protocol rolls forward, so every later boundary
+/// must reach `Committed`. A boundary reaching anything else — `Aborted` after
+/// the intent was committed, or `NeedsReview` where the world was intact — is
+/// a recovery that lost or invented work.
+const CRASH_TERMINAL_EXPECTATION: [(&str, &[&str]); 8] = [
+    ("ilrp/before_intent_commit", &[]),
+    ("ilrp/after_intent_commit", &["Committed"]),
+    ("ilrp/before_external_apply", &["Committed"]),
+    ("ilrp/after_external_apply", &["Committed"]),
+    ("ilrp/before_ack", &["Committed"]),
+    ("ilrp/after_ack", &["Committed"]),
+    ("ilrp/before_finalize", &["Committed"]),
+    ("ilrp/after_finalize_before_notify", &["Committed"]),
+];
+
+/// Judge each boundary's observed terminals against the protocol's table.
+fn verify_crash_terminal_states(evidence: &CrashEvidence) -> Result<()> {
+    for row in &evidence.boundaries {
+        let expected = CRASH_TERMINAL_EXPECTATION
+            .iter()
+            .find(|(boundary, _)| *boundary == row.boundary)
+            .map(|(_, states)| *states)
+            .with_context(|| {
+                format!(
+                    "crash boundary {:?} has no declared terminal expectation; a boundary the \
+                     protocol table does not name cannot be judged",
+                    row.boundary
+                )
+            })?;
+        for pair in &row.recovery_pairs {
+            anyhow::ensure!(
+                pair.first_terminals == expected,
+                "crash boundary {} recovered to {:?} in scenario {} occurrence {}; the protocol \
+                 requires {expected:?}",
+                row.boundary,
+                pair.first_terminals,
+                pair.scenario,
+                pair.occurrence
+            );
+        }
+    }
+    let named = CRASH_TERMINAL_EXPECTATION
+        .iter()
+        .map(|(boundary, _)| (*boundary).to_owned())
+        .collect::<BTreeSet<_>>();
+    let recorded = evidence
+        .boundaries
+        .iter()
+        .map(|row| row.boundary.clone())
+        .collect::<BTreeSet<_>>();
+    anyhow::ensure!(
+        named == recorded,
+        "crash boundaries recorded {recorded:?} but the protocol table names {named:?}"
+    );
+    Ok(())
+}
+
 fn verify_crash_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let path = root.join("conformance/haqp/evidence/crash.json");
     let bytes = fs::read(&path).with_context(|| {
@@ -892,6 +959,7 @@ fn verify_crash_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         .collect::<BTreeSet<_>>();
     verify_recovery_proof_presence(&recorded)?;
     verify_crash_rows(&recorded, &declared)?;
+    verify_crash_terminal_states(&recorded)?;
     verify_crash_injection_bindings(packet, &recorded)
 }
 
@@ -11606,6 +11674,8 @@ struct CrashEvidenceBoundary {
 struct RecoveryPair {
     scenario: String,
     occurrence: u64,
+    /// The terminal states recovery actually reached, by name.
+    first_terminals: Vec<String>,
     first_recovery_digest: String,
     second_recovery_digest: String,
     #[serde(default)]
@@ -18382,6 +18452,54 @@ mod tests {
             codex_session_epoch("2026-13-10T08-09-17-uuid"),
             None,
             "month 13 is not a month"
+        );
+    }
+
+    /// Blind pass 1 at `6b36bbb9` (A06): crash evidence carried digests, which
+    /// prove recovery is repeatable and residue-free and cannot say WHICH
+    /// state it repeatably reached. The only terminal expectation was one
+    /// string the scenario the harness runs declares for itself.
+    #[test]
+    fn recovery_must_reach_the_state_the_protocol_requires() {
+        let path = repo_root().join("conformance/haqp/evidence/crash.json");
+        let evidence: CrashEvidence =
+            serde_json::from_slice(&fs::read(&path).expect("read crash evidence"))
+                .expect("parse crash evidence");
+        verify_crash_terminal_states(&evidence).expect("the committed recovery is correct");
+
+        // A recovery that rolls forward from before the intent was durable has
+        // invented work; one that aborts after it was durable has lost it.
+        let mut invented = evidence.clone();
+        for row in &mut invented.boundaries {
+            if row.boundary == "ilrp/before_intent_commit" {
+                for pair in &mut row.recovery_pairs {
+                    pair.first_terminals = vec!["Committed".to_owned()];
+                }
+            }
+        }
+        let err = verify_crash_terminal_states(&invented)
+            .expect_err("nothing durable was recorded, so nothing may be committed");
+        assert!(err.to_string().contains("the protocol requires"), "{err}");
+
+        let mut lost = evidence.clone();
+        for row in &mut lost.boundaries {
+            if row.boundary == "ilrp/after_ack" {
+                for pair in &mut row.recovery_pairs {
+                    pair.first_terminals = vec!["Aborted".to_owned()];
+                }
+            }
+        }
+        let err = verify_crash_terminal_states(&lost)
+            .expect_err("an acknowledged intent may not be abandoned");
+        assert!(err.to_string().contains("the protocol requires"), "{err}");
+
+        // A boundary the table does not name cannot be judged at all.
+        let mut renamed = evidence;
+        renamed.boundaries[0].boundary = "ilrp/invented".to_owned();
+        let err = verify_crash_terminal_states(&renamed).expect_err("an unnamed boundary");
+        assert!(
+            err.to_string().contains("no declared terminal expectation"),
+            "{err}"
         );
     }
 

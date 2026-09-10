@@ -10,6 +10,9 @@
           "first_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
           "first_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
+          "first_terminals": [
+            "Committed"
+          ],
           "occurrence": 1,
           "scenario": "promote_single_step",
           "second_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
@@ -22,6 +25,9 @@
           "first_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
           "first_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
+          "first_terminals": [
+            "Committed"
+          ],
           "occurrence": 1,
           "scenario": "dag_accept",
           "second_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
@@ -34,6 +40,9 @@
           "first_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
           "first_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
+          "first_terminals": [
+            "Committed"
+          ],
           "occurrence": 2,
           "scenario": "dag_accept",
           "second_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
@@ -55,6 +64,9 @@
           "first_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
           "first_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
+          "first_terminals": [
+            "Committed"
+          ],
           "occurrence": 1,
           "scenario": "promote_single_step",
           "second_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
@@ -67,6 +79,9 @@
           "first_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
           "first_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
+          "first_terminals": [
+            "Committed"
+          ],
           "occurrence": 1,
           "scenario": "dag_accept",
           "second_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
@@ -88,6 +103,9 @@
           "first_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
           "first_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
+          "first_terminals": [
+            "Committed"
+          ],
           "occurrence": 1,
           "scenario": "promote_single_step",
           "second_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
@@ -100,6 +118,9 @@
           "first_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
           "first_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
+          "first_terminals": [
+            "Committed"
+          ],
           "occurrence": 1,
           "scenario": "dag_accept",
           "second_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
@@ -121,6 +142,9 @@
           "first_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
           "first_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
+          "first_terminals": [
+            "Committed"
+          ],
           "occurrence": 1,
           "scenario": "promote_single_step",
           "second_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
@@ -133,6 +157,9 @@
           "first_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
           "first_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
+          "first_terminals": [
+            "Committed"
+          ],
           "occurrence": 1,
           "scenario": "dag_accept",
           "second_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
@@ -154,6 +181,9 @@
           "first_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
           "first_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
+          "first_terminals": [
+            "Committed"
+          ],
           "occurrence": 1,
           "scenario": "promote_single_step",
           "second_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
@@ -166,6 +196,9 @@
           "first_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
           "first_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
+          "first_terminals": [
+            "Committed"
+          ],
           "occurrence": 1,
           "scenario": "dag_accept",
           "second_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
@@ -178,6 +211,9 @@
           "first_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
           "first_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
+          "first_terminals": [
+            "Committed"
+          ],
           "occurrence": 2,
           "scenario": "dag_accept",
           "second_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
@@ -199,6 +235,9 @@
           "first_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
           "first_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
+          "first_terminals": [
+            "Committed"
+          ],
           "occurrence": 1,
           "scenario": "promote_single_step",
           "second_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
@@ -211,6 +250,9 @@
           "first_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
           "first_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
+          "first_terminals": [
+            "Committed"
+          ],
           "occurrence": 1,
           "scenario": "dag_accept",
           "second_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
@@ -232,6 +274,9 @@
           "first_effect_digest": "28ac58392f9911bb08bb2b020d40fbf0f357bbedc96ac5fd91bc7f0a56643f20",
           "first_recovery_digest": "2b5e4e04bde820b9b4c5770540e2d6102df1090bf86a2fdd109ecbd63cef4c33",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
+          "first_terminals": [
+            "Committed"
+          ],
           "occurrence": 1,
           "scenario": "promote_single_step",
           "second_basis_digest": "29e89eb5be2399b457ffb41da83213954349314ff5a1f369a46f7e58abe346f6",
@@ -244,6 +289,9 @@
           "first_effect_digest": "fbcb940edcae3dba3a18278fa18597f62bd55e4ab5cb61881e71bb1be1eadecd",
           "first_recovery_digest": "711149770278f50ce8759d353bab7d72973ffd4e2018b4e978a3eab9664cd92b",
           "first_terminal_digest": "8052a37659fdaca603730e4b416de8a75534edcdf17b84f2e26ab8914dfe82f8",
+          "first_terminals": [
+            "Committed"
+          ],
           "occurrence": 1,
           "scenario": "dag_accept",
           "second_basis_digest": "5064cc1ae5c57a0071aa8e953cac056f6420462d27273b98680b0738c1372262",
@@ -265,6 +313,7 @@
           "first_effect_digest": "1dba91991342e87fc1e22424050f1a7b89e68fdaebce89744e67c380a15a248a",
           "first_recovery_digest": "a46fe3d2e3a45309679fd380c0a8280c2c1325c36b387b88d5bb6656020fb77d",
           "first_terminal_digest": "d53d18c23212ea7b6300594bb89bce60218f6eff2b9d628b8cc42d3e79bbd5ab",
+          "first_terminals": [],
           "occurrence": 1,
           "scenario": "promote_single_step",
           "second_basis_digest": "97ae1ac3657d6fe7db3f46ec76d1877a0b09c8b8ac0a87f9295dd5884b96e1ac",
@@ -277,6 +326,7 @@
           "first_effect_digest": "b3a38c351fb3fc334ae2de76e37b505350682a53c1968353e3589f25b9e22379",
           "first_recovery_digest": "855791201e701e4230519fad86c210cf53c7af6d3e22526b8b3f08eb43101276",
           "first_terminal_digest": "d53d18c23212ea7b6300594bb89bce60218f6eff2b9d628b8cc42d3e79bbd5ab",
+          "first_terminals": [],
           "occurrence": 1,
           "scenario": "dag_accept",
           "second_basis_digest": "4a7fb1426dbc4c09ef81419b40ac44d0d4c175db5b63b7ccc0f199b5fa46f619",
@@ -324,6 +374,6 @@
       "scenario": "dag_accept"
     }
   ],
-  "source_commit": "146d8d4b580e7653f48bc8427a936d3ed4c957f5",
-  "source_tree": "8d7dc276ee3a5659affa3848fca77c86bafea7ab"
+  "source_commit": "52f73a0fca9f45dba7cbb231c9e03ba24d47a402",
+  "source_tree": "187baaca4d177d6ff0a42d7477d2fb04ba631231"
 }
