@@ -3804,5 +3804,39 @@ inode under a second, unremarkable name.
 
 **A08 is the first finding against a ruling in force**, which is the mechanism
 working as designed: the ruling became live this morning and a reviewer
-immediately found prose it would over-clear. A06 and A09 are the substantial
-ones — both say a check confirms self-consistency rather than correctness.
+immediately found prose it would over-clear.
+
+### All eight closed
+
+| attempt | fix |
+|---|---|
+| A01 | the oracle closure follows a callee NAMED, not only called: `let h = helper; h(x)` is reaching it |
+| A03 | `markdown_tables` returns every table under a header, each judged against its own header's width; a header mid-sentence is prose |
+| A04 | a concurrence's cited finding must name the mutant or its coordinate — reviewers agreeing a mutant is equivalent must have been discussing that mutant |
+| A05 | two tracked seeds in one target may not carry identical bytes. Emptiness stays legal — an empty input is a real boundary and two targets commit one on purpose — but once, like anything else |
+| A06 | see below |
+| A07 | the campaign window must contain the provider clocks the receipts carry: a MiMo envelope's `created`, and the timestamp the codex CLI writes into a rollout's session id |
+| A08 | R-001 excludes `fuzz`, which its own prose always did |
+| A09 | a character is markup only if the dialect lowers it (`-`, `*`, `#`, `>`, `|`, `+`, backtick); everything else non-whitespace is content and must come back |
+
+**A06 is the one that needed real work.** Crash evidence recorded four digest
+pairs per case — world, terminal, Basis, effect — plus residue emptiness and
+convergence against baseline. Every one is an equality: they prove recovery is
+repeatable and leaves nothing behind, and **a digest cannot say which state it
+repeatably reached**. The only expectation of the state itself was
+`scenario.expect.terminal`, one string declared by the scenario the harness
+runs, applied alike to seven of the eight boundaries.
+
+The protocol has more than one answer. Before the intent is durable there is
+nothing to recover, so recovery must find no terminal; once it is durable ILRP
+rolls forward, so every later boundary must reach `Committed`. Anything else —
+`Aborted` after the acknowledgement, `Committed` before the intent existed — is
+recovery that lost or invented work. The evidence now carries terminal states by
+name, and `CRASH_TERMINAL_EXPECTATION` holds the protocol's table in the gate,
+written from ILRP's states rather than from the run.
+
+**Three of the eight were about the same thing**, which is worth naming: A04,
+A06 and A07 each found a check confirming that a record agrees with itself. A
+concurrence that agreed something was wrong, a recovery that was wrong the same
+way twice, a clock whose arithmetic closed. Self-consistency is the cheapest
+property to satisfy and the easiest to mistake for correctness.
