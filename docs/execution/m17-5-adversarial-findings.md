@@ -3708,8 +3708,32 @@ read as a line with no durable transition on it. The markers are now one shared
 constant used by both the operator contract and the anchor precondition, with
 `rename(` on it.
 
-**Still open from this lane:** A02 (an oracle alias used as a function value
-rather than called), A07 (a hard link into the locked corpus, which the alias
-protection cannot see because it compares paths and not file identity), and A09
-(a review receipt whose session identity is only required to be non-empty).
-A07 is class A and A09 is class B under AM-17.9; both block.
+**The other three, both blocking ones among them, closed the same day.**
+
+A07 (class A). `locked_corpus_write` resolved symlinks and pathname ancestry
+and compared paths. A hard link is neither a symlink nor a path relationship —
+it is a second name for the same inode — so a link created outside
+`conformance/corpora` let a write mutate corpus bytes under a path that looked
+innocent, and no amount of path reasoning could see it. Every (device, inode)
+under the corpus is now collected from directory metadata, and a written
+candidate sharing one is refused. No corpus file is opened to do it, and the
+whole situation is built in scratch for the test.
+
+A09 (class B). A codex receipt's `session_id` and `session_file` only had to be
+non-empty. The transcript's BYTES were authenticated — length and SHA-256 — and
+nothing tied them to the session the receipt names, so a record could name one
+session and retain another's rollout, correctly hashed. A rollout opens with
+its own `session_meta`, so the receipt's id must be the id that record carries,
+or end with it after the separator codex's `<timestamp>-<uuid>` form uses.
+
+A02. The alias scan watched the call form (`p(`) and the module form (`p::`),
+so `let q = p; q(input)` reached production under a name the scan had never
+heard of. The bare alias is watched as a whole word now.
+
+**What the review of those fixes then found.** The session binding used a bare
+`ends_with`, which accepts `xfixture` for a transcript declaring `fixture` — a
+different session — and the corpus walk skipped directories it could not read,
+so an unreadable subtree silently left its inodes out of the set and a hard
+link into it would have passed the check added an hour earlier. Both fixed: the
+suffix must follow a separator, and a corpus the gate cannot enumerate is a
+corpus it cannot protect, so enumeration failures are errors.
