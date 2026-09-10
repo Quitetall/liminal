@@ -3,7 +3,7 @@ id: R-001
 attack_class: corpus leakage
 target: crates/liminal-xtask/src/haq.rs
 claim_requires: read access
-claim_excludes: chdir; fchdir; wrote; write access; renameat
+claim_excludes: chdir; fchdir; wrote; write access; renameat; fuzz
 status: ruled
 ruled_by: Brian
 date: 2026-09-06
@@ -50,3 +50,10 @@ reads the last commit to touch this file.
 names a coordinate is now held to it rather than to the file, and no ruling may
 clear more than one finding in a record: matching a second is evidence the
 phrases are too broad, and the answer to that is a refusal.
+
+**Narrowed again (2026-09-10, after A08 at lane `6b36bbb9`).** The ruling's own
+text has always said the carved fuzz binaries keep the full any-touch rule, and
+`claim_excludes` never encoded it — so the matcher would have cleared a finding
+about a fuzz process reading the held-out corpus, which is leakage rather than a
+stage read. `fuzz` is now an excluded phrase. The prose and the machine-readable
+claim said different things for four days; the prose was right.
