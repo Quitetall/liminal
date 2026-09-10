@@ -3652,3 +3652,64 @@ the mutation, and not that it executes the mutated file. Both are measurements,
 both need the suite to exist, and both remain HAQP-1b under RISK-001. What
 closed here is narrower and was worse: a column that named tests which do not
 defend the requirement the mutant attacks.
+
+## F-64 — the fifteenth lane: the operator contract that had never met an anchor
+
+**Found.** 2026-09-10, lane at `aeed70f9` — the first lane against a derived
+mutation plan. Pass 2 clean; pass 1 twelve attempts, six `verified_defect`, all
+reproduced. Records under `docs/execution/reviews/2026-09-10-lane-aeed70f/`.
+
+Two of the six (A01, A11) said a declared mutant could not be applied because
+its anchor cannot support its operator. Checking the whole plan rather than the
+two found **eight**, and the reason is the same shape as AM-17.10's:
+
+`verify_mutant_operator_patch` states the lexical contract for all thirteen
+operators — `predicate-deletion` needs a `!` to delete, `missing-enum-dispatch`
+needs a `match` to remove, `threshold-plus-one` needs an integer to increment.
+It takes a **patch**, and at stage 1a there are none. So the contract had never
+been applied to an anchor, and `verify_mutant_anchors_support_operators` — the
+check named for exactly this — only asked whether the line was production code
+and not a declaration.
+
+| mutant | declared | anchor | why it could never be applied |
+|---|---|---|---|
+| P1-M001 | predicate-deletion | `if value.trim().is_empty()` | no negation to delete |
+| P1-M036 | predicate-deletion | `if found != expected_pre {` | deleting the `!` of `!=` leaves `=` |
+| P1-M039 | predicate-deletion | `if path.is_dir() {` | no negation |
+| P1-M053 | predicate-deletion | `self.read.contains(changed)` | no negation |
+| P1-M061 | predicate-deletion | `if let Some(working) = ...` | no negation |
+| P1-M055 | missing-enum-dispatch | `\| BasisComponent::ExternalRevision ... =>` | an arm, not the match |
+| P1-M028 | predicate-inversion | `let mut order: Vec<String> = Vec::new(` | inverting the `<` of a generic yields `Vec>=String>` |
+| P1-M065 | predicate-inversion | `BasisPerspective::DurableOnly => {` | an arm carries no comparison |
+
+**Two of the eight were mine.** P1-M001 I re-anchored in F-61 and P1-M055 in
+F-55, both by hand, both to lines that cannot host the operator they carry. The
+hand-repair of a generated plan reproduced the generated plan's defect.
+
+**Repairing them found a harder fact.** The Basis/revision/query invalidation
+family has **no** production negation anywhere in `liminal-revision`, and no
+spaced comparison either — so `predicate-deletion` and `predicate-inversion`
+have no site in that family at all. P1-M053, P1-M061 and P1-M065 were moved to
+operators the family can host (`success-error-substitution`,
+`stale-basis-acceptance`, `broadened-allow-list`), which is the same move F-55
+made for P1-M055 and for the same reason: an operator was assigned to a family
+without checking the family offers a site for it.
+
+**The gate.** `anchor_supports_operator` states the half of the contract an
+anchor alone can satisfy, and every mutant is now checked against it whatever
+its disposition. Writing it exposed two places where the patch contract is
+looser than reality — it accepts the `<` of a generic as a comparison, and it
+accepts a macro's `!` as a negation — so the precondition requires spaced
+comparison operators and a `!` not preceded by an identifier character.
+
+**Also fixed here.** A05: `fs::rename` publishes a staged file atomically and
+appeared on no durable-call list, so P1-M035's anchor — the rename itself —
+read as a line with no durable transition on it. The markers are now one shared
+constant used by both the operator contract and the anchor precondition, with
+`rename(` on it.
+
+**Still open from this lane:** A02 (an oracle alias used as a function value
+rather than called), A07 (a hard link into the locked corpus, which the alias
+protection cannot see because it compares paths and not file identity), and A09
+(a review receipt whose session identity is only required to be non-empty).
+A07 is class A and A09 is class B under AM-17.9; both block.

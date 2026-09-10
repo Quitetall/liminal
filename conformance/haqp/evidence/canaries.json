@@ -66,8 +66,8 @@
     "id": "C08",
     "gate": "mutants",
     "violation": "operator supplies 17 mutants",
-    "expected_failure": "operator predicate-deletion supplies 23 mutants; max 16",
-    "observed_failure": "operator predicate-deletion supplies 23 mutants; max 16",
+    "expected_failure": "operator predicate-deletion supplies 21 mutants; max 16",
+    "observed_failure": "operator predicate-deletion supplies 21 mutants; max 16",
     "caught": true,
     "mutation_semantics": "set first 17 mutant operators to predicate-deletion"
   },
@@ -139,7 +139,7 @@
     "gate": "markdown",
     "violation": "remove packet digest",
     "expected_failure": "review packet markdown missing packet digest",
-    "observed_failure": "review packet markdown missing packet digest fef59e9d4510a2e00f8b9fb04deae7a1314b950184eb399035c37dba3e06c72c",
+    "observed_failure": "review packet markdown missing packet digest e9ccdcd293d0de207f7118343892272589155d236f67c0c2efb65c927843943c",
     "caught": true,
     "mutation_semantics": "remove baseline packet digest from markdown"
   },

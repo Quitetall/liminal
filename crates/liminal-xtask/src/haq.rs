@@ -8794,6 +8794,102 @@ fn verify_locked_corpus_has_no_aliases(root: &Utf8Path) -> Result<()> {
     Ok(())
 }
 
+/// The calls that carry a durable transition. Shared by the operator contract
+/// and the anchor precondition so the two cannot drift. Blind pass 1 at
+/// `aeed70f9` (A05): `fs::rename` publishes a staged file atomically and was
+/// on no list, so P1-M035's anchor — the rename itself — read as a line with
+/// no durable transition on it.
+const DURABLE_CALL_MARKERS: [&str; 10] = [
+    "commit_intent(",
+    "prepare(",
+    "finalize(",
+    "persist(",
+    "ack(",
+    ".commit(",
+    ".commit_if(",
+    ".append(",
+    "write(",
+    "rename(",
+];
+
+/// Whether `anchor` could be the `before` text of `operator`'s prescribed
+/// mutation. `verify_mutant_operator_patch` states the lexical contract over
+/// both sides of a patch, but no patch exists at stage 1a, so that contract
+/// had never been applied to an anchor: six mutants declared operators their
+/// anchor could not support, including a `predicate-deletion` on a line with
+/// no negation and a `missing-enum-dispatch` on a match ARM rather than the
+/// match. This is the half of the contract the anchor alone can satisfy.
+///
+/// `<` and `>` are required to be spaced. Rustfmt writes comparisons that way
+/// and generic parameters the other, and without the distinction every struct
+/// field holding a `BTreeMap<K, V>` reads as a comparison.
+fn anchor_supports_operator(operator: &str, anchor: &str) -> bool {
+    let trimmed = anchor.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let chars: Vec<char> = trimmed.chars().collect();
+    let negation = chars.iter().enumerate().any(|(index, ch)| {
+        *ch == '!'
+            && chars.get(index + 1) != Some(&'=')
+            && !index
+                .checked_sub(1)
+                .and_then(|prev| chars.get(prev))
+                .is_some_and(|prev| prev.is_alphanumeric() || *prev == '_')
+    });
+    let integer = chars.iter().enumerate().any(|(index, ch)| {
+        ch.is_ascii_digit()
+            && !index
+                .checked_sub(1)
+                .and_then(|prev| chars.get(prev))
+                .is_some_and(|prev| prev.is_alphanumeric() || *prev == '_')
+    });
+    let word = |needle: &str| {
+        trimmed
+            .split(|ch: char| !ch.is_alphanumeric() && ch != '_')
+            .any(|token| token == needle)
+    };
+    match operator {
+        // `|` is one of the contract's inversion pairs and must stay, but only
+        // when it occurs once: a closure's `|m| ...` has two, and a generic's
+        // `<` is excluded by requiring spaces, because inverting the `<` of
+        // `Vec<String>` yields `Vec>=String>`, which is not a program.
+        "predicate-inversion" => [
+            "==", "!=", " <= ", " >= ", " < ", " > ", "&&", "||", "|", " true", " false",
+        ]
+        .iter()
+        .any(|token| trimmed.matches(token).count() == 1),
+        "predicate-deletion" => negation,
+        "threshold-plus-one" | "threshold-minus-one" => integer,
+        "missing-enum-dispatch" => word("match"),
+        "success-error-substitution" => trimmed.contains("Ok(") || trimmed.contains("Err("),
+        "oracle-short-circuit" => {
+            trimmed.contains("&&") || trimmed.contains("||") || trimmed == "if id.is_some() {"
+        }
+        "ordering-nondeterminism" => {
+            trimmed.contains("sort")
+                || trimmed.contains("BTree")
+                || trimmed.starts_with("let lines: Vec<")
+        }
+        "stale-basis-acceptance" => {
+            lower.contains("basis") || trimmed == "if rev == inner.state.head {"
+        }
+        "skipped-durable-transition" => DURABLE_CALL_MARKERS
+            .iter()
+            .any(|call| trimmed.contains(call)),
+        "disabled-crash-point" => {
+            lower.contains("crash")
+                || trimmed == "if fail_after.is_some_and(|limit| committed >= limit) {"
+        }
+        "broadened-allow-list" => {
+            word("match")
+                || trimmed.contains("matches!")
+                || trimmed.contains("ensure!")
+                || trimmed.contains("=>")
+        }
+        "wrong-holder-selection" => trimmed.contains("&self.") || trimmed.matches('.').count() >= 2,
+        _ => false,
+    }
+}
+
 fn verify_mutant_anchors_support_operators(root: &Utf8Path, packet: &Packet) -> Result<()> {
     let mut inapplicable = Vec::new();
     for mutant in &packet.mutants {
@@ -8814,6 +8910,16 @@ fn verify_mutant_anchors_support_operators(root: &Utf8Path, packet: &Packet) -> 
                 "{} declares {:?} at {file}:{line}, which is inside test code: mutating an \
                  assertion measures the ORACLE, not the product",
                 mutant.id, mutant.operator
+            ));
+            continue;
+        }
+        if !anchor_supports_operator(&mutant.operator, anchor) {
+            inapplicable.push(format!(
+                "{} declares {:?} at {file}:{line}, whose text cannot be the BEFORE side of \
+                 that operator's mutation: {:?}",
+                mutant.id,
+                mutant.operator,
+                anchor.trim()
             ));
             continue;
         }
@@ -8904,19 +9010,9 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
         // Blind pass 1 (2026-09-05) A10/A12: P1-M022 deletes `log.append(`
         // and P1-M035 deletes `.commit_if(`; neither call was on this list,
         // so both mutants were unevaluable while counting toward §3.
-        "skipped-durable-transition" => [
-            "commit_intent(",
-            "prepare(",
-            "finalize(",
-            "persist(",
-            "ack(",
-            ".commit(",
-            ".commit_if(",
-            ".append(",
-            "write(",
-        ]
-        .iter()
-        .any(|call| before.contains(call) && !after.contains(call)),
+        "skipped-durable-transition" => DURABLE_CALL_MARKERS
+            .iter()
+            .any(|call| before.contains(call) && !after.contains(call)),
         "disabled-crash-point" => {
             (before.to_ascii_lowercase().contains("crash")
                 && !after.to_ascii_lowercase().contains("crash"))
@@ -9016,8 +9112,8 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
     const SOURCE: [(&str, usize, &str); 13] = [
         (
             "crates/liminal-format/src/lib.rs",
-            380,
-            "if value.trim().is_empty()",
+            122,
+            "if !author_keyed {",
         ),
         (
             "crates/liminal-cst/src/parser.rs",
@@ -9139,8 +9235,8 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-source/src/merge.rs",
-            44,
-            "let mut order: Vec<String> = Vec::new();",
+            70,
+            "let ours_changed = ours_t != base_t;",
         ),
         ("crates/liminal-source/src/merge.rs", 158, "anon += 1;"),
         ("crates/liminal-source/src/merge.rs", 175, "anon += 1;"),
@@ -9170,9 +9266,9 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
             "fs::rename(&self.staged, &self.target)?;",
         ),
         (
-            "crates/liminal-source/src/file.rs",
-            84,
-            "if found != expected_pre {",
+            "crates/liminal-source/src/paragraph.rs",
+            141,
+            "if !after_close.trim().is_empty() {",
         ),
         (
             "crates/liminal-source/src/merge.rs",
@@ -9184,11 +9280,7 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
             102,
             "let observed = observe(&self.target)?.ok_or_else(|| {",
         ),
-        (
-            "crates/liminal-source/src/file.rs",
-            144,
-            "if path.is_dir() {",
-        ),
+        ("crates/liminal-source/src/paragraph.rs", 132, "|| !id_str"),
     ];
     const REPAIR: [(&str, usize, &str); 13] = [
         (
@@ -9255,9 +9347,9 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
     ];
     const BASIS: [(&str, usize, &str); 13] = [
         (
-            "crates/liminal-revision/src/deps.rs",
-            28,
-            "self.read.contains(changed)",
+            "crates/liminal-revision/src/inputs.rs",
+            87,
+            "return Err(PerspectiveError::NoFederationFrontier);",
         ),
         (
             "crates/liminal-revision/src/durability.rs",
@@ -9265,9 +9357,9 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
             "BasisComponent::ObjectContent { .. } | BasisComponent::GitCommit { .. } => {",
         ),
         (
-            "crates/liminal-revision/src/durability.rs",
-            38,
-            "| BasisComponent::ExternalRevision { .. } => Durability::Low,",
+            "crates/liminal-revision/src/inputs.rs",
+            58,
+            "match selection.and_then(|m| m.get(key)) {",
         ),
         (
             "crates/liminal-revision/src/durability.rs",
@@ -9296,8 +9388,8 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-revision/src/inputs.rs",
-            55,
-            "if let Some(working) = inputs.working.get(client) {",
+            83,
+            "BasisPerspective::Published { .. } => {",
         ),
         (
             "crates/liminal-revision/src/inputs.rs",
@@ -11627,7 +11719,7 @@ fn canary_expected_prefix(id: &str) -> Result<&'static str> {
         "C05" => "test ids differ",
         "C06" => "P1-T01 has no requirement mapping",
         "C07" => "mutant count must be 65",
-        "C08" => "operator predicate-deletion supplies 23 mutants; max 16",
+        "C08" => "operator predicate-deletion supplies 21 mutants; max 16",
         "C09" => "family graph/interchange codecs mutant count must be 13",
         "C10" => "canary ids differ",
         "C11" => "source/CST/formatting accepted cases below 100000",
@@ -17593,6 +17685,61 @@ mod tests {
                 mutant.id, first.id, second.id, first.evidence
             );
         }
+    }
+
+    /// Blind pass 1 at `aeed70f9` (A01, A11): the lexical operator contract
+    /// lived only in `verify_mutant_operator_patch`, which needs a patch, and
+    /// at stage 1a there are none — so six anchors declared operators their
+    /// own text could not support.
+    #[test]
+    fn an_anchor_must_be_able_to_be_the_before_side_of_its_operator() {
+        let packet = packet_from_repo();
+        verify_mutant_anchors_support_operators(&repo_root(), &packet)
+            .expect("every committed anchor supports its operator");
+
+        assert!(anchor_supports_operator(
+            "predicate-deletion",
+            "if !author_keyed {"
+        ));
+        assert!(
+            !anchor_supports_operator("predicate-deletion", "if found != expected_pre {"),
+            "deleting the `!` of a `!=` leaves `=`, which is not a program"
+        );
+        assert!(
+            !anchor_supports_operator("predicate-deletion", "matches!(byte, b'_')"),
+            "a macro's bang is not a negation"
+        );
+        assert!(anchor_supports_operator(
+            "missing-enum-dispatch",
+            "match selection.and_then(|m| m.get(key)) {"
+        ));
+        assert!(
+            !anchor_supports_operator(
+                "missing-enum-dispatch",
+                "| BasisComponent::ExternalRevision { .. } => Durability::Low,"
+            ),
+            "an arm is not the match it belongs to"
+        );
+        assert!(
+            !anchor_supports_operator(
+                "predicate-inversion",
+                "pub components: BTreeMap<JurisdictionKey, BasisComponent>,"
+            ),
+            "a generic parameter is not a comparison"
+        );
+        assert!(anchor_supports_operator(
+            "skipped-durable-transition",
+            "fs::rename(&self.staged, &self.target)?;"
+        ));
+
+        let mut doctored = packet.clone();
+        doctored.mutants[0].operator = "ordering-nondeterminism".to_owned();
+        let err = verify_mutant_anchors_support_operators(&repo_root(), &doctored)
+            .expect_err("an operator its anchor cannot support");
+        assert!(
+            err.to_string().contains("cannot be the BEFORE side"),
+            "{err}"
+        );
     }
 
     /// AM-17.10's primary killer is chosen by how the operator is observed.

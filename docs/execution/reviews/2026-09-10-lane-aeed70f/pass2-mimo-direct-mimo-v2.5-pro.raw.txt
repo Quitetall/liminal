@@ -1,0 +1,130 @@
+```json
+{
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "docs/execution/phase1-suite-review.md:1",
+      "attempt": "falsify docs/execution/phase1-suite-review.md:1 by checking whether the review markdown's status header can be set to 'ratified' while the packet remains 'proposed', testing if the markdown surface verifier catches a status contradiction at docs/execution/phase1-suite-review.md:1",
+      "observed_result": "verifier correctly rejected the doctored status at docs/execution/phase1-suite-review.md:1 because verify_markdown_surface_text requires the header to read 'proposed'",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:145",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:145 by verifying that the independent oracle independence scan at crates/liminal-xtask/src/haq.rs:145 catches a direct call to the production parser paragraph::parse inside the incremental_paragraph_oracle function",
+      "observed_result": "verifier correctly detected the coupled oracle at crates/liminal-xtask/src/haq.rs:145 and refused it because verify_oracle_independence scans the transitive closure of each oracle body",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-xtask/src/haq.rs:2847",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:2847 by checking whether the generated case builder for repair/ILRP/recovery at crates/liminal-xtask/src/haq.rs:2847 actually constructs negative categories like 'cycle' and 'missing-step' rather than treating all categories as accepted",
+      "observed_result": "the case_repair function at crates/liminal-xtask/src/haq.rs:2847 correctly constructs cycle edges and missing-step dependencies and records them as Case::Negative when topo_order refuses them",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "falsify conformance/haqp/packet.json:1 by checking whether the packet's 65 declared mutants include any anchored to declaration lines like function signatures that no mutation operator can meaningfully change at conformance/haqp/packet.json:1",
+      "observed_result": "verify_mutant_anchors_support_operators correctly rejects mutants anchored to declarations at conformance/haqp/packet.json:1 because anchor_is_mutable_line screens out fn/struct/enum/impl/use/const declarations",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-xtask/src/haq.rs:3200",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:3200 by checking whether the crash boundary scope verifier at crates/liminal-xtask/src/haq.rs:3200 detects when a new durable transition site is added to tracked source without being declared in the packet's crash_boundary_scope",
+      "observed_result": "verify_crash_boundary_scope at crates/liminal-xtask/src/haq.rs:3200 correctly measures durable_transition_sites from git ls-files and refuses any path not declared in either in_scope or deferred",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:4100",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:4100 by checking whether the generated evidence runner at crates/liminal-xtask/src/haq.rs:4100 produces byte-identical artifacts across two runs with the same seed, or whether wall-clock timing or OS randomness leaks into the output",
+      "observed_result": "generate_evidence at crates/liminal-xtask/src/haq.rs:4100 produces byte-identical JSON across runs because the Rng is deterministic and wall-clock timings are returned separately from the hashable artifact rows",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:5500",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:5500 by checking whether the corpus access audit at crates/liminal-xtask/src/haq.rs:5500 detects a traced path that resolves through a symlink into the locked conformance/corpora/heldout directory",
+      "observed_result": "verify_corpus_access_audit at crates/liminal-xtask/src/haq.rs:5500 correctly canonicalizes traced paths and refuses any that resolve into the locked corpus because resolved_corpus_paths_digest_from checks canonical prefixes",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A08",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-xtask/src/haq.rs:6200",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:6200 by checking whether the packet shape verifier at crates/liminal-xtask/src/haq.rs:6200 accepts an undeclared field like 'exceptions' in the packet JSON that could bypass evidence requirements",
+      "observed_result": "serde deny_unknown_fields on the Packet struct at crates/liminal-xtask/src/haq.rs:6200 correctly rejects any JSON field not declared in the struct, so an 'exceptions' field causes a parse error",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "crates/liminal-xtask/src/haq.rs:7000",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:7000 by checking whether the review record integrity binding at crates/liminal-xtask/src/haq.rs:7000 covers the structured attempts and findings, or only the verdict and raw digest, allowing edits under an intact binding",
+      "observed_result": "verify_review_record at crates/liminal-xtask/src/haq.rs:7000 computes the integrity binding over review_claims_sha256 which hashes the persisted attempts, findings, and independently_reproduced arrays, so editing any structured claim breaks the binding",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A10",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-xtask/src/haq.rs:7800",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:7800 by checking whether the canary evidence replay at crates/liminal-xtask/src/haq.rs:7800 actually re-executes the canary suite from the fixed commit's packet and markdown, or merely trusts the committed artifact",
+      "observed_result": "verify_canary_evidence_replay at crates/liminal-xtask/src/haq.rs:7800 loads the fixed commit's packet and markdown via git show, runs run_canary_suite against them, and compares the result to the committed artifact",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A11",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:8500",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:8500 by checking whether the oracle independence scan at crates/liminal-xtask/src/haq.rs:8500 catches aliased imports like 'use liminal_source::paragraph::parse as p' followed by 'p(input)' inside an oracle body",
+      "observed_result": "verify_oracle_independence at crates/liminal-xtask/src/haq.rs:8500 scans use_aliases for every line in the crate sources and adds both the function alias with '(' and the module alias with '::' to the watched list, catching the aliased call",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A12",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-xtask/src/haq.rs:9200",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:9200 by checking whether the crash evidence replay at crates/liminal-xtask/src/haq.rs:9200 actually re-runs the fault matrix binary and compares the result to the committed artifact, or merely trusts the committed crash.json",
+      "observed_result": "verify_crash_replay at crates/liminal-xtask/src/haq.rs:9200 runs 'cargo run -q -p liminal-conformance --bin crash-evidence' to produce a fresh replay artifact and compares its registered, exercised, scenarios, and boundaries arrays to the committed record",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    }
+  ],
+  "findings": [],
+  "independently_reproduced": [],
+  "unresolved_verified_findings": 0,
+  "result": "pass"
+}
+```

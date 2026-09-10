@@ -1,0 +1,191 @@
+{
+  "schema_version": "haqp-blind-review-v1",
+  "pass": 1,
+  "reviewer": {
+    "model_family": "codex:gpt-5.6-sol",
+    "identity_hash": "f6cac6a769086b0c4a44f2b83d25874afa0b393a852ac730262a2f801543651c",
+    "backend": "codex"
+  },
+  "isolated_session_hash": "4807e5bad603ebe4a0c3888351fc35c7050eed137eaab03a4094f6c250f55202",
+  "sanitized_prompt_hash": "ea6bbe44eb4eb8d348a27e49724d836330781380dcc14f9b104a108abfa9d66c",
+  "prompt_binding_sha256": "b4230509ff243ab3888f7bc90423bb64d09370aff621f8b61230f574c9d4eb4b",
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-revision/src/deps.rs:28",
+      "attempt": "Falsify crates/liminal-revision/src/deps.rs:28 by applying its declared predicate-deletion operator to the positive contains predicate.",
+      "observed_result": "The mutation contract at crates/liminal-revision/src/deps.rs:28 requires deleting a negation, but this positive predicate contains no deletable negation, leaving the mutant unevaluable.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-source/src/paragraph.rs:76",
+      "attempt": "Falsify crates/liminal-source/src/paragraph.rs:76 by importing the production parser as p, assigning p to local q, and invoking q inside the independent oracle.",
+      "observed_result": "The independence scan for crates/liminal-source/src/paragraph.rs:76 watches p only in call or module syntax; using p as a function value and calling q bypasses the forbidden-path check.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-format/src/lib.rs:373",
+      "attempt": "Falsify crates/liminal-format/src/lib.rs:373 by broadening compact identifiers to accept spaces and punctuation that cannot round-trip through marker syntax.",
+      "observed_result": "The invalid-identifier negative test covering crates/liminal-format/src/lib.rs:373 requires explicit fallback and rejects compact emission for the broadened identifier grammar.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-jurisdiction/src/ilrp.rs:274",
+      "attempt": "Falsify crates/liminal-jurisdiction/src/ilrp.rs:274 by renaming the persisted acknowledgement label while leaving the durable commit call intact.",
+      "observed_result": "The operator validation for crates/liminal-jurisdiction/src/ilrp.rs:274 rejects label-only changes because persistence still executes; deleting the durable call remains required.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-source/src/file.rs:92",
+      "attempt": "Falsify crates/liminal-source/src/file.rs:92 by moving the durable rename behind an innocently named local wrapper implemented through an unregistered filesystem syscall.",
+      "observed_result": "The durable-transition census protecting crates/liminal-source/src/file.rs:92 recognizes closed lexical spellings rather than transitive effects, so the wrapper removes this transition from discovered fault scope.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:2847",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:2847 by aliasing std::thread as th and spawning concurrent execution through th::spawn.",
+      "observed_result": "The alias-aware concurrency scan exercised at crates/liminal-xtask/src/haq.rs:2847 records the aliased spawn and rejects the not-applicable concurrency declaration.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:2847",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:2847 by creating a repository hard link to a locked-corpus file and writing through the second pathname.",
+      "observed_result": "The alias protection at crates/liminal-xtask/src/haq.rs:2847 resolves symbolic links and pathname ancestry but does not compare file identities, so a hard-link write mutates locked corpus bytes unnoticed.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A08",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-xtask/src/haq.rs:2847",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:2847 by adding an undeclared wildcard waiver field inside a structured adversarial-review attempt.",
+      "observed_result": "Strict deserialization exercised at crates/liminal-xtask/src/haq.rs:2847 reports the waiver as an unknown field and refuses the broadened exception.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "crates/liminal-xtask/src/haq.rs:2847",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:2847 by substituting arbitrary nonempty session_id and session_file receipt values while retaining the authentic transcript digest and length.",
+      "observed_result": "Receipt verification at crates/liminal-xtask/src/haq.rs:2847 authenticates transcript bytes but only requires nonempty session metadata, so substituted session identity claims remain accepted.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A10",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-format/src/lib.rs:380",
+      "attempt": "Falsify crates/liminal-format/src/lib.rs:380 by replacing formatter output with one constant and claiming idempotence alone would accept it.",
+      "observed_result": "Canonical-reparse checks covering crates/liminal-format/src/lib.rs:380 compare semantic HIR and graph content, so constant output loses multi-paragraph meaning and is rejected.",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    },
+    {
+      "id": "A11",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-revision/src/durability.rs:38",
+      "attempt": "Falsify crates/liminal-revision/src/durability.rs:38 by executing the declared missing-enum-dispatch mutation against this individual match-arm coordinate.",
+      "observed_result": "The operator contract at crates/liminal-revision/src/durability.rs:38 requires a line containing the match expression, while this coordinate names only an arm, making the declared mutant inapplicable.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A12",
+      "attack_class": "evidence/report drift",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "Falsify conformance/haqp/packet.json:1 by changing packet content while retaining the previous digest in the human-readable review report.",
+      "observed_result": "The markdown-surface verifier recomputes the digest from conformance/haqp/packet.json:1 and rejects the stale report binding before it can present unsupported packet state.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-HAQP1-001",
+      "attempt_id": "A01"
+    },
+    {
+      "id": "F-HAQP1-002",
+      "attempt_id": "A02"
+    },
+    {
+      "id": "F-HAQP1-003",
+      "attempt_id": "A05"
+    },
+    {
+      "id": "F-HAQP1-004",
+      "attempt_id": "A07"
+    },
+    {
+      "id": "F-HAQP1-005",
+      "attempt_id": "A09"
+    },
+    {
+      "id": "F-HAQP1-006",
+      "attempt_id": "A11"
+    }
+  ],
+  "independently_reproduced": [
+    "F-HAQP1-001",
+    "F-HAQP1-002",
+    "F-HAQP1-003",
+    "F-HAQP1-004",
+    "F-HAQP1-005",
+    "F-HAQP1-006"
+  ],
+  "unresolved_verified_findings": 6,
+  "result": "fail",
+  "blindness_proof": {
+    "ephemeral_session_requested": false,
+    "session_state": "fresh-codex-session",
+    "prior_pass_artifact_supplied": false,
+    "pass_two_original_spec_only": false
+  },
+  "schema_retries": 0,
+  "provider_receipt": {
+    "backend": "codex",
+    "session_file": "rollout-2026-09-10T06-56-23-01a08af6-2a9a-7ba0-963d-86ecd208b4d7.jsonl",
+    "session_id": "2026-09-10T06-56-23-01a08af6-2a9a-7ba0-963d-86ecd208b4d7",
+    "transcript_sha256": "57228b657cc019b547664a13ee096ec6c2fd660c2160659f3ca258d2cfb65ae6",
+    "transcript_bytes": 3865980
+  },
+  "fixed_base": {
+    "commit": "aeed70f926f3708020b324bdbd297868aa5b486e",
+    "tree": "c24fcd5c2e08da3a50226b4f16291bae1466c5f0",
+    "clean": true
+  },
+  "raw_response_sha256": "e535016d8bf357a82170e98a81dfcc2ce56f4aa3720f38a97dadea39e66a9539",
+  "integrity_binding_sha256": "9a82fa9a72b4f7e1b1a75b4861a0aa33665b9a859ca8badeb331143483a1d04b"
+}

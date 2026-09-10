@@ -1016,7 +1016,7 @@
    "id": "P1-M001",
    "family": "source/CST/formatting",
    "operator": "predicate-deletion",
-   "source": "crates/liminal-format/src/lib.rs:380",
+   "source": "crates/liminal-format/src/lib.rs:122",
    "requirement": "P1-R004",
    "defect": "emit a literal the compact parser would normalize",
    "killing_tests": [
@@ -1367,7 +1367,7 @@
    "id": "P1-M028",
    "family": "transforms/projections",
    "operator": "predicate-inversion",
-   "source": "crates/liminal-source/src/merge.rs:44",
+   "source": "crates/liminal-source/src/merge.rs:70",
    "requirement": "P1-R013",
    "defect": "invert projection inclusion",
    "killing_tests": [
@@ -1471,7 +1471,7 @@
    "id": "P1-M036",
    "family": "transforms/projections",
    "operator": "predicate-deletion",
-   "source": "crates/liminal-source/src/file.rs:84",
+   "source": "crates/liminal-source/src/paragraph.rs:141",
    "requirement": "P1-R015",
    "defect": "predicate deletion seeded at the anchored site",
    "killing_tests": [
@@ -1510,7 +1510,7 @@
    "id": "P1-M039",
    "family": "transforms/projections",
    "operator": "predicate-deletion",
-   "source": "crates/liminal-source/src/file.rs:144",
+   "source": "crates/liminal-source/src/paragraph.rs:132",
    "requirement": "P1-R016",
    "defect": "predicate deletion seeded at the anchored site",
    "killing_tests": [
@@ -1691,13 +1691,13 @@
   {
    "id": "P1-M053",
    "family": "Basis/revision/query invalidation",
-   "operator": "predicate-deletion",
-   "source": "crates/liminal-revision/src/deps.rs:28",
+   "operator": "success-error-substitution",
+   "source": "crates/liminal-revision/src/inputs.rs:87",
    "requirement": "P1-R017",
    "defect": "delete invalidation predicate",
    "killing_tests": [
-    "P1-T07",
-    "P1-T23"
+    "P1-T23",
+    "P1-T24"
    ],
    "disposition": "predeclared"
   },
@@ -1718,7 +1718,7 @@
    "id": "P1-M055",
    "family": "Basis/revision/query invalidation",
    "operator": "missing-enum-dispatch",
-   "source": "crates/liminal-revision/src/durability.rs:38",
+   "source": "crates/liminal-revision/src/inputs.rs:58",
    "requirement": "P1-R018",
    "defect": "drop an arm of the durability dispatch so a component class is silently misclassified",
    "killing_tests": [
@@ -1795,13 +1795,13 @@
   {
    "id": "P1-M061",
    "family": "Basis/revision/query invalidation",
-   "operator": "predicate-deletion",
-   "source": "crates/liminal-revision/src/inputs.rs:55",
+   "operator": "stale-basis-acceptance",
+   "source": "crates/liminal-revision/src/inputs.rs:83",
    "requirement": "P1-R015",
    "defect": "predicate deletion seeded at the anchored site",
    "killing_tests": [
-    "P1-T07",
-    "P1-T17"
+    "P1-T19",
+    "P1-T20"
    ],
    "disposition": "predeclared"
   },
@@ -1847,7 +1847,7 @@
   {
    "id": "P1-M065",
    "family": "Basis/revision/query invalidation",
-   "operator": "predicate-inversion",
+   "operator": "broadened-allow-list",
    "source": "crates/liminal-revision/src/inputs.rs:46",
    "requirement": "P1-R019",
    "defect": "predicate inversion seeded at the anchored site",
@@ -1912,7 +1912,7 @@
    "id": "C08",
    "gate": "mutants",
    "violation": "operator supplies 17 mutants",
-   "expected_failure": "operator predicate-deletion supplies 23 mutants; max 16",
+   "expected_failure": "operator predicate-deletion supplies 21 mutants; max 16",
    "result": "predeclared"
   },
   {
