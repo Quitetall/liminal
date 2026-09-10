@@ -6649,14 +6649,14 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
             }
         }
         for (path, write) in accesses {
+            // Blind pass 1 at `6b36bbb9` (A02): candidates were collected only
+            // when the path LOOKED like the corpus, so F-64's inode comparison
+            // — added for exactly the case where it does not — never saw a
+            // hard link under an unrelated name. Every write is a candidate;
+            // the lexical rules still decide the lexical cases, and identity
+            // decides the rest.
             if write {
-                let lower = path.to_ascii_lowercase();
-                if FORBIDDEN_TRACE_FRAGMENTS
-                    .iter()
-                    .any(|fragment| lower.contains(fragment))
-                {
-                    scan.locked_write_candidates.push(path.clone());
-                }
+                scan.locked_write_candidates.push(path.clone());
             }
             scan.open_paths.insert(path);
         }
@@ -17914,6 +17914,15 @@ mod tests {
         let flagged = locked_corpus_write(&root, &[elsewhere.to_string()], "probe")
             .expect("check")
             .expect("a hard link into the corpus is a write to the corpus");
+        assert!(flagged.contains("hard link"), "{flagged}");
+
+        // Blind pass 1 at `6b36bbb9` (A02): the name must not matter. A link
+        // whose path resembles nothing is the case identity exists for.
+        let unmarked = root.join("scratch.bin");
+        fs::hard_link(locked.as_std_path(), unmarked.as_std_path()).expect("second link");
+        let flagged = locked_corpus_write(&root, &[unmarked.to_string()], "probe")
+            .expect("check")
+            .expect("a link named nothing like the corpus is still the corpus");
         assert!(flagged.contains("hard link"), "{flagged}");
     }
 

@@ -1,0 +1,169 @@
+{
+  "schema_version": "haqp-blind-review-v1",
+  "pass": 2,
+  "reviewer": {
+    "model_family": "mimo-direct:mimo-v2.5-pro",
+    "identity_hash": "3668382ba796a14a6ef2e108440fa8a26961cba75da8cfec564f6b435c441e03",
+    "backend": "mimo-direct"
+  },
+  "isolated_session_hash": "cebb52f9e2adcc7183addbfabd67585fb236483ec91446698851b6459456dc09",
+  "sanitized_prompt_hash": "7d3b5a030f85fcc08915f876a6eba21ac1c70b095aca60c5e1bfe103602caeeb",
+  "prompt_binding_sha256": "32e3ebb5f6e9b8eac8301b751d7e5c3e0d8fe001f6c5c25f1cf0d2c323b24705",
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "docs/execution/phase1-suite-review.md:1",
+      "attempt": "falsify docs/execution/phase1-suite-review.md:1 by asserting the review markdown declares no canonical-reparse relation capable of detecting lost meaning in the formatter output",
+      "observed_result": "verifier accepted the claim at docs/execution/phase1-suite-review.md:1 because the packet declares P1-T02 canonical_round_trip_law_holds and P1-T04 malformed_source_never_panics_and_round_trips which assert parse(emit(parse(x)))==parse(x) through Phase1Document equality comparing derived graph and HIR with source positions removed",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:140",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:140 by asserting the independent_oracle_source_cst function calls liminal_cst::parse which is the production path it judges, violating ADR-0020 section 5 oracle independence",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:140 because the INDEPENDENT_ORACLES constant at line 140 lists liminal_cst::parse as a forbidden symbol and verify_oracle_independence scans the transitive closure of each oracle function body for forbidden symbols including use aliases",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-xtask/src/haq.rs:2800",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:2800 by asserting the generated case_repair function never exercises the cycle category as a negative case, so cyclic plans are silently accepted",
+      "observed_result": "verifier accepted the mutation at crates/liminal-xtask/src/haq.rs:2800 because case_repair explicitly constructs cyclic edges when category is cycle or rng.below(384)==0 and returns Case::Negative when topo_order returns CycleError::Cycle, and the test repair_cases_carry_the_shape_their_category_names asserts cycle appears as negative",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-xtask/src/haq.rs:3200",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:3200 by asserting the mutant source coordinate registry at mutant_source_coordinate allows a declaration line like pub fn to be a valid mutation anchor, inflating the denominator",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:3200 because verify_mutant_anchors_support_operators calls anchor_is_mutable_line which rejects function signatures, struct declarations, enum variants, use statements, and const declarations unless they bind a numeric threshold, and the test every_declared_mutant_anchors_a_line_its_operator_can_mutate confirms all 65 anchors are mutable",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-xtask/src/haq.rs:1800",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:1800 by asserting the crash boundary scope check at verify_crash_boundary_scope does not measure durable_transition_sites from tracked source, so a new txn.commit() anywhere goes undetected",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:1800 because verify_crash_boundary_scope calls durable_transition_sites which scans git ls-files tracked crates for DURABLE_SYMBOLS including commit, commit_if, append, sync_all, sync_data, and rename, and compares measured counts against declared packet scope entries in both directions",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:2500",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:2500 by asserting the generated evidence hash absorbs only RNG state and not the code under test output, making two different implementations produce identical evidence",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:2500 because generate_evidence folds each Case::Accepted witness bytes into the blake3 digest via digest.update(&witness), and the test generated_evidence_is_byte_identical_across_runs plus generated_case_builders_match_their_recorded_goldens pin the exact digest for each family",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:4500",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:4500 by asserting the scope trace scanner at scan_scope_trace does not track directory file descriptors, so a write through a dirfd opened on the locked corpus names no forbidden fragment",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:4500 because scan_scope_trace maintains a per-pid dir_fds map populated from openat return values, anchors relative paths against the dirfd or cwd, and locked_corpus_write checks the resolved path against FORBIDDEN_TRACE_FRAGMENTS and inode identities, with the test a_write_through_a_locked_directory_fd_is_refused confirming the defense",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A08",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-xtask/src/haq.rs:5100",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:5100 by asserting the verify_markdown_tables function allows verdict vocabulary words like pass or killed in rendered table cells while the packet is unqualified, so a human-facing cell can claim a result no artifact supports",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:5100 because verify_markdown_tables checks every cell in every RENDERED_TABLES header against VERDICT_VOCABULARY when the packet is unqualified, and the test a_rendered_table_may_not_claim_what_the_packet_does_not_declare confirms cells containing pass, executed, or smuggled verdicts behind NOT_RUN markers are refused",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "crates/liminal-xtask/src/haq.rs:5600",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:5600 by asserting the review record integrity binding at verify_review_record_digests covers only the verdict and raw digest but not the structured attempts and findings, so those can be edited under an intact binding",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:5600 because verify_review_record computes integrity_binding_sha256 over review_claims_sha256 which hashes the persisted attempts, findings, and independently_reproduced arrays in canonical JSON, and the test the_integrity_binding_covers_the_structured_claims confirms changing an observed_result breaks the binding",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A10",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-xtask/src/haq.rs:6000",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:6000 by asserting the verify_packet_shape function accepts a packet where a requirement is mapped to zero tests, inflating the inventory count without adding evidence",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:6000 because verify_packet_shape iterates all requirements and checks covered_requirements.contains for each, and the test shape_check_rejects_a_requirement_mapped_to_no_test confirms an unmapped requirement is rejected even when non-critical",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A11",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-query/src/lib.rs:80",
+      "attempt": "falsify crates/liminal-query/src/lib.rs:80 by asserting the incremental_paragraph_oracle function calls paragraph::parse which is the production path it must be independent from",
+      "observed_result": "verifier rejected the mutation at crates/liminal-query/src/lib.rs:80 because INDEPENDENT_ORACLES at haq.rs:140 lists paragraph::parse, ParagraphCompiler, liminal_source::paragraph, and IncrementalCompiler as forbidden symbols for incremental_paragraph_oracle, and verify_oracle_independence scans the transitive closure of the oracle body for these symbols including use aliases",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A12",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-xtask/src/haq.rs:3400",
+      "attempt": "falsify crates/liminal-xtask/src/haq.rs:3400 by asserting the verify_mutant_operator_patch function accepts a predicate-inversion patch that replaces == with != in a line containing two == operators, so the mutation is ambiguous and not a clean inversion",
+      "observed_result": "verifier rejected the mutation at crates/liminal-xtask/src/haq.rs:3400 because verify_mutant_operator_patch for predicate-inversion requires before.matches(from).count()==1 ensuring exactly one inversion pair is present, and the test specialized_mutant_operators_reject_unrelated_line_edits confirms unrelated edits are refused",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    }
+  ],
+  "findings": [],
+  "independently_reproduced": [],
+  "unresolved_verified_findings": 0,
+  "result": "pass",
+  "blindness_proof": {
+    "ephemeral_session_requested": true,
+    "session_state": "ephemeral-cloud-session",
+    "prior_pass_artifact_supplied": false,
+    "pass_two_original_spec_only": true
+  },
+  "schema_retries": 1,
+  "provider_receipt": {
+    "backend": "mimo-direct",
+    "response_id": "3917bc97-a8b2-43a8-a861-90ef7d239dab_8aa54d433d7a4fbe9fae6c63aff5754c",
+    "provider_model": "mimo-v2.5-pro",
+    "created": 1789042841,
+    "usage": {
+      "completion_tokens": 2620,
+      "prompt_tokens": 244078,
+      "total_tokens": 246698,
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "cached_tokens": 244032
+      }
+    }
+  },
+  "fixed_base": {
+    "commit": "6b36bbb98516af54e6f5e0848514ca19fa58ded6",
+    "tree": "75d4378cfe7b3eb43dd44539d62634a0049cf030",
+    "clean": true
+  },
+  "raw_response_sha256": "66325a28ae7131ad7fb4449265a0d3896226ea0282eac11ab33d8f8df00cdf0b",
+  "integrity_binding_sha256": "42237d5a17e78585c729161c510e57544a674d24d46bbaba6bca287f77927fe4"
+}

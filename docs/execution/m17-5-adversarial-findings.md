@@ -3772,3 +3772,37 @@ because the only gate that would catch it ran after the flip — and
 plan at all. Both of the last two lanes' plan findings would have been caught in
 seconds instead of hours. A test asserts the inventory path names all three, so
 a future gate cannot quietly move back behind the flip.
+
+## F-66 — the sixteenth lane: nine, and the first one is about yesterday's fix
+
+**Found.** 2026-09-10, lane at `6b36bbb9`, the first with R-001 and R-002 in
+force. Pass 2 clean; pass 1 twelve attempts, **nine** `verified_defect`, all
+reproduced. Records under `docs/execution/reviews/2026-09-10-lane-6b36bbb/`.
+
+**A02 is fixed here, and it is the one worth reading.** F-64 added an inode
+comparison so a hard link into the locked corpus could not hide behind an
+innocent path. It could: the trace scanner only pushed a write onto the
+candidate list when the path *lexically* contained a forbidden fragment, so a
+hard link named `scratch.bin` never reached the comparison written for exactly
+that case. The fix and the hole it was meant to close were one function apart
+and never met. Every write is a candidate now — the lexical rules still decide
+the lexical cases and identity decides the rest — and the test links the same
+inode under a second, unremarkable name.
+
+**The remaining eight, all reproduced, none yet fixed:**
+
+| attempt | class | claim |
+|---|---|---|
+| A01 | shared-oracle coupling | reachability recognises literal callee calls, so helper-VALUE indirection is still outside the closure — the same shape as F-64's A02, one level up |
+| A03 | evidence/report drift | the markdown table lookup validates only the first header match, so a second table with the same header goes unchecked |
+| A04 | weak mutants | mutant concurrence binds a finding's existence and reproduction, never its substance to the mutant id or an equivalence proof |
+| A05 | missing negatives | seed categories are classified from filenames without reading seed bytes or checking for duplicates, so the required negative diversity can be fabricated |
+| A06 | fault omissions | crash proofs check equality and residue but have no independent expected-terminal-state oracle, so a repeatable WRONG recovery satisfies them |
+| A07 | nondeterminism | no independent trusted-time binding, so regenerated self-consistent timestamps can understate campaign duration |
+| A08 | exception broadening | R-001 lacks a fuzz exclusion, so the stage-reads ruling can clear an unrelated fuzz read-access finding |
+| A09 | vacuity | content preservation compares extracted words, so losing punctuation-only semantic content raises no missing-word failure |
+
+**A08 is the first finding against a ruling in force**, which is the mechanism
+working as designed: the ruling became live this morning and a reviewer
+immediately found prose it would over-clear. A06 and A09 are the substantial
+ones — both say a check confirms self-consistency rather than correctness.
