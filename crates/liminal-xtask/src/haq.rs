@@ -806,7 +806,7 @@ pub fn verify_qualified_repo(root: &Utf8Path) -> Result<()> {
         .provenance
         .as_ref()
         .context("qualified campaign clock requires packet provenance")?;
-    verify_campaign_clock(root, Some(provenance))?;
+    verify_campaign_clock(root, &packet, Some(provenance))?;
     verify_residual_risks(root, &packet)?;
     verify_qualification_stage(&packet)?;
     if packet.qualification_stage == "1b" {
@@ -1615,6 +1615,11 @@ fn verify_coarse_scan(
     Ok((kinds, hashes))
 }
 
+/// Characters the dialect lowers into structure: lists, headings, quotes,
+/// tables and fences. Losing one of these to formatting is the formatter
+/// working; losing anything else that is not whitespace is losing content.
+const STRUCTURAL_MARKUP: [char; 7] = ['-', '*', '#', '>', '|', '+', '`'];
+
 fn independent_oracle_source_cst(
     source: &str,
     emitted: &str,
@@ -1653,6 +1658,28 @@ fn independent_oracle_source_cst(
         .into_iter()
         .filter(|word| source.contains(word.as_str()) && !once.contains(word.as_str()))
         .collect::<Vec<_>>();
+    // Blind pass 1 at `6b36bbb9` (A09): survival was judged on alphanumeric
+    // runs, so content that is punctuation raised nothing — a token of `_`
+    // has no run at all and could be dropped in silence. A character is
+    // markup only if the dialect lowers it: `-`, `*`, `#`, `>`, `|`, `+` and
+    // a backtick begin lists, headings, quotes, tables and fences, and
+    // lowering those is the formatter doing its job. Everything else that is
+    // not whitespace is content and must come back.
+    let lost_marks = content
+        .chars()
+        .filter(|ch| {
+            !ch.is_whitespace()
+                && !ch.is_alphanumeric()
+                && !STRUCTURAL_MARKUP.contains(ch)
+                && source.contains(*ch)
+                && !once.contains(*ch)
+        })
+        .collect::<BTreeSet<_>>();
+    anyhow::ensure!(
+        lost_marks.is_empty(),
+        "formatting dropped the document's punctuation content {lost_marks:?}: {source:?} -> \
+         {once:?}"
+    );
     anyhow::ensure!(
         lost.is_empty(),
         "formatting dropped the document's content {lost:?}: {source:?} -> {once:?}"
@@ -7366,7 +7393,115 @@ fn verify_corpus_audit_campaign_binding(root: &Utf8Path, audit: &CorpusAccessAud
 
 /// Check the bounded-campaign clock artifact. One clean breach is retained as
 /// residual risk; two clean breaches block ratification per ADR-0020 §7.
-fn verify_campaign_clock(root: &Utf8Path, expected: Option<&Provenance>) -> Result<()> {
+/// Days from 1970-01-01 for a civil date (Howard Hinnant's algorithm). Used to
+/// turn a provider's ISO timestamp into an epoch without taking a date
+/// dependency for one calculation.
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    let year = if month <= 2 { year - 1 } else { year };
+    let era = if year >= 0 { year } else { year - 399 } / 400;
+    let year_of_era = year - era * 400;
+    let month_shift = if month > 2 { month - 3 } else { month + 9 };
+    let day_of_year = (153 * month_shift + 2) / 5 + day - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    era * 146_097 + day_of_era - 719_468
+}
+
+/// The epoch second in a codex session id, which opens
+/// `YYYY-MM-DDTHH-MM-SS-<uuid>`. The provider's CLI writes it, not the
+/// qualifier.
+fn codex_session_epoch(session_id: &str) -> Option<i64> {
+    let digits: Vec<i64> = session_id
+        .split(['-', 'T'])
+        .take(6)
+        .map(|part| part.parse::<i64>().ok())
+        .collect::<Option<Vec<_>>>()?;
+    let [year, month, day, hour, minute, second] = digits[..] else {
+        return None;
+    };
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) || hour > 23 || minute > 59 {
+        return None;
+    }
+    Some(days_from_civil(year, month, day) * 86_400 + hour * 3_600 + minute * 60 + second)
+}
+
+/// Every clock reading in the committed review receipts that the qualifier did
+/// not author: the provider's `created` for a MiMo envelope, and the provider
+/// CLI's timestamp in a codex session id.
+fn provider_clock_readings(root: &Utf8Path, packet: &Packet) -> Result<Vec<(String, i64)>> {
+    let mut readings = Vec::new();
+    for review in &packet.reviews {
+        let Some(evidence) = review.evidence.as_deref() else {
+            continue;
+        };
+        let path = safe_repo_path(root, evidence, "campaign clock review")?;
+        let record: ReviewRecord =
+            serde_json::from_slice(&fs::read(&path).with_context(|| format!("read {path}"))?)
+                .with_context(|| format!("parse {path}"))?;
+        let receipt = &record.provider_receipt;
+        if receipt.backend == "codex" {
+            let epoch = codex_session_epoch(&receipt.session_id).with_context(|| {
+                format!(
+                    "{}: codex session id {:?} carries no provider timestamp",
+                    review.reviewer, receipt.session_id
+                )
+            })?;
+            readings.push((format!("{} codex session", review.reviewer), epoch));
+        } else {
+            anyhow::ensure!(
+                receipt.created > 0,
+                "{}: receipt carries no provider clock",
+                review.reviewer
+            );
+            readings.push((
+                format!("{} provider created", review.reviewer),
+                receipt.created,
+            ));
+        }
+    }
+    Ok(readings)
+}
+
+/// The campaign window must contain every clock reading the qualifier did not
+/// author. Blind pass 1 at `6b36bbb9` (A07): the only temporal check was
+/// `finished - started == elapsed`, which a regenerated window satisfies
+/// exactly, so an understated duration passed. The reviews happen inside the
+/// campaign; an understated window pushes their provider timestamps out.
+fn verify_campaign_window_holds_provider_clocks(
+    root: &Utf8Path,
+    packet: &Packet,
+    clock: &CampaignClock,
+) -> Result<()> {
+    let readings = provider_clock_readings(root, packet)?;
+    if readings.is_empty() {
+        return Ok(());
+    }
+    let started = clock
+        .runs
+        .iter()
+        .map(|run| i64::try_from(run.started_epoch).unwrap_or(i64::MAX))
+        .min()
+        .context("a campaign with runs has a start")?;
+    let finished = clock
+        .runs
+        .iter()
+        .map(|run| i64::try_from(run.finished_epoch).unwrap_or(i64::MAX))
+        .max()
+        .context("a campaign with runs has an end")?;
+    for (who, epoch) in &readings {
+        anyhow::ensure!(
+            *epoch >= started && *epoch <= finished,
+            "{who} reads {epoch}, outside the campaign window {started}..={finished} the clock \
+             claims; a provider's clock is not the qualifier's to move"
+        );
+    }
+    Ok(())
+}
+
+fn verify_campaign_clock(
+    root: &Utf8Path,
+    packet: &Packet,
+    expected: Option<&Provenance>,
+) -> Result<()> {
     let path = root.join("conformance/haqp/evidence/campaign.json");
     let bytes = fs::read(&path)
         .with_context(|| format!("{path}: committed campaign clock evidence is required"))?;
@@ -7454,6 +7589,13 @@ fn verify_campaign_clock(root: &Utf8Path, expected: Option<&Provenance>) -> Resu
         );
         require_eq("campaign receipt contents", &receipt, &expected_receipt)?;
     }
+    // Blind pass 1 at `6b36bbb9` (A07): every number here is the qualifier's
+    // own, and `finished - started == elapsed` is self-consistency — a
+    // regenerated window satisfies it exactly. The provider receipts carry
+    // clocks the qualifier does not author, and the reviews happen inside the
+    // campaign, so those readings must fall inside the window the campaign
+    // claims. An understated window pushes them out.
+    verify_campaign_window_holds_provider_clocks(root, packet, &clock)?;
     verify_campaign_clock_budget(&clock)
 }
 
@@ -16141,7 +16283,8 @@ mod tests {
         clock.runs[0].receipt = "conformance/haqp/evidence/campaign/run-1.receipt".to_owned();
         clock.runs[0].receipt_blake3 = blake3::hash(receipt.as_bytes()).to_hex().to_string();
         fs::write(&path, serde_json::to_vec(&clock).expect("serialize")).expect("write");
-        verify_campaign_clock(root, None).expect("one retained breach is residual risk");
+        verify_campaign_clock(root, &no_reviews_packet(), None)
+            .expect("one retained breach is residual risk");
         let mut blocked = clock;
         blocked.runs.push(CampaignRun {
             id: "run-2".to_owned(),
@@ -16168,7 +16311,8 @@ mod tests {
         fs::write(&receipt_two_path, receipt_two).expect("write receipt two");
         blocked.runs[1].receipt_blake3 = blake3::hash(receipt_two.as_bytes()).to_hex().to_string();
         fs::write(&path, serde_json::to_vec(&blocked).expect("serialize")).expect("write");
-        verify_campaign_clock(root, None).expect_err("two clean breaches block ratification");
+        verify_campaign_clock(root, &no_reviews_packet(), None)
+            .expect_err("two clean breaches block ratification");
     }
 
     /// `count > 16` — kills `>` -> `>=`: exactly 16 is the documented maximum.
@@ -18211,6 +18355,36 @@ mod tests {
             .expect("a finding naming the mutant is agreement about it");
     }
 
+    /// A packet with no declared reviews, for clock tests that are about the
+    /// budget rather than the provider-clock binding A07 added.
+    fn no_reviews_packet() -> Packet {
+        let mut packet = packet_from_repo();
+        packet.reviews.clear();
+        packet
+    }
+
+    /// Blind pass 1 at `6b36bbb9` (A07): the campaign clock's numbers are all
+    /// the qualifier's own, and `finished - started == elapsed` is satisfied
+    /// exactly by a regenerated window. The provider receipts carry clocks it
+    /// does not author.
+    #[test]
+    fn the_campaign_window_must_contain_the_providers_own_clocks() {
+        // The codex session id is `YYYY-MM-DDTHH-MM-SS-<uuid>`, written by the
+        // provider's CLI. 2026-09-10T08:09:17Z is 1789027757.
+        assert_eq!(
+            codex_session_epoch("2026-09-10T08-09-17-01a08af6-2a9a-7ba0-963d-86ecd208b4d7"),
+            Some(1_789_027_757)
+        );
+        assert_eq!(days_from_civil(1970, 1, 1), 0);
+        assert_eq!(days_from_civil(2000, 3, 1), 11_017);
+        assert_eq!(codex_session_epoch("not-a-timestamp"), None);
+        assert_eq!(
+            codex_session_epoch("2026-13-10T08-09-17-uuid"),
+            None,
+            "month 13 is not a month"
+        );
+    }
+
     /// AM-17.10's primary killer is chosen by how the operator is observed.
     #[test]
     fn the_derived_primary_matches_the_operators_observation_kind() {
@@ -18260,6 +18434,24 @@ mod tests {
         );
         independent_oracle_source_cst(source, source, source, source, "q", &coarse)
             .expect("a formatter that keeps the token is accepted");
+
+        // Blind pass 1 at `6b36bbb9` (A09): a token of punctuation has no
+        // alphanumeric run, so losing it raised no missing-word failure.
+        let marked = "alpha _ beta\n";
+        let marked_coarse = liminal_cst::coarse_parse(marked);
+        let stripped = "alpha beta\n";
+        let err =
+            independent_oracle_source_cst(marked, marked, stripped, stripped, "_", &marked_coarse)
+                .expect_err("punctuation content is content");
+        assert!(
+            err.to_string().contains("punctuation content"),
+            "refused for the wrong reason: {err}"
+        );
+        // A list marker lowered into structure is the formatter working.
+        let listed = "- alpha\n";
+        let listed_coarse = liminal_cst::coarse_parse(listed);
+        independent_oracle_source_cst(listed, listed, "alpha\n", "alpha\n", "-", &listed_coarse)
+            .expect("lowering a list marker is not losing content");
     }
 
     /// Review of `e490671`: braces inside a comment or a string are text, and
