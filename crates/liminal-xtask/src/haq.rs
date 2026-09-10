@@ -9698,10 +9698,10 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            161,
+            178,
             "match self {",
         ),
-        ("crates/liminal-jurisdiction/src/ilrp.rs", 261, "Ok(())"),
+        ("crates/liminal-jurisdiction/src/ilrp.rs", 278, "Ok(())"),
         (
             "crates/liminal-jurisdiction/src/checker.rs",
             288,
@@ -9709,32 +9709,32 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            258,
+            275,
             "let mut txn = self.store.begin()?;",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            274,
+            291,
             "self.commit_intent(id, intent, &format!(\"ack:{step_id}\"), origin)?;",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            273,
+            290,
             "self.crash.crash_if_armed(CrashPoint::BeforeAcknowledge);",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            293,
+            310,
             "let graph_steps: std::collections::BTreeSet<RepairStepId> = plan",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            301,
+            318,
             "if graph_steps.contains(&dep.before) && after_is_external {",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            209,
+            226,
             "(*self).crash_if_armed(at);",
         ),
     ];
@@ -18501,6 +18501,47 @@ mod tests {
             err.to_string().contains("no declared terminal expectation"),
             "{err}"
         );
+    }
+
+    /// Review of `8cb5f3b4`: the protocol table and the packet's registry are
+    /// two lists of the same boundaries, and two lists drift. The names the
+    /// table uses are `IntentState::name`, not a Debug derive, so a renamed
+    /// variant is a compile-time decision rather than silent evidence drift.
+    #[test]
+    fn the_protocol_table_names_exactly_the_declared_boundaries() {
+        let packet = packet_from_repo();
+        let declared = packet
+            .crash_boundaries
+            .iter()
+            .map(|row| row.boundary.clone())
+            .collect::<BTreeSet<_>>();
+        let tabled = CRASH_TERMINAL_EXPECTATION
+            .iter()
+            .map(|(boundary, _)| (*boundary).to_owned())
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            tabled, declared,
+            "the protocol's terminal table and the packet's crash boundaries must name the \
+             same set; adding a boundary is a decision about what recovery must reach"
+        );
+        for (_, states) in CRASH_TERMINAL_EXPECTATION {
+            for state in states {
+                assert!(
+                    [
+                        liminal_jurisdiction::IntentState::Prepared,
+                        liminal_jurisdiction::IntentState::Applying,
+                        liminal_jurisdiction::IntentState::ExternalApplied,
+                        liminal_jurisdiction::IntentState::Finalizing,
+                        liminal_jurisdiction::IntentState::Committed,
+                        liminal_jurisdiction::IntentState::NeedsReview,
+                        liminal_jurisdiction::IntentState::Aborted,
+                    ]
+                    .iter()
+                    .any(|known| known.name() == *state),
+                    "{state:?} is not an IntentState; the table would never match"
+                );
+            }
+        }
     }
 
     /// AM-17.10's primary killer is chosen by how the operator is observed.

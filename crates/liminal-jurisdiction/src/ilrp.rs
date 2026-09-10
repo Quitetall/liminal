@@ -51,6 +51,23 @@ pub enum IntentState {
 }
 
 impl IntentState {
+    /// The state's stable name. M17.5 F-66 (A06): recovery's terminal states
+    /// travel into crash evidence and are compared there against the
+    /// protocol's table, so their spelling is a contract. `Debug` is not one —
+    /// it is a derive that may be changed or replaced — and this is.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Prepared => "Prepared",
+            Self::Applying => "Applying",
+            Self::ExternalApplied => "ExternalApplied",
+            Self::Finalizing => "Finalizing",
+            Self::Committed => "Committed",
+            Self::NeedsReview => "NeedsReview",
+            Self::Aborted => "Aborted",
+        }
+    }
+
     /// Whether `self → next` is a legal transition (v4 §7.8 diagram).
     #[must_use]
     pub fn may_transition_to(self, next: IntentState) -> bool {

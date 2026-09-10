@@ -551,7 +551,10 @@ impl ToyRun {
 
 /// Terminal states by name, in the order recovery reached them.
 fn terminal_names(terminals: &[IntentState]) -> Vec<String> {
-    terminals.iter().map(|state| format!("{state:?}")).collect()
+    terminals
+        .iter()
+        .map(|state| state.name().to_owned())
+        .collect()
 }
 
 fn terminal_digest(terminals: &[IntentState]) -> anyhow::Result<String> {
