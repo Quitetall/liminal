@@ -442,7 +442,11 @@ fn expected_review_rows(record: &ReviewRecord) -> [(&'static str, String); 11] {
 /// the review markdown may BE one of them —
 /// the content tables are checked cell by cell above, and this catches the
 /// `Field | Value` blocks the flip also fills (A09).
-const VERDICT_VOCABULARY: [&str; 12] = [
+/// Words that claim a result. Blind pass 1 at `0a0b4b4b` (A09): `approved`,
+/// `accepted`, `granted` and `signed` all assert a decision the flip has not
+/// made, and none of them were here — an unqualified packet's report could
+/// have said its ratification was approved.
+const VERDICT_VOCABULARY: [&str; 16] = [
     "pass",
     "passed",
     "fail",
@@ -455,6 +459,10 @@ const VERDICT_VOCABULARY: [&str; 12] = [
     "complete",
     "ratified",
     "authorized",
+    "approved",
+    "accepted",
+    "granted",
+    "signed",
 ];
 
 const ACTIVATION_VOCABULARY: [&str; 2] = ["Phase 1", "Conditional: first persisted-format ADR"];
@@ -9245,11 +9253,20 @@ fn anchor_supports_operator(operator: &str, anchor: &str) -> bool {
         // when it occurs once: a closure's `|m| ...` has two, and a generic's
         // `<` is excluded by requiring spaces, because inverting the `<` of
         // `Vec<String>` yields `Vec>=String>`, which is not a program.
-        "predicate-inversion" => [
-            "==", "!=", " <= ", " >= ", " < ", " > ", "&&", "||", "|", " true", " false",
-        ]
-        .iter()
-        .any(|token| trimmed.matches(token).count() == 1),
+        "predicate-inversion" => {
+            // Blind pass 1 at `0a0b4b4b` (A04): a `|` in a PATTERN is an
+            // alternative, not an operator — inverting the bar of
+            // `A | B => ...` yields `A & B`, which is not a pattern and does
+            // not compile, so the mutant could never be applied let alone
+            // killed. A bar counts only where it can be bitwise or.
+            let pattern_alternative = trimmed.contains("=>") || trimmed.starts_with('|');
+            [
+                "==", "!=", " <= ", " >= ", " < ", " > ", "&&", "||", " true", " false",
+            ]
+            .iter()
+            .any(|token| trimmed.matches(token).count() == 1)
+                || (!pattern_alternative && trimmed.matches('|').count() == 1)
+        }
         "predicate-deletion" => negation,
         "threshold-plus-one" | "threshold-minus-one" => integer,
         "missing-enum-dispatch" => word("match"),
@@ -10137,9 +10154,34 @@ fn verify_markdown_surface_text(text: &str, packet: &Packet) -> Result<()> {
     let status = markdown_header(text, "status")
         .context("review packet markdown has no `status:` header")?;
     require_eq("review packet markdown status", status, "proposed")?;
-    if !text.contains("ratification decision | unratified") {
-        anyhow::bail!("review packet markdown must record unratified status");
-    }
+    // Blind pass 1 at `0a0b4b4b` (A09): this searched the WHOLE document for
+    // the row, so the phrase in a paragraph, a second authority table, or a
+    // row under any other header satisfied it. The authority table is one
+    // table and its rows are read from it.
+    // `| Field | Value |` is a generic header this document spells five times,
+    // so the authority table is found by its section instead.
+    let heading = "## Packet authority and bounds";
+    let section = text
+        .find(heading)
+        .with_context(|| format!("review packet markdown has no {heading:?} section"))?;
+    let authority = markdown_tables(&text[section..], "| Field | Value |");
+    let authority = authority
+        .first()
+        .with_context(|| format!("{heading:?} renders no table"))?;
+    let row_value = |field: &str| -> Option<String> {
+        authority
+            .1
+            .iter()
+            .find(|row| row.first().is_some_and(|cell| cell.trim() == field))
+            .and_then(|row| row.get(1))
+            .map(|cell| (*cell).trim().to_owned())
+    };
+    let ratification = row_value("ratification decision")
+        .context("the authority table has no ratification decision row")?;
+    anyhow::ensure!(
+        ratification.starts_with("unratified"),
+        "the authority table records ratification {ratification:?}; the packet is unratified"
+    );
     let canary_claim = format!(
         "Target: exactly **{} predeclared canaries**",
         packet.canaries.len()
@@ -18542,6 +18584,52 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Blind pass 1 at `0a0b4b4b` (A04, A09): a `|` in a pattern is an
+    /// alternative and inverting it does not compile; and the ratification row
+    /// was searched for across the whole document rather than read from the
+    /// authority table.
+    #[test]
+    fn a_pattern_bar_is_not_an_operator_and_a_row_is_read_from_its_table() {
+        assert!(
+            !anchor_supports_operator(
+                "predicate-inversion",
+                "BasisComponent::ObjectContent { .. } | BasisComponent::GitCommit { .. } => {"
+            ),
+            "inverting a match arm's bar yields `A & B`, which is not a pattern"
+        );
+        assert!(
+            !anchor_supports_operator(
+                "predicate-inversion",
+                "| BasisComponent::Other { .. } => 1,"
+            ),
+            "a leading bar is an alternative too"
+        );
+        assert!(
+            anchor_supports_operator("predicate-inversion", "NodeFlags(self.0 | other.0)"),
+            "a bar in an expression is bitwise or"
+        );
+
+        for word in ["approved", "accepted", "granted", "signed"] {
+            assert!(
+                VERDICT_VOCABULARY.contains(&word),
+                "{word} asserts a decision the flip has not made"
+            );
+        }
+
+        let text = fs::read_to_string(repo_root().join("docs/execution/phase1-suite-review.md"))
+            .expect("read the review markdown");
+        let packet = packet_from_repo();
+        verify_markdown_surface_text(&text, &packet).expect("the committed surface holds");
+        // The phrase in prose is not the row: it must come from the table.
+        let doctored = text.replace(
+            "| ratification decision | unratified",
+            "| ratification decision | approved by the qualifier",
+        ) + "\n\nratification decision | unratified\n";
+        let err = verify_markdown_surface_text(&doctored, &packet)
+            .expect_err("a prose mention is not the authority table's row");
+        assert!(err.to_string().contains("records ratification"), "{err}");
     }
 
     /// AM-17.10's primary killer is chosen by how the operator is observed.

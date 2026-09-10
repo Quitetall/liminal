@@ -1704,7 +1704,7 @@
   {
    "id": "P1-M054",
    "family": "Basis/revision/query invalidation",
-   "operator": "predicate-inversion",
+   "operator": "broadened-allow-list",
    "source": "crates/liminal-revision/src/durability.rs:30",
    "requirement": "P1-R017",
    "defect": "invert revision freshness check",
