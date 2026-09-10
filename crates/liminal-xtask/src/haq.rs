@@ -1705,6 +1705,40 @@ fn verify_coarse_scan(
 /// working; losing anything else that is not whitespace is losing content.
 const STRUCTURAL_MARKUP: [char; 7] = ['-', '*', '#', '>', '|', '+', '`'];
 
+/// A document's words in order. An escape stands for the character it
+/// denotes, so `\n` inside an emitted literal is a separator and not the
+/// letter `n` glued to the next word — without that, escaping a newline
+/// looks like reordering.
+fn sequence(text: &str) -> Vec<String> {
+    let mut plain = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            plain.push(ch);
+            continue;
+        }
+        // `\uXXXX` and `\xNN` denote one character each; anything else
+        // after a backslash denotes the character that follows it.
+        let digits = match chars.peek() {
+            Some('u') => 4,
+            Some('x') => 2,
+            _ => 0,
+        };
+        chars.next();
+        for _ in 0..digits {
+            if chars.peek().is_some_and(char::is_ascii_hexdigit) {
+                chars.next();
+            }
+        }
+        plain.push(' ');
+    }
+    plain
+        .split(|ch: char| !ch.is_alphanumeric())
+        .filter(|run| !run.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
 fn independent_oracle_source_cst(
     source: &str,
     emitted: &str,
@@ -1768,6 +1802,22 @@ fn independent_oracle_source_cst(
     anyhow::ensure!(
         lost.is_empty(),
         "formatting dropped the document's content {lost:?}: {source:?} -> {once:?}"
+    );
+    // Blind pass 1 at `0a0b4b4b` (A01): membership was checked and ORDER was
+    // not, so a formatter that scrambled a document's words kept every word,
+    // every mark, non-emptiness and idempotence, and lost the meaning. A
+    // formatter may move a word between lines; it may never move one past
+    // another, so the sequence of alphanumeric runs is invariant.
+    // Formatting may ADD words — the explicit dialect wraps content in `node`,
+    // `paragraph`, `literal` — so the source's words must appear in the output
+    // in their own order, not as the whole of it.
+    let emitted_words = sequence(once);
+    let mut next = emitted_words.iter();
+    anyhow::ensure!(
+        sequence(source)
+            .iter()
+            .all(|word| next.any(|candidate| candidate == word)),
+        "formatting reordered the document's words: {source:?} -> {once:?}"
     );
     anyhow::ensure!(
         source.trim().is_empty() || !once.trim().is_empty(),
@@ -2400,6 +2450,28 @@ fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
 /// exact source target, and identical falsification claim/observation. This
 /// prevents two semantically different reports at one line from becoming a
 /// concurrence by coordinate coincidence; finding IDs remain pass-local.
+/// Whether two blinded passes are reporting the same defect. Blind pass 1 at
+/// `0a0b4b4b` (A10): this required the `attempt` and `observed_result` strings
+/// to be byte-identical. Two reviewers who cannot see each other's work will
+/// not write the same sentence, so a genuine independent reproduction was
+/// rejected unless they coordinated wording — which is the one thing the
+/// blinding exists to prevent. The class and the coordinate already match by
+/// the time this is asked; what is left to establish is that the two are about
+/// the same thing, and shared vocabulary establishes it. Four significant
+/// words in common is far more than coincidence at one coordinate and far less
+/// than dictation.
+fn reports_the_same_defect(left: &ReviewRecordAttempt, right: &ReviewRecordAttempt) -> bool {
+    let vocabulary = |attempt: &ReviewRecordAttempt| {
+        format!("{} {}", attempt.attempt, attempt.observed_result)
+            .to_ascii_lowercase()
+            .split(|ch: char| !ch.is_alphanumeric() && ch != '_')
+            .filter(|word| word.len() >= 4)
+            .map(str::to_owned)
+            .collect::<BTreeSet<_>>()
+    };
+    vocabulary(left).intersection(&vocabulary(right)).count() >= 4
+}
+
 fn verify_cross_pass_reproduction(records: &[(String, ReviewRecord)]) -> Result<()> {
     if records.is_empty() {
         return Ok(());
@@ -2428,13 +2500,12 @@ fn verify_cross_pass_reproduction(records: &[(String, ReviewRecord)]) -> Result<
                         && candidate.independently_reproduced
                         && candidate.attack_class == attempt.attack_class
                         && candidate.target == attempt.target
-                        && candidate.attempt == attempt.attempt
-                        && candidate.observed_result == attempt.observed_result
+                        && reports_the_same_defect(candidate, attempt)
                 })
                 .count();
             anyhow::ensure!(
                 matches == 1,
-                "{who}: reproduced finding {finding_id:?} needs exactly one independently reproduced defect with the same attack class and source coordinate in the other pass; found {matches}"
+                "{who}: reproduced finding {finding_id:?} needs exactly one independently reproduced defect in the other pass with the same attack class, the same source coordinate, and a report about the same defect; found {matches}"
             );
         }
     }
@@ -18756,6 +18827,74 @@ mod tests {
             touched(&alias),
             "reading a second name for a corpus inode is reading the corpus"
         );
+    }
+
+    /// Blind pass 1 at `0a0b4b4b` (A10): cross-pass reproduction required the
+    /// two reports to be byte-identical, so two reviewers who cannot see each
+    /// other's work had to write the same sentence — the one thing blinding
+    /// exists to prevent.
+    #[test]
+    fn two_blinded_reports_of_one_defect_need_not_share_a_sentence() {
+        let attempt = |what: &str, observed: &str| ReviewRecordAttempt {
+            id: "A1".to_owned(),
+            attack_class: "vacuity".to_owned(),
+            target: "crates/liminal-xtask/src/haq.rs:1".to_owned(),
+            attempt: what.to_owned(),
+            observed_result: observed.to_owned(),
+            independently_reproduced: true,
+            classification: "verified_defect".to_owned(),
+            resolved: false,
+            resolution: None,
+        };
+        let codex = attempt(
+            "falsify the content survival check",
+            "content survival compares alphanumeric runs, so punctuation content is dropped unseen",
+        );
+        let mimo = attempt(
+            "attack content survival",
+            "the survival check compares alphanumeric runs only; dropped punctuation content is unseen",
+        );
+        assert!(
+            reports_the_same_defect(&codex, &mimo),
+            "different words, same defect"
+        );
+
+        let unrelated = attempt(
+            "falsify the campaign clock",
+            "the recorded window is self-consistent and binds no external timestamp",
+        );
+        assert!(
+            !reports_the_same_defect(&codex, &unrelated),
+            "the same coordinate is not the same defect"
+        );
+    }
+
+    /// Blind pass 1 at `0a0b4b4b` (A01): membership was checked and order was
+    /// not, so a formatter that scrambled a document's words kept every word,
+    /// every mark, non-emptiness and idempotence — and lost the meaning.
+    #[test]
+    fn formatting_may_not_move_one_word_past_another() {
+        let source = "alpha beta gamma\n";
+        let coarse = liminal_cst::coarse_parse(source);
+        let scrambled = "gamma beta alpha\n";
+        let err =
+            independent_oracle_source_cst(source, source, scrambled, scrambled, "beta", &coarse)
+                .expect_err("every word is present and the meaning is gone");
+        assert!(err.to_string().contains("reordered"), "{err}");
+
+        // Adding structural words is the explicit dialect working, and an
+        // escape denotes the character it stands for rather than a letter.
+        let wrapped =
+            "#!liminal-explicit-v1\nnode paragraph {\n  literal \"alpha\\u0001beta\";\n}\n";
+        independent_oracle_source_cst(
+            "alpha\u{1}beta\n",
+            "alpha\u{1}beta\n",
+            wrapped,
+            wrapped,
+            "alpha",
+            &liminal_cst::coarse_parse("alpha\u{1}beta\n"),
+        )
+        .expect("wrapping and escaping preserve order");
     }
 
     /// AM-17.10's primary killer is chosen by how the operator is observed.

@@ -3840,3 +3840,43 @@ A06 and A07 each found a check confirming that a record agrees with itself. A
 concurrence that agreed something was wrong, a recovery that was wrong the same
 way twice, a clock whose arithmetic closed. Self-consistency is the cheapest
 property to satisfy and the easiest to mistake for correctness.
+
+## F-67 — the seventeenth lane: seven, and one defect in the seed corpus itself
+
+**Found.** 2026-09-10, lane at `0a0b4b4b`. Pass 2 clean; pass 1 twelve attempts,
+seven `verified_defect`, all reproduced. Records under
+`docs/execution/reviews/2026-09-10-lane-0a0b4b4/`. Five of the seven attack
+fixes made the same day, which is what a reviewer reading the diff should do.
+
+| attempt | class | what was true | fix |
+|---|---|---|---|
+| A01 | vacuity | content survival checked MEMBERSHIP — words, punctuation, non-emptiness, idempotence — and never order. A formatter that scrambled a document's words kept all of it and lost the meaning | the source's words must appear in the output in their own order. Formatting may ADD words (the explicit dialect wraps content in `node`, `paragraph`, `literal`) so it is a subsequence, and an escape denotes the character it stands for — without that, escaping a newline reads as reordering |
+| A02 | shared-oracle coupling | `item_bodies` looked for `fn NAME(` only, so a macro was an item the oracle could reach with its body outside the scan | macros are items: `macro_rules! NAME` is collected and followed |
+| A03 | missing negatives | seed classes came from file names; F-66 added byte-distinctness and nothing tying a name to what it claims | see below |
+| A04 | weak mutants | a `|` in a PATTERN is an alternative — inverting `A \| B => ...` yields `A & B`, which does not compile — and the precondition counted it as an operator | a bar counts only where it can be bitwise or; P1-M054 moved to `broadened-allow-list`, which its match arm does host |
+| A07 | corpus leakage | the fuzz any-touch rule fired on the fragments `heldout` and `conformance/corpora`, and F-64's inode comparison guarded WRITES. For the carved fuzz binaries a read is the leak | every path a fuzz part opened is checked by identity |
+| A09 | evidence/report drift | the unratified check searched the whole document for `ratification decision \| unratified`, and four words asserting a decision — approved, accepted, granted, signed — were absent from the verdict vocabulary | the row is read from the authority table, located by its section since `\| Field \| Value \|` is spelled five times; the four words are verdicts |
+| A10 | evidence/report drift | cross-pass reproduction required the two reports to be BYTE-IDENTICAL, so a genuine independent reproduction was rejected unless the reviewers coordinated wording — the one thing blinding exists to prevent | class and coordinate still match exactly; the reports must share four significant words, which is far more than coincidence at one coordinate and far less than dictation |
+
+**A03 found a defect in the corpus, not the gate.** Five seeds named
+`12-invalid-utf8.bin` are valid UTF-8: their intended `0xff 0xfe` had been
+UTF-8 encoded on the way to disk, which is exactly what makes those bytes
+valid. So the malformed class was witnessed for five of seven targets by a seed
+that is not malformed, and had been since the corpus was written. The five are
+rewritten, and a name that asserts a byte property must now exhibit it —
+invalid-utf8 must not decode, empty must be whitespace, control must carry a
+control byte, unicode must be non-ASCII, long-line must have one. Names with no
+byte-level meaning stay claims, and the table says so by omitting them.
+
+**A10 is the first finding that a check was too STRICT**, and it matters more
+than it looks. Every other finding in seventeen lanes has been a gate accepting
+what it should refuse. This one refuses what it should accept, and the cost is
+paid in the direction hardest to see: a real defect reproduced by both passes
+would have been dropped for being described in two people's words.
+
+**Receipts lost.** While clearing the tree between fixes I deleted this lane's
+raw answers and codex rollout before copying them aside. The records survive
+with their digests; the bytes those digests attest to do not, so the F-49
+binding for this lane can be asserted and no longer checked. Recorded rather
+than repaired: a regenerated transcript would be a different session, and
+writing one to make a digest match is the forgery receipts exist to prevent.

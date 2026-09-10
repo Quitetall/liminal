@@ -1,0 +1,196 @@
+{
+  "schema_version": "haqp-blind-review-v1",
+  "pass": 1,
+  "reviewer": {
+    "model_family": "codex:gpt-5.6-sol",
+    "identity_hash": "f6cac6a769086b0c4a44f2b83d25874afa0b393a852ac730262a2f801543651c",
+    "backend": "codex"
+  },
+  "isolated_session_hash": "73d5f88eca52ec9eee9cbbebc098365580ea61532ff9184d636ae61e4e9eb484",
+  "sanitized_prompt_hash": "b443dc44d334ae4e8476edfadd61f3a071fc661eb02cf13d22b8820fb487976a",
+  "prompt_binding_sha256": "b0fc98463a79f8fc7a7509d9ab9f1ec7ff0c10d5b3b728e2534b0c3de4c05453",
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:1 using an idempotent formatter that alphabetically reorders two content words while preserving every word and punctuation character.",
+      "observed_result": "Static counterexample at crates/liminal-xtask/src/haq.rs:1 preserves emitted source, word membership, punctuation membership, non-emptiness, and once-equals-twice while changing document word order.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:1 by routing an independent oracle through a local macro whose expansion calls the forbidden production parser.",
+      "observed_result": "Reachability analysis at crates/liminal-xtask/src/haq.rs:1 follows functions and aliases but not macro definitions, so the coupled production call remains outside the inspected oracle body.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:1 by supplying unique valid seed bytes under filenames containing boundary, truncated, invalid, and hostile classification tokens.",
+      "observed_result": "Seed verification at crates/liminal-xtask/src/haq.rs:1 derives classes exclusively from filenames and checks only byte uniqueness, so mislabeled valid payloads satisfy every required negative class.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "crates/liminal-revision/src/durability.rs:30",
+      "attempt": "Falsify crates/liminal-revision/src/durability.rs:30 by applying the declared predicate-inversion operator to the match-pattern alternation and replacing its vertical bar with an ampersand.",
+      "observed_result": "Preflight accepts crates/liminal-revision/src/durability.rs:30 because one vertical bar matches the inversion contract, but the resulting pattern cannot compile and therefore cannot produce a semantic mutant kill.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "Falsify conformance/haqp/packet.json:1 by deleting the declared ilrp/before_ack crash boundary while leaving all remaining registered boundary claims unchanged.",
+      "observed_result": "Verifier rejects conformance/haqp/packet.json:1 because declared, runtime-registered, and closed authoritative crash-boundary sets no longer match after the deliberate omission.",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:1 by claiming the durable surface compares counts not order and therefore misses reordered durable calls within one file.",
+      "observed_result": "Reproduction at crates/liminal-xtask/src/haq.rs:1 confirms the durable surface intentionally compares counts not order; reordering calls preserves the defined per-file census and creates no measurement drift.",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:1 by placing an ignored hard link to a locked-corpus file under a fuzz corpus and reading it through the benign alias.",
+      "observed_result": "Control-flow reproduction at crates/liminal-xtask/src/haq.rs:1 shows alias scanning detects only symlinks, read auditing checks lexical or canonical paths, and inode identity protects writes only, so the fuzz read is accepted.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A08",
+      "attack_class": "exception broadening",
+      "target": "conformance/haqp/packet.json:1",
+      "attempt": "Falsify conformance/haqp/packet.json:1 by adding an undeclared wildcard exceptions array intended to waive every packet verification failure.",
+      "observed_result": "Deserialization rejects conformance/haqp/packet.json:1 because Packet uses deny_unknown_fields, preventing the undeclared wildcard exception from reaching any verifier branch.",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "docs/execution/phase1-suite-review.md:19",
+      "attempt": "Falsify docs/execution/phase1-suite-review.md:19 by changing the authoritative ratification cell to approved and appending the expected unratified row elsewhere in the document.",
+      "observed_result": "Markdown verification accepts drift at docs/execution/phase1-suite-review.md:19 because it searches globally for the expected row, omits this table from rendered-table checks, and does not classify approved as a forbidden verdict.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A10",
+      "attack_class": "evidence/report drift",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:1 using two independent reviews that reproduce the same defect and coordinate but describe their attempts with independently written prose.",
+      "observed_result": "Cross-pass verification at crates/liminal-xtask/src/haq.rs:1 requires byte-identical attempt and observation strings, so semantically matching independent reproductions are rejected unless reviewers coordinate wording.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false
+    },
+    {
+      "id": "A11",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:1 by asserting that ordinary qualification-stage read access to the locked corpus constitutes prohibited leakage.",
+      "observed_result": "Reproduction at crates/liminal-xtask/src/haq.rs:1 confirms stage read access is expressly permitted by R-001 while modification remains forbidden, so the asserted defect conflicts with governing authority.",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    },
+    {
+      "id": "A12",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:1",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:1 with a traced openat call using O_WRONLY and O_TRUNC directly against a repository locked-corpus path.",
+      "observed_result": "Trace processing at crates/liminal-xtask/src/haq.rs:1 records the path as a write candidate, resolves it beneath conformance/corpora, and rejects the deliberate locked-corpus modification.",
+      "independently_reproduced": false,
+      "classification": "caught_violation",
+      "resolved": false
+    }
+  ],
+  "findings": [
+    {
+      "id": "F01",
+      "attempt_id": "A01"
+    },
+    {
+      "id": "F02",
+      "attempt_id": "A02"
+    },
+    {
+      "id": "F03",
+      "attempt_id": "A03"
+    },
+    {
+      "id": "F04",
+      "attempt_id": "A04"
+    },
+    {
+      "id": "F05",
+      "attempt_id": "A07"
+    },
+    {
+      "id": "F06",
+      "attempt_id": "A09"
+    },
+    {
+      "id": "F07",
+      "attempt_id": "A10"
+    }
+  ],
+  "independently_reproduced": [
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05",
+    "F06",
+    "F07"
+  ],
+  "unresolved_verified_findings": 7,
+  "result": "fail",
+  "blindness_proof": {
+    "ephemeral_session_requested": false,
+    "session_state": "fresh-codex-session",
+    "prior_pass_artifact_supplied": false,
+    "pass_two_original_spec_only": false
+  },
+  "schema_retries": 0,
+  "provider_receipt": {
+    "backend": "codex",
+    "session_file": "rollout-2026-09-10T17-47-42-01a08d4a-7669-77a0-9c2e-2a50e812eff7.jsonl",
+    "session_id": "2026-09-10T17-47-42-01a08d4a-7669-77a0-9c2e-2a50e812eff7",
+    "transcript_sha256": "8cc50c56351245f0ad4f69c516d51299983eae91fc1ade865946016b0bf01b0c",
+    "transcript_bytes": 2427674
+  },
+  "fixed_base": {
+    "commit": "0a0b4b4b748e10b7850b705a2e2b524b0862bc70",
+    "tree": "0c0e7967aa4e0b9d5ebbc9e4d6593731436ee5d1",
+    "clean": true
+  },
+  "raw_response_sha256": "01bde40f3c855a7e477039250b3579cf117c08764277d9e6c351f67ede80aa38",
+  "integrity_binding_sha256": "4392d8b07930468c6ac4199df2def8ebe091c0309dd7ba9f3bf91c793a9cc92e"
+}
