@@ -4275,6 +4275,25 @@ fn verify_mutant_concurrence(root: &Utf8Path, packet: &Packet) -> Result<()> {
                 mutant.id,
                 concurrence.finding
             );
+            // Blind pass 1 at `6b36bbb9` (A04): existence and reproduction were
+            // checked and SUBSTANCE was not, so any reproduced defect in the
+            // record satisfied the concurrence for any mutant claiming
+            // equivalence. A reviewer agreeing that a mutant is equivalent has
+            // to have been talking about that mutant, which means naming it or
+            // the line it sits on — the same binding resolution evidence uses.
+            let coordinate = mutant.source.as_str();
+            let prose = format!(
+                "{} {} {}",
+                attempt.attempt, attempt.observed_result, attempt.target
+            );
+            anyhow::ensure!(
+                prose.contains(mutant.id.as_str()) || prose.contains(coordinate),
+                "{} concurrence cites finding {:?}, which names neither the mutant nor its \
+                 coordinate {coordinate}: a reviewer agreeing a mutant is equivalent must have \
+                 been talking about that mutant",
+                mutant.id,
+                concurrence.finding
+            );
         }
     }
     Ok(())
@@ -5042,11 +5061,28 @@ fn verify_seed_classes(root: &Utf8Path, target: &str, seed_dir: &Utf8Path) -> Re
         .map_or_else(|_| seed_dir.to_string(), ToString::to_string);
     let listed = git_text(root, &["ls-files", "-z", "--", &relative])?;
     let mut counts = BTreeMap::new();
+    // Blind pass 1 at `6b36bbb9` (A05): the class came from the FILE NAME and
+    // nothing read the bytes, so five copies of one seed under five names
+    // satisfied "seeds spanning valid, boundary, truncated, malformed and
+    // hostile". Content is what makes a seed a seed: two tracked seeds in one
+    // target may not carry the same bytes. Emptiness is not forbidden — an
+    // empty input is a real boundary for a fuzz target, and two targets commit
+    // one on purpose — but it can only be committed once, like anything else.
+    let mut by_digest: BTreeMap<String, String> = BTreeMap::new();
     for name in listed.split('\0').filter(|name| !name.trim().is_empty()) {
         let file = Utf8Path::new(name)
             .file_name()
             .unwrap_or(name)
             .to_ascii_lowercase();
+        let bytes = fs::read(root.join(name))
+            .with_context(|| format!("{target}: read committed seed {name}"))?;
+        let digest = blake3::hash(&bytes).to_hex().to_string();
+        if let Some(first) = by_digest.insert(digest, name.to_owned()) {
+            anyhow::bail!(
+                "{target}: committed seeds {first} and {name} carry identical bytes; a class \
+                 spanned by copies of one seed is not a class the corpus covers"
+            );
+        }
         let class = SEED_CLASSES
             .iter()
             .find(|(_, tokens)| tokens.iter().any(|token| file.contains(token)))
@@ -18108,6 +18144,73 @@ mod tests {
         assert!(!body.contains("other_thing("));
     }
 
+    /// Blind pass 1 at `6b36bbb9` (A04): concurrence checked that the cited
+    /// finding exists and was reproduced, never that it was ABOUT the mutant —
+    /// so any reproduced defect in the record certified any mutant's claim of
+    /// equivalence.
+    #[test]
+    fn an_equivalence_concurrence_must_cite_a_finding_about_that_mutant() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-concurrence").expect("scratch");
+        let root = scratch.path().to_owned();
+        let mut packet = packet_from_repo();
+        let mutant_id = packet.mutants[0].id.clone();
+        let coordinate = packet.mutants[0].source.clone();
+        packet.mutants[0].disposition = "equivalent".to_owned();
+        packet.mutants[0].disposition_proof = Some("same observable function".to_owned());
+
+        let write_record = |pass: u8, family: &str, prose: &str| -> String {
+            let mut record = review_record(pass, family, "codex");
+            record.attempts = vec![ReviewRecordAttempt {
+                id: "A1".to_owned(),
+                attack_class: "weak mutants".to_owned(),
+                target: "conformance/haqp/packet.json".to_owned(),
+                attempt: "argue equivalence".to_owned(),
+                observed_result: prose.to_owned(),
+                independently_reproduced: true,
+                classification: "verified_defect".to_owned(),
+                resolved: false,
+                resolution: None,
+            }];
+            record.findings = vec![serde_json::json!({"id": "F-eq", "attempt_id": "A1"})];
+            record.independently_reproduced = vec!["F-eq".to_owned()];
+            let rel = format!("conformance/haqp/evidence/reviews/pass{pass}.json");
+            let path = root.join(&rel);
+            fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
+            fs::write(&path, serde_json::to_vec(&record).expect("serialize")).expect("write");
+            rel
+        };
+
+        let unrelated = "the campaign clock is self-consistent and proves nothing";
+        packet.reviews[0].result = "pass".to_owned();
+        packet.reviews[1].result = "pass".to_owned();
+        packet.reviews[0].evidence = Some(write_record(1, "openai", unrelated));
+        packet.reviews[1].evidence = Some(write_record(2, "mimo", unrelated));
+        packet.mutants[0].disposition_concurrence = vec![
+            DispositionConcurrence {
+                reviewer: packet.reviews[0].reviewer.clone(),
+                record: "pass-1".to_owned(),
+                finding: "F-eq".to_owned(),
+            },
+            DispositionConcurrence {
+                reviewer: packet.reviews[1].reviewer.clone(),
+                record: "pass-2".to_owned(),
+                finding: "F-eq".to_owned(),
+            },
+        ];
+        let err = verify_mutant_concurrence(&root, &packet)
+            .expect_err("a finding about something else is not agreement about this mutant");
+        assert!(
+            err.to_string().contains("names neither the mutant"),
+            "{err}"
+        );
+
+        let about = format!("{mutant_id} at {coordinate} is equivalent under the declared domain");
+        packet.reviews[0].evidence = Some(write_record(1, "openai", &about));
+        packet.reviews[1].evidence = Some(write_record(2, "mimo", &about));
+        verify_mutant_concurrence(&root, &packet)
+            .expect("a finding naming the mutant is agreement about it");
+    }
+
     /// AM-17.10's primary killer is chosen by how the operator is observed.
     #[test]
     fn the_derived_primary_matches_the_operators_observation_kind() {
@@ -18526,16 +18629,30 @@ mod tests {
         commit_all("same-class seeds");
         let err = verify_seed_classes(&root, "t", &dir).expect_err("no boundary seed");
         assert!(err.to_string().contains("no boundary seed"), "{err}");
-        for name in [
+        // Blind pass 1 at `6b36bbb9` (A05): these four used to carry identical
+        // bytes, which is the fabricated diversity the finding names — four
+        // classes spanned by one seed copied four times. The fixture said so
+        // before the gate did.
+        for (index, name) in [
             "boundary.bin",
             "truncated.bin",
             "invalid.bin",
             "hostile.bin",
-        ] {
-            fs::write(dir.join(name), b"x").expect("seed");
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            fs::write(dir.join(name), format!("class {index}")).expect("seed");
         }
         commit_all("classed seeds");
         verify_seed_classes(&root, "t", &dir).expect("every class declared");
+
+        // Copying a seed under another class's name adds a name, not a class.
+        fs::write(dir.join("hostile-copy.bin"), b"class 0").expect("seed");
+        commit_all("a copied seed");
+        let err =
+            verify_seed_classes(&root, "t", &dir).expect_err("two seeds carrying identical bytes");
+        assert!(err.to_string().contains("identical bytes"), "{err}");
     }
 
     /// Blind pass 1 at f360e90 (A03): equal length let a duplicated step
