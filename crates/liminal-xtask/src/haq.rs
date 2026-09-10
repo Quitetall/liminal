@@ -715,6 +715,14 @@ pub fn verify_inventory_repo(root: &Utf8Path) -> Result<()> {
     verify_markdown_review_blocks(root, &packet)?;
     verify_markdown_tables(root, &packet)?;
     verify_oracle_independence(root)?;
+    // M17.5 F-65: the mutation plan's gates lived only in the qualified path,
+    // which runs after the flip. A plan defect therefore cost a whole lane to
+    // discover, and `haq verify-inventory` — the command run by hand between
+    // lanes — never read the plan at all. AM-17.10's derivation and F-64's
+    // operator contract are checks on the PACKET, so they belong here too.
+    verify_mutant_source_coordinates(root, &packet)?;
+    verify_mutant_anchors_support_operators(root, &packet)?;
+    verify_mutant_killing_tests(root, &packet)?;
     Ok(())
 }
 
@@ -8858,17 +8866,24 @@ fn verify_mutant_source_coordinates(root: &Utf8Path, packet: &Packet) -> Result<
 /// lucky.
 fn verify_locked_corpus_has_no_aliases(root: &Utf8Path) -> Result<()> {
     let locked = root.join("conformance/corpora/heldout");
-    if !locked.exists() {
-        return Ok(());
-    }
+    // M17.5 F-65: this returned Ok when the corpus was absent, and nothing
+    // else in the gate required it to exist — so a tree with the corpus
+    // deleted passed every corpus check vacuously while the packet went on
+    // declaring `locked_acceptance_corpora_touched: false`. Twenty-three files
+    // are tracked; absence is a broken tree, not an empty obligation.
+    anyhow::ensure!(
+        locked.is_dir(),
+        "{locked} is missing: the locked corpus cannot be shown untouched when it is not there"
+    );
     let canonical = fs::canonicalize(&locked)
         .with_context(|| format!("{locked}: locked corpus must resolve"))?;
     let mut aliases = Vec::new();
     let mut stack = vec![root.to_owned()];
     while let Some(dir) = stack.pop() {
-        let Ok(entries) = fs::read_dir(&dir) else {
-            continue;
-        };
+        // A directory this cannot read is a directory it cannot clear of
+        // aliases; the same silent skip was a hard-link bypass in F-64.
+        let entries = fs::read_dir(&dir)
+            .with_context(|| format!("{dir}: scan the tree for corpus aliases"))?;
         for entry in entries.flatten() {
             let Ok(path) = Utf8PathBuf::from_path_buf(entry.path()) else {
                 continue;
@@ -15509,6 +15524,24 @@ mod tests {
             fs::create_dir_all(dest.parent().expect("source parent")).expect("mkdir");
             fs::copy(source.join(source_file), &dest).expect("copy requirement source");
         }
+        // F-65 moved the plan's gates into the inventory path, so the copy
+        // needs every file a mutant anchors in, and a locked corpus directory.
+        // A placeholder, not the real corpus: the alias scan walks for aliases
+        // and never reads corpus bytes, and the fixture must not either.
+        for mutant in &packet.mutants {
+            let file = mutant
+                .source
+                .rsplit_once(':')
+                .expect("mutant source coordinate")
+                .0;
+            let dest = root.join(file);
+            fs::create_dir_all(dest.parent().expect("anchor parent")).expect("mkdir");
+            fs::copy(source.join(file), &dest).expect("copy anchor source");
+        }
+        let heldout = root.join("conformance/corpora/heldout");
+        fs::create_dir_all(heldout.as_std_path()).expect("mkdir corpus");
+        fs::write(heldout.join("placeholder"), b"not the locked corpus").expect("placeholder");
+
         // Sanity: the COPY must pass, or the refusal below proves nothing about
         // the doctoring.
         verify_inventory_repo(root).expect("an unmodified copy must still pass");
@@ -17972,6 +18005,37 @@ mod tests {
             !mentions_word("let paragraphs = split(input);", "p"),
             "a one-letter alias must not match inside every identifier"
         );
+    }
+
+    /// M17.5 F-65: the sweep for gates that pass vacuously when the thing they
+    /// check is absent. The corpus one was real — nothing required the locked
+    /// corpus to exist, so deleting it cleared every corpus check.
+    #[test]
+    fn the_locked_corpus_must_exist_to_be_shown_untouched() {
+        verify_locked_corpus_has_no_aliases(&repo_root()).expect("the committed tree has it");
+        let scratch = liminal_scratch::ScratchDir::new("haq-no-corpus").expect("scratch");
+        let err = verify_locked_corpus_has_no_aliases(scratch.path())
+            .expect_err("a tree with no locked corpus proves nothing about it");
+        assert!(err.to_string().contains("is missing"), "{err}");
+    }
+
+    /// The plan's gates must run before the flip, not only after it: a lane
+    /// costs hours, and `haq verify-inventory` is what is run between them.
+    #[test]
+    fn the_inventory_path_reads_the_mutation_plan() {
+        let source = fs::read_to_string(repo_root().join("crates/liminal-xtask/src/haq.rs"))
+            .expect("read the gate");
+        let body = item_body(&source, "verify_inventory_repo").expect("inventory entry point");
+        for gate in [
+            "verify_mutant_source_coordinates",
+            "verify_mutant_anchors_support_operators",
+            "verify_mutant_killing_tests",
+        ] {
+            assert!(
+                body.contains(gate),
+                "the inventory path does not call {gate}, so a plan defect costs a whole lane"
+            );
+        }
     }
 
     /// AM-17.10's primary killer is chosen by how the operator is observed.

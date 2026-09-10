@@ -3737,3 +3737,38 @@ so an unreadable subtree silently left its inodes out of the set and a hard
 link into it would have passed the check added an hour earlier. Both fixed: the
 suffix must follow a separator, and a corpus the gate cannot enumerate is a
 corpus it cannot protect, so enumeration failures are errors.
+
+## F-65 — the sweep: checks that pass when the thing they check is absent
+
+**Done.** 2026-09-10, before lane sixteen. Three lanes running had each found the
+same structural defect — a contract that exists and a gate that never runs it at
+stage 1a — so the whole gate was swept for it rather than waiting for a fourth.
+
+**Method.** Every `verify_*` function with an early `Ok(())`, a disposition
+filter, or a provenance guard was listed (7 early returns, 21 filters/guards),
+then each candidate's body was replaced with `Ok(())` and the gate re-run — the
+same technique F-36 used, applied deliberately instead of by campaign.
+
+**What was NOT wrong, recorded so the sweep is not repeated.** All 89 verifiers
+are reachable from a production entry point. `verify_cross_pass_reproduction`
+and `verify_reviewer_independence` return early on zero review records, and both
+then require exactly two — but `verify_packet_shape` pins `reviews.len() == 2`
+and runs in both paths, so zero is unreachable. `verify_generated_contract`
+returns early for a family with no declared relations, and
+`verify_generated_inventory` pins the five family names exactly. Three false
+alarms, each covered by a check one level up.
+
+**What was wrong.**
+
+| where | what was true | fix |
+|---|---|---|
+| `verify_locked_corpus_has_no_aliases` | returned `Ok(())` when `conformance/corpora/heldout` did not exist, and **nothing else in the gate required it to exist** — so a tree with the corpus deleted passed every corpus check vacuously while the packet went on declaring `locked_acceptance_corpora_touched: false` | absence is a refusal; 23 files are tracked, so a missing corpus is a broken tree, not an empty obligation |
+| the same function | skipped any directory it could not read | an error, the same silent skip that was a hard-link bypass in F-64 |
+| `verify_inventory_repo` | called eight checks, none of which read the mutation plan. AM-17.10's derivation, F-64's operator contract and the closed source registry all ran **only** in the qualified path, which executes after the flip | all three run pre-flip now |
+
+**The last one is the useful one.** A plan defect cost a whole lane to discover,
+because the only gate that would catch it ran after the flip — and
+`haq verify-inventory`, the command run by hand between lanes, never read the
+plan at all. Both of the last two lanes' plan findings would have been caught in
+seconds instead of hours. A test asserts the inventory path names all three, so
+a future gate cannot quietly move back behind the flip.
