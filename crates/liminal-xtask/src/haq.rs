@@ -178,15 +178,20 @@ fn item_body<'a>(text: &'a str, name: &str) -> Option<&'a str> {
 /// Every definition of `name` in `text`. All of them, not the first: a crate's
 /// modules concatenate here, and two modules may name a function alike.
 fn item_bodies<'a>(text: &'a str, name: &str) -> Vec<&'a str> {
-    let needle = format!("fn {name}(");
+    // Blind pass 1 at `0a0b4b4b` (A02): a macro is an item the oracle can
+    // reach, and its body is where the production call would sit — following
+    // functions alone left `production!()` outside the scanned body.
+    let needles = [format!("fn {name}("), format!("macro_rules! {name}")];
     let mut out = Vec::new();
-    let mut from = 0;
-    while let Some(offset) = text[from..].find(&needle) {
-        let start = from + offset;
-        let rest = &text[start..];
-        let end = rest.find("\n}\n").map_or(rest.len(), |index| index + 2);
-        out.push(&rest[..end]);
-        from = start + needle.len();
+    for needle in &needles {
+        let mut from = 0;
+        while let Some(offset) = text[from..].find(needle.as_str()) {
+            let start = from + offset;
+            let rest = &text[start..];
+            let end = rest.find("\n}\n").map_or(rest.len(), |index| index + 2);
+            out.push(&rest[..end]);
+            from = start + needle.len();
+        }
     }
     out
 }
@@ -246,6 +251,10 @@ fn oracle_reachable_body(text: &str, name: &str) -> String {
             // `unsafe` is among them because adding a helper to the closure
             // can only add refusals; dropping one is the direction that lets
             // an oracle reach production unnoticed.
+            if let Some(rest) = trimmed.strip_prefix("macro_rules! ") {
+                let end = rest.find(['{', '(', '[']).unwrap_or(rest.len());
+                return Some(rest[..end].trim().to_owned());
+            }
             let rest = trimmed
                 .split_once("fn ")
                 .filter(|(before, _)| {
@@ -5137,6 +5146,35 @@ fn verify_fuzz_seed_manifests(root: &Utf8Path, recorded: &[FuzzEvidence]) -> Res
 /// The seed classes ADR-0020 §4 requires a corpus to span, and the closed name
 /// tokens that declare each. A seed matching no negative token is a valid
 /// input by declaration; a corpus needs at least one seed in every class.
+/// What a seed's name asserts about its bytes, where the name asserts anything
+/// checkable. Blind pass 1 at `0a0b4b4b` (A03): the class came from the name
+/// and F-66 added only byte-distinctness, so a valid payload named
+/// `12-invalid-utf8.bin` witnessed the malformed class for five targets — and
+/// five committed seeds were exactly that, their intended `0xff 0xfe` having
+/// been UTF-8 encoded on the way to disk, which is the one thing that makes
+/// those bytes valid. A name that asserts a byte property must exhibit it.
+type SeedPredicate = fn(&[u8]) -> bool;
+
+const SEED_NAME_PREDICATES: [(&str, SeedPredicate); 5] = [
+    ("invalid-utf8", |bytes| std::str::from_utf8(bytes).is_err()),
+    ("empty", |bytes: &[u8]| {
+        bytes.iter().copied().all(|byte| byte.is_ascii_whitespace())
+    }),
+    ("control", |bytes| {
+        bytes
+            .iter()
+            .any(|byte| byte.is_ascii_control() && !byte.is_ascii_whitespace())
+    }),
+    ("unicode", |bytes| {
+        std::str::from_utf8(bytes).is_ok_and(|text| !text.is_ascii())
+    }),
+    ("long-line", |bytes| {
+        bytes
+            .split(|byte| *byte == b'\n')
+            .any(|line| line.len() >= 64)
+    }),
+];
+
 const SEED_CLASSES: [(&str, &[&str]); 4] = [
     ("boundary", &["boundary"]),
     ("truncated", &["truncated", "unterminated"]),
@@ -5184,6 +5222,13 @@ fn verify_seed_classes(root: &Utf8Path, target: &str, seed_dir: &Utf8Path) -> Re
             anyhow::bail!(
                 "{target}: committed seeds {first} and {name} carry identical bytes; a class \
                  spanned by copies of one seed is not a class the corpus covers"
+            );
+        }
+        for (token, holds) in SEED_NAME_PREDICATES {
+            anyhow::ensure!(
+                !file.contains(token) || holds(&bytes),
+                "{target}: seed {name} is named {token:?} and its bytes are not; a class \
+                 witnessed by a mislabelled seed is a class the corpus does not cover"
             );
         }
         let class = SEED_CLASSES
@@ -6955,6 +7000,30 @@ fn scan_scope_trace_file(path: &Utf8Path, label: &str) -> Result<ScopeTraceScan>
 /// Scan a scope's stored remainder and every carved part, binding each part's
 /// bytes to the digest the row declares. Returns the remainder's scan and the
 /// union of open paths; a locked-corpus fragment in ANY file is the row's.
+/// Whether any of `paths` names a file the locked corpus also names. A hard
+/// link is a second name for one inode, so no amount of path reasoning sees it.
+fn corpus_identity_touched(root: &Utf8Path, paths: &BTreeSet<String>) -> Result<bool> {
+    use std::os::unix::fs::MetadataExt as _;
+    let identities = locked_corpus_identities(root)?;
+    if identities.is_empty() {
+        return Ok(false);
+    }
+    for path in paths {
+        let local = if Path::new(path).is_absolute() {
+            std::path::PathBuf::from(path)
+        } else {
+            root.as_std_path().join(path)
+        };
+        let resolved = canonicalize_trace_path(&local).unwrap_or(local);
+        if let Ok(metadata) = fs::symlink_metadata(&resolved)
+            && identities.contains(&(metadata.dev(), metadata.ino()))
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 fn scan_scope_trace_union(
     root: &Utf8Path,
     row: &CorpusScopeTrace,
@@ -6978,6 +7047,15 @@ fn scan_scope_trace_union(
             &scan.raw_blake3,
         )?;
         forbidden = forbidden.or(scan.forbidden);
+        // Blind pass 1 at `0a0b4b4b` (A07): the any-touch rule fired on the
+        // lexical fragments `heldout` and `conformance/corpora`, so a hard
+        // link under any other name was invisible — and F-64's inode
+        // comparison guarded writes only, while the carved fuzz binaries are
+        // the one family for which a READ is the leak. Identity applies to
+        // every path a fuzz part opened.
+        if forbidden.is_none() && corpus_identity_touched(root, &scan.open_paths)? {
+            forbidden = Some("locked corpus reached by inode identity");
+        }
         open.extend(scan.open_paths);
     }
     Ok((remainder, open, forbidden))
@@ -18632,6 +18710,54 @@ mod tests {
         assert!(err.to_string().contains("records ratification"), "{err}");
     }
 
+    /// Blind pass 1 at `0a0b4b4b` (A02): a macro is an item the oracle can
+    /// reach, and the closure followed functions only — so the production call
+    /// hid one expansion away.
+    #[test]
+    fn the_oracle_closure_follows_a_macro_definition() {
+        let text = concat!(
+            "macro_rules! reach {\n    () => {\n        forbidden_path(1)\n    };\n}\n\n",
+            "fn oracle(x: u8) -> u8 {\n    reach!()\n}\n\n",
+            "macro_rules! unused {\n    () => {\n        other_thing()\n    };\n}\n",
+        );
+        let body = oracle_reachable_body(text, "oracle");
+        assert!(
+            body.contains("forbidden_path("),
+            "a macro the oracle invokes is part of the oracle: {body}"
+        );
+        assert!(
+            !body.contains("other_thing("),
+            "a macro it never invokes is not"
+        );
+    }
+
+    /// Blind pass 1 at `0a0b4b4b` (A07): the fuzz any-touch rule fired on the
+    /// lexical fragments `heldout` and `conformance/corpora`, and F-64's inode
+    /// comparison guarded writes only — so a fuzz binary READING a hard link
+    /// to a corpus file under any other name was accepted.
+    #[test]
+    fn a_fuzz_read_of_a_corpus_inode_is_a_touch() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-fuzz-read").expect("scratch");
+        let root = scratch.path().to_owned();
+        let corpus = root.join("conformance/corpora/heldout");
+        fs::create_dir_all(corpus.as_std_path()).expect("mkdir");
+        let locked = corpus.join("case.txt");
+        fs::write(locked.as_std_path(), b"held out").expect("write");
+        let alias = root.join("workspace-input.bin");
+        fs::hard_link(locked.as_std_path(), alias.as_std_path()).expect("hard link");
+        let ordinary = root.join("ordinary.txt");
+        fs::write(ordinary.as_std_path(), b"mine").expect("write");
+
+        let touched = |path: &Utf8Path| {
+            corpus_identity_touched(&root, &BTreeSet::from([path.to_string()])).expect("check")
+        };
+        assert!(!touched(&ordinary), "an ordinary read is not a touch");
+        assert!(
+            touched(&alias),
+            "reading a second name for a corpus inode is reading the corpus"
+        );
+    }
+
     /// AM-17.10's primary killer is chosen by how the operator is observed.
     #[test]
     fn the_derived_primary_matches_the_operators_observation_kind() {
@@ -19092,6 +19218,22 @@ mod tests {
         let err =
             verify_seed_classes(&root, "t", &dir).expect_err("two seeds carrying identical bytes");
         assert!(err.to_string().contains("identical bytes"), "{err}");
+        fs::remove_file(dir.join("hostile-copy.bin")).expect("remove");
+        commit_all("drop the copy");
+
+        // Blind pass 1 at `0a0b4b4b` (A03): a name that asserts a byte
+        // property must exhibit it. Five committed seeds named
+        // `12-invalid-utf8.bin` were valid UTF-8 — their intended `0xff 0xfe`
+        // had been UTF-8 encoded on the way to disk, which is the one thing
+        // that makes those bytes valid.
+        fs::write(dir.join("12-invalid-utf8.bin"), "perfectly valid text").expect("seed");
+        commit_all("a seed that lies about its bytes");
+        let err =
+            verify_seed_classes(&root, "t", &dir).expect_err("a valid payload named invalid-utf8");
+        assert!(err.to_string().contains("and its bytes are not"), "{err}");
+        fs::write(dir.join("12-invalid-utf8.bin"), [0xff, 0xfe, b'x']).expect("seed");
+        commit_all("a seed that tells the truth");
+        verify_seed_classes(&root, "t", &dir).expect("bytes matching the name");
     }
 
     /// Blind pass 1 at f360e90 (A03): equal length let a duplicated step
