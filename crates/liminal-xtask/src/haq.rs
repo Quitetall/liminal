@@ -2542,6 +2542,37 @@ fn verify_review_provider_receipt(record: &ReviewRecord, record_path: &Utf8Path)
                 "review transcript_sha256 (of the retained transcript)",
                 &format!("{:x}", Sha256::digest(&bytes)),
                 &receipt.transcript_sha256,
+            )?;
+            // Blind pass 1 at `aeed70f9` (A09): the transcript's bytes were
+            // authenticated and its IDENTITY was not — `session_id` and
+            // `session_file` only had to be non-empty, so a record could name
+            // one session and retain another's rollout. A rollout opens with
+            // its own `session_meta`, and the receipt's id ends with the UUID
+            // that record carries.
+            let first = std::str::from_utf8(&bytes)
+                .context("codex transcript is not UTF-8")?
+                .lines()
+                .next()
+                .context("codex transcript is empty")?;
+            let meta: serde_json::Value = serde_json::from_str(first)
+                .context("codex transcript's first record is not JSON")?;
+            anyhow::ensure!(
+                meta["type"] == "session_meta",
+                "a codex rollout opens with session_meta; this one opens with {:?}",
+                meta["type"]
+            );
+            let declared = meta["payload"]["session_id"]
+                .as_str()
+                .context("codex session_meta carries no session_id")?;
+            anyhow::ensure!(
+                receipt.session_id.ends_with(declared),
+                "receipt names session {:?}, retained transcript is session {declared:?}",
+                receipt.session_id
+            );
+            require_eq(
+                "review provider_receipt session_file",
+                &receipt.session_file,
+                &format!("rollout-{}.jsonl", receipt.session_id),
             )
         }
         "mimo-direct" => {
@@ -6619,6 +6650,40 @@ fn open_evidence_reader(path: &Utf8Path) -> Result<Box<dyn std::io::BufRead>> {
 ///
 /// Relative paths are judged root-relative, conservatively: a stage's cwd is
 /// not receipted, so a relative write that names the locked corpus refuses.
+/// Every (device, inode) under the locked corpus. Blind pass 1 at `aeed70f9`
+/// (A07): the write check resolved symlinks and pathname ancestry, and a hard
+/// link is neither — it is a second name for the same inode, so writing
+/// through one outside the corpus mutates corpus bytes under an innocent path.
+/// Identity is read from directory metadata; no corpus file is opened.
+fn locked_corpus_identities(root: &Utf8Path) -> BTreeSet<(u64, u64)> {
+    use std::os::unix::fs::MetadataExt as _;
+    let corpora = root.join("conformance/corpora");
+    let mut identities = BTreeSet::new();
+    if !corpora.is_dir() {
+        return identities;
+    }
+    let mut stack = vec![corpora];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = fs::read_dir(dir.as_std_path()) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Ok(metadata) = fs::symlink_metadata(&path) else {
+                continue;
+            };
+            if metadata.is_dir() {
+                if let Ok(dir) = Utf8PathBuf::from_path_buf(path) {
+                    stack.push(dir);
+                }
+            } else if metadata.is_file() {
+                identities.insert((metadata.dev(), metadata.ino()));
+            }
+        }
+    }
+    identities
+}
+
 fn locked_corpus_write(
     root: &Utf8Path,
     candidates: &[String],
@@ -6626,6 +6691,7 @@ fn locked_corpus_write(
 ) -> Result<Option<String>> {
     let canonical_root = fs::canonicalize(root.as_std_path())
         .with_context(|| format!("{label}: canonicalize repository root"))?;
+    let identities = locked_corpus_identities(root);
     for lexical in candidates {
         let path = Path::new(lexical);
         // Blind pass 1 at 78c8f9b (A12): a relative write from a subdirectory,
@@ -6654,6 +6720,16 @@ fn locked_corpus_write(
                 .starts_with("conformance/corpora")
         {
             return Ok(Some(lexical.clone()));
+        }
+        // A07: a hard link is a second name for the same inode, so no amount
+        // of path reasoning sees it. Identity does.
+        if let Ok(metadata) = fs::symlink_metadata(&canonical) {
+            use std::os::unix::fs::MetadataExt as _;
+            if identities.contains(&(metadata.dev(), metadata.ino())) {
+                return Ok(Some(format!(
+                    "{lexical} (hard link into the locked corpus)"
+                )));
+            }
         }
     }
     Ok(None)
@@ -14065,7 +14141,10 @@ mod tests {
     /// The retained raw answer a fixture record's digest names (A09): a
     /// scratch directory holding `r.raw.txt`, and the record path beside it.
     /// The transcript a fixture codex receipt attests to.
-    const FIXTURE_TRANSCRIPT: &[u8] = b"{\"type\":\"session_meta\",\"id\":\"fixture\"}\n";
+    /// A rollout opens with its own `session_meta`, and A09 binds the receipt's
+    /// id to the `session_id` that record carries.
+    const FIXTURE_TRANSCRIPT: &[u8] =
+        b"{\"type\":\"session_meta\",\"payload\":{\"session_id\":\"fixture\"}}\n";
 
     /// A fixture codex receipt, in the canonical JSON the gate re-derives from
     /// the record file: sorted keys, compact separators.
@@ -17740,6 +17819,81 @@ mod tests {
             err.to_string().contains("cannot be the BEFORE side"),
             "{err}"
         );
+    }
+
+    /// Blind pass 1 at `aeed70f9` (A07): the write check resolved symlinks and
+    /// pathname ancestry. A hard link is neither — it is a second name for the
+    /// same inode — so writing through one outside the corpus mutated corpus
+    /// bytes under a path that looked innocent. Built in scratch; the real
+    /// locked corpus is never touched.
+    #[test]
+    fn a_hard_link_into_the_locked_corpus_is_refused() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-hardlink").expect("scratch");
+        let root = scratch.path().to_owned();
+        let corpus = root.join("conformance/corpora/heldout");
+        fs::create_dir_all(corpus.as_std_path()).expect("mkdir corpus");
+        let locked = corpus.join("case.txt");
+        fs::write(locked.as_std_path(), b"locked bytes").expect("write");
+        let elsewhere = root.join("scratch-name.txt");
+        fs::hard_link(locked.as_std_path(), elsewhere.as_std_path()).expect("hard link");
+
+        let innocent = root.join("ordinary.txt");
+        fs::write(innocent.as_std_path(), b"mine").expect("write");
+        assert!(
+            locked_corpus_write(&root, &[innocent.to_string()], "probe")
+                .expect("check")
+                .is_none(),
+            "an ordinary file is not the corpus"
+        );
+
+        let flagged = locked_corpus_write(&root, &[elsewhere.to_string()], "probe")
+            .expect("check")
+            .expect("a hard link into the corpus is a write to the corpus");
+        assert!(flagged.contains("hard link"), "{flagged}");
+    }
+
+    /// Blind pass 1 at `aeed70f9` (A09): the transcript's bytes were
+    /// authenticated and its identity was not, so a record could name one
+    /// session and retain another's rollout.
+    #[test]
+    fn a_receipt_must_retain_the_session_it_names() {
+        let (scratch, path) = fixture_record_path();
+        let mut record = review_record(1, "openai", "codex");
+        record.provider_receipt.session_id = "fixture".to_owned();
+        record.provider_receipt.session_file = "rollout-fixture.jsonl".to_owned();
+        record.provider_receipt.transcript_bytes = FIXTURE_TRANSCRIPT.len() as u64;
+        record.provider_receipt.transcript_sha256 =
+            format!("{:x}", Sha256::digest(FIXTURE_TRANSCRIPT));
+        verify_review_provider_receipt(&record, &path)
+            .expect("the retained session is the named one");
+
+        // Another session's rollout, correctly hashed: the bytes authenticate,
+        // the identity does not.
+        let other = b"{\"type\":\"session_meta\",\"payload\":{\"session_id\":\"someone-else\"}}\n";
+        fs::write(scratch.path().join("r.session.jsonl"), other).expect("transcript");
+        let mut substituted = record.clone();
+        substituted.provider_receipt.transcript_bytes = other.len() as u64;
+        substituted.provider_receipt.transcript_sha256 = format!("{:x}", Sha256::digest(other));
+        let err = verify_review_provider_receipt(&substituted, &path)
+            .expect_err("a substituted session identity");
+        assert!(
+            err.to_string().contains("retained transcript is session"),
+            "{err}"
+        );
+
+        // A rollout that does not open with its own metadata at all.
+        fs::write(
+            scratch.path().join("r.session.jsonl"),
+            b"{\"type\":\"event_msg\"}\n",
+        )
+        .expect("transcript");
+        let mut headless = record.clone();
+        headless.provider_receipt.transcript_bytes = b"{\"type\":\"event_msg\"}\n".len() as u64;
+        headless.provider_receipt.transcript_sha256 =
+            format!("{:x}", Sha256::digest(b"{\"type\":\"event_msg\"}\n"));
+        let err = verify_review_provider_receipt(&headless, &path)
+            .expect_err("a rollout with no session_meta");
+        assert!(err.to_string().contains("opens with session_meta"), "{err}");
     }
 
     /// AM-17.10's primary killer is chosen by how the operator is observed.
