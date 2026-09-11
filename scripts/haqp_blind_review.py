@@ -150,6 +150,21 @@ def codex_sessions() -> set[Path]:
     return set(sessions.rglob("rollout-*.jsonl"))
 
 
+def session_ran_in(path: Path, scratch: str) -> bool:
+    """Whether `path` is the rollout of a `codex exec` run whose working
+    directory was `scratch`. A rollout's first record is its own
+    `session_meta`, written by the CLI rather than by the reviewer."""
+    try:
+        with path.open(encoding="utf-8") as handle:
+            first = json.loads(handle.readline())
+    except (OSError, ValueError):
+        return False
+    if first.get("type") != "session_meta":
+        return False
+    payload = first.get("payload") or {}
+    return payload.get("cwd") == scratch and payload.get("originator") == "codex_exec"
+
+
 def codex_call(model: str, prompt: str) -> tuple[str, dict[str, Any]]:
     """Run one non-interactive Codex session and return its final message.
 
@@ -225,13 +240,21 @@ def codex_call(model: str, prompt: str) -> tuple[str, dict[str, Any]]:
         # The transcript this call wrote: the one rollout that appeared while it
         # ran. Attribution by set difference rather than by newest mtime, so a
         # concurrent session cannot be mistaken for this one.
+        # Set difference finds the rollouts that appeared; it cannot say which
+        # is OURS, and on 2026-09-11 a Codex Desktop subagent belonging to an
+        # unrelated project appeared mid-call and the run refused. A rollout
+        # opens with its own `session_meta`, which names the working directory
+        # it ran in and how it was started — and our working directory is a
+        # temporary one no other session can be in. Identity, not timing.
         fresh = sorted(codex_sessions() - before)
-        if len(fresh) != 1:
+        ours = [path for path in fresh if session_ran_in(path, scratch)]
+        if len(ours) != 1:
             raise RuntimeError(
-                f"{model}: expected exactly one new codex transcript, found {len(fresh)}; "
-                "session persistence is required (Brian's ruling, 2026-09-06)"
+                f"{model}: expected exactly one codex transcript from {scratch}, found "
+                f"{len(ours)} among {len(fresh)} new session(s); session persistence is "
+                "required (Brian's ruling, 2026-09-06)"
             )
-        transcript = fresh[0]
+        transcript = ours[0]
         receipt = {
             "backend": "codex",
             "session_file": transcript.name,
