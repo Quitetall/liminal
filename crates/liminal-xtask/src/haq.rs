@@ -764,6 +764,45 @@ pub fn verify_inventory_repo(root: &Utf8Path) -> Result<()> {
     verify_mutant_source_coordinates(root, &packet)?;
     verify_mutant_anchors_support_operators(root, &packet)?;
     verify_mutant_killing_tests(root, &packet)?;
+    // Blind pass 2 at `ec045588` (A05, A09, A12): four checks were reachable
+    // only through `verify_qualified_repo`, which refuses before it starts
+    // unless the packet is already qualified — so at stage 1a they had never
+    // run against anything, and replacing each with `Ok(())` changed no
+    // verdict. F-65 moved the mutation plan's gates here; these are the rest
+    // that need no provenance, which is to say everything whose evidence is
+    // already in the tree.
+    verify_qualification_stage(&packet)?;
+    verify_locked_corpus_has_no_aliases(root)?;
+    verify_crash_terminal_states(&read_crash_evidence(root)?)?;
+    verify_review_receipts_inventory(root, &packet)?;
+    Ok(())
+}
+
+/// The crash evidence as committed. Split out so the terminal-state oracle can
+/// run before the flip: the file is in the tree whether or not a campaign has.
+fn read_crash_evidence(root: &Utf8Path) -> Result<CrashEvidence> {
+    let path = root.join("conformance/haqp/evidence/crash.json");
+    let bytes =
+        fs::read(&path).with_context(|| format!("{path}: committed crash evidence is required"))?;
+    serde_json::from_slice(&bytes).with_context(|| format!("parse {path}"))
+}
+
+/// Every declared review record's digests, receipt and retained transcript,
+/// checked before the flip. Blind pass 2 at `ec045588` (A09): these ran only
+/// on the qualified path, so the committed records' digests bound nothing a
+/// clone could check.
+fn verify_review_receipts_inventory(root: &Utf8Path, packet: &Packet) -> Result<()> {
+    for review in &packet.reviews {
+        let Some(evidence) = review.evidence.as_deref() else {
+            continue;
+        };
+        let path = safe_repo_path(root, evidence, "review receipt")?;
+        let record: ReviewRecord =
+            serde_json::from_slice(&fs::read(&path).with_context(|| format!("read {path}"))?)
+                .with_context(|| format!("parse {path}"))?;
+        verify_review_record_digests(root, &record, &path)
+            .with_context(|| format!("{}: committed review record", review.reviewer))?;
+    }
     Ok(())
 }
 
@@ -1709,6 +1748,13 @@ const STRUCTURAL_MARKUP: [char; 7] = ['-', '*', '#', '>', '|', '+', '`'];
 /// denotes, so `\n` inside an emitted literal is a separator and not the
 /// letter `n` glued to the next word — without that, escaping a newline
 /// looks like reordering.
+///
+/// Review of `ec045588`: an escape the emitter does not produce — `\u` with
+/// too few hex digits, say — is normalised imperfectly, and that is safe
+/// because this runs over BOTH sides. Mangling can only add words to the
+/// output, never remove one from the source, and added words are what a
+/// subsequence tolerates. Every character the emitter actually escapes is
+/// non-alphanumeric, so it already separates words in the source.
 fn sequence(text: &str) -> Vec<String> {
     let mut plain = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
@@ -1812,13 +1858,29 @@ fn independent_oracle_source_cst(
     // `paragraph`, `literal` — so the source's words must appear in the output
     // in their own order, not as the whole of it.
     let emitted_words = sequence(once);
+    let source_words = sequence(source);
     let mut next = emitted_words.iter();
-    anyhow::ensure!(
-        sequence(source)
+    if !source_words
+        .iter()
+        .all(|word| next.any(|candidate| candidate == word))
+    {
+        // Review of `ec045588`: a subsequence fails for two different reasons
+        // and they are not the same defect. If some word appears fewer times
+        // in the output than in the source, the formatter dropped a copy —
+        // which the loss check above cannot see, because it asks whether the
+        // word survives at all and not how often. Otherwise every word is
+        // present the right number of times and the order changed.
+        let count = |words: &[String], word: &String| words.iter().filter(|w| *w == word).count();
+        let dropped = source_words
             .iter()
-            .all(|word| next.any(|candidate| candidate == word)),
-        "formatting reordered the document's words: {source:?} -> {once:?}"
-    );
+            .find(|word| count(&source_words, word) > count(&emitted_words, word));
+        anyhow::ensure!(
+            dropped.is_none(),
+            "formatting dropped a copy of {:?}: {source:?} -> {once:?}",
+            dropped.expect("checked")
+        );
+        anyhow::bail!("formatting reordered the document's words: {source:?} -> {once:?}");
+    }
     anyhow::ensure!(
         source.trim().is_empty() || !once.trim().is_empty(),
         "formatting emptied a non-empty document"
@@ -16005,9 +16067,46 @@ mod tests {
         fs::create_dir_all(heldout.as_std_path()).expect("mkdir corpus");
         fs::write(heldout.join("placeholder"), b"not the locked corpus").expect("placeholder");
 
+        for rel in [
+            "conformance/haqp/evidence/crash.json",
+            "conformance/haqp/evidence/reviews/pass1-codex-gpt-5.6-sol.json",
+            "conformance/haqp/evidence/reviews/pass1-codex-gpt-5.6-sol.raw.txt",
+            "conformance/haqp/evidence/reviews/pass1-codex-gpt-5.6-sol.session.jsonl",
+            "conformance/haqp/evidence/reviews/pass2-mimo-direct-mimo-v2.5-pro.json",
+            "conformance/haqp/evidence/reviews/pass2-mimo-direct-mimo-v2.5-pro.raw.txt",
+        ] {
+            let dest = root.join(rel);
+            fs::create_dir_all(dest.parent().expect("parent")).expect("mkdir");
+            fs::copy(source.join(rel), &dest).expect("copy evidence fixture");
+        }
+
         // Sanity: the COPY must pass, or the refusal below proves nothing about
         // the doctoring.
         verify_inventory_repo(root).expect("an unmodified copy must still pass");
+
+        // Blind pass 2 at `ec045588` (A05): the crash terminal-state oracle ran
+        // only on the qualified path, which refuses before it starts unless
+        // the packet is already qualified — so at stage 1a it had never
+        // judged anything. Doctoring recovery must refuse BEFORE the flip.
+        let crash_path = root.join("conformance/haqp/evidence/crash.json");
+        let mut crash: serde_json::Value =
+            serde_json::from_slice(&fs::read(&crash_path).expect("read")).expect("parse");
+        for boundary in crash["boundaries"].as_array_mut().expect("boundaries") {
+            if boundary["boundary"] == "ilrp/before_intent_commit" {
+                for pair in boundary["recovery_pairs"].as_array_mut().expect("pairs") {
+                    pair["first_terminals"] = serde_json::json!(["Committed"]);
+                }
+            }
+        }
+        fs::write(&crash_path, serde_json::to_vec(&crash).expect("encode")).expect("write");
+        let err = verify_inventory_repo(root).expect_err("invented recovery work");
+        assert!(err.to_string().contains("the protocol requires"), "{err}");
+        fs::copy(
+            source.join("conformance/haqp/evidence/crash.json"),
+            &crash_path,
+        )
+        .expect("restore");
+        verify_inventory_repo(root).expect("the restored copy passes again");
 
         // A proposed packet may not declare itself ratified.
         let path = root.join("conformance/haqp/packet.json");

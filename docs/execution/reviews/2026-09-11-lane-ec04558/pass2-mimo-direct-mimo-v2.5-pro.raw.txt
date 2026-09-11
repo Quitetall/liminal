@@ -1,14 +1,5 @@
+```json
 {
-  "schema_version": "haqp-blind-review-v1",
-  "pass": 2,
-  "reviewer": {
-    "model_family": "mimo-direct:mimo-v2.5-pro",
-    "identity_hash": "3668382ba796a14a6ef2e108440fa8a26961cba75da8cfec564f6b435c441e03",
-    "backend": "mimo-direct"
-  },
-  "isolated_session_hash": "59284116776998b9e3318db137229ccecef850e70e2b7a3dbab813511f4ef6b6",
-  "sanitized_prompt_hash": "59a1f3716ce66d080f3a0a00d4a5204b6d45241eb82db807c076046bee89cdaf",
-  "prompt_binding_sha256": "325358dc6205443f9e62fbdca31736b7b6ac39cc09a16c6afb0f8f8640e6786d",
   "attempts": [
     {
       "id": "A01",
@@ -160,36 +151,6 @@
     "F04"
   ],
   "unresolved_verified_findings": 4,
-  "result": "fail",
-  "blindness_proof": {
-    "ephemeral_session_requested": true,
-    "session_state": "ephemeral-cloud-session",
-    "prior_pass_artifact_supplied": false,
-    "pass_two_original_spec_only": true
-  },
-  "schema_retries": 0,
-  "provider_receipt": {
-    "backend": "mimo-direct",
-    "response_id": "a1b782d8-3f6c-4b74-89c4-049df704dc04_3f0b3e81b4f241258cf1148a78201ee0",
-    "provider_model": "mimo-v2.5-pro",
-    "created": 1789104219,
-    "usage": {
-      "completion_tokens": 2368,
-      "prompt_tokens": 254527,
-      "total_tokens": 256895,
-      "completion_tokens_details": {
-        "reasoning_tokens": 0
-      },
-      "prompt_tokens_details": {
-        "cached_tokens": 0
-      }
-    }
-  },
-  "fixed_base": {
-    "commit": "ec045588e6804cf1c50c1ee5616531530f5df654",
-    "tree": "7b2a912e3bb12a9c100df03ef2b8f90f782f145a",
-    "clean": true
-  },
-  "raw_response_sha256": "01b08df6b921c10a8a773568b43bb1955550a6219d373a2b168bd18dafb47945",
-  "integrity_binding_sha256": "4cdf1adcde716a4dcaacf8d22a995a2d133bcfef17290ceef36009072850d72c"
+  "result": "fail"
 }
+```
