@@ -2523,11 +2523,33 @@ fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
 /// words in common is far more than coincidence at one coordinate and far less
 /// than dictation.
 fn reports_the_same_defect(left: &ReviewRecordAttempt, right: &ReviewRecordAttempt) -> bool {
+    // Blind pass 1 at `ec045588` (A02): both reports name the coordinate, so
+    // `crates`, `liminal`, `xtask` and `haq` were four shared words before
+    // either said anything — the coordinate matched twice, once as itself and
+    // once as vocabulary. Words the coordinate already carries are struck out,
+    // and so are the handful this campaign puts in every report.
+    const UBIQUITOUS: [&str; 8] = [
+        "verifier",
+        "verify",
+        "packet",
+        "evidence",
+        "check",
+        "checks",
+        "because",
+        "committed",
+    ];
+    let coordinate: BTreeSet<String> = format!("{} {}", left.target, right.target)
+        .to_ascii_lowercase()
+        .split(|ch: char| !ch.is_alphanumeric() && ch != '_')
+        .map(str::to_owned)
+        .collect();
     let vocabulary = |attempt: &ReviewRecordAttempt| {
         format!("{} {}", attempt.attempt, attempt.observed_result)
             .to_ascii_lowercase()
             .split(|ch: char| !ch.is_alphanumeric() && ch != '_')
             .filter(|word| word.len() >= 4)
+            .filter(|word| !coordinate.contains(*word))
+            .filter(|word| !UBIQUITOUS.contains(word))
             .map(str::to_owned)
             .collect::<BTreeSet<_>>()
     };
@@ -10481,6 +10503,35 @@ fn verify_markdown_surface_text(text: &str, packet: &Packet) -> Result<()> {
         ratification.starts_with("unratified"),
         "the authority table records ratification {ratification:?}; the packet is unratified"
     );
+    // Blind pass 1 at `ec045588` (A10): the qualification lane's table renders
+    // the commands, hashes and toolchain a run would record, and no rendered
+    // table or authority row bound it — a fabricated command inventory sat
+    // there through the packet digest and every status check. None of it is a
+    // verdict word, so the document-wide verdict scan never saw it either.
+    // While the packet is unqualified every one of those cells is a value the
+    // lane has not produced.
+    let lane_heading = "### Qualification lane";
+    let lane = text
+        .find(lane_heading)
+        .with_context(|| format!("review packet markdown has no {lane_heading:?} section"))?;
+    let lane_table = markdown_tables(&text[lane..], "| Field | Value |");
+    let lane_table = lane_table
+        .first()
+        .with_context(|| format!("{lane_heading:?} renders no table"))?;
+    anyhow::ensure!(
+        !lane_table.1.is_empty(),
+        "{lane_heading:?} renders an empty table"
+    );
+    for row in &lane_table.1 {
+        for cell in row.iter().skip(1) {
+            let value = cell.trim().trim_matches('`').trim();
+            anyhow::ensure!(
+                cell_claims_nothing(value),
+                "the qualification lane records {value:?} while the packet is unqualified; only \
+                 the flip may write what a run produced"
+            );
+        }
+    }
     let canary_claim = format!(
         "Target: exactly **{} predeclared canaries**",
         packet.canaries.len()
@@ -12113,6 +12164,18 @@ fn run_canary_suite(
             );
         }
         let canonical = canary_expected_prefix(&row.id)?;
+        if let Some((_, phrase)) = CANARY_REQUIRED_PHRASE
+            .iter()
+            .find(|(id, _)| *id == row.id.as_str())
+        {
+            anyhow::ensure!(
+                row.expected_failure.contains(phrase),
+                "{}: expected failure {:?} must name the violation this canary performs \
+                 ({phrase:?}); its prefix is shared by every refusal of its kind",
+                row.id,
+                row.expected_failure
+            );
+        }
         anyhow::ensure!(
             row.expected_failure.starts_with(canonical),
             "{}: expected failure {:?} is outside closed canary failure registry {:?}",
@@ -12444,6 +12507,13 @@ fn canary_failure_matches(expected: &str, observed: &str) -> bool {
         || observed.starts_with(&format!("{expected},"))
         || observed.starts_with(&format!("{expected} "))
 }
+
+/// Phrases a canary's declared failure must CONTAIN, for canaries whose
+/// closed prefix is generic. Blind pass 1 at `ec045588` (A09): C13's prefix is
+/// `fuzz target`, which every refusal about any fuzz target shares — the
+/// target's own name sits between the prefix and anything distinctive, so no
+/// prefix can carry the meaning. The phrase can.
+const CANARY_REQUIRED_PHRASE: [(&str, &str); 1] = [("C13", "is claimed by both")];
 
 /// Packet prose may add concrete values after a closed failure prefix, but it
 /// cannot replace the failure family with a packet-controlled generic phrase.
@@ -18967,6 +19037,21 @@ mod tests {
         let err = verify_markdown_surface_text(&doctored, &packet)
             .expect_err("a prose mention is not the authority table's row");
         assert!(err.to_string().contains("records ratification"), "{err}");
+
+        // Blind pass 1 at `ec045588` (A10): the qualification lane's table was
+        // bound by nothing, so a fabricated command inventory survived the
+        // packet digest and every status check — none of it is a verdict word.
+        let fabricated = text.replace(
+            "| exact commands, in order | NOT_RUN |",
+            "| exact commands, in order | `just ci`, `just haq-lane run-1` |",
+        );
+        assert_ne!(fabricated, text, "the lane row must exist to be doctored");
+        let err = verify_markdown_surface_text(&fabricated, &packet)
+            .expect_err("a command inventory the lane never produced");
+        assert!(
+            err.to_string().contains("while the packet is unqualified"),
+            "{err}"
+        );
     }
 
     /// Blind pass 1 at `0a0b4b4b` (A02): a macro is an item the oracle can
@@ -19054,6 +19139,22 @@ mod tests {
         assert!(
             !reports_the_same_defect(&codex, &unrelated),
             "the same coordinate is not the same defect"
+        );
+
+        // Blind pass 1 at `ec045588` (A02): the coordinate's own words are not
+        // evidence that two reports are about one defect — both reports name
+        // it, so `crates`, `liminal`, `xtask` and `haq` arrived free.
+        let path_words = attempt(
+            "probe crates liminal xtask haq",
+            "the crates liminal xtask haq verifier accepted an unrelated thing",
+        );
+        let other_path_words = attempt(
+            "probe crates liminal xtask haq again",
+            "the crates liminal xtask haq verifier missed a different thing",
+        );
+        assert!(
+            !reports_the_same_defect(&path_words, &other_path_words),
+            "path tokens and campaign boilerplate are not a shared report"
         );
     }
 
