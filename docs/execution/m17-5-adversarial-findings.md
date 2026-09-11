@@ -4043,3 +4043,44 @@ seconds. The gate already requires `result == "pass"`, so the overwrite
 destroyed good evidence to produce a later refusal. A failed run still writes
 its receipt — that it happened is evidence — and leaves the clock at the last
 completed campaign.
+
+## F-71 — the twenty-first lane: the ruling mechanism contradicted itself
+
+**Found.** 2026-09-11, lane at `3720d179`. Pass 2 clean — seven caught
+violations and five false positives, no defect. Pass 1 five `verified_defect`,
+all reproduced. Records under `docs/execution/reviews/2026-09-11-lane-3720d17/`.
+
+**A11 is the one that matters, and it is not what the reviewer said.** The claim
+was that the ruling-aware count has no production caller. It has one: the flip
+calls `haq review-unresolved` and writes the effective count into the packet
+row. What is true is worse. `verify_review_record` required that row to equal
+the record's RAW count — so a ruling that cleared anything produced a row the
+gate then refused. The two halves of the mechanism disagreed about what the
+number means, and a signed ruling in force would have blocked the flip it was
+written to permit. The gate re-derives the effective count now and holds the row
+to that, which also stops the flip's arithmetic being taken on trust.
+
+| attempt | what was true |
+|---|---|
+| A02 | `use_aliases` read only renaming imports, so `use ...::paragraph::parse;` bound nothing and a bare `parse(` reached production unwatched |
+| A09 | the raw answer and the transcript were each hashed and neither checked against the other — both digests true, the pair a fiction |
+| A10 | a MiMo receipt's `provider_model` had only to be non-empty; the provider could say anything answered and the record's own `model_family` went uncompared |
+| A11 | above |
+| A08 | recorded, not fixed — see below |
+
+**A08 is recorded rather than fixed.** It says a file-level ruling clears by
+substring without semantic identity. That is true and it is the fourth finding
+against this mechanism: matching on class and file (lane `aa00d41`), on a
+negated phrase (`5fb1b57`), on unrelated prose in the same file (`c29bc0ea`,
+which added coordinate binding and the one-clearance cap), and now on substring
+presence alone. Each round narrowed it and none can close it, because whether
+two sentences describe the same claim is not decidable from the sentences. The
+remaining fix is to require every ruling to name a coordinate rather than a
+file — which is a change to what a ruling IS, and belongs to Brian rather than
+to me under Protocol §3. Both rulings in force are file-level.
+
+**A false refusal I caused fixing A02.** Treating an unaliased import as
+aliasing its own last segment made an import list's trailing empty item yield
+the alias `""`, and `format!("{alias}(")` is then `(` — which every call in the
+file contains, so the oracle was refused for reaching everything. An alias must
+be an identifier.

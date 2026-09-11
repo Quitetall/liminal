@@ -2876,6 +2876,109 @@ fn effective_unresolved_findings(
 
 /// The receipt must be the backend's own shape, and a Codex transcript must be
 /// retained beside the record and hash to what the receipt claims (F-49).
+/// The last assistant message in a codex rollout: what the provider actually
+/// said, as its own transcript records it.
+fn transcript_final_message(bytes: &[u8]) -> Option<String> {
+    let mut spoken = None;
+    for line in std::str::from_utf8(bytes).ok()?.lines() {
+        let Ok(record) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        let payload = &record["payload"];
+        if record["type"] != "response_item"
+            || payload["type"] != "message"
+            || payload["role"] != "assistant"
+        {
+            continue;
+        }
+        let text = payload["content"]
+            .as_array()?
+            .iter()
+            .filter_map(|part| part["text"].as_str())
+            .collect::<String>();
+        spoken = Some(text);
+    }
+    spoken
+}
+
+/// A codex receipt: the session it names, the transcript it retained, and
+/// that the answer beside the record is the one the transcript records the
+/// provider giving.
+fn verify_codex_receipt(record: &ReviewRecord, record_path: &Utf8Path) -> Result<()> {
+    let receipt = &record.provider_receipt;
+    anyhow::ensure!(
+        !receipt.session_id.trim().is_empty() && !receipt.session_file.trim().is_empty(),
+        "a codex receipt must name the session that answered"
+    );
+    require_hex_digest("review transcript_sha256", &receipt.transcript_sha256)?;
+    let transcript = record_path.with_extension("session.jsonl");
+    let bytes = fs::read(&transcript).with_context(|| {
+        format!("{transcript}: the codex transcript must be retained beside its record")
+    })?;
+    anyhow::ensure!(
+        bytes.len() as u64 == receipt.transcript_bytes,
+        "codex transcript is {} bytes, receipt claims {}",
+        bytes.len(),
+        receipt.transcript_bytes
+    );
+    require_eq(
+        "review transcript_sha256 (of the retained transcript)",
+        &format!("{:x}", Sha256::digest(&bytes)),
+        &receipt.transcript_sha256,
+    )?;
+    // Blind pass 1 at `aeed70f9` (A09): the transcript's bytes were
+    // authenticated and its IDENTITY was not — `session_id` and
+    // `session_file` only had to be non-empty, so a record could name
+    // one session and retain another's rollout. A rollout opens with
+    // its own `session_meta`, and the receipt's id ends with the UUID
+    // that record carries.
+    let first = std::str::from_utf8(&bytes)
+        .context("codex transcript is not UTF-8")?
+        .lines()
+        .next()
+        .context("codex transcript is empty")?;
+    let meta: serde_json::Value =
+        serde_json::from_str(first).context("codex transcript's first record is not JSON")?;
+    anyhow::ensure!(
+        meta["type"] == "session_meta",
+        "a codex rollout opens with session_meta; this one opens with {:?}",
+        meta["type"]
+    );
+    let declared = meta["payload"]["session_id"]
+        .as_str()
+        .context("codex session_meta carries no session_id")?;
+    // Codex names a rollout `<timestamp>-<uuid>` and its `session_meta`
+    // carries the bare uuid, so the receipt's id either IS the declared
+    // id or ends with it after a separator. Review of `bba803d4`: a
+    // bare `ends_with` would also accept `xfixture` for `fixture`,
+    // which is a different session.
+    anyhow::ensure!(
+        receipt.session_id == declared || receipt.session_id.ends_with(&format!("-{declared}")),
+        "receipt names session {:?}, retained transcript is session {declared:?}",
+        receipt.session_id
+    );
+    require_eq(
+        "review provider_receipt session_file",
+        &receipt.session_file,
+        &format!("rollout-{}.jsonl", receipt.session_id),
+    )?;
+    // Blind pass 1 at `3720d179` (A09): the raw answer and the
+    // transcript were each hashed and neither was checked against the
+    // other, so a record could retain a real session and a different
+    // answer — both digests true, the pair a fiction. The rollout's
+    // last assistant message IS the answer the runner saved.
+    let raw_path = record_path.with_extension("raw.txt");
+    let raw = fs::read_to_string(&raw_path)
+        .with_context(|| format!("{raw_path}: the raw answer must be retained"))?;
+    let spoken = transcript_final_message(&bytes)
+        .with_context(|| format!("{transcript}: the transcript carries no assistant message"))?;
+    anyhow::ensure!(
+        spoken.trim() == raw.trim(),
+        "the retained answer is not the one the transcript records the provider giving"
+    );
+    Ok(())
+}
+
 fn verify_review_provider_receipt(record: &ReviewRecord, record_path: &Utf8Path) -> Result<()> {
     let receipt = &record.provider_receipt;
     require_eq(
@@ -2884,73 +2987,32 @@ fn verify_review_provider_receipt(record: &ReviewRecord, record_path: &Utf8Path)
         &record.reviewer.backend,
     )?;
     match receipt.backend.as_str() {
-        "codex" => {
-            anyhow::ensure!(
-                !receipt.session_id.trim().is_empty() && !receipt.session_file.trim().is_empty(),
-                "a codex receipt must name the session that answered"
-            );
-            require_hex_digest("review transcript_sha256", &receipt.transcript_sha256)?;
-            let transcript = record_path.with_extension("session.jsonl");
-            let bytes = fs::read(&transcript).with_context(|| {
-                format!("{transcript}: the codex transcript must be retained beside its record")
-            })?;
-            anyhow::ensure!(
-                bytes.len() as u64 == receipt.transcript_bytes,
-                "codex transcript is {} bytes, receipt claims {}",
-                bytes.len(),
-                receipt.transcript_bytes
-            );
-            require_eq(
-                "review transcript_sha256 (of the retained transcript)",
-                &format!("{:x}", Sha256::digest(&bytes)),
-                &receipt.transcript_sha256,
-            )?;
-            // Blind pass 1 at `aeed70f9` (A09): the transcript's bytes were
-            // authenticated and its IDENTITY was not — `session_id` and
-            // `session_file` only had to be non-empty, so a record could name
-            // one session and retain another's rollout. A rollout opens with
-            // its own `session_meta`, and the receipt's id ends with the UUID
-            // that record carries.
-            let first = std::str::from_utf8(&bytes)
-                .context("codex transcript is not UTF-8")?
-                .lines()
-                .next()
-                .context("codex transcript is empty")?;
-            let meta: serde_json::Value = serde_json::from_str(first)
-                .context("codex transcript's first record is not JSON")?;
-            anyhow::ensure!(
-                meta["type"] == "session_meta",
-                "a codex rollout opens with session_meta; this one opens with {:?}",
-                meta["type"]
-            );
-            let declared = meta["payload"]["session_id"]
-                .as_str()
-                .context("codex session_meta carries no session_id")?;
-            // Codex names a rollout `<timestamp>-<uuid>` and its `session_meta`
-            // carries the bare uuid, so the receipt's id either IS the declared
-            // id or ends with it after a separator. Review of `bba803d4`: a
-            // bare `ends_with` would also accept `xfixture` for `fixture`,
-            // which is a different session.
-            anyhow::ensure!(
-                receipt.session_id == declared
-                    || receipt.session_id.ends_with(&format!("-{declared}")),
-                "receipt names session {:?}, retained transcript is session {declared:?}",
-                receipt.session_id
-            );
-            require_eq(
-                "review provider_receipt session_file",
-                &receipt.session_file,
-                &format!("rollout-{}.jsonl", receipt.session_id),
-            )
-        }
+        "codex" => verify_codex_receipt(record, record_path),
         "mimo-direct" => {
             anyhow::ensure!(
                 !receipt.response_id.trim().is_empty(),
                 "a mimo receipt must carry the provider's response id"
             );
+            // Blind pass 1 at `3720d179` (A10): non-empty was the whole
+            // check, so the provider could say it answered as anything and
+            // the record's own `model_family` went uncompared. The receipt is
+            // the provider's statement of who answered; if it does not name
+            // the reviewer the record claims, one of the two is wrong.
             anyhow::ensure!(
                 !receipt.provider_model.trim().is_empty(),
                 "a mimo receipt must carry the model the provider says answered"
+            );
+            anyhow::ensure!(
+                receipt
+                    .provider_model
+                    .contains(record.reviewer.model_family.as_str())
+                    || record
+                        .reviewer
+                        .model_family
+                        .contains(receipt.provider_model.as_str()),
+                "the provider says {:?} answered and the record names {:?}",
+                receipt.provider_model,
+                record.reviewer.model_family
             );
             anyhow::ensure!(
                 receipt.created > 0,
@@ -3097,6 +3159,35 @@ fn verify_review_record_digests(
     Ok(())
 }
 
+/// The packet row's unresolved count, re-derived. Blind pass 1 at `3720d179`
+/// (A11): the row was required to equal the record's RAW count while the flip
+/// writes the ruling-aware one, so a ruling that cleared anything produced a
+/// row the gate then refused — the two halves of the mechanism disagreed about
+/// what the number means. The gate derives it, which also stops the flip's
+/// arithmetic being taken on trust.
+fn verify_unresolved_count(
+    root: &Utf8Path,
+    review: &Review,
+    record: &ReviewRecord,
+    record_path: &Utf8Path,
+    who: &str,
+) -> Result<()> {
+    let effective = effective_unresolved_findings_repo(root, record_path)?;
+    anyhow::ensure!(
+        effective == review.unresolved_verified_findings,
+        "{who} declares {} unresolved verified findings; its record and the rulings in force \
+         leave {effective}",
+        review.unresolved_verified_findings
+    );
+    anyhow::ensure!(
+        record.unresolved_verified_findings >= effective,
+        "{who} record counts {} unresolved verified findings, fewer than the {effective} its \
+         attempts leave after rulings",
+        record.unresolved_verified_findings
+    );
+    Ok(())
+}
+
 fn verify_review_record(
     root: &Utf8Path,
     review: &Review,
@@ -3161,14 +3252,10 @@ fn verify_review_record(
             record.result
         );
     }
-    if record.unresolved_verified_findings != review.unresolved_verified_findings {
-        anyhow::bail!(
-            "{who} declares {} unresolved verified findings but its record counts {}",
-            review.unresolved_verified_findings,
-            record.unresolved_verified_findings
-        );
-    }
     verify_review_findings(review, record, who, root)?;
+    // After the findings themselves: a row whose findings are malformed should
+    // say so, rather than reporting the count that follows from them.
+    verify_unresolved_count(root, review, record, record_path, who)?;
     // P1-A07: blindness is a property of how the pass was RUN. The runner emits
     // this proof; before F-27 nothing read it back.
     if record.blindness_proof.prior_pass_artifact_supplied {
@@ -9162,7 +9249,21 @@ fn use_aliases(line: &str) -> Vec<(String, String)> {
     items
         .iter()
         .filter_map(|item| {
-            let (path, alias) = item.split_once(" as ")?;
+            // Blind pass 1 at `3720d179` (A02): only a renaming `use` was
+            // read, so `use liminal_source::paragraph::parse;` — which brings
+            // the forbidden symbol in under its own last segment — bound
+            // nothing, and the oracle could call a bare `parse(`. An
+            // unaliased import aliases the symbol to its own final segment.
+            let (path, alias) = item
+                .split_once(" as ")
+                .unwrap_or_else(|| (item, item.rsplit("::").next().unwrap_or(item)));
+            // An import list's trailing comma leaves an empty item, whose
+            // "alias" would be the empty string — and `format!("{alias}(")`
+            // is then `(`, which every call in the file contains.
+            let alias = alias.trim();
+            if alias.is_empty() || !alias.chars().all(|ch| ch.is_alphanumeric() || ch == '_') {
+                return None;
+            }
             // `rsplit` always yields at least one element.
             let symbol = path
                 .rsplit("::")
@@ -15092,8 +15193,14 @@ mod tests {
     /// The transcript a fixture codex receipt attests to.
     /// A rollout opens with its own `session_meta`, and A09 binds the receipt's
     /// id to the `session_id` that record carries.
-    const FIXTURE_TRANSCRIPT: &[u8] =
-        b"{\"type\":\"session_meta\",\"payload\":{\"session_id\":\"fixture\"}}\n";
+    /// A rollout opens with its own `session_meta` and ends with what the
+    /// provider said; A09 binds the retained answer to that last message.
+    const FIXTURE_TRANSCRIPT: &[u8] = concat!(
+        "{\"type\":\"session_meta\",\"payload\":{\"session_id\":\"fixture\"}}\n",
+        "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",",
+        "\"content\":[{\"type\":\"output_text\",\"text\":\"fixture raw answer\"}]}}\n",
+    )
+    .as_bytes();
 
     /// A fixture codex receipt, in the canonical JSON the gate re-derives from
     /// the record file: sorted keys, compact separators.
@@ -19934,9 +20041,16 @@ mod tests {
             use_aliases("use std::fs::rename as mv;"),
             vec![("rename".to_owned(), "mv".to_owned())]
         );
+        // Blind pass 1 at `3720d179` (A02): an unaliased import brings the
+        // symbol in under its own last segment, which is an alias for the
+        // scan's purposes — `use ...::parse;` then a bare `parse(` reached
+        // production under a name nothing watched.
         assert_eq!(
             use_aliases("use std::fs::{rename as mv, remove_file};"),
-            vec![("rename".to_owned(), "mv".to_owned())]
+            vec![
+                ("rename".to_owned(), "mv".to_owned()),
+                ("remove_file".to_owned(), "remove_file".to_owned()),
+            ]
         );
         assert_eq!(
             use_aliases("use liminal_source::paragraph::{parse as p, other as o};"),
