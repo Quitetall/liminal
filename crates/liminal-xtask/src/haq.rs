@@ -5335,8 +5335,7 @@ const SEED_NAME_PREDICATES: [(&str, SeedPredicate); 5] = [
 /// malformed bytes under any unrecognised name satisfied ADR-0020 §4's demand
 /// that the corpus span valid input. A default is not a declaration; the valid
 /// class is now witnessed by a name that claims it, like every other class.
-const SEED_VALID_TOKENS: [&str; 17] = [
-    "empty",
+const SEED_VALID_TOKENS: [&str; 15] = [
     "single-token",
     "single-node",
     "single-edge",
@@ -5348,7 +5347,6 @@ const SEED_VALID_TOKENS: [&str; 17] = [
     "nested",
     "deep",
     "wide",
-    "comment",
     "escape",
     "dag",
     "legal-path",
@@ -5356,7 +5354,10 @@ const SEED_VALID_TOKENS: [&str; 17] = [
 ];
 
 const SEED_CLASSES: [(&str, &[&str]); 4] = [
-    ("boundary", &["boundary"]),
+    // `empty` is a boundary, not a well-formed document: an empty markdown
+    // file is a document and an empty JSON file is not (blind pass 1 at
+    // `40f41b24`, A03).
+    ("boundary", &["boundary", "empty"]),
     ("truncated", &["truncated", "unterminated"]),
     (
         "malformed",
@@ -5409,6 +5410,30 @@ fn verify_seed_classes(root: &Utf8Path, target: &str, seed_dir: &Utf8Path) -> Re
                 !file.contains(token) || holds(&bytes),
                 "{target}: seed {name} is named {token:?} and its bytes are not; a class \
                  witnessed by a mislabelled seed is a class the corpus does not cover"
+            );
+        }
+        // Blind pass 1 at `40f41b24` (A03): declaring the valid class by name
+        // says a seed is well-formed and checks nothing. What well-formed
+        // means depends on the format, and for the two formats the corpus
+        // carries it is checkable without asking the product: JSON must parse,
+        // and text must decode. `comment` left the valid list because it means
+        // opposite things in the two — a comment is content in markdown and is
+        // not JSON at all.
+        if SEED_VALID_TOKENS.iter().any(|token| file.contains(token)) {
+            // `file` is already lowercased above, so this is the case-folded
+            // comparison clippy asks for.
+            let well_formed = if Path::new(&file)
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+            {
+                serde_json::from_slice::<serde_json::Value>(&bytes).is_ok()
+            } else {
+                std::str::from_utf8(&bytes).is_ok()
+            };
+            anyhow::ensure!(
+                well_formed,
+                "{target}: seed {name} declares the valid class and is not well-formed in its \
+                 own format; a class witnessed by a seed that cannot be parsed is not covered"
             );
         }
         let class = SEED_CLASSES
@@ -19975,6 +20000,17 @@ mod tests {
         fs::write(dir.join("01-single-token.bin"), b"declared valid").expect("seed");
         commit_all("a seed that declares it");
         verify_seed_classes(&root, "t", &dir).expect("every class declared by name");
+
+        // Blind pass 1 at `40f41b24` (A03): declaring the valid class by name
+        // says a seed is well-formed and checked nothing. JSON must parse.
+        fs::write(dir.join("02-single-node.json"), b"// not json\n{}").expect("seed");
+        commit_all("a valid-class seed that is not JSON");
+        let err =
+            verify_seed_classes(&root, "t", &dir).expect_err("a valid seed that cannot be parsed");
+        assert!(err.to_string().contains("not well-formed"), "{err}");
+        fs::write(dir.join("02-single-node.json"), br#"{"ops":[]}"#).expect("seed");
+        commit_all("a valid-class seed that parses");
+        verify_seed_classes(&root, "t", &dir).expect("well-formed in its own format");
     }
 
     /// Blind pass 1 at f360e90 (A03): equal length let a duplicated step

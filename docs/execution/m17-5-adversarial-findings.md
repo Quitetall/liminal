@@ -3939,3 +3939,53 @@ scanner per line, discarding exactly the state being added; `has_disjunction`
 looked at the space before `||` rather than the operand; and the alias scan
 compared identities drawn from the whole corpora tree against `heldout` alone,
 so fifty ordinary corpus files read as aliases to themselves.
+
+## F-69 — the nineteenth lane: delivered as files, and one finding
+
+**Run 2026-09-11 at `40f41b24`, after the 1 MiB blocker.** Brian ruled that the
+reviewer should be given the material on disk and prompted to read it, and that
+these lanes are exploratory: the official qualification run will follow
+ADR-0020 §6 as written rather than work around it, and the point of this is to
+learn which delivery is most effective.
+
+**The delivery works, and the transcript says so.** The codex pass received a
+2,189-byte manifest — every file with its size and SHA-256 — and found those
+files in its working directory, which is the same temporary directory that has
+always been its blinding. It read all of them: `haq.rs` appears in 32 tool
+calls, `packet.json` in 14, the rulings in 14, and every other file between 8
+and 13. The retained transcript is 2.9 MB against the previous lane's 2.1 MB,
+so the reviewer did more work, not less.
+
+**What it found.** One verified defect, ten caught violations, one false
+positive — against ten verified defects in lane eighteen. One lane cannot
+separate "the fixes closed the holes" from "files review less well than text",
+and it would be dishonest to claim it does. What can be said: the attempts are
+substantive and spread across twelve distinct coordinates, and ten of them are
+the reviewer trying an attack and reporting that the gate caught it, which is
+what a hardened gate should produce.
+
+**A03, the one finding.** F-68 made the valid seed class a declaration by NAME
+rather than a default — and a name still said a seed was well-formed while
+nothing checked it. What well-formed means depends on the format, and for the
+two the corpus carries it is checkable without asking the product: JSON must
+parse, text must decode. Two tokens turned out to mean opposite things in the
+two formats and left the valid list: `empty` is a boundary, since an empty
+markdown file is a document and an empty JSON file is not; and `comment` is
+content in markdown and is not JSON at all. Every target keeps a valid witness
+without them.
+
+**Two defects in the runner, found by running it.**
+
+The first: set difference over `~/.codex/sessions` names every rollout that
+appeared while a call ran and cannot say which is ours. A Codex Desktop
+subagent belonging to an unrelated project started mid-call and the run
+refused — correctly, and with the wrong instrument. A rollout opens with its
+own `session_meta` naming the working directory it ran in, and ours is a
+temporary directory no other session can be in. The set difference still bounds
+the search; identity picks from it.
+
+The second: the aborted lane rewrote `campaign.json` with a 52-second run — the
+time it spent before blocking. A campaign that did not happen was recorded as
+one that did, and it was reverted rather than kept. The clock is written before
+the stages it times complete, which is worth a gate of its own if a lane can
+abort between.
