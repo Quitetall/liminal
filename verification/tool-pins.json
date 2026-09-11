@@ -1,0 +1,44 @@
+{
+  "status": "bootstrap-only",
+  "claims": {
+    "formal_check_tool_validation": false,
+    "production_binding": false,
+    "full_package_b_closure": false
+  },
+  "rust": {
+    "channel": "1.97.1",
+    "rustc_commit": "8bab26f4f68e0e26f0bb7960be334d5b520ea452",
+    "llvm_version": "22.1.6",
+    "components": ["rustc-dev", "llvm-tools"]
+  },
+  "verus": {
+    "version": "0.2026.08.30.b432e82",
+    "source_commit": "b432e82fed7e05090fd53b5e5fc39020f725aabe",
+    "platform": "linux_x86_64",
+    "archive": "verus-0.2026.08.30.b432e82-x86-linux.zip",
+    "release_url": "https://github.com/verus-lang/verus/releases/tag/release%2F0.2026.08.30.b432e82",
+    "archive_url": "https://github.com/verus-lang/verus/releases/download/release/0.2026.08.30.b432e82/verus-0.2026.08.30.b432e82-x86-linux.zip",
+    "source_url": "https://github.com/verus-lang/verus/commit/b432e82fed7e05090fd53b5e5fc39020f725aabe",
+    "archive_sha256": "067f5f72a457fe66b77c0c10b180f2a919a9c7481a8baa024ffc716aa931a41b",
+    "verus_sha256": "0b7a8b2c97a4c281820a1a856c1dd53ed417f2071871ae79205d1db73a3e677b",
+    "cargo_verus_sha256": "3ae8d9777c9168773b0feae36f2041206ad1a52af7edf448e93327ae37c3998c",
+    "rust_verify_sha256": "2da3596d6498daf7be457fb686ed48f91750118c7d95753c210b9e9172b90ca9",
+    "z3": {
+      "version": "4.16.0",
+      "sha256": "e583c4186a45e72411fa2cb2048401eed03f0f8e5f24694676a8f6271a50b765"
+    }
+  },
+  "cargo_dependencies": {
+    "vstd": "=0.0.0-2026-08-30-0159",
+    "vstd_url": "https://crates.io/crates/vstd/0.0.0-2026-08-30-0159",
+    "cargo_lock_sha256": "7f09b9fb17f79814b20b05cd9d0d123df86553eca09158694a87c3c24471fc0d",
+    "source": "crates.io"
+  },
+  "tlc": {
+    "release": "v1.7.4",
+    "release_url": "https://github.com/tlaplus/tlaplus/releases/tag/v1.7.4",
+    "jar_url": "https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar",
+    "runtime_version": "TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)",
+    "jar_sha256": "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88"
+  }
+}
