@@ -4129,6 +4129,50 @@ pub fn derive_killers_repo(root: &Utf8Path) -> Result<String> {
     Ok(out)
 }
 
+/// The campaign's first blind-review lane. A coordinate whose line was last
+/// changed at or after this commit is the qualifier's own churn rather than
+/// the suite under qualification (AM-17.11).
+const CAMPAIGN_FIRST_LANE: &str = "0d8c32a4ae1afda9808e55c3c291445aad4e3d60";
+
+/// Whether `coordinate` — a `file:line` a finding names — points at a line
+/// this campaign wrote. Answered from `git blame`, so the classification that
+/// decides whether a finding is fixed or recorded is evidence rather than the
+/// qualifier's judgement about its own work.
+pub fn coordinate_is_campaign_churn(root: &Utf8Path, coordinate: &str) -> Result<bool> {
+    let (file, line) = coordinate
+        .rsplit_once(':')
+        .with_context(|| format!("{coordinate:?} is not a file:line coordinate"))?;
+    let line: u32 = line
+        .parse()
+        .with_context(|| format!("{coordinate:?} does not name a line"))?;
+    anyhow::ensure!(line > 0, "{coordinate:?} names line zero");
+    let blamed = git_text(
+        root,
+        &[
+            "blame",
+            "--porcelain",
+            "-L",
+            &format!("{line},{line}"),
+            "--",
+            file,
+        ],
+    )
+    .with_context(|| format!("blame {coordinate}"))?;
+    let commit = blamed
+        .split_whitespace()
+        .next()
+        .with_context(|| format!("{coordinate}: blame named no commit"))?;
+    // `merge-base --is-ancestor A B` succeeds when A is an ancestor of B. The
+    // campaign's first lane being an ancestor of the blamed commit means the
+    // line was written during the campaign.
+    let status = Command::new("git")
+        .current_dir(root)
+        .args(["merge-base", "--is-ancestor", CAMPAIGN_FIRST_LANE, commit])
+        .status()
+        .context("git merge-base --is-ancestor")?;
+    Ok(status.success())
+}
+
 fn verify_mutant_killing_tests(root: &Utf8Path, packet: &Packet) -> Result<()> {
     // AM-17.10: the column is derived for every mutant, whatever its
     // disposition, and is checked before the clauses that inspect only killed

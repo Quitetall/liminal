@@ -46,6 +46,18 @@ fn main() -> Result<()> {
                     )?
                 );
             }
+            HaqCommand::Churn { coordinate } => {
+                let root = liminal_xtask::repo_root()?;
+                let churn = liminal_xtask::haq::coordinate_is_campaign_churn(&root, &coordinate)?;
+                println!(
+                    "{coordinate}: {}",
+                    if churn {
+                        "campaign churn — recorded under AM-17.11"
+                    } else {
+                        "under qualification — fixed"
+                    }
+                );
+            }
             HaqCommand::DeriveKillers => {
                 print!(
                     "{}",
@@ -164,6 +176,12 @@ enum HaqCommand {
     PacketDigest,
     /// Print the killing tests AM-17.10 derives for every mutant.
     DeriveKillers,
+    /// Say whether a finding's coordinate names a line this campaign wrote
+    /// (AM-17.11): `churn crates/liminal-xtask/src/haq.rs:123`.
+    Churn {
+        /// The `file:line` coordinate a finding names.
+        coordinate: String,
+    },
     /// Run deterministic generated evidence for all five HAQP families.
     Generate {
         /// Accepted cases per family (qualification uses 100000).

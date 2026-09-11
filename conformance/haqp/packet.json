@@ -42,6 +42,18 @@
    "mitigation": "re-anchored 2026-09-03 so every declared mutant names a mutable line; every_declared_mutant_anchors_a_line_its_operator_can_mutate holds it",
    "authority": "ADR-0021",
    "state": "mitigated"
+  },
+  {
+   "id": "RISK-004",
+   "owner": "Brian",
+   "severity": "disclosed",
+   "trigger": "a standing ruling can clear a finding it does not answer: whether two sentences describe one claim is not decidable from the sentences",
+   "requirement": "P1-R001",
+   "evidence": "docs/execution/M17.md:AM-17.11",
+   "planned_phase": "M24",
+   "mitigation": "four narrowings hold it as far as text allows \u2014 class and target must match, a named coordinate binds, excluded phrases veto, and one ruling clears at most one finding per record, which turns an over-broad phrase into a refusal. AM-17.11 records it rather than narrowing a fifth time: the matcher is the qualifier's own code, frozen",
+   "authority": "AM-17.11",
+   "state": "disclosed"
   }
  ],
  "requirements": [
