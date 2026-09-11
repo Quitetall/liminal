@@ -1,6 +1,6 @@
 {
   "schema_version": "haqp-generated-v3-negative-categories",
-  "artifact_blake3": "ad224f6aa7503590ea61256113e59eca39cafcd4146fa7ac971f17f4a6778614",
+  "artifact_blake3": "b53f6780e5c087178cb2950acc178a30aa7631100d3af856c4d090313cbb1fa0",
   "rows": [
     {
       "family": "source/CST/formatting",
@@ -9,7 +9,7 @@
       "discards": 0,
       "negatives": 22956,
       "seed": 11400714819323198485,
-      "evidence_hash": "e846ca0d0ab85c9851669ae8f7ae506c71ef4349b776154aa7e83874b18c0074",
+      "evidence_hash": "3d0a39f5f12a4734976288b10a9fe2f97bd0a35ddb70ab9365fb9aa345d81e37",
       "category_counts": {
         "boundary-offset": 7720,
         "comment": 7650,
@@ -33,20 +33,20 @@
           "relation": "lossless_emit",
           "oracle_id": "oracle:source_CST_formatting",
           "result": "pass",
-          "artifact_blake3": "de8fa36633a9199b2e68453c9abaaeb7d1c39e5909df062207b6a9b69f6203ec"
+          "artifact_blake3": "45ad20b8284fc71f465ce20bfd263abd1c7189222a348cf4c3ddeea1f32ecdfa"
         },
         {
           "relation": "format_idempotence",
           "oracle_id": "oracle:source_CST_formatting",
           "result": "pass",
-          "artifact_blake3": "6d9e85da4e37885f3ace1dc67b46d7b2fe62ce32c465a9531bdedf5ff4ae36bf"
+          "artifact_blake3": "f8034b8fd6f8778d8f29117105d19c65af1df44b84706072507d28cadce23bd3"
         }
       ],
       "oracle": {
         "id": "oracle:source_CST_formatting",
         "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_cst",
         "independent": true,
-        "relation_matrix_blake3": "aa9a0ec9cbd748a3fa3e24a109d4dde2edbfb379f8a353ab120bfb97fb824415"
+        "relation_matrix_blake3": "43b079d7b9d1612ecfb203da9f3da0827a0df564c14d7782a8bfed0a71d3bb30"
       }
     },
     {

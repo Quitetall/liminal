@@ -5330,6 +5330,31 @@ const SEED_NAME_PREDICATES: [(&str, SeedPredicate); 5] = [
     }),
 ];
 
+/// The names that DECLARE a well-formed seed. Blind pass 1 at `ec045588`
+/// (A03): the valid class was whatever matched no negative token, so a seed of
+/// malformed bytes under any unrecognised name satisfied ADR-0020 §4's demand
+/// that the corpus span valid input. A default is not a declaration; the valid
+/// class is now witnessed by a name that claims it, like every other class.
+const SEED_VALID_TOKENS: [&str; 17] = [
+    "empty",
+    "single-token",
+    "single-node",
+    "single-edge",
+    "single-step",
+    "whitespace",
+    "unicode",
+    "long-line",
+    "long-run",
+    "nested",
+    "deep",
+    "wide",
+    "comment",
+    "escape",
+    "dag",
+    "legal-path",
+    "large-payload",
+];
+
 const SEED_CLASSES: [(&str, &[&str]); 4] = [
     ("boundary", &["boundary"]),
     ("truncated", &["truncated", "unterminated"]),
@@ -5389,8 +5414,16 @@ fn verify_seed_classes(root: &Utf8Path, target: &str, seed_dir: &Utf8Path) -> Re
         let class = SEED_CLASSES
             .iter()
             .find(|(_, tokens)| tokens.iter().any(|token| file.contains(token)))
-            .map_or("valid", |(class, _)| *class);
-        *counts.entry(class).or_insert(0usize) += 1;
+            .map(|(class, _)| *class)
+            .or_else(|| {
+                SEED_VALID_TOKENS
+                    .iter()
+                    .any(|token| file.contains(token))
+                    .then_some("valid")
+            });
+        if let Some(class) = class {
+            *counts.entry(class).or_insert(0usize) += 1;
+        }
     }
     // "valid" is the implicit class of a seed matching no negative token; the
     // required set is that plus every declared negative class, so adding a
@@ -13008,7 +13041,13 @@ fn case_source_cst(rng: &mut Rng) -> Result<Case> {
         "invalid-utf8" => vec![0xff, 0xfe],
         "comment" => format!("{token} <!-- {token} -->").into_bytes(),
         "escape" => format!(r"{token} \ {token}").into_bytes(),
-        "boundary-offset" => format!("{token}\n{token}").into_bytes(),
+        // Blind pass 1 at `ec045588` (A01): every generated source held at
+        // most ONE coarse block, so the per-document hash relation F-60 added
+        // — equal text hashes alike, different text does not — had nothing to
+        // relate and a constant hash passed 100,000 cases. A blank line makes
+        // two blocks, and repeating the token makes them equal, which is the
+        // arm a constant hash satisfies and a text-blind one does not.
+        "boundary-offset" => format!("{token}\n\n{token}").into_bytes(),
         "hostile" => format!("{token}\0\x7f").into_bytes(),
         other => unreachable!("unknown source category {other}"),
     };
@@ -16411,7 +16450,7 @@ mod tests {
         const GOLDENS: [(&str, &str); 5] = [
             (
                 "source/CST/formatting",
-                "4f06b08b36c1dd0ab73302756b44f7c77ee6b3559022c427b51c0291a01b2d0c",
+                "1311bee6bb9ad19f27f81430eb62d0258700e4fdd43fae27f19d8f86f9476f11",
             ),
             (
                 "graph/interchange codecs",
@@ -19256,6 +19295,34 @@ mod tests {
         }
     }
 
+    /// Blind pass 1 at `ec045588` (A01): every generated source held at most
+    /// one coarse block, so the hash relation had nothing to relate and a
+    /// constant hash passed 100,000 cases.
+    #[test]
+    fn the_generated_corpus_reaches_more_than_one_coarse_block() {
+        // `boundary-offset` renders two blocks with identical text, which is
+        // the arm a constant hash satisfies and a text-blind one does not.
+        let source = "alpha\n\nalpha\n";
+        let coarse = liminal_cst::coarse_parse(source);
+        assert!(coarse.blocks.len() >= 2, "a blank line makes two blocks");
+        let texts: Vec<&str> = coarse
+            .blocks
+            .iter()
+            .map(|block| {
+                let start = usize::try_from(block.range.start).expect("fits");
+                let end = usize::try_from(block.range.end).expect("fits");
+                &source[start..end]
+            })
+            .collect();
+        assert_eq!(texts.len(), 2);
+        assert_eq!(
+            texts[0].trim(),
+            texts[1].trim(),
+            "the two carry the same text"
+        );
+        verify_coarse_scan(source, &coarse).expect("equal text hashing alike is accepted");
+    }
+
     /// AM-17.10's primary killer is chosen by how the operator is observed.
     #[test]
     fn the_derived_primary_matches_the_operators_observation_kind() {
@@ -19718,8 +19785,10 @@ mod tests {
             fs::write(dir.join(format!("{i:02x}-deadbeef.bin")), [i]).expect("seed");
         }
         commit_all("same-class seeds");
-        let err = verify_seed_classes(&root, "t", &dir).expect_err("no boundary seed");
-        assert!(err.to_string().contains("no boundary seed"), "{err}");
+        // Sixteen seeds declaring no class at all: since A03 the valid class
+        // is declared rather than defaulted, so it is the first one missing.
+        let err = verify_seed_classes(&root, "t", &dir).expect_err("no class declared");
+        assert!(err.to_string().contains("no valid seed"), "{err}");
         // Blind pass 1 at `6b36bbb9` (A05): these four used to carry identical
         // bytes, which is the fabricated diversity the finding names — four
         // classes spanned by one seed copied four times. The fixture said so
@@ -19735,6 +19804,8 @@ mod tests {
         {
             fs::write(dir.join(name), format!("class {index}")).expect("seed");
         }
+        // The valid class is declared by name like every other (A03).
+        fs::write(dir.join("00-single-token.bin"), b"declared valid").expect("seed");
         commit_all("classed seeds");
         verify_seed_classes(&root, "t", &dir).expect("every class declared");
 
@@ -19760,6 +19831,18 @@ mod tests {
         fs::write(dir.join("12-invalid-utf8.bin"), [0xff, 0xfe, b'x']).expect("seed");
         commit_all("a seed that tells the truth");
         verify_seed_classes(&root, "t", &dir).expect("bytes matching the name");
+
+        // Blind pass 1 at `ec045588` (A03): `valid` was whatever matched no
+        // negative token, so a seed under an unrecognised name witnessed the
+        // well-formed class by default. It must claim the class by name.
+        fs::remove_file(dir.join("00-single-token.bin")).expect("remove the valid seed");
+        fs::write(dir.join("mystery.bin"), b"unrecognised name").expect("seed");
+        commit_all("no seed declares the valid class");
+        let err = verify_seed_classes(&root, "t", &dir).expect_err("no declared valid seed");
+        assert!(err.to_string().contains("no valid seed"), "{err}");
+        fs::write(dir.join("01-single-token.bin"), b"declared valid").expect("seed");
+        commit_all("a seed that declares it");
+        verify_seed_classes(&root, "t", &dir).expect("every class declared by name");
     }
 
     /// Blind pass 1 at f360e90 (A03): equal length let a duplicated step
