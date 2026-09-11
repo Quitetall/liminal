@@ -3880,3 +3880,62 @@ with their digests; the bytes those digests attest to do not, so the F-49
 binding for this lane can be asserted and no longer checked. Recorded rather
 than repaired: a regenerated transcript would be a different session, and
 writing one to make a digest match is the forgery receipts exist to prevent.
+
+## F-68 — the eighteenth lane: both passes failed, and pass 2 found the shape
+
+**Found.** 2026-09-11, lane at `ec045588`. **Pass 2 failed for the first time in
+eighteen lanes** — ten findings from pass 1 and four from pass 2, all fourteen
+independently reproduced. Records and receipts under
+`docs/execution/reviews/2026-09-11-lane-ec04558/`.
+
+### Pass 2: four gates that had never run
+
+All four say one thing. `verify_crash_terminal_states`,
+`verify_review_raw_response`, `verify_campaign_window_holds_provider_clocks` and
+`verify_qualification_stage` are reachable only through `verify_qualified_repo`,
+which refuses before it starts unless the packet is already qualified. At stage
+1a they had never judged anything — and two of them were written the day before,
+which is the sharpest possible version of F-65: I swept for exactly this defect,
+moved the mutation plan's gates before the flip, and left the evidence gates
+behind it.
+
+Three now run pre-flip, with the locked-corpus alias scan: everything whose
+evidence is already in the tree. The fourth stays behind it on purpose — a
+campaign clock is a campaign's evidence and no campaign has run at 1a, so
+checking the provider window would refuse a tree that is correct for its stage.
+
+The review receipts are committed beside their records now. They were untracked,
+so the records' digests bound bytes a clone did not have — assertions rather
+than checks, which is also how I came to delete lane seventeen's.
+
+### Pass 1: ten, and five against the previous two days' fixes
+
+| attempt | what was true |
+|---|---|
+| A01 | every generated source held at most ONE coarse block, so F-60's hash relation had nothing to relate and a constant hash passed 100,000 cases |
+| A02 | `reports_the_same_defect` counted four shared words, and both reports name the coordinate — `crates`, `liminal`, `xtask`, `haq` arrived free |
+| A03 | the valid seed class was whatever matched no negative token, so malformed bytes under an unrecognised name witnessed well-formed input |
+| A04 | `ok_or_else(\|\| {` carries a `\|\|` that is a closure's parameter list, and the precondition counted it as a disjunction |
+| A05 | `self.store.begin()?` reads a member exactly as `inner.state.nodes.get(&id)` does; the operator's reach is not lexically decidable and the heuristic pretended it was |
+| A06 | `chmod` was in the write-syscall table and `fchmod` was not, so corpus metadata changed through a descriptor produced no candidate |
+| A07 | the brace reader saw one line, so a raw string or block comment spanning lines could hold a `#[cfg(test)]` skip open past its module |
+| A08 | the alias scan looked for symlinks; a hard link made outside the trace and removed after leaves nothing any later check can resolve |
+| A09 | C13's closed prefix `fuzz target` is shared by every refusal about any fuzz target |
+| A10 | the qualification lane's table — commands, hashes, toolchain, exit status — was bound by nothing, and none of its cells is a verdict word |
+
+**A02, A04, A05, A07 and A08 all attack fixes from the previous two days.** That
+is the pattern worth keeping: a reviewer reading the diff finds the seam where
+a fix meets the code it was bolted to, and five of ten findings lived there.
+
+**A05 is the one that changed a rule rather than a line.** Two lines with the
+same shape — one reading the only store there is, one reading a collection with
+a sibling — cannot be told apart lexically, so `WRONG_HOLDER_ANCHORS` is a
+closed set shared by the precondition and the patch contract. Where an
+operator's reach is not decidable, saying so is the fix.
+
+**And three of my own bugs surfaced while fixing these**, each caught by a test
+rather than by reading: a blanket rename gave `line_is_inside_test_code` a fresh
+scanner per line, discarding exactly the state being added; `has_disjunction`
+looked at the space before `||` rather than the operand; and the alias scan
+compared identities drawn from the whole corpora tree against `heldout` alone,
+so fifty ordinary corpus files read as aliases to themselves.
