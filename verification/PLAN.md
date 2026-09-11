@@ -15,7 +15,7 @@ Do not interpret its successful exit as the complete future check contract below
 The committed bootstrap fixtures demonstrate pinned-tool feasibility: a true
 arithmetic contract, its false implementation, ordinary and verified builds,
 cold replay, and positive/negative Boolean-model controls. They are not production
-code and do not discharge any of the fourteen obligations. The real ILRP slice,
+code and do not discharge any of the sixteen obligations. The real ILRP slice,
 production same-body binding, adapters and formal evidence aggregation remain
 unimplemented. See `bootstrap/README.md` for reproducible tool-control commands.
 
@@ -84,6 +84,11 @@ cover the accumulated delta against the planning baseline.
 
 ## Construction and proof obligations
 
+Independent review found that the first candidate-registry transcription omitted
+the existing v4 §7.8 Apply and Revert steps. The two local rows below correct that
+inventory omission; they reuse `LIM-SAS-RQ-115`, introduce no SAS requirement or
+constitutional meaning, and remain pending adoption and not established.
+
 | Local obligation | Existing requirement anchor | Required result |
 | --- | --- | --- |
 | identity-only | LIM-SAS-RQ-104 / Law 1 | Proof representations add no third semantic primitive. |
@@ -92,9 +97,11 @@ cover the accumulated delta against the planning baseline.
 | basis | LIM-SAS-RQ-111,117 / Laws 3D,3J | Immutable, perspective-correct selected inputs; no independent dirty-buffer chimera. |
 | ilrp-order | LIM-SAS-RQ-115 / Law 3H; v4 7.7-7.8 | Reject invalid DAGs and unsupported graph-before-external dependency shapes before effects. |
 | ilrp-intent | LIM-SAS-RQ-115 / v4 7.8 Prepare | No external application before durable intent. |
+| ilrp-apply | LIM-SAS-RQ-115 / v4 7.8 Apply | Before every step, verify its prestate; stage, flush, and atomically replace files where supported; use service idempotency keys where supported. |
 | ilrp-ack | LIM-SAS-RQ-115 / v4 7.8 Acknowledge | Ack identity, step, observed poststate and dependency completion agree. |
 | ilrp-finalize | LIM-SAS-RQ-115 / v4 7.8 Finalize | Required effects precede exactly-once accepted graph finalization; graph effects and Committed intent share a transaction. |
 | ilrp-recover | LIM-SAS-RQ-115 / v4 7.8 Recover | Repeated recovery is safe; neither-pre-nor-post state cannot be guessed past. |
+| ilrp-revert | LIM-SAS-RQ-115 / v4 7.8 Revert | A valid inverse executes through the same ILRP rather than bypassing its ordering and recovery rules. |
 | store | v4 92; ADR-0007; TM-01,TM-02 | Invalid transaction leaves no accepted trace; recovery validates durable prefix and fails closed on interior corruption. |
 | receipt | v4 7.8; TM-02,TM-10 | Receipt certifies only the exact writes whose durability contract completed. |
 | evidence | LIM-SAS-RQ-003,005,012,017; ADR-0020/0021 | No formal PASS from missing, stale, partial or mismatched evidence; no claim of HAQP verifier correctness. |

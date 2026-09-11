@@ -106,6 +106,21 @@ bench-baseline-check:
 bench-gate:
     cargo run -p liminal-xtask -- bench gate
 
+formal-check:
+    cargo run -p liminal-xtask -- formal check
+
+formal-proof:
+    cargo run -p liminal-xtask -- formal proof
+
+formal-model:
+    cargo run -p liminal-xtask -- formal model
+
+formal-adapters:
+    cargo run -p liminal-xtask -- formal adapters
+
+formal-gate phase:
+    cargo run -p liminal-xtask -- formal gate {{ phase }}
+
 # Threaded lane (M17.5 F-11). nextest gives every test its own PROCESS, so the
 # suite's green status under `cargo test` — tests as THREADS in one process —
 # was never exercised by CI. That is the runner cargo-mutants drives, and it is
