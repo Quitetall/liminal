@@ -6703,6 +6703,19 @@ const WRITE_SYSCALLS: [&str; 26] = [
     "lremovexattr(",
 ];
 /// Syscalls whose second string is also a path being written (the target).
+/// Write-class syscalls that name a DESCRIPTOR rather than a path. Their
+/// path-bearing siblings are in `WRITE_SYSCALLS`; these resolve through the
+/// descriptor map instead (blind pass 1 at `ec045588`, A06).
+const FD_WRITE_SYSCALLS: [&str; 7] = [
+    "fchmod(",
+    "fchown(",
+    "ftruncate(",
+    "fsetxattr(",
+    "fremovexattr(",
+    "futimens(",
+    "fallocate(",
+];
+
 const TWO_PATH_SYSCALLS: [&str; 7] = [
     "rename(",
     "renameat(",
@@ -6930,6 +6943,29 @@ fn record_chdir(
     cwds.insert(pid, resolved);
 }
 
+/// The path an fd-only write syscall on `line` names, resolved through the
+/// descriptor map. Blind pass 1 at `ec045588` (A06): `chmod` names a path and
+/// was listed; `fchmod` names a descriptor and was not, so changing the locked
+/// corpus's mode through an open descriptor produced no write candidate.
+fn fd_write_target(
+    line: &str,
+    pid: u32,
+    open_fds: &BTreeMap<(u32, i64), String>,
+) -> Option<String> {
+    let call = FD_WRITE_SYSCALLS
+        .iter()
+        .find(|call| line.contains(**call))?;
+    let fd = line
+        .split_once(*call)?
+        .1
+        .split([',', ')'])
+        .next()?
+        .trim()
+        .parse::<i64>()
+        .ok()?;
+    open_fds.get(&(pid, fd)).cloned()
+}
+
 fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan> {
     let mut scan = ScopeTraceScan::default();
     let mut hasher = blake3::Hasher::new();
@@ -7000,10 +7036,21 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
         if let Some(pid) = pid {
             anchor_relative_paths(pid, &dir_fds, &cwds, &mut arguments);
         }
-        let accesses = arguments
+        let mut accesses = arguments
             .into_iter()
             .map(|(path, write, _)| (path, write))
             .collect::<Vec<_>>();
+        // Blind pass 1 at `ec045588` (A06): `chmod` and `fchmodat` name a
+        // path and were listed; `fchmod` names a descriptor and was not, so
+        // changing the locked corpus's mode or owner through an open
+        // descriptor produced no write candidate at all. Every successful
+        // open's path is already remembered for its fd, so the descriptor
+        // resolves to the file it names.
+        if let Some(pid) = pid
+            && let Some(path) = fd_write_target(&line, pid, &dir_fds)
+        {
+            accesses.push((path, true));
+        }
         if let Some(pid) = pid {
             // Blind pass 1 at e09ae5e (A07): the cwd and dirfd maps are keyed
             // per pid and were never inherited, so a parent that chdir'd into
@@ -9463,6 +9510,7 @@ fn verify_mutant_source_coordinates(root: &Utf8Path, packet: &Packet) -> Result<
 /// name is sufficient, and the existing filter becomes sound rather than
 /// lucky.
 fn verify_locked_corpus_has_no_aliases(root: &Utf8Path) -> Result<()> {
+    use std::os::unix::fs::MetadataExt as _;
     let locked = root.join("conformance/corpora/heldout");
     // M17.5 F-65: this returned Ok when the corpus was absent, and nothing
     // else in the gate required it to exist — so a tree with the corpus
@@ -9473,6 +9521,7 @@ fn verify_locked_corpus_has_no_aliases(root: &Utf8Path) -> Result<()> {
         locked.is_dir(),
         "{locked} is missing: the locked corpus cannot be shown untouched when it is not there"
     );
+    let identities = locked_corpus_identities(root)?;
     let canonical = fs::canonicalize(&locked)
         .with_context(|| format!("{locked}: locked corpus must resolve"))?;
     let mut aliases = Vec::new();
@@ -9493,6 +9542,22 @@ fn verify_locked_corpus_has_no_aliases(root: &Utf8Path) -> Result<()> {
             let Ok(meta) = entry.path().symlink_metadata() else {
                 continue;
             };
+            // Blind pass 1 at `ec045588` (A08): only symlinks counted. A hard
+            // link is the alias no path reasoning sees, and one created
+            // outside a traced process leaves the trace naming an innocent
+            // path; if it is then removed, neither the lexical fragments nor
+            // the inode check can resolve it afterwards. An alias that still
+            // exists in the tree is found here, which is where it can be.
+            if meta.is_file() && identities.contains(&(meta.dev(), meta.ino())) {
+                // The identity set covers the whole corpora tree, so a file
+                // inside it is the corpus rather than an alias to it.
+                let corpora = root.join("conformance/corpora");
+                let inside = Utf8PathBuf::from_path_buf(entry.path())
+                    .is_ok_and(|path| path.starts_with(&corpora));
+                if !inside {
+                    aliases.push(entry.path().display().to_string());
+                }
+            }
             if meta.file_type().is_symlink() {
                 // A link INTO the locked tree gives its bytes a second name.
                 if let Ok(resolved) = fs::canonicalize(entry.path())
@@ -18788,6 +18853,24 @@ mod tests {
         let err = verify_locked_corpus_has_no_aliases(scratch.path())
             .expect_err("a tree with no locked corpus proves nothing about it");
         assert!(err.to_string().contains("is missing"), "{err}");
+
+        // Blind pass 1 at `ec045588` (A08): only symlinks counted. A hard link
+        // is the alias no path reasoning sees, and one made outside a traced
+        // process leaves the trace naming an innocent path — which, once the
+        // link is removed, nothing afterwards can resolve. It is found here,
+        // while it still exists.
+        let tree = liminal_scratch::ScratchDir::new("haq-hard-alias").expect("scratch");
+        let root = tree.path().to_owned();
+        let corpus = root.join("conformance/corpora/heldout");
+        fs::create_dir_all(corpus.as_std_path()).expect("mkdir");
+        fs::write(corpus.join("case.txt").as_std_path(), b"held out").expect("write");
+        verify_locked_corpus_has_no_aliases(&root).expect("a corpus with no alias");
+        let alias = root.join("innocent-name.bin");
+        fs::hard_link(corpus.join("case.txt").as_std_path(), alias.as_std_path())
+            .expect("hard link");
+        let err = verify_locked_corpus_has_no_aliases(&root)
+            .expect_err("a second name for a corpus file is an alias");
+        assert!(err.to_string().contains("alias"), "{err}");
     }
 
     /// The plan's gates must run before the flip, not only after it: a lane
@@ -19321,6 +19404,32 @@ mod tests {
             "the two carry the same text"
         );
         verify_coarse_scan(source, &coarse).expect("equal text hashing alike is accepted");
+    }
+
+    /// Blind pass 1 at `ec045588` (A06): `chmod` names a path and was listed;
+    /// `fchmod` names a descriptor and was not, so changing the locked
+    /// corpus's mode through an open descriptor produced no write candidate.
+    #[test]
+    fn a_write_through_a_descriptor_is_still_a_write() {
+        let trace = concat!(
+            "100 openat(AT_FDCWD, \"conformance/corpora/heldout/case.txt\", O_RDONLY) = 7\n",
+            "100 fchmod(7, 0666)                     = 0\n",
+            "100 +++ exited with 0 +++\n",
+        );
+        let scan = scan_scope_trace(std::io::Cursor::new(trace.as_bytes())).expect("scan");
+        assert!(
+            scan.locked_write_candidates
+                .iter()
+                .any(|path| path.contains("heldout/case.txt")),
+            "the descriptor resolves to the file it names: {:?}",
+            scan.locked_write_candidates
+        );
+
+        // A descriptor never opened resolves to nothing rather than to
+        // something else.
+        let orphan = "100 fchmod(99, 0666)                    = 0\n100 +++ exited with 0 +++\n";
+        let scan = scan_scope_trace(std::io::Cursor::new(orphan.as_bytes())).expect("scan");
+        assert!(scan.locked_write_candidates.is_empty());
     }
 
     /// AM-17.10's primary killer is chosen by how the operator is observed.
