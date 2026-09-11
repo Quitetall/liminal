@@ -6836,7 +6836,7 @@ const FORBIDDEN_TRACE_FRAGMENTS: [&str; 2] = ["heldout", "conformance/corpora"];
 /// A12). An absolute path is already anchored.
 fn anchor_relative_paths(
     pid: u32,
-    dir_fds: &BTreeMap<(u32, i64), String>,
+    open_fds: &BTreeMap<(u32, i64), String>,
     cwds: &BTreeMap<u32, String>,
     arguments: &mut [(String, bool, Option<i64>)],
 ) {
@@ -6847,7 +6847,7 @@ fn anchor_relative_paths(
             continue;
         }
         if let Some(base) = dirfd
-            .and_then(|fd| dir_fds.get(&(pid, fd)))
+            .and_then(|fd| open_fds.get(&(pid, fd)))
             .or_else(|| cwds.get(&pid))
         {
             *path = format!("{base}/{path}");
@@ -6877,12 +6877,12 @@ fn record_duplicated_fd(
     line: &str,
     pid: u32,
     returned_fd: Option<i64>,
-    dir_fds: &mut BTreeMap<(u32, i64), String>,
+    open_fds: &mut BTreeMap<(u32, i64), String>,
 ) {
     if let Some((from, to)) = duplicated_fd(line, returned_fd)
-        && let Some(dir) = dir_fds.get(&(pid, from)).cloned()
+        && let Some(dir) = open_fds.get(&(pid, from)).cloned()
     {
-        dir_fds.insert((pid, to), dir);
+        open_fds.insert((pid, to), dir);
     }
 }
 
@@ -6910,7 +6910,7 @@ fn duplicated_fd(line: &str, returned_fd: Option<i64>) -> Option<(i64, i64)> {
 fn record_chdir(
     line: &str,
     pid: u32,
-    dir_fds: &BTreeMap<(u32, i64), String>,
+    open_fds: &BTreeMap<(u32, i64), String>,
     cwds: &mut BTreeMap<u32, String>,
 ) {
     if !line.contains("chdir(") || !line.trim_end().ends_with("= 0") {
@@ -6925,7 +6925,7 @@ fn record_chdir(
             .split_once("fchdir(")
             .and_then(|(_, rest)| rest.split(')').next())
             .and_then(|token| token.trim().parse::<i64>().ok());
-        match fd.and_then(|fd| dir_fds.get(&(pid, fd))) {
+        match fd.and_then(|fd| open_fds.get(&(pid, fd))) {
             Some(dir) => cwds.insert(pid, dir.clone()),
             None => cwds.remove(&pid),
         };
@@ -6952,6 +6952,13 @@ fn fd_write_target(
     pid: u32,
     open_fds: &BTreeMap<(u32, i64), String>,
 ) -> Option<String> {
+    // Review of `f23bacd3`: a refused call changed nothing, and counting it
+    // would refuse a trace for a write that never happened. Every syscall in
+    // the table takes its descriptor first, which is what makes the first
+    // argument the fd.
+    if line.contains(" = -1 ") {
+        return None;
+    }
     let call = FD_WRITE_SYSCALLS
         .iter()
         .find(|call| line.contains(**call))?;
@@ -6976,7 +6983,7 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
     // remembered per pid from their open's return value, and a path relative
     // to one is judged under that directory. An `<unfinished ...>` open is
     // completed by its `<... openat resumed>) = fd` line.
-    let mut dir_fds: BTreeMap<(u32, i64), String> = BTreeMap::new();
+    let mut open_fds: BTreeMap<(u32, i64), String> = BTreeMap::new();
     let mut unfinished: BTreeMap<u32, (String, bool)> = BTreeMap::new();
     // Blind pass 1 at aa00d41 (A07): a `chdir` into the locked corpus made
     // every later relative write nameless — no fragment, and resolution
@@ -7008,7 +7015,7 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
             // A pid that exited holds no directory fds; a later process
             // reusing the number must not inherit them.
             if line.contains(" +++ exited with ") || line.contains(" +++ killed by ") {
-                dir_fds.retain(|(owner, _), _| *owner != pid);
+                open_fds.retain(|(owner, _), _| *owner != pid);
             }
         }
         let pid = line
@@ -7023,9 +7030,9 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
             && let (Some((path, is_dir)), Some(fd)) = (unfinished.remove(&pid), returned_fd)
         {
             if is_dir && fd >= 0 {
-                dir_fds.insert((pid, fd), path);
+                open_fds.insert((pid, fd), path);
             } else {
-                dir_fds.remove(&(pid, fd));
+                open_fds.remove(&(pid, fd));
             }
         }
         // Parsed ONCE and carried: `anchor_relative_paths` used to re-parse the
@@ -7034,7 +7041,7 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
         // `7e4ba39`). Passing the dirfds through removes the coupling.
         let mut arguments = scope_trace_line_arguments(&line);
         if let Some(pid) = pid {
-            anchor_relative_paths(pid, &dir_fds, &cwds, &mut arguments);
+            anchor_relative_paths(pid, &open_fds, &cwds, &mut arguments);
         }
         let mut accesses = arguments
             .into_iter()
@@ -7047,7 +7054,7 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
         // open's path is already remembered for its fd, so the descriptor
         // resolves to the file it names.
         if let Some(pid) = pid
-            && let Some(path) = fd_write_target(&line, pid, &dir_fds)
+            && let Some(path) = fd_write_target(&line, pid, &open_fds)
         {
             accesses.push((path, true));
         }
@@ -7062,16 +7069,16 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
                 if let Some(cwd) = cwds.get(&pid).cloned() {
                     cwds.insert(child, cwd);
                 }
-                let inherited = dir_fds
+                let inherited = open_fds
                     .range((pid, i64::MIN)..=(pid, i64::MAX))
                     .map(|((_, fd), dir)| (*fd, dir.clone()))
                     .collect::<Vec<_>>();
                 for (fd, dir) in inherited {
-                    dir_fds.insert((child, fd), dir);
+                    open_fds.insert((child, fd), dir);
                 }
             }
-            record_chdir(&line, pid, &dir_fds, &mut cwds);
-            record_duplicated_fd(&line, pid, returned_fd, &mut dir_fds);
+            record_chdir(&line, pid, &open_fds, &mut cwds);
+            record_duplicated_fd(&line, pid, returned_fd, &mut open_fds);
             // Blind pass 1 at 5fb1b57 (A10): only `O_DIRECTORY` opens were
             // remembered, so a descriptor opened without it and later used as
             // a dirfd resolved against nothing. Every successful open's path
@@ -7084,9 +7091,9 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
                     unfinished.insert(pid, (path.clone(), true));
                 } else if let Some(fd) = returned_fd {
                     if fd >= 0 {
-                        dir_fds.insert((pid, fd), path.clone());
+                        open_fds.insert((pid, fd), path.clone());
                     } else {
-                        dir_fds.remove(&(pid, fd));
+                        open_fds.remove(&(pid, fd));
                     }
                 }
             }
@@ -7137,9 +7144,9 @@ fn open_evidence_reader(path: &Utf8Path) -> Result<Box<dyn std::io::BufRead>> {
 /// link is neither — it is a second name for the same inode, so writing
 /// through one outside the corpus mutates corpus bytes under an innocent path.
 /// Identity is read from directory metadata; no corpus file is opened.
-fn locked_corpus_identities(root: &Utf8Path) -> Result<BTreeSet<(u64, u64)>> {
+fn locked_corpus_identities(root: &Utf8Path, within: &str) -> Result<BTreeSet<(u64, u64)>> {
     use std::os::unix::fs::MetadataExt as _;
-    let corpora = root.join("conformance/corpora");
+    let corpora = root.join(within);
     let mut identities = BTreeSet::new();
     if !corpora.is_dir() {
         return Ok(identities);
@@ -7174,7 +7181,7 @@ fn locked_corpus_write(
 ) -> Result<Option<String>> {
     let canonical_root = fs::canonicalize(root.as_std_path())
         .with_context(|| format!("{label}: canonicalize repository root"))?;
-    let identities = locked_corpus_identities(root)?;
+    let identities = locked_corpus_identities(root, "conformance/corpora")?;
     for lexical in candidates {
         let path = Path::new(lexical);
         // Blind pass 1 at 78c8f9b (A12): a relative write from a subdirectory,
@@ -7239,7 +7246,7 @@ fn scan_scope_trace_file(path: &Utf8Path, label: &str) -> Result<ScopeTraceScan>
 /// link is a second name for one inode, so no amount of path reasoning sees it.
 fn corpus_identity_touched(root: &Utf8Path, paths: &BTreeSet<String>) -> Result<bool> {
     use std::os::unix::fs::MetadataExt as _;
-    let identities = locked_corpus_identities(root)?;
+    let identities = locked_corpus_identities(root, "conformance/corpora")?;
     if identities.is_empty() {
         return Ok(false);
     }
@@ -9521,7 +9528,7 @@ fn verify_locked_corpus_has_no_aliases(root: &Utf8Path) -> Result<()> {
         locked.is_dir(),
         "{locked} is missing: the locked corpus cannot be shown untouched when it is not there"
     );
-    let identities = locked_corpus_identities(root)?;
+    let identities = locked_corpus_identities(root, "conformance/corpora")?;
     let canonical = fs::canonicalize(&locked)
         .with_context(|| format!("{locked}: locked corpus must resolve"))?;
     let mut aliases = Vec::new();
@@ -19430,6 +19437,22 @@ mod tests {
         let orphan = "100 fchmod(99, 0666)                    = 0\n100 +++ exited with 0 +++\n";
         let scan = scan_scope_trace(std::io::Cursor::new(orphan.as_bytes())).expect("scan");
         assert!(scan.locked_write_candidates.is_empty());
+
+        // Review of `f23bacd3`: a refused call wrote nothing.
+        let refused = concat!(
+            "100 openat(AT_FDCWD, \"conformance/corpora/heldout/case.txt\", O_RDONLY) = 7\n",
+            "100 fchmod(7, 0666)                     = -1 EACCES (Permission denied)\n",
+            "100 +++ exited with 0 +++\n",
+        );
+        let scan = scan_scope_trace(std::io::Cursor::new(refused.as_bytes())).expect("scan");
+        assert!(
+            !scan
+                .locked_write_candidates
+                .iter()
+                .any(|path| path.contains("case.txt")),
+            "a permission-denied fchmod is not a write: {:?}",
+            scan.locked_write_candidates
+        );
     }
 
     /// AM-17.10's primary killer is chosen by how the operator is observed.
