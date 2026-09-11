@@ -3989,3 +3989,57 @@ time it spent before blocking. A campaign that did not happen was recorded as
 one that did, and it was reverted rather than kept. The clock is written before
 the stages it times complete, which is worth a gate of its own if a lane can
 abort between.
+
+## F-70 — the twentieth lane: four, all against yesterday's fixes
+
+**Found.** 2026-09-11, lane at `2bba9071`. Pass 2 clean, twelve caught
+violations and no defect; pass 1 four `verified_defect` and eight caught
+violations, all four reproduced. Records under
+`docs/execution/reviews/2026-09-11-lane-2bba907/`. Every finding is against a
+fix made in the previous two days, which is the seam worth aiming at.
+
+| attempt | what was true |
+|---|---|
+| A01 | F-69 gave `boundary-offset` two blocks — with IDENTICAL text, which a constant hash satisfies. It passes the equal-text arm and never meets the collision arm, and every other category still renders one block |
+| A05 | the durable-call matcher required the next character to BE the call, so `commit_intent (id)` — a space, or a comment between the name and its arguments — named no durable transition |
+| A07 | the alias walk's UTF-8 conversion failed into `continue` BEFORE the identity comparison, so a non-UTF-8 path skipped the one check that needs no path at all |
+| A09 | four shared words is a count, and a count is satisfied by four words this campaign writes in every report |
+
+**A01 is the instructive one.** The fix was right about what was missing — two
+blocks — and wrong about which relation it exercised. Identical twins prove
+equal text hashes alike and say nothing about whether different text can
+collide, which is the arm a constant hash fails. `wide` now renders two blocks
+of different width, so both arms have something to check. The first attempt
+used a durable marker for the second block and the formatter lifted `{#outer}`
+into an attribute, moving a word: markers and word-order checking cannot share
+a source, which the 100,000-case probe said before any reasoning did.
+
+**A09, third round.** Byte-identical prose was too strict (lane seventeen), four
+shared words too loose (lane eighteen's A02 struck out the coordinate's own
+words, and this lane struck out the rest). What makes two reports the same
+report is sharing something RARE. Two words appearing in at most two of the
+twenty-four attempts across both passes, measured against the record rather
+than against a stop-list somebody maintains.
+
+**The fixture said it first.** The cross-pass test built twelve attempts from
+one sentence, so every word was boilerplate and the pair matched on nothing of
+their own. It now reads as two blinded reviewers would write it: the same defect
+in different words.
+
+### Also fixed: a commit message of mine that was not true
+
+`47caa3e2` says the alias scan was scoped to the held-out corpus and given a
+`continue`. Neither landed — the script that would have made those edits
+asserted before writing, and I described the intent as the outcome. Both are
+applied here. That is a class B failure by AM-17.9's own definition, committed
+by the party running the qualification, and the correction belongs in the record
+rather than in a quiet amend.
+
+### And the clock an aborted lane rewrote
+
+`haqp_campaign_clock.sh` wrote `campaign.json` whatever the wrapped command did,
+so lane nineteen's 52-second abort replaced a completed campaign's 4,623
+seconds. The gate already requires `result == "pass"`, so the overwrite
+destroyed good evidence to produce a later refusal. A failed run still writes
+its receipt — that it happened is evidence — and leaves the clock at the last
+completed campaign.

@@ -44,6 +44,17 @@ if ! RECEIPT_BLAKE3=$(cargo run -q -p liminal-xtask -- haq hash "$RECEIPT"); the
   exit 1
 fi
 
+# M17.5 F-69: the clock was rewritten whatever the wrapped command did, so a
+# lane that aborted after 52 seconds replaced a completed campaign's 4,623
+# with its own. The receipt above records the failed run either way — that it
+# happened is evidence — but the clock is the record of the campaign the packet
+# would be qualified against, and an abort is not one. A failed run leaves the
+# last completed campaign's clock where it is.
+if [ "$CODE" -ne 0 ]; then
+  echo "campaign run $RUN_ID failed (exit $CODE); clock left at the last completed campaign" >&2
+  exit "$CODE"
+fi
+
 mkdir -p "$(dirname "$OUT")"
 printf '{"schema_version":"haqp-campaign-clock-v1","reference_machine":"%s","runs":[{"id":"%s","commit":"%s","tree":"%s","command":"%s","started_epoch":%s,"finished_epoch":%s,"elapsed_s":%s,"clean":%s,"result":"%s","wrapper":"%s","wrapper_sha256":"%s","receipt":"%s","receipt_blake3":"%s"}]}\n' \
   "$(hostname -s)" "$RUN_ID" "$COMMIT" "$TREE" "$COMMAND" "$STARTED" "$FINISHED" "$ELAPSED" "$CLEAN" "$([ "$CODE" -eq 0 ] && echo pass || echo fail)" "$WRAPPER" "$WRAPPER_SHA256" "$RECEIPT" "$RECEIPT_BLAKE3" >"$OUT"

@@ -2522,7 +2522,11 @@ fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
 /// the same thing, and shared vocabulary establishes it. Four significant
 /// words in common is far more than coincidence at one coordinate and far less
 /// than dictation.
-fn reports_the_same_defect(left: &ReviewRecordAttempt, right: &ReviewRecordAttempt) -> bool {
+fn reports_the_same_defect(
+    left: &ReviewRecordAttempt,
+    right: &ReviewRecordAttempt,
+    corpus: &[&ReviewRecordAttempt],
+) -> bool {
     // Blind pass 1 at `ec045588` (A02): both reports name the coordinate, so
     // `crates`, `liminal`, `xtask` and `haq` were four shared words before
     // either said anything — the coordinate matched twice, once as itself and
@@ -2553,7 +2557,35 @@ fn reports_the_same_defect(left: &ReviewRecordAttempt, right: &ReviewRecordAttem
             .map(str::to_owned)
             .collect::<BTreeSet<_>>()
     };
-    vocabulary(left).intersection(&vocabulary(right)).count() >= 4
+    let shared: BTreeSet<String> = vocabulary(left)
+        .intersection(&vocabulary(right))
+        .cloned()
+        .collect();
+    if shared.len() < 4 {
+        return false;
+    }
+    // Blind pass 1 at `2bba9071` (A09): four shared words is a count, and a
+    // count is satisfied by four words this campaign puts in every report.
+    // What makes two reports the same report is sharing something RARE — a
+    // word that does not appear all over the rest of the record. Two such
+    // words, measured against every attempt in both passes rather than
+    // against a list someone maintains.
+    let distinctive = shared
+        .iter()
+        .filter(|word| {
+            corpus
+                .iter()
+                .filter(|attempt| {
+                    format!("{} {}", attempt.attempt, attempt.observed_result)
+                        .to_ascii_lowercase()
+                        .split(|ch: char| !ch.is_alphanumeric() && ch != '_')
+                        .any(|token| token == word.as_str())
+                })
+                .count()
+                <= 2
+        })
+        .count();
+    distinctive >= 2
 }
 
 fn verify_cross_pass_reproduction(records: &[(String, ReviewRecord)]) -> Result<()> {
@@ -2564,6 +2596,12 @@ fn verify_cross_pass_reproduction(records: &[(String, ReviewRecord)]) -> Result<
         records.len() == 2,
         "cross-pass reproduction requires two records"
     );
+    // Every attempt both passes made, which is what says whether a shared word
+    // is rare or is something the campaign writes everywhere (A09).
+    let corpus: Vec<&ReviewRecordAttempt> = records
+        .iter()
+        .flat_map(|(_, record)| record.attempts.iter())
+        .collect();
     for (index, (who, record)) in records.iter().enumerate() {
         let other = &records[1 - index].1;
         let findings = review_finding_ids(&record.findings, &record.attempts, who)?;
@@ -2584,7 +2622,7 @@ fn verify_cross_pass_reproduction(records: &[(String, ReviewRecord)]) -> Result<
                         && candidate.independently_reproduced
                         && candidate.attack_class == attempt.attack_class
                         && candidate.target == attempt.target
-                        && reports_the_same_defect(candidate, attempt)
+                        && reports_the_same_defect(candidate, attempt, &corpus)
                 })
                 .count();
             anyhow::ensure!(
@@ -9553,7 +9591,11 @@ fn verify_locked_corpus_has_no_aliases(root: &Utf8Path) -> Result<()> {
         locked.is_dir(),
         "{locked} is missing: the locked corpus cannot be shown untouched when it is not there"
     );
-    let identities = locked_corpus_identities(root, "conformance/corpora")?;
+    // The identities are the HELD-OUT corpus's, not the whole corpora tree's,
+    // so a hard link from `heldout` into a sibling corpus is an alias too — it
+    // would let a read of that sibling touch held-out bytes while every path
+    // involved looks legitimate.
+    let identities = locked_corpus_identities(root, "conformance/corpora/heldout")?;
     let canonical = fs::canonicalize(&locked)
         .with_context(|| format!("{locked}: locked corpus must resolve"))?;
     let mut aliases = Vec::new();
@@ -9564,10 +9606,15 @@ fn verify_locked_corpus_has_no_aliases(root: &Utf8Path) -> Result<()> {
         let entries = fs::read_dir(&dir)
             .with_context(|| format!("{dir}: scan the tree for corpus aliases"))?;
         for entry in entries.flatten() {
-            let Ok(path) = Utf8PathBuf::from_path_buf(entry.path()) else {
-                continue;
-            };
-            let name = path.file_name().unwrap_or_default();
+            // Blind pass 1 at `2bba9071` (A07): this conversion failing used
+            // to `continue`, so a path that is not UTF-8 skipped the identity
+            // comparison — the one check that needs no path at all. It is
+            // optional now; only the symlink branch requires it.
+            let converted = Utf8PathBuf::from_path_buf(entry.path()).ok();
+            let name = converted
+                .as_ref()
+                .and_then(|path| path.file_name())
+                .unwrap_or_default();
             if name == ".git" || name == "target" {
                 continue;
             }
@@ -9581,15 +9628,22 @@ fn verify_locked_corpus_has_no_aliases(root: &Utf8Path) -> Result<()> {
             // the inode check can resolve it afterwards. An alias that still
             // exists in the tree is found here, which is where it can be.
             if meta.is_file() && identities.contains(&(meta.dev(), meta.ino())) {
-                // The identity set covers the whole corpora tree, so a file
-                // inside it is the corpus rather than an alias to it.
-                let corpora = root.join("conformance/corpora");
-                let inside = Utf8PathBuf::from_path_buf(entry.path())
-                    .is_ok_and(|path| path.starts_with(&corpora));
+                // A file inside the held-out corpus is the corpus rather than
+                // an alias to it. A path that is not UTF-8 cannot be inside
+                // it, so it reads as outside — the conservative side.
+                let inside = converted
+                    .as_ref()
+                    .is_some_and(|path| path.starts_with(&locked));
                 if !inside {
                     aliases.push(entry.path().display().to_string());
+                    continue;
                 }
             }
+            // The symlink branch needs the path itself; a non-UTF-8 one is
+            // already covered by the identity comparison above.
+            let Some(path) = converted else {
+                continue;
+            };
             if meta.file_type().is_symlink() {
                 // A link INTO the locked tree gives its bytes a second name.
                 if let Ok(resolved) = fs::canonicalize(entry.path())
@@ -11061,7 +11115,24 @@ fn durable_symbol_hits(line: &str, symbols: &[String]) -> usize {
             if line[..offset].chars().next_back().is_some_and(identifier) {
                 continue;
             }
-            let rest = &line[offset + symbol.len()..];
+            // Blind pass 1 at `2bba9071` (A05): the next character had to BE
+            // the call, so `commit_intent (id)` — a space, or a comment
+            // between the name and its argument list — named no durable
+            // transition. Whitespace and a block comment are not part of the
+            // name, so they are stepped over before asking what follows.
+            let mut rest = &line[offset + symbol.len()..];
+            loop {
+                let stepped = rest.trim_start();
+                let stepped = match stepped.find("*/") {
+                    Some(end) if stepped.starts_with("/*") => &stepped[end + 2..],
+                    _ => stepped,
+                };
+                if stepped.len() == rest.len() {
+                    rest = stepped;
+                    break;
+                }
+                rest = stepped;
+            }
             let follows = rest.starts_with('(')
                 || rest.starts_with("::")
                 || rest.starts_with(';')
@@ -13129,11 +13200,22 @@ fn case_source_cst(rng: &mut Rng) -> Result<Case> {
         "unterminated" => format!("{token} {{#{token}").into_bytes(),
         "nested" => format!("{token} {{#outer {{#{token}}}}}").into_bytes(),
         "deep" => format!("{} {token}", "{#".repeat(24)).into_bytes(),
-        "wide" => (0..32)
-            .map(|_| token.clone())
-            .collect::<Vec<_>>()
-            .join(" ")
-            .into_bytes(),
+        // Blind pass 1 at `2bba9071` (A01): `boundary-offset` renders two
+        // blocks with IDENTICAL text, which a constant hash satisfies — it
+        // passes the equal-text arm and never meets the other. This renders
+        // two blocks of DIFFERENT width, so a hash that ignores its bytes
+        // collides across them and the relation has both arms to check. A
+        // durable marker cannot be used for this: the formatter lifts `{#id}`
+        // into an attribute, which moves a word and reads as reordering.
+        "wide" => {
+            let row = |count: usize| {
+                (0..count)
+                    .map(|_| token.clone())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            };
+            format!("{}\n\n{}", row(32), row(16)).into_bytes()
+        }
         "control-byte" => format!("{token}\x01{token}").into_bytes(),
         "invalid-utf8" => vec![0xff, 0xfe],
         "comment" => format!("{token} <!-- {token} -->").into_bytes(),
@@ -16547,7 +16629,7 @@ mod tests {
         const GOLDENS: [(&str, &str); 5] = [
             (
                 "source/CST/formatting",
-                "1311bee6bb9ad19f27f81430eb62d0258700e4fdd43fae27f19d8f86f9476f11",
+                "33a57b2298bf545f744d49bb9c32fb0f90d01bd5b0b6b9c2c5ed5b903f4e0ad6",
             ),
             (
                 "graph/interchange codecs",
@@ -17417,6 +17499,23 @@ mod tests {
             for record in [&mut one, &mut two] {
                 record.attempts[0].classification = "verified_defect".to_owned();
                 record.attempts[0].independently_reproduced = true;
+                // Blind pass 1 at `2bba9071` (A09): the twelve fixture
+                // attempts share one sentence, and matching on boilerplate is
+                // what the distinctiveness rule refuses. A reproduction is two
+                // reports of ONE defect, so the pair says something only they
+                // say — worded differently, as two blinded reviewers would.
+                record.attempts[0].attempt = if record.pass == 1 {
+                    "falsify the coarse block hash relation by returning a constant digest"
+                } else {
+                    "attack the block digest: make coarse hashing ignore its bytes entirely"
+                }
+                .to_owned();
+                record.attempts[0].observed_result = if record.pass == 1 {
+                    "a constant digest satisfied the relation; collision across blocks unseen"
+                } else {
+                    "hashing that ignores bytes passed; the collision arm never fired"
+                }
+                .to_owned();
                 record.findings = vec![serde_json::json!({
                     "id": "F-01",
                     "attempt_id": record.attempts[0].id,
@@ -19282,7 +19381,7 @@ mod tests {
             "the survival check compares alphanumeric runs only; dropped punctuation content is unseen",
         );
         assert!(
-            reports_the_same_defect(&codex, &mimo),
+            reports_the_same_defect(&codex, &mimo, &[&codex, &mimo]),
             "different words, same defect"
         );
 
@@ -19291,7 +19390,7 @@ mod tests {
             "the recorded window is self-consistent and binds no external timestamp",
         );
         assert!(
-            !reports_the_same_defect(&codex, &unrelated),
+            !reports_the_same_defect(&codex, &unrelated, &[&codex, &unrelated]),
             "the same coordinate is not the same defect"
         );
 
@@ -19307,7 +19406,11 @@ mod tests {
             "the crates liminal xtask haq verifier missed a different thing",
         );
         assert!(
-            !reports_the_same_defect(&path_words, &other_path_words),
+            !reports_the_same_defect(
+                &path_words,
+                &other_path_words,
+                &[&path_words, &other_path_words]
+            ),
             "path tokens and campaign boilerplate are not a shared report"
         );
     }
@@ -19477,6 +19580,38 @@ mod tests {
                 .any(|path| path.contains("case.txt")),
             "a permission-denied fchmod is not a write: {:?}",
             scan.locked_write_candidates
+        );
+    }
+
+    /// M17.5 F-69: the clock wrapper rewrote `campaign.json` whatever the
+    /// wrapped command did, so a lane that aborted after 52 seconds replaced a
+    /// completed campaign's 4,623 with its own — and the gate then refuses a
+    /// clock whose result is not `pass`, so the overwrite destroyed good
+    /// evidence to produce a later refusal.
+    #[test]
+    fn an_aborted_campaign_leaves_the_clock_alone() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-clock").expect("scratch");
+        let root = scratch.path().to_owned();
+        let source = repo_root();
+        for rel in ["scripts/haqp_campaign_clock.sh", "scripts/haqp_paths.py"] {
+            let dest = root.join(rel);
+            fs::create_dir_all(dest.parent().expect("parent")).expect("mkdir");
+            fs::copy(source.join(rel), &dest).expect("copy script");
+        }
+        let clock = root.join("conformance/haqp/evidence/campaign.json");
+        fs::create_dir_all(clock.parent().expect("parent")).expect("mkdir");
+        fs::write(&clock, b"{\"the completed campaign\":true}").expect("clock");
+
+        let status = Command::new("bash")
+            .current_dir(&root)
+            .args(["scripts/haqp_campaign_clock.sh", "run-x", "false"])
+            .status()
+            .expect("run the wrapper");
+        assert!(!status.success(), "the wrapped command failed");
+        assert_eq!(
+            fs::read(&clock).expect("read"),
+            b"{\"the completed campaign\":true}",
+            "an aborted run must not replace the completed campaign's clock"
         );
     }
 
