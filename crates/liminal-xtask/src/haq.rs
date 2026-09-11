@@ -9489,6 +9489,35 @@ const DURABLE_CALL_MARKERS: [&str; 10] = [
 /// `<` and `>` are required to be spaced. Rustfmt writes comparisons that way
 /// and generic parameters the other, and without the distinction every struct
 /// field holding a `BTreeMap<K, V>` reads as a comparison.
+/// Whether `trimmed` uses `||` as a disjunction rather than as a closure's
+/// empty parameter list. Blind pass 1 at `ec045588` (A04): `ok_or_else(|| {`
+/// carries a `||` that no short-circuit mutation can act on, and the
+/// precondition counted it — the same mistake as a pattern's `|`, one token
+/// wider. A disjunction has an operand to its left.
+fn has_disjunction(trimmed: &str) -> bool {
+    trimmed.match_indices("||").any(|(at, _)| {
+        trimmed[..at]
+            .trim_end()
+            .chars()
+            .next_back()
+            .is_some_and(|previous| previous.is_alphanumeric() || matches!(previous, '_' | ')'))
+    })
+}
+
+/// The lines a wrong-holder mutation can redirect. Blind pass 1 at `ec045588`
+/// (A05): `self.store.begin()?` reads a member off a receiver exactly as
+/// `inner.state.nodes.get(&id)` does, and one is the only store there is while
+/// the other has a sibling to be redirected to. Nothing in the text says
+/// which, so this operator's reach is not lexically decidable, and pretending
+/// otherwise is how P1-M047 came to declare a mutation no patch could
+/// implement. The set is closed and shared with
+/// `verify_mutant_operator_patch`: one statement of where the operator
+/// applies, not two that can drift.
+const WRONG_HOLDER_ANCHORS: [&str; 2] = [
+    "&self.basis",
+    "return Ok(inner.state.nodes.get(&id).cloned());",
+];
+
 fn anchor_supports_operator(operator: &str, anchor: &str) -> bool {
     let trimmed = anchor.trim();
     let lower = trimmed.to_ascii_lowercase();
@@ -9526,10 +9555,11 @@ fn anchor_supports_operator(operator: &str, anchor: &str) -> bool {
             // killed. A bar counts only where it can be bitwise or.
             let pattern_alternative = trimmed.contains("=>") || trimmed.starts_with('|');
             [
-                "==", "!=", " <= ", " >= ", " < ", " > ", "&&", "||", " true", " false",
+                "==", "!=", " <= ", " >= ", " < ", " > ", "&&", " true", " false",
             ]
             .iter()
             .any(|token| trimmed.matches(token).count() == 1)
+                || has_disjunction(trimmed)
                 || (!pattern_alternative && trimmed.matches('|').count() == 1)
         }
         "predicate-deletion" => negation,
@@ -9537,7 +9567,7 @@ fn anchor_supports_operator(operator: &str, anchor: &str) -> bool {
         "missing-enum-dispatch" => word("match"),
         "success-error-substitution" => trimmed.contains("Ok(") || trimmed.contains("Err("),
         "oracle-short-circuit" => {
-            trimmed.contains("&&") || trimmed.contains("||") || trimmed == "if id.is_some() {"
+            trimmed.contains("&&") || has_disjunction(trimmed) || trimmed == "if id.is_some() {"
         }
         "ordering-nondeterminism" => {
             trimmed.contains("sort")
@@ -9560,7 +9590,7 @@ fn anchor_supports_operator(operator: &str, anchor: &str) -> bool {
                 || trimmed.contains("ensure!")
                 || trimmed.contains("=>")
         }
-        "wrong-holder-selection" => trimmed.contains("&self.") || trimmed.matches('.').count() >= 2,
+        "wrong-holder-selection" => WRONG_HOLDER_ANCHORS.contains(&trimmed),
         _ => false,
     }
 }
@@ -9709,10 +9739,14 @@ fn verify_mutant_operator_patch(operator: &str, patch: &MutantPatch) -> Result<(
                     && after.contains("if let"))
         }
         "wrong-holder-selection" => {
-            // P1-M008: basis getter redirected to text; no generic self.* escape.
-            (before == "&self.basis" && after == "&self.text")
-                || (before == "return Ok(inner.state.nodes.get(&id).cloned());"
-                    && after == "return Ok(inner.state.relations.get(&id).cloned());")
+            // P1-M008: basis getter redirected to text; no generic self.*
+            // escape. The anchors are `WRONG_HOLDER_ANCHORS`, which
+            // `anchor_supports_operator` holds to as well, so a mutant cannot
+            // declare this operator at a line no patch here could implement.
+            WRONG_HOLDER_ANCHORS.contains(&before)
+                && ((before == "&self.basis" && after == "&self.text")
+                    || (before == "return Ok(inner.state.nodes.get(&id).cloned());"
+                        && after == "return Ok(inner.state.relations.get(&id).cloned());"))
         }
         _ => false,
     };
@@ -9932,8 +9966,8 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-source/src/file.rs",
-            83,
-            "let found = observe(&self.target)?.map(|o| o.hash);",
+            147,
+            "let hash = match fs::read(&path) {",
         ),
         (
             "crates/liminal-source/src/file.rs",
@@ -9951,9 +9985,9 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
             "let mut seen: BTreeSet<String> = BTreeSet::new();",
         ),
         (
-            "crates/liminal-source/src/file.rs",
-            102,
-            "let observed = observe(&self.target)?.ok_or_else(|| {",
+            "crates/liminal-source/src/merge.rs",
+            131,
+            "if c != b && m != c {",
         ),
         ("crates/liminal-source/src/paragraph.rs", 132, "|| !id_str"),
     ];
@@ -9990,9 +10024,9 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
             "if !basis_ok && !chain_ok {",
         ),
         (
-            "crates/liminal-jurisdiction/src/ilrp.rs",
-            275,
-            "let mut txn = self.store.begin()?;",
+            "crates/liminal-jurisdiction/src/checker.rs",
+            186,
+            "if !node_grade.satisfies(req.minimum) {",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
@@ -12422,7 +12456,7 @@ fn canary_expected_prefix(id: &str) -> Result<&'static str> {
         "C05" => "test ids differ",
         "C06" => "P1-T01 has no requirement mapping",
         "C07" => "mutant count must be 65",
-        "C08" => "operator predicate-deletion supplies 21 mutants; max 16",
+        "C08" => "operator predicate-deletion supplies 22 mutants; max 16",
         "C09" => "family graph/interchange codecs mutant count must be 13",
         "C10" => "canary ids differ",
         "C11" => "source/CST/formatting accepted cases below 100000",
@@ -19087,6 +19121,38 @@ mod tests {
         let mut commented = SourceScanner::default();
         assert_eq!(commented.structural("a /* { "), "a ");
         assert_eq!(commented.structural(" } */ b {"), " b {");
+    }
+
+    /// Blind pass 1 at `ec045588` (A04, A05): two operators whose preconditions
+    /// were looser than the patch contract, so a mutant could declare a
+    /// mutation no patch could ever implement.
+    #[test]
+    fn an_operator_reaches_only_where_a_patch_could_implement_it() {
+        assert!(
+            !anchor_supports_operator(
+                "oracle-short-circuit",
+                "let observed = observe(&self.target)?.ok_or_else(|| {"
+            ),
+            "a closure's empty parameter list is not a disjunction"
+        );
+        assert!(anchor_supports_operator(
+            "oracle-short-circuit",
+            "if c != b && m != c {"
+        ));
+        assert!(
+            anchor_supports_operator("oracle-short-circuit", "if bl.len() != ol.len() || x {"),
+            "a disjunction has an operand to its left"
+        );
+        assert!(
+            !anchor_supports_operator(
+                "wrong-holder-selection",
+                "let mut txn = self.store.begin()?;"
+            ),
+            "reading the only store there is cannot be redirected"
+        );
+        for anchor in WRONG_HOLDER_ANCHORS {
+            assert!(anchor_supports_operator("wrong-holder-selection", anchor));
+        }
     }
 
     /// AM-17.10's primary killer is chosen by how the operator is observed.

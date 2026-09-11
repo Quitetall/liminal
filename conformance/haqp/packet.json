@@ -1444,13 +1444,13 @@
   {
    "id": "P1-M034",
    "family": "transforms/projections",
-   "operator": "wrong-holder-selection",
-   "source": "crates/liminal-source/src/file.rs:83",
+   "operator": "missing-enum-dispatch",
+   "source": "crates/liminal-source/src/file.rs:147",
    "requirement": "P1-R014",
    "defect": "choose external holder for projection",
    "killing_tests": [
-    "P1-T19",
-    "P1-T20"
+    "P1-T18",
+    "P1-T19"
    ],
    "disposition": "predeclared"
   },
@@ -1497,7 +1497,7 @@
    "id": "P1-M038",
    "family": "transforms/projections",
    "operator": "oracle-short-circuit",
-   "source": "crates/liminal-source/src/file.rs:102",
+   "source": "crates/liminal-source/src/merge.rs:131",
    "requirement": "P1-R014",
    "defect": "compare incremental render to itself",
    "killing_tests": [
@@ -1613,13 +1613,13 @@
   {
    "id": "P1-M047",
    "family": "repair/ILRP/recovery",
-   "operator": "wrong-holder-selection",
-   "source": "crates/liminal-jurisdiction/src/ilrp.rs:275",
+   "operator": "predicate-deletion",
+   "source": "crates/liminal-jurisdiction/src/checker.rs:186",
    "requirement": "P1-R015",
    "defect": "apply graph step as file step",
    "killing_tests": [
-    "P1-T19",
-    "P1-T20"
+    "P1-T07",
+    "P1-T17"
    ],
    "disposition": "predeclared"
   },
@@ -1912,7 +1912,7 @@
    "id": "C08",
    "gate": "mutants",
    "violation": "operator supplies 17 mutants",
-   "expected_failure": "operator predicate-deletion supplies 21 mutants; max 16",
+   "expected_failure": "operator predicate-deletion supplies 22 mutants; max 16",
    "result": "predeclared"
   },
   {
