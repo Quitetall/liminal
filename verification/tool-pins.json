@@ -2,6 +2,7 @@
   "status": "bootstrap-only",
   "claims": {
     "formal_check_tool_validation": false,
+    "bootstrap_tool_validation": true,
     "production_binding": false,
     "full_package_b_closure": false
   },
@@ -33,6 +34,17 @@
     "vstd_url": "https://crates.io/crates/vstd/0.0.0-2026-08-30-0159",
     "cargo_lock_sha256": "7f09b9fb17f79814b20b05cd9d0d123df86553eca09158694a87c3c24471fc0d",
     "source": "crates.io"
+  },
+  "bootstrap_sources": {
+    "admission/Cargo.toml": "42619ab7f217209f47b1ed1bf3c0e56852f10d1d2870ed13faf314df2f70d290",
+    "admission/Cargo.lock": "7f09b9fb17f79814b20b05cd9d0d123df86553eca09158694a87c3c24471fc0d",
+    "admission/rust-toolchain.toml": "121a4844fb86fb4c2ba4ac9fc33c3dd178db024753c9de1fdda6518d2de02903",
+    "admission/src/main.rs": "70a1917f1f5012120a7e17ca6baf6f3e3d73426ded229ba18ca5e9eb398edaca",
+    "false/admit_revision_false.rs": "ce8734b9e41aaa23eb78fe91299a594263f9a7ff299ff15536b0c1e7dc148fdf",
+    "model/positive/ToolControl.cfg": "477c1f24656eb0f400776d140418ebf0d58f2a842f41018d5bfe437c5d56428b",
+    "model/positive/ToolControl.tla": "4c70a273ec19997f6ffd83cc1b9c9f200c3e8df407f45d9185e21b025718b1ed",
+    "model/false/ToolControl.cfg": "477c1f24656eb0f400776d140418ebf0d58f2a842f41018d5bfe437c5d56428b",
+    "model/false/ToolControl.tla": "bd8961e7a1b29bd79434f384dc9425e6c5cffae7843ab309c3cf57a61201b24a"
   },
   "tlc": {
     "release": "v1.7.4",

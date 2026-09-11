@@ -109,6 +109,12 @@ bench-gate:
 formal-check:
     cargo run -p liminal-xtask -- formal check
 
+formal-bootstrap verus_root tlc_jar output:
+    python3 -B verification/bootstrap/run.py --verus-root {{ quote(verus_root) }} --tlc-jar {{ quote(tlc_jar) }} --output {{ quote(output) }}
+
+formal-bootstrap-self-test:
+    python3 -B -m unittest -v verification/bootstrap/test_run.py
+
 formal-proof:
     cargo run -p liminal-xtask -- formal proof
 
@@ -160,6 +166,7 @@ haq-lane run="run-1":
 
 # Everything CI runs, locally, in CI order
 ci: fmt-check lint
+    just formal-bootstrap-self-test
     cargo nextest run --workspace --all-features --profile ci
     just test-threaded
     cargo test --workspace --doc
