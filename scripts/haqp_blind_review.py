@@ -16,6 +16,7 @@ import json
 import os
 import re
 import select
+import shutil
 import signal
 import subprocess
 import sys
@@ -55,7 +56,7 @@ def run(*args: str) -> str:
     return subprocess.check_output(args, cwd=ROOT, text=True, stderr=subprocess.STDOUT)
 
 
-def base_context() -> tuple[str, bool, dict[str, Any]]:
+def base_context() -> tuple[str, str, list[str], bool, dict[str, Any]]:
     commit = run("git", "rev-parse", "HEAD").strip()
     # §1 fixes the SOURCE tree; the evidence tree is what the lanes before this
     # one just wrote. A blanket `git status` check blocked this lane at the END
@@ -75,12 +76,29 @@ def base_context() -> tuple[str, bool, dict[str, Any]]:
         "crates/liminal-query/src/lib.rs",
     ]
     fixed_base = {"commit": commit, "tree": tree, "clean": clean}
+    present = [rel for rel in files if (ROOT / rel).exists()]
     chunks = [f"fixed_commit={commit}\nfixed_tree={tree}\nclean={clean}\n"]
-    for rel in files:
-        path = ROOT / rel
-        if path.exists():
-            chunks.append(f"\n--- {rel} ---\n{path.read_text(encoding='utf-8')}")
-    return "".join(chunks), clean, fixed_base
+    for rel in present:
+        chunks.append(f"\n--- {rel} ---\n{(ROOT / rel).read_text(encoding='utf-8')}")
+    # The same document set, described rather than pasted. Brian's ruling of
+    # 2026-09-11: the gate's own source grew until one prompt crossed the
+    # provider's 1 MiB ceiling, and a backend that can read files is given them
+    # on disk instead. The manifest names every file with its size and digest,
+    # so a reviewer that skipped one cannot claim otherwise and the record
+    # still binds what was offered.
+    manifest = [
+        f"fixed_commit={commit}\nfixed_tree={tree}\nclean={clean}\n",
+        "\nThe material under review is in your working directory, at these exact\n"
+        "relative paths. READ EVERY ONE before answering; they are the whole of\n"
+        "what you are reviewing and nothing else in the directory is relevant.\n",
+    ]
+    for rel in present:
+        raw = (ROOT / rel).read_bytes()
+        manifest.append(
+            f"\n  {rel}  ({len(raw)} bytes, sha256 {hashlib.sha256(raw).hexdigest()})"
+        )
+    manifest.append("\n")
+    return "".join(chunks), "".join(manifest), present, clean, fixed_base
 
 
 def packet_state() -> dict[str, Any]:
@@ -105,6 +123,12 @@ def blocked(reason: str, *, commit: str, clean: bool) -> int:
 
 SYSTEM = "You are an isolated HAQP adversarial reviewer. Return JSON only."
 CODEX_PREFIX = "codex:"
+
+# The repository-relative files a filesystem-capable backend is given on disk
+# rather than inline, set once by `main` from `base_context`. Brian's ruling of
+# 2026-09-11 after the prompt crossed the provider's 1 MiB ceiling: the same
+# document set, delivered where the reviewer can read all of it.
+MATERIALIZE: list[str] = []
 MIMO_DIRECT_PREFIX = "mimo-direct:"
 
 
@@ -175,6 +199,16 @@ def codex_call(model: str, prompt: str) -> tuple[str, dict[str, Any]]:
             name,
             "-",
         ]
+        # The material under review, placed where the reviewer can read it.
+        # Only these files: the scratch directory IS the blinding, so nothing
+        # else — no repository, no history, no earlier record — is reachable.
+        for rel in MATERIALIZE:
+            source = ROOT / rel
+            if not source.exists():
+                continue
+            destination = Path(scratch) / rel
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, destination)
         before = codex_sessions()
         completed = subprocess.run(
             argv,
@@ -774,7 +808,7 @@ def run_pass(
             if pass_two
             else "Attack implementation and packet directly.\n"
         )
-        + context
+        + (context[1] if backend_of(model) == "codex" else context[0])
     )
     identity = digest(
         f"pass{2 if pass_two else 1}:{model}:haqp-blind-review-v1".encode()
@@ -1179,7 +1213,9 @@ def main() -> int:
     args = parser.parse_args()
     if args.self_test:
         return self_test()
-    context, clean, fixed_base = base_context()
+    inline, manifest, materialize, clean, fixed_base = base_context()
+    MATERIALIZE[:] = materialize
+    context = (inline, manifest)
     commit = fixed_base["commit"]
     packet = packet_state()
     if not clean:
