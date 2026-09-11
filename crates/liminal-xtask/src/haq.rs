@@ -9095,6 +9095,7 @@ fn line_is_inside_test_code(text: &str, line: usize) -> bool {
     let mut depth = 0i32;
     let mut in_test = false;
     let mut test_depth = 0i32;
+    let mut scanner = SourceScanner::default();
     for (index, source) in text.lines().enumerate() {
         let trimmed = source.trim();
         if index + 1 == line {
@@ -9103,12 +9104,13 @@ fn line_is_inside_test_code(text: &str, line: usize) -> bool {
         if !in_test && trimmed.replace(' ', "") == "#[cfg(test)]" {
             in_test = true;
             test_depth = depth;
+            scanner.structural(source);
             continue;
         }
         // Braces inside a comment or a string literal are text, not structure:
         // one `// weird }` would close the test module early and let a
         // test-code anchor read as production (review of `e490671`).
-        let structural = structural_braces(source);
+        let structural = scanner.structural(source);
         depth += i32::try_from(structural.matches('{').count()).unwrap_or(0);
         depth -= i32::try_from(structural.matches('}').count()).unwrap_or(0);
         if in_test && depth <= test_depth && structural.contains('}') {
@@ -9118,42 +9120,89 @@ fn line_is_inside_test_code(text: &str, line: usize) -> bool {
     false
 }
 
-/// `line` with its line comment and its string, raw-string and character
-/// literals removed, so only braces that structure the code remain.
+/// Brace counting that survives a line ending. Blind pass 1 at `ec045588`
+/// (A07): the old per-line reader could not see a raw string or block comment
+/// that spans lines, so their braces counted as structure — enough to hold a
+/// `#[cfg(test)]` skip open past the module and hide a production spawn after
+/// it. The state carries across lines, which is what a multi-line literal is.
 ///
 /// A `'` opens a character literal only when it closes within one escape
 /// sequence. Otherwise it introduces a lifetime, and reading `Formatter<'_>`
-/// as an unterminated literal would swallow the `{` that follows it.
-fn structural_braces(line: &str) -> String {
-    let chars: Vec<char> = line.chars().collect();
-    let mut out = String::with_capacity(line.len());
-    let mut i = 0;
-    while i < chars.len() {
-        if chars[i] == '/' && chars.get(i + 1) == Some(&'/') {
-            break;
-        }
-        if let Some(after) = skip_raw_string(&chars, i) {
-            i = after;
-            continue;
-        }
-        if chars[i] == '"' {
-            i = skip_string(&chars, i);
-            continue;
-        }
-        if let Some(after) = skip_char_literal(&chars, i) {
-            i = after;
-            continue;
-        }
-        out.push(chars[i]);
-        i += 1;
-    }
-    out
+/// as an unterminated literal would swallow the `{` that follows it (F-56).
+#[derive(Default)]
+struct SourceScanner {
+    in_block_comment: bool,
+    /// Hashes of the raw string currently open, if one is.
+    in_raw_string: Option<usize>,
 }
 
-/// The index past a raw string starting at `at` (`r"..."`, `br#"..."#`), or
-/// `None` if one does not start there. An unterminated literal runs to the
-/// end of the line, which is what a trailing `r#"` in real source does.
-fn skip_raw_string(chars: &[char], at: usize) -> Option<usize> {
+impl SourceScanner {
+    /// `line` with its comments and literals removed, continuing whatever the
+    /// previous line left open, so only braces that structure code remain.
+    fn structural(&mut self, line: &str) -> String {
+        let chars: Vec<char> = line.chars().collect();
+        let mut out = String::with_capacity(line.len());
+        let mut i = 0;
+        while i < chars.len() {
+            if self.in_block_comment {
+                if chars[i] == '*' && chars.get(i + 1) == Some(&'/') {
+                    self.in_block_comment = false;
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+                continue;
+            }
+            if let Some(hashes) = self.in_raw_string {
+                let closes = chars[i] == '"'
+                    && chars[i + 1..]
+                        .iter()
+                        .take(hashes)
+                        .filter(|c| **c == '#')
+                        .count()
+                        == hashes;
+                if closes {
+                    self.in_raw_string = None;
+                    i += 1 + hashes;
+                } else {
+                    i += 1;
+                }
+                continue;
+            }
+            if chars[i] == '/' && chars.get(i + 1) == Some(&'*') {
+                self.in_block_comment = true;
+                i += 2;
+                continue;
+            }
+            if chars[i] == '/' && chars.get(i + 1) == Some(&'/') {
+                break;
+            }
+            if let Some((hashes, after)) = raw_string_opening(&chars, i) {
+                if let Some(end) = raw_string_close(&chars, after, hashes) {
+                    i = end;
+                    continue;
+                }
+                self.in_raw_string = Some(hashes);
+                break;
+            }
+            if chars[i] == '"' {
+                i = skip_string(&chars, i).max(i + 1);
+                continue;
+            }
+            if let Some(after) = skip_char_literal(&chars, i) {
+                i = after;
+                continue;
+            }
+            out.push(chars[i]);
+            i += 1;
+        }
+        out
+    }
+}
+
+/// The hash count and the index just past the opening quote of a raw string
+/// starting at `at`, or `None` if one does not start there.
+fn raw_string_opening(chars: &[char], at: usize) -> Option<(usize, usize)> {
     let mut i = at;
     if chars.get(i) == Some(&'b') {
         i += 1;
@@ -9167,11 +9216,16 @@ fn skip_raw_string(chars: &[char], at: usize) -> Option<usize> {
     if chars.get(i) != Some(&'"') {
         return None;
     }
-    i += 1;
+    Some((hashes, i + 1))
+}
+
+/// The index past a raw string's terminator, searching from `from`, or `None`
+/// when the line ends inside it. Counted rather than `all`: on a tail shorter
+/// than `hashes` an `all` is vacuously true, which would close the literal on
+/// a quote that does not terminate it.
+fn raw_string_close(chars: &[char], from: usize, hashes: usize) -> Option<usize> {
+    let mut i = from;
     while i < chars.len() {
-        // Counted, not `all`: on a tail shorter than `hashes` an `all` is
-        // vacuously true, which would close the literal on a quote that does
-        // not terminate it.
         if chars[i] == '"'
             && chars[i + 1..]
                 .iter()
@@ -9184,7 +9238,7 @@ fn skip_raw_string(chars: &[char], at: usize) -> Option<usize> {
         }
         i += 1;
     }
-    Some(chars.len())
+    None
 }
 
 /// The index past the string literal opening at `at`, or the end of the line.
@@ -11451,10 +11505,11 @@ fn scan_concurrency_primitives(root: &Utf8Path) -> Result<ConcurrencyScan> {
             // and hide a production spawn. Only structural braces count now,
             // the same scanner the mutant anchor screen uses.
             let mut skipping: Option<(usize, bool)> = None;
+            let mut scanner = SourceScanner::default();
             for (index, line) in text.lines().enumerate() {
                 let trimmed = line.trim();
+                let structural = scanner.structural(line);
                 if let Some((depth, entered)) = skipping.as_mut() {
-                    let structural = structural_braces(line);
                     *depth += structural.matches('{').count();
                     let closes = structural.matches('}').count();
                     if *depth > 0 {
@@ -18996,6 +19051,44 @@ mod tests {
         .expect("wrapping and escaping preserve order");
     }
 
+    /// Blind pass 1 at `ec045588` (A07): the brace reader saw one line, so a
+    /// raw string or block comment spanning lines had its braces counted as
+    /// structure — enough to hold a `#[cfg(test)]` skip open past the module.
+    #[test]
+    fn a_literal_that_spans_lines_is_still_text() {
+        let text = concat!(
+            "#[cfg(test)]\n",
+            "mod tests {\n",
+            "    const FIXTURE: &str = r#\"\n",
+            "        { { { unbalanced braces inside a raw string\n",
+            "    \"#;\n",
+            "}\n",
+            "\n",
+            "fn production_after_the_module() {\n",
+            "    let x = 1;\n",
+            "}\n",
+        );
+        assert!(
+            line_is_inside_test_code(text, 4),
+            "the raw string's content is inside the test module"
+        );
+        assert!(
+            !line_is_inside_test_code(text, 9),
+            "production after the module is not test code; unbalanced braces in a \
+             multi-line literal must not hold the skip open"
+        );
+
+        let mut scanner = SourceScanner::default();
+        assert_eq!(scanner.structural("let s = r#\"{{{\"#; {"), "let s = ; {");
+        let mut spanning = SourceScanner::default();
+        assert_eq!(spanning.structural("let s = r#\"{"), "let s = ");
+        assert_eq!(spanning.structural("still inside } {"), "");
+        assert_eq!(spanning.structural("\"#; }"), "; }");
+        let mut commented = SourceScanner::default();
+        assert_eq!(commented.structural("a /* { "), "a ");
+        assert_eq!(commented.structural(" } */ b {"), " b {");
+    }
+
     /// AM-17.10's primary killer is chosen by how the operator is observed.
     #[test]
     fn the_derived_primary_matches_the_operators_observation_kind() {
@@ -19083,17 +19176,45 @@ mod tests {
             "production is not test code"
         );
 
-        assert_eq!(structural_braces("let s = \"}\"; // {"), "let s = ; ");
+        assert_eq!(
+            SourceScanner::default().structural("let s = \"}\"; // {"),
+            "let s = ; "
+        );
         assert!(
-            structural_braces("fn fmt(&self, f: &mut Formatter<'_>) -> Result {").contains('{'),
+            SourceScanner::default()
+                .structural("fn fmt(&self, f: &mut Formatter<'_>) -> Result {")
+                .contains('{'),
             "a lifetime is not an unterminated character literal"
         );
-        assert!(!structural_braces("let brace = '}';").contains('}'));
-        assert!(!structural_braces("let brace = b'{';").contains('{'));
-        assert!(!structural_braces("let esc = '\\'';").contains('\''));
-        assert!(!structural_braces("let nl = '\\n'; let u = '\\u{7d}';").contains('}'));
-        assert_eq!(structural_braces("let s = r#\"// }\"#; {"), "let s = ; {");
-        assert!(!structural_braces("let s = br\"}\";").contains('}'));
+        assert!(
+            !SourceScanner::default()
+                .structural("let brace = '}';")
+                .contains('}')
+        );
+        assert!(
+            !SourceScanner::default()
+                .structural("let brace = b'{';")
+                .contains('{')
+        );
+        assert!(
+            !SourceScanner::default()
+                .structural("let esc = '\\'';")
+                .contains('\'')
+        );
+        assert!(
+            !SourceScanner::default()
+                .structural("let nl = '\\n'; let u = '\\u{7d}';")
+                .contains('}')
+        );
+        assert_eq!(
+            SourceScanner::default().structural("let s = r#\"// }\"#; {"),
+            "let s = ; {"
+        );
+        assert!(
+            !SourceScanner::default()
+                .structural("let s = br\"}\";")
+                .contains('}')
+        );
         assert!(!anchor_is_mutable_line(") -> Result<Basis, Error> {"));
         assert!(!anchor_is_mutable_line(") {"));
         assert!(
