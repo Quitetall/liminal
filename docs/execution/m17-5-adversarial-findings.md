@@ -4114,3 +4114,46 @@ qualification claims nothing about the instrument being sound.
 between 1 and 11, so a single qualifying lane is as likely to be a quiet draw
 as a converged state. The rule is satisfied here; the judgement that the loop
 has ended wants a second consecutive lane that satisfies it too.
+
+## F-73 — the twenty-third lane: the second consecutive qualifying lane, and one fix
+
+**Found.** 2026-09-12, lane at `f5d92b6d`. Pass 2 clean: eleven caught
+violations and one false positive, no defect. Pass 1 four `verified_defect` and
+eight caught violations. Records under
+`docs/execution/reviews/2026-09-12-lane-f5d92b6/`.
+
+| attempt | coordinate | `haq churn` | disposition |
+|---|---|---|---|
+| A01 | `haq.rs:1661` | campaign churn | RISK-006 |
+| A02 | `haq.rs:174` | campaign churn | RISK-005 |
+| A12 | `haq.rs:9312` | campaign churn | RISK-005 |
+| A06 | `haq.rs:11116` | **under qualification** | fixed |
+
+**A06 is the fix, and it predates the campaign** — the churn test said so, which
+is what the test is for. Concurrency schedule evidence carried an
+`oracle_digest` computed over the schedule's OWN declared id, sequence and
+result. It proves the row is internally consistent and nothing else: a runner
+that never explored a schedule computes that digest exactly. It is the
+self-consistency pattern this campaign has now found in a concurrence, a
+recovery, a clock and here — a checksum of a claim standing in for evidence of
+it.
+
+There is no receipt defined for schedule exploration yet, so inventing one
+would be speculation about Phase 6. The structural checks stay, stating the
+schema, and the gate then refuses: schedule evidence cannot be qualified until
+it binds something the runner did not author. The path is dormant today —
+`concurrent_code` is `not_applicable` — so this costs nothing now and refuses
+rather than accepts when it is reached.
+
+**A01 is the rule's edge, and worth naming.** The coarse-scan oracle checks each
+block's range, kind and content hash but never requires the blocks to cover the
+source, so a scan omitting a non-blank region satisfies it. That is blindness
+about a PRODUCTION behaviour, and the code that is blind is the qualifier's own,
+written during this campaign. AM-17.11's churn test says record, and it is
+recorded as RISK-006 — but a reader should see that the rule, applied
+faithfully, can record a finding whose consequence is about the product. The
+alternative is to keep editing the instrument, which is the loop the amendment
+closed. Brian may want to narrow the rule so that oracle coverage counts as
+suite rather than instrument; that is his to decide.
+
+**Two consecutive lanes now satisfy AM-17.11's termination rule.**

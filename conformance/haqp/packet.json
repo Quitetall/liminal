@@ -66,6 +66,18 @@
    "mitigation": "the scan follows calls, values, aliases across the crate, macro definitions and every visibility form, and over-inclusion is its bias; what remains is that it is not a parser. Recorded under AM-17.11 rather than narrowed again: it is the qualifier's own code, frozen",
    "authority": "AM-17.11",
    "state": "disclosed"
+  },
+  {
+   "id": "RISK-006",
+   "owner": "Brian",
+   "severity": "disclosed",
+   "trigger": "the coarse-scan oracle judges each block's range, kind and hash but never requires the blocks to COVER the source, so a scan that omits a non-blank region satisfies it",
+   "requirement": "P1-R002",
+   "evidence": "docs/execution/m17-5-adversarial-findings.md:F-73",
+   "planned_phase": "M24",
+   "mitigation": "ranges are in bounds, non-overlapping, non-blank, classified against a re-derived rule and related by content hash; what is missing is coverage. Recorded under AM-17.11: the oracle is the qualifier's own code, written during this campaign and frozen",
+   "authority": "AM-17.11",
+   "state": "disclosed"
   }
  ],
  "requirements": [

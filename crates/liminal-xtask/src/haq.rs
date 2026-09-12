@@ -11129,7 +11129,19 @@ fn verify_concurrency_evidence_record(
             &expected,
         )?;
     }
-    Ok(())
+    // Blind pass 1 at `f5d92b6d` (A06): the digest checked above is taken over
+    // the schedule's OWN declared id, sequence and result, so it proves the row
+    // is internally consistent and nothing else — a runner that never explored
+    // a schedule computes it exactly. Authentication needs something the runner
+    // cannot author from the row, and no such receipt is defined for schedule
+    // exploration yet. The structure above states the schema; until the receipt
+    // exists, evidence of this kind is refused rather than accepted on a
+    // checksum of itself.
+    anyhow::bail!(
+        "concurrency schedules carry only self-derived oracle digests; schedule exploration \
+         cannot be qualified until its evidence binds an execution receipt the runner did not \
+         author (M21 / Phase 6)"
+    )
 }
 
 /// Bind evidence source coordinates to an actual committed Git tree. Shape
