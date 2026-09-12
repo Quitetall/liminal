@@ -4084,3 +4084,33 @@ aliasing its own last segment made an import list's trailing empty item yield
 the alias `""`, and `format!("{alias}(")` is then `(` — which every call in the
 file contains, so the oracle was refused for reaching everything. An alias must
 be an identifier.
+
+## F-72 — the twenty-second lane: the first to qualify under AM-17.11
+
+**Found.** 2026-09-12, lane at `fb172797` — the first lane run under the freeze.
+Pass 2 clean: twelve caught violations, no defect. Pass 1 three
+`verified_defect` and nine caught violations, all three reproduced. Records
+under `docs/execution/reviews/2026-09-12-lane-fb17279/`.
+
+**All three are campaign churn, by the test rather than by my say-so.**
+
+| attempt | coordinate | `haq churn` | what it names |
+|---|---|---|---|
+| A02 | `haq.rs:345` | campaign churn | the alias watch filter — it sees `self` where an import brings a symbol in under a receiver, so `production` is never registered |
+| A08 | `haq.rs:2849` | campaign churn | the ruling matcher, already RISK-004 |
+| A10 | `haq.rs:191` | campaign churn | `item_body`'s extraction ends at the first bare `}`, so it stops inside a multi-line raw string and omits what follows |
+
+Every one is the qualifier's own implementation, written during this campaign,
+and AM-17.11's termination rule is therefore satisfied: **this lane's Class A
+and Class B findings are all campaign churn.**
+
+**They are recorded, not fixed.** A02 and A10 are both limits of reading Rust
+lexically rather than parsing it, and they join RISK-005. A08 is RISK-004's
+fifth appearance. Recording is not dismissal — a reader of this packet can see
+exactly which parts of the instrument are known to be imperfect, and the
+qualification claims nothing about the instrument being sound.
+
+**One lane is not the answer.** The counts across this campaign oscillate
+between 1 and 11, so a single qualifying lane is as likely to be a quiet draw
+as a converged state. The rule is satisfied here; the judgement that the loop
+has ended wants a second consecutive lane that satisfies it too.

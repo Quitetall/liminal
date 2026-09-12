@@ -54,6 +54,18 @@
    "mitigation": "four narrowings hold it as far as text allows \u2014 class and target must match, a named coordinate binds, excluded phrases veto, and one ruling clears at most one finding per record, which turns an over-broad phrase into a refusal. AM-17.11 records it rather than narrowing a fifth time: the matcher is the qualifier's own code, frozen",
    "authority": "AM-17.11",
    "state": "disclosed"
+  },
+  {
+   "id": "RISK-005",
+   "owner": "Brian",
+   "severity": "disclosed",
+   "trigger": "the oracle-independence scan reads Rust lexically: an alias watch that sees `self` rather than the imported symbol, and a body extraction that ends at the first bare `}` and so stops inside a multi-line raw string, can each leave a production path unwatched",
+   "requirement": "P1-R001",
+   "evidence": "docs/execution/m17-5-adversarial-findings.md:F-72",
+   "planned_phase": "M24",
+   "mitigation": "the scan follows calls, values, aliases across the crate, macro definitions and every visibility form, and over-inclusion is its bias; what remains is that it is not a parser. Recorded under AM-17.11 rather than narrowed again: it is the qualifier's own code, frozen",
+   "authority": "AM-17.11",
+   "state": "disclosed"
   }
  ],
  "requirements": [
