@@ -111,3 +111,11 @@ duplicated exit-criteria wording. M17.6 authorization after HAQP-1a permits
 execution; final suite ratification follows HAQP-1b at M24. This records the
 already accepted staging rule, not a new GO, test activation, amendment
 ratification, or change to full M19 breadth, assertions, goldens or thresholds.
+
+AM-17.13 (M17): user-approved 2026-09-13, allow only independently verified,
+behavior-preserving mutant file/line reference updates and their derived packet
+digest mirror under AM-17.11, with a committed before/after audit record per
+`docs/execution/haqp-reference-maintenance.md`; ambiguous, missing, rewritten,
+or behavior-changing targets and golden changes require a separate decision,
+while qualifier logic, mutation identity, coverage, thresholds, historical
+evidence, and phase authority remain unchanged.
