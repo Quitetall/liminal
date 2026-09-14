@@ -3,7 +3,7 @@
 Status: development evidence, not qualification. Source baseline:
 `3b1ec265b9ffc8bdd3da596011b4ac2593c2369c`.
 
-The public `check_inputs` seam has 19 passing temporary-filesystem controls.
+The three public proof-input seams have 46 passing temporary-filesystem controls.
 The original changed-source control failed against the permissive stub before
 implementation, then passed with hash validation. The later deep-JSON trial
 failed only because its expected error message was too specific: this Python
@@ -83,5 +83,49 @@ has 31 passing tests. Logs: `proof-input-integer-red.log` and
 vendored all 167 packages but omitted 77 Git-control files across 68 packages.
 Common files matched byte-for-byte, and vendor checksum maps described the
 filtered trees correctly. That does not establish byte-complete archive identity.
-The next closure step reconstructs all archive files directly rather than adding
-an exclusion to the comparison.
+The dependency constructor below instead reconstructs every archive file.
+
+## Dependency constructor and exact-vendor probes
+
+The dependency constructor enforces the public contract summarized in `README.md`:
+closed Cargo.lock version/source/checksum inputs, an explicit complete archive
+list, bounded archive inspection before output creation, raw path and member-type
+refusal, Git-control preservation, normalized modes, generated Cargo checksum
+metadata, and input rehashing. It creates only a new external destination and
+leaves partial output on I/O failure. Its success remains
+`dependencies-prepared` with `qualification: false`; the caller must independently
+bind lock and archive authority, and the producer's returned maps are not proof.
+Positive byte-identical duplicate-copy and both-order bad-copy controls passed
+without a production change; they harden coverage and do not show a prior bug.
+
+The first real run failed closed on `convert_case-0.4.0/.gitignore`: its regular
+TarInfo carried mode `0100664`, and the initial blanket mode mask incorrectly
+classified the valid file-type bits as privileged permissions. The preserved v1
+failure was not retried in place. After separating matching file-type bits from
+special permission bits, v2 constructed all 167 locked packages from 214 explicit
+archive candidates: 7,201 source files and 1,676 directories, producing 7,368
+regular files including 167 generated checksum files. A separate verifier
+rehashed and streamed the archives, and an independent tree comparator ignored
+the producer result map while confirming source bytes, directory inventory,
+executable bits and logical checksum maps. The v2 log SHA-256 is
+`97c7e8243e76296b2d63a034d0699d26aa9acf071682f0bafbda67c5b61d71af`:
+`dependency-constructor-real-v2.log`.
+
+The prior `cargo-vendor-closure.log` omission remains evidence: ordinary Cargo
+vendor dropped 77 Git-control files across 68 packages. The later exact-vendor
+ordinary build succeeded but inherited the normal child environment after only
+explicit compiler-related variables were unset; it is feasibility evidence, not
+a strict environment replay. The separate strict allow-list `env -i` verified
+run recorded 1,862 vstd and 4 leaf functions verified with zero errors and the
+expected witness. These runs establish feasibility only, not qualification.
+
+`source-build-script-closure.log` records an independent source-closure finding:
+adding a new `crates/liminal-safety/build.rs` introduced a custom-build target
+while all eight selected pins remained unchanged. No build script was executed.
+The orchestrator therefore requires a closed source inventory; the selected eight
+paths alone cannot bind implicit Cargo build inputs. The log SHA-256 is
+`ecb13498685523d9c1955d241d08d88b343331a0fcbbcc528a0cb1ddb6bfd735`.
+
+All sixteen obligations remain open. Archive reconstruction, dependency
+construction, ordinary builds, strict verified builds and witnesses are input
+closure or feasibility observations only; none is a full qualification result.

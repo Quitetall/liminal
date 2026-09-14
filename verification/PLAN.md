@@ -31,11 +31,17 @@ remain unimplemented. See `safety-ack-slice.md`, `haqp-29f9f159-result.md`,
 `bootstrap/README.md` for reproducible tool-control commands and
 `checked-repair-verification-2026-09-14.md` for the runtime evidence boundary.
 
-The next runner slice under `proof/` validates selected source pins and complete
-extracted Verus distribution bytes. Its statuses are input-only, never proof or
-qualification. It is not yet integrated with the formal commands. See
-`proof/development-2026-09-14.md` for its negative controls, reconstructed-source
-build/verify probes, and the remaining dependency-closure and execution work.
+The runner slice under `proof/` validates selected source pins and complete
+extracted Verus distribution bytes, and constructs a checksum-closed dependency
+tree from an explicit archive set at a new external destination. Its 46 public
+controls and statuses are input-only (`qualification: false`), never proof or
+qualification. The caller must bind lock/archive authority, and independent
+comparison—not the producer's returned map—checks constructed output. Real probes
+reconstructed all 167 locked packages and demonstrated ordinary and strict
+verified build feasibility; the selected-eight build-script counterexample still
+requires a closed source inventory. This is not yet integrated with the formal
+commands. See `proof/development-2026-09-14.md` for exact limits, failures,
+environment boundaries, evidence hashes and remaining execution work.
 
 `authority-amendment-proposal.md` records the concrete StoreOwner/read-view
 split approved by the user on 2026-09-13 as AM-17.12, recorded in M17 and the

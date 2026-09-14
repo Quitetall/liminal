@@ -13,6 +13,24 @@ must supply the approved archive pin; accepting a caller-chosen archive digest
 does not establish that archive's authority. Its success status is only
 `distribution-valid`, with `qualification: false`.
 
+`prepare_dependencies(lockfile, archives, destination)` in `dependencies.py`
+constructs a checksum-closed Cargo source tree at a new destination outside the
+repository. It accepts only Cargo.lock version 4 registry packages from the exact
+crates.io index source and an explicit, complete `.crate` list; preserves all
+archive files including Git-control files; writes Cargo checksum metadata; and
+returns only `dependencies-prepared` with `qualification: false`. It performs no
+build or network access, never overwrites or deletes a destination, and preserves
+partial output after construction I/O failure for diagnosis.
+Byte-identical duplicate archive candidates are allowed only when every supplied
+copy matches the locked checksum. Archive and file result maps are keyed per
+package; they do not assert that only one physical candidate copy existed.
+
+The constructor refuses lockfiles over 4 MiB, archives or individual regular
+members over 512 MiB, and aggregate inputs over 1,000 package/candidates, 100,000
+members, or 2 GiB of regular bytes. The caller remains responsible for binding
+Cargo.lock and archive authority. The returned hash maps are constructor output,
+not an independent correctness proof.
+
 Run its public-interface controls with:
 
 ```sh
@@ -22,9 +40,9 @@ python3 -m unittest discover -s verification/proof -p 'test_*.py' -v
 These eight source hashes are not the complete Cargo build graph. These four
 executable hashes alone do not bind bundled Verus libraries, Rust, dependencies or
 ambient build configuration. The separate distribution check binds the packaged
-files but not external Rust or host libraries. Neither check may be promoted to
-`formal-proof` or treated as full input closure. The full runner still needs
-pinned distribution and dependency closure, controlled fresh builds, two cold
+files but not external Rust or host libraries. None of these input operations may
+be promoted to `formal-proof` or treated as full input closure. The full runner still needs
+pinned source/distribution/dependency authority, controlled fresh builds, two cold
 replays, negative proof/runtime controls, executable bindings and durable raw
 evidence. Existing formal qualification commands remain refusal-only.
 
