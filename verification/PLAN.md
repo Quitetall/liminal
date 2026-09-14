@@ -49,7 +49,9 @@ witness binding, not verifier-source correctness, a qualified executable, cold
 independent construction or qualification. A bounded stdout reader now preserves
 up to 64 ordered summary/report observations under a closed pinned-emitter schema;
 its self-reported metadata does not authenticate the command, source or tool.
-The 121 support controls and all development statuses retain
+A request constructor now supplies only three fixed sandboxed verify/build
+operations with fresh writable state and read-only inputs; it does not execute
+or authenticate them. The 129 support controls and all development statuses retain
 `qualification: false`, never proof or qualification. The caller must bind
 source/tool/profile and lock/archive authority, and independent
 comparison—not the producer's returned map—checks constructed output. Real probes

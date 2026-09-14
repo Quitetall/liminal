@@ -133,6 +133,31 @@ Run all public-interface controls with:
 just formal-proof-self-test
 ```
 
+`prepare_sandbox(source, rust, verus, vendor, destination, operation)` in
+`sandbox.py` constructs a fixed Linux sandbox request for exactly `verify`,
+`ordinary-build`, or `verified-build`. It accepts four existing absolute input
+directories and creates a new external destination plus private `target`,
+`cargo-home`, `rustup-home`, `tmp`, `logs`, and `command-parent` directories.
+The returned `command-evidence` output path remains uncreated for `run_command`.
+Inputs are mounted read-only; writable paths, environment, tracing, and offline
+Cargo configuration are fixed rather than supplied by the caller. Verify and
+verified-build also fix their selected package/example, JSON output, and
+`--no-cheating`; ordinary-build is the fixed Cargo witness build without those
+Verus flags.
+
+Input overlap, destination overlap, symlink components, retained `..`, invalid
+UTF-8/NUL, forbidden held-out/artifact names, filesystem-root and `/usr` aliases,
+missing/non-directory inputs, and existing or unsafe destinations refuse before
+creation. `Path` has already normalized `.` and repeated separators before this
+API can observe them; the seam validates the normalized value and any retained
+`..`. Construction I/O failures retain partial output for diagnosis. The result
+is `sandbox-prepared` with `qualification: false`: it does not execute, hash or
+authorize inputs, establish actual tool selection, or qualify a proof. Eight
+public controls bring the current proof-support suite to 129; see
+`sandbox-development-2026-09-14.md`. Independent comparison matched all three
+complete argv values; this did not execute them. A real execution control remains
+pending.
+
 `run_command(argv, cwd, environment, output)` in `command.py` now supplies the
 Linux execution seam. It requires an absolute executable, an allow-listed child
 environment, an existing source directory and a new external evidence directory.
