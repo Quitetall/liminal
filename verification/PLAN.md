@@ -21,9 +21,12 @@ Do not interpret its successful exit as the complete future check contract below
 The committed bootstrap fixtures demonstrate pinned-tool feasibility: a true
 arithmetic contract, its false implementation, ordinary and verified builds,
 cold replay, and positive/negative Boolean-model controls. They are not production
-code and do not discharge any of the sixteen obligations. The real ILRP slice,
-production same-body binding, adapters and formal evidence aggregation remain
-unimplemented. See `bootstrap/README.md` for reproducible tool-control commands.
+code and do not discharge any of the sixteen obligations. The checked runtime
+ILRP/StoreOwner slice landed at `51361e19`; its development and verification
+records are linked below. The leaf proof core, production same-body binding,
+adapters and formal evidence aggregation remain unimplemented. See
+`bootstrap/README.md` for reproducible tool-control commands and
+`checked-repair-verification-2026-09-14.md` for the runtime evidence boundary.
 
 `authority-amendment-proposal.md` records the concrete StoreOwner/read-view
 split approved by the user on 2026-09-13 as AM-17.12, recorded in M17 and the

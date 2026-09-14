@@ -68,15 +68,15 @@ pub struct AuxWrite {
     pub value: Option<serde_json::Value>,
 }
 
-/// One accepted historical write to an auxiliary key. Read-only provenance;
+/// One accepted historical write to an auxiliary key (v4 §92). Read-only provenance;
 /// possessing this DTO grants no write authority.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CommittedAuxRecord {
-    /// Graph revision containing the write.
+    /// Graph revision containing the write (v4 §92).
     pub revision: GraphRevisionId,
-    /// Accepted transaction recorded at that revision.
+    /// Accepted transaction recorded at that revision (v4 §92).
     pub transaction: Transaction,
-    /// Written value, or `None` for a deletion.
+    /// Written value, or `None` for a deletion (v4 §92).
     pub value: Option<serde_json::Value>,
 }
 
@@ -334,7 +334,7 @@ impl GraphStore {
         Ok(self.lock()?.state.head)
     }
 
-    /// Transaction that produced the current head, or `None` at genesis.
+    /// Transaction that produced the current head, or `None` at genesis (v4 §92).
     pub fn head_transaction(&self) -> Result<Option<Transaction>, StoreError> {
         let inner = self.lock()?;
         let head = inner.state.head;
@@ -347,7 +347,7 @@ impl GraphStore {
     }
 
     /// Validate graph operations against a clone of current state without
-    /// mutating memory, appending a record, or advancing the head.
+    /// mutating memory, appending a record, or advancing the head (v4 §7.8).
     pub fn preview_ops(&self, ops: &[Operation]) -> Result<StateView, StoreError> {
         let mut state = self.lock()?.state.clone();
         for op in ops {
@@ -357,7 +357,7 @@ impl GraphStore {
     }
 
     /// Replay retained checksummed history and return every accepted write to
-    /// `namespace[key]`, including overwrites and deletions, in append order.
+    /// `namespace[key]`, including overwrites and deletions, in append order (v4 §92).
     pub fn committed_aux_history(
         &self,
         namespace: &str,
@@ -706,7 +706,7 @@ impl GraphTxn<'_> {
             .commit_txn(self.ops, self.aux, meta, self.expected_head)
     }
 
-    /// Require the store to remain at `head` until this transaction commits.
+    /// Require the store to remain at `head` until this transaction commits (v4 §7.8).
     /// The comparison occurs under the same mutex as validation and append.
     #[must_use]
     pub fn expect_head(mut self, head: GraphRevisionId) -> Self {

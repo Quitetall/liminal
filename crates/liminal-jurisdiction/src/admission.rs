@@ -12,7 +12,7 @@ use crate::{
     SafetyEvidence, StatePredicate,
 };
 
-/// Validated selected inputs bound to a live coordinating store and revision.
+/// Validated selected inputs bound to a live coordinating store and revision (v4 §7.5).
 /// The legacy DTO `transaction` label is retained, not used as proof of history.
 /// Actual admission revision is recorded independently here.
 #[derive(Debug)]
@@ -23,19 +23,19 @@ pub struct ValidatedBasis<'s> {
 }
 
 impl ValidatedBasis<'_> {
-    /// The checked input vector, not a claim about resulting state.
+    /// The checked input vector, not a claim about resulting state (v4 §7.5).
     #[must_use]
     pub fn basis(&self) -> &WorkspaceBasis {
         &self.basis
     }
-    /// Actual store revision observed during admission.
+    /// Actual store revision observed during admission (v4 §7.5).
     #[must_use]
     pub fn revision(&self) -> GraphRevisionId {
         self.revision
     }
 }
 
-/// Non-serializable authority for one immutable repair in one store.
+/// Non-serializable authority for one immutable repair in one store (v4 Law 3F; v4 §7.7).
 ///
 /// ```compile_fail
 /// use liminal_jurisdiction::AuthorizedRepair;
@@ -51,17 +51,17 @@ pub struct AuthorizedRepair<'s> {
 }
 
 impl AuthorizedRepair<'_> {
-    /// Read the admitted proposal; cloning this DTO does not clone authority.
+    /// Read the admitted proposal; cloning this DTO does not clone authority (v4 §7.7).
     #[must_use]
     pub fn plan(&self) -> &RepairPlan {
         &self.plan
     }
-    /// Evidence produced by the checker or explicit local human acceptance.
+    /// Evidence produced by the checker or explicit local human acceptance (v4 §7.9; R4 §6).
     #[must_use]
     pub fn evidence(&self) -> &SafetyEvidence {
         &self.evidence
     }
-    /// The captured and runtime-validated input vector.
+    /// The captured and runtime-validated input vector (v4 §7.5).
     #[must_use]
     pub fn basis(&self) -> &ValidatedBasis<'_> {
         &self.basis
@@ -84,16 +84,16 @@ impl AuthorizedRepair<'_> {
     }
 }
 
-/// Refused admission preserves the proposal; it does not authorize any effect.
+/// Refused admission preserves the proposal; it authorizes no effect (v4 Law 3F; v4 §7.7).
 #[derive(Debug, thiserror::Error)]
 pub enum AdmissionError {
-    /// The existing checker could not establish automatic acceptance.
+    /// The existing checker could not establish automatic acceptance (v4 Law 3G; v4 §7.9).
     #[error("repair requires review: {0:?}")]
     Review(Vec<ReviewReason>),
-    /// Reading the store failed.
+    /// Reading the coordinating store failed (v4 §7.8).
     #[error(transparent)]
     Store(#[from] liminal_graph::StoreError),
-    /// A governing profile or checker operation failed.
+    /// A governing profile or checker operation failed (v4 §7.3).
     #[error(transparent)]
     Checker(#[from] CheckerError),
 }
@@ -103,7 +103,7 @@ fn refusal(reason: impl Into<String>) -> AdmissionError {
 }
 
 impl<'s> Checker<'s> {
-    /// Evaluate through the existing conjunction, then seal exactly that plan.
+    /// Evaluate through the existing conjunction, then seal exactly that plan (v4 §7.9; v4 §125).
     pub fn authorize_repair(
         &self,
         plan: RepairPlan,
@@ -123,7 +123,7 @@ impl<'s> Checker<'s> {
         })
     }
 
-    /// Explicit local approval is a separate route, requiring caller identity.
+    /// Explicit local approval is a separate route, requiring caller identity (R4 §6).
     /// It may resolve automatic review requirements, but cannot override invalid
     /// input bindings, subject/operation mismatch, or an unexecutable DAG.
     /// Actor identity is a caller claim, not authentication proof.

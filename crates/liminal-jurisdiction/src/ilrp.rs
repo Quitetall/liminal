@@ -33,20 +33,20 @@ use crate::repair::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum IntentState {
-    /// Durable intent recorded; nothing external touched yet.
+    /// Durable intent recorded; nothing external touched yet (R4 §7.1).
     Prepared,
-    /// External steps executing in topological order.
+    /// External steps executing in topological order (R4 §7.2).
     Applying,
-    /// Every external step applied and acknowledged.
+    /// Every external step applied and acknowledged (R4 §7.3).
     ExternalApplied,
-    /// Graph finalization in progress.
+    /// Graph finalization in progress (R4 §7.4).
     Finalizing,
-    /// Terminal: graph mutations and intent completion committed together.
+    /// Terminal: graph mutations and intent completion committed together (R4 §7.4).
     Committed,
     /// Terminal-until-human: the world matched neither prestate nor poststate;
-    /// work preserved as contested Overlays. Never guessed past.
+    /// work preserved as contested Overlays. Never guessed past (R4 §7.5).
     NeedsReview,
-    /// Terminal: abandoned before external effects, or explicitly discarded.
+    /// Terminal: abandoned before external effects, or explicitly discarded (R4 §7.5).
     Aborted,
 }
 
@@ -249,7 +249,7 @@ pub struct IlrpDriver<'s, X, C> {
     crash: C,
 }
 
-/// Evidence of an accepted graph finalization, reconstructed from the log.
+/// Accepted graph-finalization evidence reconstructed from the log (R4 §7.4).
 #[derive(Debug)]
 pub struct CommittedRepair<'s> {
     store: &'s GraphStore,
@@ -263,36 +263,36 @@ pub struct CommittedRepair<'s> {
 }
 
 impl CommittedRepair<'_> {
-    /// Whether this receipt belongs to this exact live store instance.
+    /// Whether this receipt belongs to this exact live store instance (v4 §7.8).
     pub fn belongs_to(&self, store: &GraphStore) -> bool {
         std::ptr::eq(self.store, store)
     }
-    /// The immutable plan verified across the accepted intent history.
+    /// The immutable plan verified across the accepted intent history (R4 §7.5).
     pub fn plan(&self) -> &RepairPlan {
         &self.plan
     }
-    /// Admission evidence from that same history, not replacement caller data.
+    /// Admission evidence from that same history, not replacement caller data (R4 §6).
     pub fn evidence(&self) -> &SafetyEvidence {
         &self.evidence
     }
-    /// Finalized graph revision plus acknowledged external observations. This
+    /// Finalized graph revision plus acknowledged external observations (R4 §7.3; R4 §7.4). This
     /// is a historical vector, not a claim that external files cannot change.
     pub fn resulting_basis(&self) -> &liminal_revision::WorkspaceBasis {
         &self.resulting_basis
     }
-    /// External steps in topological order, then graph steps at finalization.
+    /// External steps in topological order, then graph steps at finalization (R4 §7.2; R4 §7.4).
     pub fn applied_steps(&self) -> &[RepairStepId] {
         &self.applied_steps
     }
-    /// Repair whose graph effects committed atomically with its terminal state.
+    /// Repair whose graph effects committed atomically with its terminal state (R4 §7.4).
     pub fn repair(&self) -> RepairId {
         self.repair
     }
-    /// Accepted revision of that transaction.
+    /// Accepted revision of that transaction (R4 §7.4).
     pub fn revision(&self) -> liminal_id::GraphRevisionId {
         self.revision
     }
-    /// Identity from the accepted transaction, not a caller-supplied label.
+    /// Identity from the accepted transaction, not a caller-supplied label (v4 §92).
     pub fn transaction(&self) -> liminal_id::TransactionId {
         self.transaction
     }
@@ -343,7 +343,7 @@ fn applied_order(plan: &RepairPlan) -> Result<Vec<RepairStepId>, crate::repair::
     Ok(external)
 }
 
-/// Runtime outcome; terminal state alone does not manufacture a receipt.
+/// Runtime outcome; terminal state alone does not manufacture a receipt (R4 §7.4; R4 §7.5).
 #[derive(Debug)]
 pub struct RepairOutcome<'s> {
     state: IntentState,
@@ -427,11 +427,11 @@ impl FinalizationPermit {
 }
 
 impl<'s> RepairOutcome<'s> {
-    /// Observed lifecycle state.
+    /// Observed ILRP lifecycle state (v4 §7.8).
     pub fn state(&self) -> IntentState {
         self.state
     }
-    /// Present only for a verified durable graph finalization.
+    /// Present only for verified durable graph finalization (R4 §7.4).
     pub fn committed(&self) -> Option<&CommittedRepair<'s>> {
         self.committed.as_ref()
     }
@@ -441,7 +441,7 @@ impl<'s> RepairOutcome<'s> {
 const AUX_NS_INTENT: &str = ILRP_INTENT;
 
 impl<'s, X: ExternalExecutor, C: CrashInjector> IlrpDriver<'s, X, C> {
-    /// Assemble the coordinator from trusted store ownership.
+    /// Assemble the coordinator from trusted store ownership (v4 §7.8).
     pub fn new(coordinator: CoordinatorWriter<'s>, executor: X, crash: C) -> Self {
         Self {
             store: coordinator.store(),
@@ -451,12 +451,12 @@ impl<'s, X: ExternalExecutor, C: CrashInjector> IlrpDriver<'s, X, C> {
         }
     }
 
-    /// Read access does not convey transaction authority.
+    /// Read access does not convey transaction authority (v4 Law 3; v4 §7.3).
     pub fn store(&self) -> &'s GraphStore {
         self.store
     }
 
-    /// Execute and return durable completion evidence for downstream bookkeeping.
+    /// Execute and return durable completion evidence for downstream bookkeeping (v4 §7.8).
     pub fn run_checked(&self, repair: RepairId) -> Result<RepairOutcome<'s>, IlrpError> {
         let state = self.run(repair)?;
         let committed = self.verify_history(repair)?;
@@ -653,7 +653,7 @@ impl<'s, X: ExternalExecutor, C: CrashInjector> IlrpDriver<'s, X, C> {
         Ok(id)
     }
 
-    /// **Apply → Acknowledge → Finalize** (v4 §7.8 steps 2–4).
+    /// Status-only compatibility Apply → Acknowledge → Finalize; bookkeeping requires `run_checked` (v4 §7.8).
     pub fn run(&self, repair: RepairId) -> Result<IntentState, IlrpError> {
         self.verify_history(repair)?;
         let key = repair.to_string();
@@ -675,7 +675,7 @@ impl<'s, X: ExternalExecutor, C: CrashInjector> IlrpDriver<'s, X, C> {
         self.advance(repair, &mut intent, Origin::Human)
     }
 
-    /// **Recover** (v4 §7.8 step 5): scan nonterminal intents on restart.
+    /// Status-only restart scan of nonterminal intents; receipts use `run_checked` (v4 §7.8 step 5).
     pub fn recover_all(&self) -> Result<Vec<(RepairId, IntentState)>, IlrpError> {
         let all = self.store.scan_aux(AUX_NS_INTENT)?;
         let mut results = Vec::new();
