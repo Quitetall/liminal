@@ -10381,22 +10381,22 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            291,
+            292,
             "self.commit_intent(id, intent, &format!(\"ack:{step_id}\"), origin)?;",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            290,
+            291,
             "self.crash.crash_if_armed(CrashPoint::BeforeAcknowledge);",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            310,
+            311,
             "let graph_steps: std::collections::BTreeSet<RepairStepId> = plan",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            318,
+            319,
             "if graph_steps.contains(&dep.before) && after_is_external {",
         ),
         (

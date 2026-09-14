@@ -181,6 +181,55 @@ not a retry or a reduced qualification matrix.
 
 ## Testing speed policy
 
+## Slice D: ILRP acknowledgement and persisted-record structure
+
+DG17.3 approval is recorded in amendment commit `1fb7b34a`; its mandatory
+external review returned PASS. The frozen probe itself is still unchanged.
+
+Before insertion/persistence, acknowledgements now require the exact planned
+step key, mutation identity, expected poststate and acknowledged predecessors.
+Both run and recovery validate persisted repair identity, step-key identity,
+DAG structure, every acknowledgement, empty acknowledgements in Prepared, and
+complete acknowledgements in ExternalApplied/Finalizing/Committed. Invalid
+records remain untouched and refuse; terminal labels do not skip this check.
+This is structural validation only, not proof of durable history, subject
+authority or a committed receipt. Those interfaces remain pending.
+
+Two added tests provide red/green controls for malformed acknowledgements and
+missing acknowledgements at finalization/terminal states. The first red stops
+at the wrong-ID case; wrong-poststate is additionally covered by the green
+matrix, not claimed independently red in that log. Five pre-existing tests
+retain all assertions; their positive fixtures now provide real planned IDs
+and poststates, and complete acknowledgements when claiming completed effects.
+Seven ILRP tests pass. All 29 milestone tests pass (24 skipped), and targeted
+Clippy passes. All evidence is under the reviews directory above.
+
+MiMo's mechanical fixture inventory missed `ilrp_recover_twice_is_noop` and
+incorrectly mentioned a Committed case in the nonterminal fixture matrix.
+Inspection of the actual fixtures corrected both; no review suggestion to
+leave terminal acknowledgements unchecked was adopted.
+
+Pre-commit code review returned PASS WITH NITS. Verified dispositions: map
+lookup does not imply equality of a public payload's `id` field, so retain that
+check. Recovery refusal of malformed historical data is the approved
+revalidate-else-preserve policy, not grounds to skip validation, strip invalid
+acks, or wipe the store. Each persisted predecessor ack is validated before
+advance; individual new acks validate before insertion. Error reclassification
+as corruption is deliberate for persisted DTOs. Toy-scale complexity and
+test-name/style nits are deferred, not correctness fixes.
+
+Four frozen mutant coordinates moved by one line, with independent pre-change
+review and source hashes in
+`docs/execution/reference-maintenance/2026-09-13-ilrp-validation.md`.
+Inventory passes. No expected result, threshold, frozen probe or historical
+evidence was changed. Full CI remains to run against the fixed candidate.
+
+Observed build-cache interference: the packet-digest build lost a native BLAKE3
+archive and returned 101; target/debug disappeared during inspection. The
+cleanup actor is unknown. An isolated external Cargo target directory passed
+the identical build; no code fix or cache deletion was needed. Largest observed
+job was the milestone test build/run at 2.1 GiB, with zero cgroup swap use.
+
 Reuse normal Cargo development artifacts and run affected-package controls during
 implementation. Final qualification retains its prescribed clean source, fresh
 caches, fixed matrices, seeds, budgets, zero retries and serialized crash tests.

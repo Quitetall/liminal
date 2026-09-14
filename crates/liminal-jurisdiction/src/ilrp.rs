@@ -286,6 +286,7 @@ impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
         ack: StepAck,
         origin: Origin,
     ) -> Result<(), IlrpError> {
+        validate_ack(intent, step_id, &ack)?;
         intent.acks.insert(step_id, ack);
         self.crash.crash_if_armed(CrashPoint::BeforeAcknowledge);
         self.commit_intent(id, intent, &format!("ack:{step_id}"), origin)?;
@@ -363,6 +364,7 @@ impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
             )))?;
         let mut intent: RepairIntent = serde_json::from_value(value)
             .map_err(|e| IlrpError::Store(liminal_graph::StoreError::Corrupt(e.to_string())))?;
+        validate_intent(repair, &intent)?;
 
         // Terminal → idempotent re-run.
         if intent.state.is_terminal() {
@@ -383,6 +385,7 @@ impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
             })?;
             let mut intent: RepairIntent = serde_json::from_value(value)
                 .map_err(|e| IlrpError::Store(liminal_graph::StoreError::Corrupt(e.to_string())))?;
+            validate_intent(id, &intent)?;
 
             if intent.state.is_terminal() {
                 continue;
@@ -562,6 +565,65 @@ pub enum IlrpError {
     /// Serialization/deserialization of an intent record failed.
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
+}
+
+// Structural admission of untrusted persisted DTOs. This does not establish
+// provenance or subject-local authority; those require the owner/admission slice.
+fn validate_intent(id: RepairId, intent: &RepairIntent) -> Result<(), IlrpError> {
+    let corrupt =
+        |message: &str| IlrpError::Store(liminal_graph::StoreError::Corrupt(message.to_owned()));
+    if intent.plan.id != id {
+        return Err(corrupt("intent key and repair identity disagree"));
+    }
+    crate::repair::topo_order(&intent.plan)?;
+    if intent.plan.steps.iter().any(|(key, step)| *key != step.id) {
+        return Err(corrupt("plan key and step identity disagree"));
+    }
+    for (step, ack) in &intent.acks {
+        validate_ack(intent, *step, ack).map_err(|error| corrupt(&error.to_string()))?;
+    }
+    if intent.state == IntentState::Prepared && !intent.acks.is_empty() {
+        return Err(corrupt("prepared intent already contains acknowledgements"));
+    }
+    if matches!(
+        intent.state,
+        IntentState::ExternalApplied | IntentState::Finalizing | IntentState::Committed
+    ) && intent.acks.len() != intent.plan.steps.len()
+    {
+        return Err(corrupt("completed effects lack required acknowledgements"));
+    }
+    Ok(())
+}
+
+// Validate the executor's claim before it enters either memory or durable state.
+// Equality checks bind the acknowledgement to the specific planned step, not
+// merely to a terminal label or to a successful external call.
+fn validate_ack(
+    intent: &RepairIntent,
+    step_id: RepairStepId,
+    ack: &StepAck,
+) -> Result<(), IlrpError> {
+    let step = intent.plan.steps.get(&step_id).ok_or_else(|| {
+        IlrpError::Executor(format!("acknowledgement names unknown step {step_id}"))
+    })?;
+    if step.id != step_id || ack.step != step_id {
+        return Err(IlrpError::Executor(
+            "acknowledgement step identity mismatch".into(),
+        ));
+    }
+    if ack.observed_poststate != step.expected_poststate {
+        return Err(IlrpError::Executor(
+            "acknowledgement poststate mismatch".into(),
+        ));
+    }
+    for dependency in &intent.plan.dependencies {
+        if dependency.after == step_id && !intent.acks.contains_key(&dependency.before) {
+            return Err(IlrpError::Executor(
+                "acknowledgement precedes dependency".into(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

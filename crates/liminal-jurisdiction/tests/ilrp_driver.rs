@@ -132,6 +132,102 @@ fn hand_craft_intent(store: &GraphStore, intent: &RepairIntent) {
 }
 
 #[test]
+fn ilrp_rejects_mismatched_ack_before_persistence() {
+    for wrong_identity in [true, false] {
+        let dir = fresh_dir("mismatched-ack");
+        let store = GraphStore::open(&dir).unwrap();
+        let plan = single_step_plan("note.md", b"hello");
+        let step = plan.steps.values().next().unwrap();
+        let executor = MockExecutor::new();
+        executor.push_verify(PrestateMatch::Prestate);
+        executor.push_apply(Ok(StepAck {
+            step: if wrong_identity {
+                RepairStepId::new()
+            } else {
+                step.id
+            },
+            observed_poststate: if wrong_identity {
+                step.expected_poststate.clone()
+            } else {
+                StatePredicate::Any
+            },
+            at: Timestamp::now(),
+        }));
+        let driver = IlrpDriver {
+            store: &store,
+            executor: &executor,
+            crash: NoCrash,
+        };
+        let id = driver
+            .prepare(
+                plan,
+                SafetyEvidence::StructurallyDisjoint {
+                    description: "ack validation control".into(),
+                },
+            )
+            .unwrap();
+        assert!(
+            driver.run(id).is_err(),
+            "invalid acknowledgement must refuse"
+        );
+        let value = store
+            .get_aux(ILRP_INTENT, &id.to_string())
+            .unwrap()
+            .unwrap();
+        let intent: RepairIntent = serde_json::from_value(value).unwrap();
+        assert_eq!(intent.state, IntentState::Applying);
+        assert!(
+            intent.acks.is_empty(),
+            "invalid acknowledgement must not persist"
+        );
+    }
+}
+
+#[test]
+fn ilrp_missing_acks_cannot_authorize_finalization_or_terminal_success() {
+    for state in [
+        IntentState::ExternalApplied,
+        IntentState::Finalizing,
+        IntentState::Committed,
+    ] {
+        let dir = fresh_dir("missing-acks");
+        let store = GraphStore::open(&dir).unwrap();
+        let intent = RepairIntent {
+            plan: single_step_plan("note.md", b"hello"),
+            state,
+            evidence: SafetyEvidence::StructurallyDisjoint {
+                description: "fault input".into(),
+            },
+            acks: BTreeMap::new(),
+        };
+        let id = intent.plan.id;
+        hand_craft_intent(&store, &intent);
+        let head = store.head().unwrap();
+        let executor = MockExecutor::new();
+        let driver = IlrpDriver {
+            store: &store,
+            executor: &executor,
+            crash: NoCrash,
+        };
+        assert!(
+            driver.run(id).is_err(),
+            "state label cannot replace acknowledgements"
+        );
+        assert!(
+            driver.recover_all().is_err(),
+            "recovery must validate terminal rows too"
+        );
+        assert_eq!(
+            store.head().unwrap(),
+            head,
+            "invalid record must remain preserved"
+        );
+        assert!(executor.verify_calls.lock().unwrap().is_empty());
+        assert!(executor.apply_calls.lock().unwrap().is_empty());
+    }
+}
+
+#[test]
 fn ilrp_prepare_persists_prepared_intent() {
     let dir = fresh_dir("prepare");
     let store = GraphStore::open(&dir).unwrap();
@@ -168,12 +264,14 @@ fn ilrp_run_happy_path_reaches_committed() {
     let dir = fresh_dir("happy");
     let store = GraphStore::open(&dir).unwrap();
     let executor = MockExecutor::new();
+    let plan = single_step_plan("note.md", b"hello");
+    let step = plan.steps.values().next().unwrap();
 
     // Verify returns Prestate → apply is called.
     executor.push_verify(PrestateMatch::Prestate);
     executor.push_apply(Ok(StepAck {
-        step: RepairStepId::new(), // will be overwritten
-        observed_poststate: StatePredicate::Any,
+        step: step.id,
+        observed_poststate: step.expected_poststate.clone(),
         at: Timestamp::now(),
     }));
 
@@ -183,7 +281,6 @@ fn ilrp_run_happy_path_reaches_committed() {
         crash: NoCrash,
     };
 
-    let plan = single_step_plan("note.md", b"hello");
     let evidence = SafetyEvidence::StructurallyDisjoint {
         description: "test".into(),
     };
@@ -256,28 +353,40 @@ fn ilrp_recover_all_terminalizes_each_nonterminal_state() {
         (IntentState::Finalizing, IntentState::Committed),
     ];
 
+    let mut expected_acks = BTreeMap::new();
     for (initial, _) in &states_and_expected {
         let plan = single_step_plan("note.md", b"data");
+        let step = plan.steps.values().next().unwrap();
+        let ack = StepAck {
+            step: step.id,
+            observed_poststate: step.expected_poststate.clone(),
+            at: Timestamp::now(),
+        };
+        let acks = if matches!(
+            initial,
+            IntentState::ExternalApplied | IntentState::Finalizing
+        ) {
+            BTreeMap::from([(step.id, ack)])
+        } else {
+            expected_acks.insert(plan.id, ack);
+            BTreeMap::new()
+        };
         let intent = RepairIntent {
             plan,
             state: *initial,
             evidence: SafetyEvidence::StructurallyDisjoint {
                 description: "test".into(),
             },
-            acks: BTreeMap::new(),
+            acks,
         };
         hand_craft_intent(&store, &intent);
     }
 
-    // For Prepared states, the executor will be called; set up verify → Prestate.
+    // Queue exact planned acknowledgements in the same repair-key order as scan_aux.
     let executor = MockExecutor::new();
-    for _ in 0..states_and_expected.len() {
+    for ack in expected_acks.into_values() {
         executor.push_verify(PrestateMatch::Prestate);
-        executor.push_apply(Ok(StepAck {
-            step: RepairStepId::new(),
-            observed_poststate: StatePredicate::Any,
-            at: Timestamp::now(),
-        }));
+        executor.push_apply(Ok(ack));
     }
 
     let driver = IlrpDriver {
@@ -302,12 +411,14 @@ fn ilrp_recover_twice_is_noop() {
     let dir = fresh_dir("recover-twice");
     let store = GraphStore::open(&dir).unwrap();
     let executor = MockExecutor::new();
+    let plan = single_step_plan("note.md", b"hello");
+    let step = plan.steps.values().next().unwrap();
 
     // Prepare + run one intent to committed.
     executor.push_verify(PrestateMatch::Prestate);
     executor.push_apply(Ok(StepAck {
-        step: RepairStepId::new(),
-        observed_poststate: StatePredicate::Any,
+        step: step.id,
+        observed_poststate: step.expected_poststate.clone(),
         at: Timestamp::now(),
     }));
 
@@ -317,7 +428,6 @@ fn ilrp_recover_twice_is_noop() {
         crash: NoCrash,
     };
 
-    let plan = single_step_plan("note.md", b"hello");
     let evidence = SafetyEvidence::StructurallyDisjoint {
         description: "test".into(),
     };

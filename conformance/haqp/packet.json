@@ -1663,7 +1663,7 @@
    "id": "P1-M048",
    "family": "repair/ILRP/recovery",
    "operator": "skipped-durable-transition",
-   "source": "crates/liminal-jurisdiction/src/ilrp.rs:291",
+   "source": "crates/liminal-jurisdiction/src/ilrp.rs:292",
    "requirement": "P1-R015",
    "defect": "skip ack persistence",
    "killing_tests": [
@@ -1676,7 +1676,7 @@
    "id": "P1-M049",
    "family": "repair/ILRP/recovery",
    "operator": "disabled-crash-point",
-   "source": "crates/liminal-jurisdiction/src/ilrp.rs:290",
+   "source": "crates/liminal-jurisdiction/src/ilrp.rs:291",
    "requirement": "P1-R015",
    "defect": "disable before_ack point",
    "killing_tests": [
@@ -1689,7 +1689,7 @@
    "id": "P1-M050",
    "family": "repair/ILRP/recovery",
    "operator": "ordering-nondeterminism",
-   "source": "crates/liminal-jurisdiction/src/ilrp.rs:310",
+   "source": "crates/liminal-jurisdiction/src/ilrp.rs:311",
    "requirement": "P1-R015",
    "defect": "recover steps unordered",
    "killing_tests": [
@@ -1702,7 +1702,7 @@
    "id": "P1-M051",
    "family": "repair/ILRP/recovery",
    "operator": "oracle-short-circuit",
-   "source": "crates/liminal-jurisdiction/src/ilrp.rs:318",
+   "source": "crates/liminal-jurisdiction/src/ilrp.rs:319",
    "requirement": "P1-R015",
    "defect": "compare recovery digest to itself",
    "killing_tests": [
