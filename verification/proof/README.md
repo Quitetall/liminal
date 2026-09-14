@@ -96,8 +96,15 @@ compiler selection. Fifteen controls bring proof-support tests to 106.
 Real construction completed under the separate bounded profile; independent
 archive/output comparison matched all 8,181 rows including the root, and a
 namespace-only corrupted-file control was rejected without changing the original.
-This is construction evidence, not actual compiler selection or qualification. See
-`toolchain-development-2026-09-14.md` for preserved failures and exact evidence.
+This construction evidence is not by itself compiler selection or qualification.
+A later bounded sandbox probe observed the constructed compiler and pinned
+verifier selection, and a two-sided scratch-source control observed strict
+argument forwarding in that reconstructed environment. See
+`selection-development-2026-09-14.md`. A bounded same-source ordinary/verified
+witness pair also observed stable per-build binaries and byte-identical runtime
+output. This is development witness binding, not a qualified executable. Cold
+independent construction cycles and aggregate qualification remain unfinished. See
+`toolchain-development-2026-09-14.md` for the constructor evidence.
 
 Run all public-interface controls with:
 

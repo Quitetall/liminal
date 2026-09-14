@@ -40,8 +40,13 @@ the constructor and checker share bounded manifest validators. Requested commit
 and historical inventory origin remain distinct. The Rust payload constructor now
 reconstructs all six selected pinned Linux archives, preserving empty directories
 and refusing conflicting overlaps. Independent output comparison and a corrupted
-namespace-view control establish this development construction boundary, not
-compiler selection or qualification. Its 106 support controls and development statuses retain
+namespace-view control establish this development construction boundary. A later
+bounded sandbox probe observed constructed-compiler selection and a two-sided
+scratch-source control observed strict forwarding in that reconstructed
+environment. A bounded same-source ordinary/verified witness pair also observed
+stable per-build binaries and identical runtime output. This remains development
+witness binding, not verifier-source correctness, a qualified executable, cold
+independent construction or qualification. Its 106 support controls and development statuses retain
 `qualification: false`, never proof or qualification. The caller must bind
 source/tool/profile and lock/archive authority, and independent
 comparison—not the producer's returned map—checks constructed output. Real probes
@@ -50,8 +55,10 @@ verified build feasibility. The selected-eight build-script counterexample is no
 closed at the input stage by the 166-entry source inventory; runner/profile/commit
 authority, controlled replay and formal receipt aggregation remain unfinished.
 This is not yet integrated with the formal
-commands. See `proof/development-2026-09-14.md` for exact limits, failures,
-environment boundaries, evidence hashes and remaining execution work.
+commands. See `proof/development-2026-09-14.md` and
+`proof/selection-development-2026-09-14.md` for exact limits, failures,
+environment boundaries, evidence hashes and remaining execution work. All
+sixteen obligations remain pending.
 
 The fast proof-input recipe is now part of local CI. Full `just ci` at
 `f31d727c` passed: 620 Rust tests, 47 skipped, 85 Python controls and all 33
