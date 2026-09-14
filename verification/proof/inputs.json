@@ -1,0 +1,21 @@
+{
+  "schema": "liminal-proof-inputs-v1",
+  "fragment": "ack-identity-dependency-v1",
+  "discharges_obligation": false,
+  "source_sha256": {
+    "Cargo.toml": "68257e6559919b4ade4145baabb122cc282d54704658fb55bb60585ae5705c42",
+    "Cargo.lock": "9edc0e116c0ede220f013bbd653a66a3105ae7652f5fe321190e935e5b02d0ec",
+    "rust-toolchain.toml": "3fa5312726831c209741bbea6bd0d51c20cb40ad9eb733a331f9a8a86fc840b5",
+    "crates/liminal-safety/Cargo.toml": "3bd35d545d6d892f16afcd6993659a4d2ca4cfd818a7cc844b4b3e717e1819f0",
+    "crates/liminal-safety/src/lib.rs": "a96cf145ef072b23916d7bc92f6c90cde82102a8d0451c2b361f591f3795c5ba",
+    "crates/liminal-safety/examples/acknowledgement_witness.rs": "ef1ce141ec4b5f0ee14f0258203f85c9d6f369485b96e3176613a66d15762a02",
+    "crates/liminal-jurisdiction/Cargo.toml": "ace3e31c7c082daa39033083f4cde37573b75173cfa10f070da7d57dc9615bef",
+    "crates/liminal-jurisdiction/src/ilrp.rs": "287105c022110e555005f0b90db49c5961e8100985c2bc70c409abc03ff4c567"
+  },
+  "tool_sha256": {
+    "verus": "0b7a8b2c97a4c281820a1a856c1dd53ed417f2071871ae79205d1db73a3e677b",
+    "cargo-verus": "3ae8d9777c9168773b0feae36f2041206ad1a52af7edf448e93327ae37c3998c",
+    "rust_verify": "2da3596d6498daf7be457fb686ed48f91750118c7d95753c210b9e9172b90ca9",
+    "z3": "e583c4186a45e72411fa2cb2048401eed03f0f8e5f24694676a8f6271a50b765"
+  }
+}

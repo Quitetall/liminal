@@ -1,0 +1,229 @@
+import json
+import importlib.util
+from pathlib import Path
+import tempfile
+import unittest
+
+MODULE_PATH = Path(__file__).with_name("run.py")
+SPEC = importlib.util.spec_from_file_location("proof_runner", MODULE_PATH)
+RUNNER = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(RUNNER)
+InputFailure = RUNNER.InputFailure
+check_inputs = RUNNER.check_inputs
+
+
+ABC_SHA256 = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+SOURCE_PATHS = (
+    "Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain.toml",
+    "crates/liminal-safety/Cargo.toml",
+    "crates/liminal-safety/src/lib.rs",
+    "crates/liminal-safety/examples/acknowledgement_witness.rs",
+    "crates/liminal-jurisdiction/Cargo.toml",
+    "crates/liminal-jurisdiction/src/ilrp.rs",
+)
+TOOL_PATHS = ("verus", "cargo-verus", "rust_verify", "z3")
+
+
+class ProofInputTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.repository = self.root / "repository"
+        self.verus_root = self.root / "verus-root"
+        for base, paths in ((self.repository, SOURCE_PATHS), (self.verus_root, TOOL_PATHS)):
+            for relative in paths:
+                path = base / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"abc")
+        manifest = {
+            "schema": "liminal-proof-inputs-v1",
+            "fragment": "ack-identity-dependency-v1",
+            "discharges_obligation": False,
+            "source_sha256": {path: ABC_SHA256 for path in SOURCE_PATHS},
+            "tool_sha256": {path: ABC_SHA256 for path in TOOL_PATHS},
+        }
+        manifest_path = self.repository / "verification/proof/inputs.json"
+        manifest_path.parent.mkdir(parents=True)
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def test_changed_source_is_rejected(self):
+        (self.repository / "Cargo.toml").write_bytes(b"changed")
+
+        with self.assertRaisesRegex(InputFailure, "Cargo.toml"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_valid_pinned_inputs_return_actual_hashes_without_qualification(self):
+        self.assertEqual(
+            check_inputs(self.repository, self.verus_root),
+            {
+                "status": "inputs-valid",
+                "qualification": False,
+                "source_sha256": {path: ABC_SHA256 for path in SOURCE_PATHS},
+                "tool_sha256": {path: ABC_SHA256 for path in TOOL_PATHS},
+            },
+        )
+
+    def test_changed_tool_is_rejected(self):
+        (self.verus_root / "z3").write_bytes(b"changed")
+
+        with self.assertRaisesRegex(InputFailure, "z3"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_missing_source_key_is_rejected(self):
+        manifest_path = self.repository / "verification/proof/inputs.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        del manifest["source_sha256"]["Cargo.toml"]
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        with self.assertRaisesRegex(InputFailure, "source_sha256"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_extra_source_key_is_rejected(self):
+        manifest_path = self.repository / "verification/proof/inputs.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["source_sha256"]["unapproved.rs"] = ABC_SHA256
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        with self.assertRaisesRegex(InputFailure, "source_sha256"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_symlink_source_is_rejected(self):
+        source = self.repository / "Cargo.toml"
+        source.unlink()
+        source.symlink_to(self.repository / "Cargo.lock")
+
+        with self.assertRaisesRegex(InputFailure, "Cargo.toml"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_duplicate_json_field_is_rejected(self):
+        manifest_path = self.repository / "verification/proof/inputs.json"
+        text = manifest_path.read_text(encoding="utf-8")
+        manifest_path.write_text(
+            text.replace(
+                '"schema": "liminal-proof-inputs-v1",',
+                '"schema": "liminal-proof-inputs-v1", "schema": "liminal-proof-inputs-v1",',
+                1,
+            ),
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(InputFailure, "duplicate"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_integer_zero_is_not_accepted_as_false(self):
+        manifest_path = self.repository / "verification/proof/inputs.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["discharges_obligation"] = 0
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        with self.assertRaisesRegex(InputFailure, "discharges_obligation"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_malformed_hash_is_rejected(self):
+        manifest_path = self.repository / "verification/proof/inputs.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["tool_sha256"]["z3"] = "BA78"
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        with self.assertRaisesRegex(InputFailure, "lowercase SHA-256"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_deeply_nested_json_is_reported_as_invalid_manifest(self):
+        manifest_path = self.repository / "verification/proof/inputs.json"
+        manifest_path.write_text("[" * 2_000 + "0" + "]" * 2_000, encoding="utf-8")
+
+        with self.assertRaises(InputFailure):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_nan_is_rejected(self):
+        manifest_path = self.repository / "verification/proof/inputs.json"
+        text = manifest_path.read_text(encoding="utf-8")
+        manifest_path.write_text(
+            text.replace('"discharges_obligation": false', '"discharges_obligation": NaN'),
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(InputFailure, "non-finite JSON"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_oversized_manifest_is_rejected(self):
+        manifest_path = self.repository / "verification/proof/inputs.json"
+        manifest_path.write_bytes(b" " * (64 * 1024 + 1))
+
+        with self.assertRaisesRegex(InputFailure, "64 KiB"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_symlink_source_parent_directory_is_rejected(self):
+        source_parent = self.repository / "crates/liminal-safety/src"
+        (source_parent / "lib.rs").unlink()
+        source_parent.rmdir()
+        target = self.root / "outside-source"
+        target.mkdir()
+        (target / "lib.rs").write_bytes(b"abc")
+        source_parent.symlink_to(target, target_is_directory=True)
+
+        with self.assertRaisesRegex(InputFailure, "liminal-safety/src/lib.rs"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_missing_tool_is_rejected(self):
+        (self.verus_root / "z3").unlink()
+
+        with self.assertRaisesRegex(InputFailure, "z3"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_nonregular_tool_is_rejected(self):
+        tool = self.verus_root / "z3"
+        tool.unlink()
+        tool.mkdir()
+
+        with self.assertRaisesRegex(InputFailure, "z3"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_unknown_top_level_field_is_rejected(self):
+        manifest_path = self.repository / "verification/proof/inputs.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["unknown"] = "rejected"
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        with self.assertRaisesRegex(InputFailure, "top-level fields"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_missing_tool_key_is_rejected(self):
+        manifest_path = self.repository / "verification/proof/inputs.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        del manifest["tool_sha256"]["z3"]
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        with self.assertRaisesRegex(InputFailure, "tool_sha256"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_extra_tool_key_is_rejected(self):
+        manifest_path = self.repository / "verification/proof/inputs.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["tool_sha256"]["unapproved-tool"] = ABC_SHA256
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        with self.assertRaisesRegex(InputFailure, "tool_sha256"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_missing_manifest_is_rejected(self):
+        (self.repository / "verification/proof/inputs.json").unlink()
+
+        with self.assertRaisesRegex(InputFailure, "inputs.json"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_oversized_json_integer_is_reported_as_invalid_manifest(self):
+        manifest_path = self.repository / "verification/proof/inputs.json"
+        manifest_path.write_text('{"value":' + "9" * 10_000 + "}", encoding="utf-8")
+
+        with self.assertRaisesRegex(InputFailure, "invalid inputs.json"):
+            check_inputs(self.repository, self.verus_root)
+
+
+if __name__ == "__main__":
+    unittest.main()
