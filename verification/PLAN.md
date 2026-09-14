@@ -37,7 +37,11 @@ tree from an explicit archive set at a new external destination. It also supplie
 a bounded Linux command-execution seam with raw output and observed service
 receipts. Exact-commit Git reconstruction now supplies fresh source stages;
 the constructor and checker share bounded manifest validators. Requested commit
-and historical inventory origin remain distinct. Its 91 unit controls and development statuses retain
+and historical inventory origin remain distinct. The Rust payload constructor now
+reconstructs all six selected pinned Linux archives, preserving empty directories
+and refusing conflicting overlaps. Independent output comparison and a corrupted
+namespace-view control establish this development construction boundary, not
+compiler selection or qualification. Its 106 support controls and development statuses retain
 `qualification: false`, never proof or qualification. The caller must bind
 source/tool/profile and lock/archive authority, and independent
 comparison—not the producer's returned map—checks constructed output. Real probes

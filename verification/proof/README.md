@@ -65,7 +65,41 @@ members, or 2 GiB of regular bytes. The caller remains responsible for binding
 Cargo.lock and archive authority. The returned hash maps are constructor output,
 not an independent correctness proof.
 
-Run its public-interface controls with:
+`construct_rust_toolchain(channel_manifest, channel_sha256, archives, destination)`
+in `toolchain.py` constructs a fresh external Rust 1.97.1 Linux payload from
+exactly six explicitly supplied archives. The caller owns approval of the channel
+manifest digest; the constructor checks that digest, the selected package hashes,
+availability, target and Rust version. It never executes an installer, registers
+a rustup toolchain, or copies unrelated ambient components.
+
+The projection preserves every selected component file and directory, including
+undeclared empty directories. Undeclared regular payload refuses. Only named
+top-level installer metadata is excluded from output; unknown top-level content
+refuses. Links, special files, unsafe or duplicate paths, non-directory parents,
+and conflicting cross-package entries refuse. Identical overlapping entries merge
+only after content/type/mode equality checks. Existing output and aliased parents
+refuse; partial output after a write failure remains for diagnosis.
+
+Limits are 2 MiB for channel/component manifests, 512 MiB per compressed archive,
+1.5 GiB aggregate compressed input, 256 MiB per regular file, 2 GiB aggregate
+uncompressed regular bytes, and 20,000 aggregate members. Remaining aggregate
+budgets are enforced at each archive member before its body is read. This is
+not a process resource envelope: real construction additionally needs a bounded
+job profile that accommodates the observed 199,494,192-byte LLVM files. The
+existing proof-command 64 MiB file limit is unchanged and insufficient for that
+construction job.
+
+The result is `toolchain-constructed`, always `qualification: false`, with the
+channel/archive digests and projected entry map. The caller must independently
+compare complete output, bind approved tools/source/profile, and establish actual
+compiler selection. Fifteen controls bring proof-support tests to 106.
+Real construction completed under the separate bounded profile; independent
+archive/output comparison matched all 8,181 rows including the root, and a
+namespace-only corrupted-file control was rejected without changing the original.
+This is construction evidence, not actual compiler selection or qualification. See
+`toolchain-development-2026-09-14.md` for preserved failures and exact evidence.
+
+Run all public-interface controls with:
 
 ```sh
 just formal-proof-self-test
