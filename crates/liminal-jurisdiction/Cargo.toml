@@ -11,6 +11,7 @@ publish.workspace = true
 
 [dependencies]
 liminal-scratch.workspace = true
+liminal-safety.workspace = true
 liminal-graph.workspace = true
 liminal-id.workspace = true
 liminal-revision.workspace = true

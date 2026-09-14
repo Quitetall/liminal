@@ -23,8 +23,11 @@ arithmetic contract, its false implementation, ordinary and verified builds,
 cold replay, and positive/negative Boolean-model controls. They are not production
 code and do not discharge any of the sixteen obligations. The checked runtime
 ILRP/StoreOwner slice landed at `51361e19`; its development and verification
-records are linked below. The leaf proof core, production same-body binding,
-adapters and formal evidence aggregation remain unimplemented. See
+records are linked below. The candidate leaf now proves executable acknowledgement
+identity/dependency membership used by production, with constrained vstd
+admission approved in DG17.5. This narrow predicate does not discharge `ilrp-ack`.
+Further protocol/core proofs, qualified adapters and formal evidence aggregation
+remain unimplemented. See `safety-ack-slice.md`, `haqp-29f9f159-result.md`,
 `bootstrap/README.md` for reproducible tool-control commands and
 `checked-repair-verification-2026-09-14.md` for the runtime evidence boundary.
 
@@ -58,7 +61,9 @@ AM-17.11 freezes the existing HAQP instrument. AM-17.13 permits only tracked,
 independently verified, behavior-preserving reference maintenance under
 [`haqp-reference-maintenance.md`](../docs/execution/haqp-reference-maintenance.md).
 DG17.3 additionally permits the exact generated ILRP probe setup migration
-recorded in M17, preserving its assertions and outputs. Otherwise do not modify
+recorded in M17, preserving its assertions and outputs. DG17.5 permits exact
+vstd pin/feature admission and its refusal controls, not a general dependency
+allow-list expansion. Otherwise do not modify
 `crates/liminal-xtask/src/haq.rs` or `scripts/haqp_*`.
 Keep existing
 HAQP thresholds, packet, evidence, locked corpora, M18-M24 gate names and M24's

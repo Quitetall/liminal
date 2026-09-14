@@ -23,3 +23,4 @@ pub mod bench;
 pub mod formal;
 /// HAQP-1 packet verification.
 pub mod haq;
+mod vstd_admission;

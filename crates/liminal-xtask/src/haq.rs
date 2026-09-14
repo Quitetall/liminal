@@ -11882,6 +11882,18 @@ struct ConcurrencyScan {
 /// primitives. A file's trailing `#[cfg(test)]` module is skipped; comment
 /// lines are skipped. Deterministic order: crates, files and lines sorted.
 fn scan_concurrency_primitives(root: &Utf8Path) -> Result<ConcurrencyScan> {
+    // DG17.5: inspect the resolved workspace, not dependency keys (which alias).
+    // Source-only test fixtures have no workspace manifest and admit no vstd.
+    let vstd_admitted = root.join("Cargo.toml").is_file() && crate::vstd_admission::admitted(root)?;
+    scan_concurrency_sources(root, vstd_admitted)
+}
+
+fn concurrency_dependency_allowed(dependency: &str, vstd_admitted: bool) -> bool {
+    CONCURRENCY_SCAN_ALLOWED_DEPENDENCIES.contains(&dependency)
+        || (vstd_admitted && dependency == "vstd")
+}
+
+fn scan_concurrency_sources(root: &Utf8Path, vstd_admitted: bool) -> Result<ConcurrencyScan> {
     fn walk(dir: &Utf8Path, out: &mut Vec<Utf8PathBuf>) -> Result<()> {
         let mut entries = fs::read_dir(dir.as_std_path())
             .with_context(|| format!("read {dir}"))?
@@ -11923,7 +11935,7 @@ fn scan_concurrency_primitives(root: &Utf8Path) -> Result<ConcurrencyScan> {
             let external = runtime_external_dependencies(&manifest)?;
             let unknown = external
                 .iter()
-                .filter(|dep| !CONCURRENCY_SCAN_ALLOWED_DEPENDENCIES.contains(&dep.as_str()))
+                .filter(|dep| !concurrency_dependency_allowed(dep, vstd_admitted))
                 .cloned()
                 .collect::<Vec<_>>();
             anyhow::ensure!(
@@ -21659,5 +21671,74 @@ mod tests {
                 "crash replay must find its inputs, not vanish: {message}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod vstd_scan_controls {
+    use super::scan_concurrency_primitives;
+    use std::{fs, process::Command};
+
+    #[test]
+    fn allowed_dependency_alias_cannot_hide_vstd_features_from_scan() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-vstd-alias").expect("scratch");
+        let root = scratch.path();
+        fs::create_dir_all(root.join("src")).expect("package source");
+        fs::create_dir_all(root.join("crates/example/src")).expect("scanned source");
+        fs::write(root.join("src/lib.rs"), "").expect("package library");
+        fs::write(root.join("crates/example/src/lib.rs"), "").expect("scan library");
+        let manifest = concat!(
+            "[package]\nname = \"vstd-alias-control\"\nversion = \"0.0.0\"\n",
+            "edition = \"2024\"\n[workspace]\n[dependencies]\n",
+            "serde = { package = \"vstd\", version = \"=0.0.0-2026-08-30-0159\", ",
+            "default-features = false }\n"
+        );
+        fs::write(root.join("Cargo.toml"), manifest).expect("exact alias manifest");
+        let lock = Command::new("cargo")
+            .args(["generate-lockfile", "--offline"])
+            .current_dir(root)
+            .output()
+            .expect("generate lockfile");
+        assert!(
+            lock.status.success(),
+            "{}",
+            String::from_utf8_lossy(&lock.stderr)
+        );
+        assert!(
+            scan_concurrency_primitives(root)
+                .expect("safe alias")
+                .execution
+                .is_empty()
+        );
+
+        fs::write(
+            root.join("Cargo.toml"),
+            manifest.replace("default-features = false", "default-features = true"),
+        )
+        .expect("unsafe alias manifest");
+        let metadata = Command::new("cargo")
+            .args([
+                "metadata",
+                "--locked",
+                "--offline",
+                "--format-version",
+                "1",
+                "--all-features",
+            ])
+            .current_dir(root)
+            .output()
+            .expect("resolve unsafe alias");
+        assert!(
+            metadata.status.success(),
+            "{}",
+            String::from_utf8_lossy(&metadata.stderr)
+        );
+        let error = scan_concurrency_primitives(root)
+            .err()
+            .expect("alias must not evade guard");
+        assert!(
+            format!("{error:#}").contains("resolved vstd features must be empty"),
+            "{error:#}"
+        );
     }
 }

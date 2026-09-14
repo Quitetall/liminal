@@ -970,7 +970,11 @@ fn validate_ack(
     let step = intent.plan.steps.get(&step_id).ok_or_else(|| {
         IlrpError::Executor(format!("acknowledgement names unknown step {step_id}"))
     })?;
-    if step.id != step_id || ack.step != step_id {
+    // UUID conversion preserves all 128 bits; poststate remains structural below.
+    let key = step_id.as_uuid().as_u128();
+    let planned = step.id.as_uuid().as_u128();
+    let received = ack.step.as_uuid().as_u128();
+    if !liminal_safety::acknowledgement_matches(key, planned, received, &[], &[]) {
         return Err(IlrpError::Executor(
             "acknowledgement step identity mismatch".into(),
         ));
@@ -981,7 +985,22 @@ fn validate_ack(
         ));
     }
     for dependency in &intent.plan.dependencies {
-        if dependency.after == step_id && !intent.acks.contains_key(&dependency.before) {
+        if dependency.after != step_id {
+            continue;
+        }
+        // Borrow one selected map key without allocating. The first call above
+        // preserves identity-error precedence; this call checks each dependency.
+        let acknowledged = intent
+            .acks
+            .get_key_value(&dependency.before)
+            .map(|(identity, _)| identity.as_uuid().as_u128());
+        if !liminal_safety::acknowledgement_matches(
+            key,
+            planned,
+            received,
+            &[dependency.before.as_uuid().as_u128()],
+            acknowledged.as_slice(),
+        ) {
             return Err(IlrpError::Executor(
                 "acknowledgement precedes dependency".into(),
             ));

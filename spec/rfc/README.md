@@ -46,3 +46,4 @@ RFCs. If only this repository needs to know it, it is an ADR.
 |-----|-------|--------|
 | [0000](0000-template.md) | Template | — |
 | [0001](0001-add-liminal-jurisdiction-crate.md) | Add `crates/liminal-jurisdiction` to the v4 §117 layout | accepted (2026-07-17) |
+| [0002](0002-add-liminal-safety-leaf.md) | Record the approved safety dependency leaf | draft (2026-09-14) |

@@ -51,6 +51,7 @@ rand = { version = "0.9", default-features = false, features = [
 # ---- internal ----
 liminal-id = { path = "crates/liminal-id" }
 liminal-scratch = { path = "crates/liminal-scratch" }
+liminal-safety = { path = "crates/liminal-safety" }
 liminal-graph = { path = "crates/liminal-graph" }
 liminal-revision = { path = "crates/liminal-revision" }
 liminal-text = { path = "crates/liminal-text" }
