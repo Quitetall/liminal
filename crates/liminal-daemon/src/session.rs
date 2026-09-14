@@ -152,11 +152,11 @@ impl<'w> ClientSession<'w> {
     /// EPHEMERAL working-state write (M08): it does NOT advance the graph
     /// revision, so a buffer edit never invalidates graph-reading queries.
     fn persist_buffer_blob(&self, buffer: BufferId, generation: u64, bytes: &[u8]) {
-        let key = format!("buf/{}/{buffer}/{generation}", self.client);
-        let _ = self.workspace.store().put_working_aux(
-            SYS_BLOB,
-            &key,
-            serde_json::Value::String(String::from_utf8_lossy(bytes).into_owned()),
+        let _ = self.workspace.working_capture().put_buffer(
+            self.client,
+            buffer,
+            generation,
+            &String::from_utf8_lossy(bytes),
         );
     }
 

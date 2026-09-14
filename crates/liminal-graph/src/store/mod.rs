@@ -388,7 +388,7 @@ impl GraphStore {
     /// pins, or a buffer edit would spuriously invalidate every graph-reading
     /// query (component-granular invalidation, v4 §7.5). Lost on reopen —
     /// buffers are re-sent by their editor.
-    pub fn put_working_aux(
+    pub(crate) fn put_working_aux(
         &self,
         ns: &str,
         key: &str,

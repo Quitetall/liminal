@@ -16,6 +16,7 @@
 pub mod kind;
 mod node;
 mod op;
+mod owner;
 pub mod physical;
 mod relation;
 pub mod store;
@@ -23,6 +24,7 @@ pub mod store;
 pub use liminal_id::KindId;
 pub use node::{Node, NodeFlags, PayloadRef};
 pub use op::{Operation, Origin, Transaction, TxnMeta};
+pub use owner::{EpochWriter, StoreOwner, WorkingCapture};
 pub use relation::{AnchorRef, IdentityRequirement, Relation, RelationFlags, Target};
 pub use store::ns;
 pub use store::{AuxWrite, GraphStore, GraphTxn, StateView, StoreError};

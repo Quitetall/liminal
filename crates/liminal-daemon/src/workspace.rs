@@ -3,7 +3,7 @@
 //! and every repair flowing through the ONE interpreter.
 
 use camino::Utf8Path;
-use liminal_graph::GraphStore;
+use liminal_graph::{GraphStore, StoreOwner};
 use liminal_id::{
     BufferId, ClientId, JurisdictionKey, PathId, SessionEpoch, SourceId, TransactionId,
 };
@@ -27,7 +27,7 @@ pub(crate) struct BufferState {
 /// The assembled toy workspace: store + profiles + inputs + buffer bookkeeping.
 #[derive(Debug)]
 pub struct ToyWorkspace {
-    store: GraphStore,
+    owner: StoreOwner,
     profiles: ProfileSet,
     inputs: AvailableInputs,
     /// The workspace root (buffers read/write files under it).
@@ -59,7 +59,8 @@ impl ToyWorkspace {
     /// (v4 §7.8 step 5 — recovery is the FIRST thing that happens).
     pub fn open(root: &Utf8Path) -> Result<Self, WorkspaceError> {
         let store_dir = root.join("state");
-        let store = GraphStore::open(&store_dir)?;
+        let owner = StoreOwner::open(&store_dir)?;
+        let store = owner.store();
 
         // Sweep abandoned staged files (D02.4: delete all).
         for staged in liminal_source::scan_staged(root)? {
@@ -68,9 +69,9 @@ impl ToyWorkspace {
 
         // Run ILRP recovery over every nonterminal intent. The executor is
         // store-aware so a resumed InsertSourceId step can resolve its alias.
-        let executor = crate::executor::FsExecutor::with_store(root.to_owned(), &store)?;
+        let executor = crate::executor::FsExecutor::with_store(root.to_owned(), store)?;
         let driver = liminal_jurisdiction::IlrpDriver {
-            store: &store,
+            store,
             executor: &executor,
             crash: liminal_jurisdiction::NoCrash,
         };
@@ -79,21 +80,21 @@ impl ToyWorkspace {
         // Algorithm B (M05): age Active overlays and re-verify any whose
         // write route returned while the process was down, BEFORE the
         // workspace is handed to a caller.
-        crate::runner::sweep_overlays(&store, root)
+        crate::runner::sweep_overlays(store, root)
             .map_err(|e| WorkspaceError::Sweep(e.to_string()))?;
 
         // D06.3: this session's epoch is one past the durable counter. It is
         // computed read-only here and only PERSISTED when the session first
         // opens a buffer (`register_buffer`) — so recovery-only and CLI-read
         // opens are side-effect-free and world-digest idempotence holds.
-        let epoch = SessionEpoch(peek_epoch(&store)? + 1);
+        let epoch = SessionEpoch(peek_epoch(store)? + 1);
 
         // Seed the durable input map from every ingested file (D06.5: the
         // single source of truth for perspective resolution).
-        let inputs = seed_durable_inputs(&store, root)?;
+        let inputs = seed_durable_inputs(store, root)?;
 
         Ok(Self {
-            store,
+            owner,
             profiles: ProfileSet::phase_minus_1(),
             inputs,
             root: root.to_owned(),
@@ -107,7 +108,7 @@ impl ToyWorkspace {
     #[must_use]
     pub fn checker(&self) -> Checker<'_> {
         Checker {
-            store: &self.store,
+            store: self.store(),
             profiles: &self.profiles,
         }
     }
@@ -120,7 +121,7 @@ impl ToyWorkspace {
             return None;
         };
         let node_str = node.to_string();
-        for (alias, value) in self.store.scan_aux(liminal_graph::ns::JUR_ALIAS).ok()? {
+        for (alias, value) in self.store().scan_aux(liminal_graph::ns::JUR_ALIAS).ok()? {
             if value.get("node").and_then(|v| v.as_str()) == Some(node_str.as_str()) {
                 return Some(alias);
             }
@@ -131,7 +132,9 @@ impl ToyWorkspace {
     /// The core Reconciliation Queue (R4 §9; no ticket-list subsystem underlies it).
     #[must_use]
     pub fn reconciliation(&self) -> ReconciliationQueue<'_> {
-        ReconciliationQueue { store: &self.store }
+        ReconciliationQueue {
+            store: self.store(),
+        }
     }
 
     /// Capture one immutable Basis under a perspective (Law 3D/3J). Resolves
@@ -147,7 +150,7 @@ impl ToyWorkspace {
         // M08.2: every Basis pins the graph-store revision at the reserved
         // graph_key() so graph-reading queries (backlinks, export, ai-context)
         // record a dependency on it and can replay from a frozen Basis.
-        if let Ok(revision) = self.store.head() {
+        if let Ok(revision) = self.store().head() {
             basis.components.insert(
                 liminal_revision::graph_key(),
                 liminal_revision::BasisComponent::GraphSnapshot { revision },
@@ -175,7 +178,7 @@ impl ToyWorkspace {
     /// sessions bump the durable counter.
     pub(crate) fn register_buffer(&mut self, id: BufferId, state: BufferState) {
         if !self.epoch_persisted {
-            let _ = persist_epoch(&self.store, self.epoch);
+            let _ = persist_epoch(&self.owner.epoch_writer(), self.epoch);
             self.epoch_persisted = true;
         }
         self.buffers.insert(id, state);
@@ -249,7 +252,7 @@ impl ToyWorkspace {
     /// `RepairRecord`s only, sorted by repair id (UUIDv7 ⇒ chronological).
     pub fn repairs(&self) -> Result<Vec<RepairRecord>, WorkspaceError> {
         let mut out = Vec::new();
-        for (_key, value) in self.store.scan_aux(liminal_graph::ns::JUR_REPAIR)? {
+        for (_key, value) in self.store().scan_aux(liminal_graph::ns::JUR_REPAIR)? {
             let record: RepairRecord = serde_json::from_value(value)
                 .map_err(|e| liminal_graph::StoreError::Corrupt(e.to_string()))?;
             out.push(record);
@@ -261,7 +264,12 @@ impl ToyWorkspace {
     /// The underlying store (harness access).
     #[must_use]
     pub fn store(&self) -> &GraphStore {
-        &self.store
+        self.owner.store()
+    }
+
+    /// Session capture receives no epoch or accepted-transaction capability.
+    pub(crate) fn working_capture(&self) -> liminal_graph::WorkingCapture<'_> {
+        self.owner.working_capture()
     }
 
     /// Mutable input map (session plumbing).
@@ -281,20 +289,20 @@ fn peek_epoch(store: &GraphStore) -> Result<u64, WorkspaceError> {
 
 /// Persist this session's epoch to `SYS_EPOCH["epoch"]` (its own txn). Called
 /// once, lazily, when a session first opens a buffer.
-fn persist_epoch(store: &GraphStore, epoch: SessionEpoch) -> Result<(), WorkspaceError> {
-    let mut txn = store.begin()?;
-    txn.put_aux(
-        liminal_graph::ns::SYS_EPOCH,
-        "epoch",
-        serde_json::Value::from(epoch.0),
+fn persist_epoch(
+    writer: &liminal_graph::EpochWriter<'_>,
+    epoch: SessionEpoch,
+) -> Result<(), WorkspaceError> {
+    writer.persist(
+        epoch,
+        liminal_graph::TxnMeta {
+            actor: None,
+            origin: liminal_graph::Origin::Human,
+            at: liminal_id::Timestamp::now(),
+            provenance: Some("epoch:persist".into()),
+            inverse: None,
+        },
     )?;
-    txn.commit(liminal_graph::TxnMeta {
-        actor: None,
-        origin: liminal_graph::Origin::Human,
-        at: liminal_id::Timestamp::now(),
-        provenance: Some("epoch:persist".into()),
-        inverse: None,
-    })?;
     Ok(())
 }
 
