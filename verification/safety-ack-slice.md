@@ -90,7 +90,10 @@ focused reproduction found the frozen harness searches workspace target paths
 despite a custom `CARGO_TARGET_DIR`; switching to the supported workspace target
 let the crash matrix run and exposed the expected old/new lockfile digest
 mismatch. No harness predicate or recorded digest was weakened. Fresh producer
-evidence at a committed source and a full fixed-source rerun remain required.
+evidence at committed source `076e0e78` then passed: eight crash boundaries and
+all 33 canaries. Full `just ci` exited 0 with 620 passed and 47 skipped; see
+`safety-ack-verification-2026-09-14.md`. This closes that development replay
+failure, not the outstanding whole-core or HAQP qualification obligations.
 
 Still needed: complete source/tool/executable binding and cold replay, proof
 evidence runner, further protocol/store/Basis/authority obligations, finite
