@@ -64,3 +64,36 @@ for `positive-comparison.json`, and
 `2ea00e4a927909ccf7259cf74546cd2c49fb423b1dde797be07c209ef5d62f05`
 for `negative-comparison.json`. This binds the staged projection to the requested
 commit under that comparator; isolated execution and authority remain pending.
+
+## Commit-review follow-up
+
+Full CI at `f032ce660889a985052520d08074fdac62c796ad` completed with child exit
+0, unchanged source, 620 nextest tests passed / 47 skipped, 22 bootstrap and 136
+proof-support controls, and 33/33 canaries. The actual LAMU commit review returned
+primary and critic PASS WITH NITS. Its directory-mode observation was confirmed:
+the intermediate directory created by `parents=True` inherited umask-dependent
+permissions. The mode-0700 root prevented cross-user exposure, but construction
+metadata was not deterministic. This follow-up changes only runner staging;
+the historical source-staging behavior is unchanged.
+
+A public-seam test runs separate interpreter children under umasks 000, 022 and
+077, without changing the parent's umask. On the old code, it failed for 000
+(intermediate 0777) and 077 (intermediate 0700); actual test exit was 1. Explicit
+creation and mode normalization of the root and two fixed child directories
+made the same test pass, exit 0. Exclusive file writes and partial-output
+retention remain intact. The positive byte/hash fixture also uses independently
+known `abc` and `hello` digests rather than eight identical payloads.
+
+Evidence is under `/mnt/4tb/liminal-formal-evidence/reviews/`:
+
+- `runner-mode-red.log`: `323efa56163893e2cfae2f249a24ddee3b0484a5a2e044e865b7cfb309e7d9c3`
+- `runner-mode-green.log`: `c9921cc137de3dbc5a1e098ca9c64e5c664017fdc03b581f056c391b22049657`
+- `runner-mode-all-green.log`: `0dd4d3550170cadf2d791b74480e39ae748401b607cff518e501e08b1d23822f`
+
+The final support run passed 137 tests in 6.020 seconds, actual exit 0. Current
+implementation/test SHA-256 values are
+`a317751f85b9d6ac8537281b53248cb64aeb8da7cae888352be57ada843852a7` and
+`5a8b10d0152bd1de45eeacc395cc70c853c22a865a70ebe55c20cf714c29ab37`.
+The earlier full CI and projection-comparison receipts remain bound to their
+earlier source, not this follow-up. Fresh full verification and review of the
+follow-up remain separate requirements.

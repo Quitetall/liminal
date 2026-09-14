@@ -64,6 +64,8 @@ a new external root; it neither authenticates nor executes them. At this slice,
 proof-support discovery passed 136 controls. Independent comparison matched the
 11-row projection and detected a one-file mutation; isolated orchestration and
 authority binding remain pending.
+The runner-staging review follow-up normalizes its directory modes and adds a
+three-umask regression control; proof-support discovery then passed 137 tests.
 This is not yet integrated with the formal
 commands. See `proof/development-2026-09-14.md` and
 `proof/selection-development-2026-09-14.md` for exact limits, failures,

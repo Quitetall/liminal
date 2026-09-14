@@ -1,4 +1,3 @@
-import hashlib
 import importlib.util
 import os
 from pathlib import Path
@@ -23,6 +22,7 @@ RUNNER_FILES = (
     "verification/proof/sandbox.py",
 )
 ABC_SHA256 = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+HELLO_SHA256 = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
 
 
 class RunnerStageTests(unittest.TestCase):
@@ -40,7 +40,9 @@ class RunnerStageTests(unittest.TestCase):
             path = self.repository / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b"abc")
-        (self.repository / "verification/proof/sandbox.py").chmod(0o755)
+        sandbox = self.repository / "verification/proof/sandbox.py"
+        sandbox.write_bytes(b"hello")
+        sandbox.chmod(0o755)
         self._git("add", ".")
         self._git("commit", "-q", "-m", "runner fixture")
         self.commit = self._git("rev-parse", "HEAD").stdout.strip()
@@ -74,7 +76,12 @@ class RunnerStageTests(unittest.TestCase):
         )
         self.assertEqual(set(result["file_sha256"]), set(RUNNER_FILES))
         self.assertEqual(set(result["file_mode"]), set(RUNNER_FILES))
-        self.assertEqual(set(result["file_sha256"].values()), {ABC_SHA256})
+        expected_hashes = {relative: ABC_SHA256 for relative in RUNNER_FILES}
+        expected_hashes["verification/proof/sandbox.py"] = HELLO_SHA256
+        self.assertEqual(result["file_sha256"], expected_hashes)
+        for relative in RUNNER_FILES:
+            expected = b"hello" if relative == "verification/proof/sandbox.py" else b"abc"
+            self.assertEqual((self.destination / relative).read_bytes(), expected)
         self.assertEqual(result["file_mode"]["verification/proof/sandbox.py"], "100755")
         self.assertEqual((self.destination / "verification/proof/run.py").read_bytes(), b"abc")
         self.assertFalse((self.destination / "verification/proof/__pycache__").exists())
@@ -82,6 +89,40 @@ class RunnerStageTests(unittest.TestCase):
             oct(os.stat(self.destination / "verification/proof/sandbox.py").st_mode & 0o777),
             "0o755",
         )
+
+    def test_runner_directory_modes_ignore_child_umask(self):
+        masks = [0o000, 0o022, 0o077]
+        for mask in masks:
+            with self.subTest(mask=mask):
+                destination = self.root / f"runner-mask-{mask:o}"
+                loader_script = (
+                    "import importlib.util, sys, pathlib, os\n"
+                    "spec = importlib.util.spec_from_file_location('stage', sys.argv[1])\n"
+                    "module = importlib.util.module_from_spec(spec)\n"
+                    "spec.loader.exec_module(module)\n"
+                    "os.umask(int(sys.argv[5]))\n"
+                    "module.stage_runner(pathlib.Path(sys.argv[2]), sys.argv[3], pathlib.Path(sys.argv[4]))"
+                )
+                command = [
+                    "/usr/bin/python3", "-I", "-B", "-c", loader_script,
+                    str(MODULE_PATH), str(self.repository), self.commit,
+                    str(destination), str(mask),
+                ]
+                result = subprocess.run(
+                    command, text=True, capture_output=True, timeout=30,
+                    check=False, env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(result.stderr, "")
+                self.assertEqual(destination.stat().st_mode & 0o777, 0o700)
+                verification = destination / "verification"
+                self.assertEqual(verification.stat().st_mode & 0o777, 0o755)
+                proof = verification / "proof"
+                self.assertEqual(proof.stat().st_mode & 0o777, 0o755)
+                for relative in RUNNER_FILES:
+                    expected = 0o755 if relative == "verification/proof/sandbox.py" else 0o644
+                    self.assertEqual((destination / relative).stat().st_mode & 0o777, expected)
 
     def test_malformed_missing_and_nonfile_selection_refuse_before_output(self):
         cases = [("malformed", "HEAD"), ("unknown", "0" * 40)]

@@ -262,9 +262,13 @@ def stage_runner(repository: Path, commit: str, destination: Path) -> dict:
 
     try:
         target.mkdir(mode=0o700)
+        target.chmod(0o700)
+        for relative in ("verification", "verification/proof"):
+            directory = target / relative
+            directory.mkdir(mode=0o755)
+            directory.chmod(0o755)
         for relative in RUNNER_PATHS:
             path = target / relative
-            path.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
             with path.open("xb") as output:
                 output.write(blobs[relative])
             path.chmod(0o755 if modes[relative] == "100755" else 0o644)
