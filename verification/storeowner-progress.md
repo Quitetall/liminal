@@ -227,6 +227,10 @@ failures and resource measurements are recorded in
 2026-09-14, conditional on the dependency audit and epoch-transaction comparison.
 The approval is recorded separately in commit 6451c0c6. The registry maintenance
 does not complete the remaining owner/admission work or qualify a new candidate.
+The maintenance and producer refresh subsequently passed full `just ci` at
+`39d345e2` (587 passed / 47 skipped; threaded and remaining stages green).
+The failed first run and successful fixed-candidate rerun are retained in
+`verification/dg17-4-verification-2026-09-14.md`.
 
 Observed build-cache interference: the packet-digest build lost a native BLAKE3
 archive and returned 101; target/debug disappeared during inspection. The
