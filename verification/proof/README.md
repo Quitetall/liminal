@@ -48,8 +48,13 @@ not an independent correctness proof.
 Run its public-interface controls with:
 
 ```sh
-python3 -m unittest discover -s verification/proof -p 'test_*.py' -v
+just formal-proof-self-test
 ```
+
+This fast input-stage recipe is wired into local `just ci` immediately after the
+bootstrap self-test. It does not run a verifier, model, network operation or heavy
+proof. Broader formal proof/model/adapter execution and remote-CI wiring remain
+unqualified and unfinished.
 
 These eight source hashes are not the complete Cargo build graph. These four
 executable hashes alone do not bind bundled Verus libraries, Rust, dependencies or

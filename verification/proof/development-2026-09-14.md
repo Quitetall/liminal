@@ -4,6 +4,10 @@ Status: development evidence, not qualification. Source baseline:
 `3b1ec265b9ffc8bdd3da596011b4ac2593c2369c`.
 
 The three public proof-input seams have 63 passing temporary-filesystem controls.
+`just formal-proof-self-test` runs them as a fast input-stage step in local
+`just ci`, immediately after `formal-bootstrap-self-test`. It performs no verifier,
+model, network or heavy-proof execution. Formal proof/model/adapter execution and
+remote-CI wiring remain outside this integration and are not qualified.
 The original changed-source control failed against the permissive stub before
 implementation, then passed with hash validation. The later deep-JSON trial
 failed only because its expected error message was too specific: this Python

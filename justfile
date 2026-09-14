@@ -115,6 +115,10 @@ formal-bootstrap verus_root tlc_jar output:
 formal-bootstrap-self-test:
     python3 -B -m unittest -v verification/bootstrap/test_run.py
 
+# Fast input-stage unit controls only: no verifier, model, network, or heavy proof execution.
+formal-proof-self-test:
+    python3 -B -m unittest discover -v -s verification/proof -p 'test_*.py'
+
 formal-proof:
     cargo run -p liminal-xtask -- formal proof
 
@@ -167,6 +171,7 @@ haq-lane run="run-1":
 # Everything CI runs, locally, in CI order
 ci: fmt-check lint
     just formal-bootstrap-self-test
+    just formal-proof-self-test
     cargo nextest run --workspace --all-features --profile ci
     just test-threaded
     cargo test --workspace --doc
