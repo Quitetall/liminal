@@ -175,6 +175,67 @@ Standards PASS reports are `dependency-constructor-spec-review.md` and
 PASS is `source-closure-standards-review.md`. These reviews do not establish runner
 correctness, proof qualification, or phase authority.
 
+## Bounded command execution development
+
+The new `command.py` executes real commands in owned systemd user services and
+retains exact requests, client/child environments, control commands and exits,
+raw streams, observed limits, terminal state and cleanup evidence. Its 18 public
+controls bring the fast proof suite to 81 tests. This is not full proof-runner
+orchestration or qualification; the caller must bind sources, tools, profiles,
+expected outcomes and replay authority.
+
+The first seven preflight controls found three errors: missing executable and
+existing output leaked raw OS errors, and output-parent symlink aliases were
+not resolved before the source-directory check. `test-command-candidate-red.log`
+preserves the 4-pass/3-error result (SHA-256
+`7bb577e3c2b612d9a3d4dd70338dc5cd157b7ab820ac4ebb365e1df8d2a31e39`).
+Typed refusals and canonical parent containment closed those gaps without
+overwriting sentinel files. Later controls also reject malformed Unicode argv
+and retain observed-limit drift, transport failure and cleanup failures.
+
+`command-controls-v1.log` (SHA-256
+`bbe7d0eb44382e5c766a96aef812bf9f4b6f9b0d530a46294bc87102bb8a7f47`)
+records four real controls at module SHA-256
+`250b6c1de2f8ea841b62c4e8abef612c21804de1d09b76bf12ddc9d6dd182f18`:
+false exited 1; signal termination recorded signal 15 rather than an exit code;
+`env` printed exactly the two supplied variables; raw-byte output retained `ff`
+and `657272` with child exit 7 and matching hashes. No unit remained active.
+These controls precede the subsequent preflight/cleanup changes and do not
+qualify the final module revision.
+
+The later `command-cleanup-v2` probe confirms why a nonzero `reset-failed` is not
+itself cleanup failure: the service was already unloaded. The runner now retains
+the reset exit and separately observes `LoadState=not-found`, `ActiveState=inactive`
+and `SubState=dead`. Unit tests exercise both that valid outcome and failure to
+establish absence. Earlier review advice to reject every nonzero reset was checked
+against the real service and rejected; the actual observation gap was closed.
+
+An initial LAMU `review_diff` response incorrectly treated this Python file as
+outside an unrelated `lamu-rs` workspace. Its nominal PASS was not accepted as
+review evidence. The raw response remains `command-precommit-review.jsonl`.
+
+An independent literal-argument control then found a real wrapper defect:
+systemd's default environment expansion removed an unset dollar argument before
+the child ran. Its checker constructed the expected value from `chr(36)` rather
+than embedding the same expandable literal, avoiding a self-consistent false
+pass. The percent-literal control passed. Both before/after files bind this RED
+probe to module SHA-256
+`2cba780bf3b23e02fe096eb486efacdfd72969eb3fb442691361643b91f0006b`;
+an initially reported older hash was corrected against those actual artifacts.
+The probe is `probes/command-literals-v1` under the external evidence root.
+`command-literal-argv-red.log` preserves the matching unit regression failure
+(SHA-256 `5458a5a17b912630be322f5a4c337dc79731675398bd73c1a708a05d831530e8`).
+The launcher now explicitly disables manager-side expansion with
+`--expand-environment=no`, and the unit regression passes.
+The separate `command-literals-v2` GREEN probe used the same independent checkers:
+both commands exited 0 and cleanup independently established absence. Its
+summary SHA-256 is
+`d8c00bbeab9655f208e67f0b8bb8a153d88485b61dec7c9cfe5307d54e1b4df7`;
+before/after module SHA-256 is
+`7f60adc5a10ec5b7992e5f2a71b70737aac5d0b668837cbb9356f2e0faa373ef`.
+This observes literal argument preservation for those two controls, not every
+argument/path shape or complete runner correctness.
+
 All sixteen obligations remain open. Archive reconstruction, dependency
 construction, ordinary builds, strict verified builds and witnesses are input
 closure or feasibility observations only; none is a full qualification result.

@@ -33,9 +33,11 @@ remain unimplemented. See `safety-ack-slice.md`, `haqp-29f9f159-result.md`,
 
 The runner slice under `proof/` validates selected source pins and complete
 extracted Verus distribution bytes, and constructs a checksum-closed dependency
-tree from an explicit archive set at a new external destination. Its 63 public
-controls and statuses are input-only (`qualification: false`), never proof or
-qualification. The caller must bind lock/archive authority, and independent
+tree from an explicit archive set at a new external destination. It also supplies
+a bounded Linux command-execution seam with raw output and observed service
+receipts. Its 81 unit controls and development statuses retain
+`qualification: false`, never proof or qualification. The caller must bind
+source/tool/profile and lock/archive authority, and independent
 comparison—not the producer's returned map—checks constructed output. Real probes
 reconstructed all 167 locked packages and demonstrated ordinary and strict
 verified build feasibility. The selected-eight build-script counterexample is now

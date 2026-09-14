@@ -115,7 +115,7 @@ formal-bootstrap verus_root tlc_jar output:
 formal-bootstrap-self-test:
     python3 -B -m unittest -v verification/bootstrap/test_run.py
 
-# Fast input-stage unit controls only: no verifier, model, network, or heavy proof execution.
+# Fast proof-support unit controls only: no verifier, model, network, or heavy proof execution.
 formal-proof-self-test:
     python3 -B -m unittest discover -v -s verification/proof -p 'test_*.py'
 

@@ -51,6 +51,40 @@ Run its public-interface controls with:
 just formal-proof-self-test
 ```
 
+`run_command(argv, cwd, environment, output)` in `command.py` now supplies the
+Linux execution seam. It requires an absolute executable, an allow-listed child
+environment, an existing source directory and a new external evidence directory.
+It resolves output-parent aliases before enforcing separation from `cwd`, never
+overwrites evidence, and runs every command (including witnesses) in an owned
+systemd user service. A working user bus is required. The child receives no
+inherited environment; the validated bus variables belong only to the client.
+Relative path arguments resolve against the Python caller's working directory;
+the request records the resulting absolute source and evidence locations through
+its cwd and retained launcher arguments.
+Manager-side argument expansion is explicitly disabled, preserving literal dollar
+arguments rather than silently expanding them before the child starts.
+
+Each service requests and checks CPU quota 200%, MemoryHigh 2 GiB, MemoryMax
+4 GiB, zero swap, 256 tasks, a 64 MiB per-file limit and a ten-minute runtime
+limit. The parent also bounds observation and control-command waits. This is a
+resource envelope, not a hostile-code filesystem or network sandbox. The caller
+must bind the tool, source, flags, working-directory ancestry and dependency
+configuration; this module does not establish that authority or offline behavior.
+
+Requests, launcher/control commands and exits, raw stdout/stderr, observed states,
+terminal state and receipt are retained. Nonzero exits and signals are recorded
+as observations, not converted to passes. Limit drift, failed launches or missing
+cleanup evidence refuse with `execution-incomplete`. Cleanup checks actual unit
+absence: a nonzero `reset-failed` is permitted only when independent observation
+confirms the unit is absent, as happens after successful garbage collection.
+The receipt always has `qualification: false`. Retained files are development
+artifacts, not crash-durable or independently replayable proof receipts.
+
+The command seam adds 18 fast public-interface controls to the existing 63
+input controls. Process-boundary fixtures are not real execution evidence.
+Separate real controls exercised success, nonzero exit, signal termination,
+exact environment, raw-byte output and unit cleanup; see the development record.
+
 This fast input-stage recipe is wired into local `just ci` immediately after the
 bootstrap self-test. It does not run a verifier, model, network operation or heavy
 proof. Broader formal proof/model/adapter execution and remote-CI wiring remain
