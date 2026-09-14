@@ -58,7 +58,8 @@ It resolves output-parent aliases before enforcing separation from `cwd`, never
 overwrites evidence, and runs every command (including witnesses) in an owned
 systemd user service. A working user bus is required. The child receives no
 inherited environment; the validated bus variables belong only to the client.
-Relative path arguments resolve against the Python caller's working directory;
+Relative `cwd` and `output` Path parameters resolve against the Python caller's
+working directory; child-relative argv paths use the service working directory.
 the request records the resulting absolute source and evidence locations through
 its cwd and retained launcher arguments.
 Manager-side argument expansion is explicitly disabled, preserving literal dollar

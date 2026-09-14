@@ -236,6 +236,31 @@ before/after module SHA-256 is
 This observes literal argument preservation for those two controls, not every
 argument/path shape or complete runner correctness.
 
+### Follow-up correction to the command test evidence
+
+Commit `e894fea8` was committed before the final combined test exit was inspected.
+Its claim of passing 18 new plus 63 existing controls was incorrect for that
+revision: `command-suite-81.log` records 80 passed and one failed, exit 1
+(SHA-256 `0f0bea49826c86a263de9820a30ec0fccf06336a3289d6a0bd7c9a3e8fa2e313`).
+The loaded-unit cleanup assertion omitted the newly retained `state_exit` field.
+This was a real stale expectation, not an intermittent failure. The follow-up
+adds the exact `state_exit: 0` expectation while retaining all other comparisons;
+no production behavior changes. `command-suite-81-corrected.log` records all 81
+passing, exit 0 (SHA-256
+`15477f31e317ea67cf4ddaa3220b94033dcad13b8cc0d44e9496acc0824a0fb1`).
+The original failed log and commit remain intact.
+
+Actual LAMU `review_commit` of `e894fea8` returned PASS WITH NITS from MiMo V2.5
+Pro, with a critic pass, retained as `command-e894fea8-review.jsonl`. Both called
+out the stale expectation. The review's statement that the commit message
+acknowledged the failure is false; the review request acknowledged it, not the
+commit. Path-name traversal advice was checked against the actual `Path.name`
+and canonical-parent operations: a basename cannot contain separators, and
+the physical containment check precedes directory creation. The `..` refusal is
+not redundant because only the parent is resolved. Existing caller-controlled
+`TMPDIR`, bounded observation slack and exclusive evidence files remain
+intentional, documented development boundaries, not new qualification claims.
+
 All sixteen obligations remain open. Archive reconstruction, dependency
 construction, ordinary builds, strict verified builds and witnesses are input
 closure or feasibility observations only; none is a full qualification result.

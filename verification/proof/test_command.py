@@ -276,7 +276,8 @@ class CommandTests(unittest.TestCase):
         receipt = self.receipt()
         self.assertEqual(receipt["status"], "execution-incomplete")
         self.assertEqual(
-            receipt["cleanup"], {"stop_exit": 0, "reset_exit": 0, "unit_absent": False}
+            receipt["cleanup"],
+            {"stop_exit": 0, "reset_exit": 0, "state_exit": 0, "unit_absent": False},
         )
         self.assertIn("LoadState=loaded", (self.output / "cleanup-state.stdout").read_text())
 
