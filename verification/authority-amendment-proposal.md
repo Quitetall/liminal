@@ -3,8 +3,9 @@
 Status: **user-approved for implementation, 2026-09-13**. Brian authorized
 steps 1–4: record this amendment, migrate scoped StoreOwner/read-only GraphStore,
 enforce checked repair admission/recovery/finalization/receipts, and add bypass
-controls while retaining existing behavior and assertions. Full verification
-requires the next checkpoint. Approval is not SAS successor acceptance, phase
+controls while retaining existing behavior and assertions. The subsequent
+DG17.3 approval authorizes required verification with bounded local compute.
+Approval is not SAS successor acceptance, phase
 authorization, proof establishment, or suite ratification. The number was checked
 against baseline `64ee56528df5f95b0f3c12f7f881942a6b2343f3`; AM-17.12 was unused.
 That is the consolidated implementation baseline; the original proposal was

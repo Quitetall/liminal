@@ -66,6 +66,8 @@ the actor responsible is unestablished. An isolated target directory built the
 same source successfully, with 1.3 GiB peak memory and no swap. No source fix,
 cache deletion, hidden test retry or claimed root-cause attribution followed.
 
-`just haq-inventory` and fixed-source `just ci` results will be recorded after
-their actual completion. Missing/deferred Phase 1 killing tests remain
-unmeasured and ignored; this maintenance does not activate them.
+`just haq-inventory` completed with exit 0. Fixed-source `just ci` subsequently
+ran at the documentation-corrected candidate; actual failures, independent later
+stages and artifact hashes are recorded in
+`verification/ilrp-verification-2026-09-13.md`. Missing/deferred Phase 1 killing
+tests remain unmeasured and ignored; this maintenance does not activate them.

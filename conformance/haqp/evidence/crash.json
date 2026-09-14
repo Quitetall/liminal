@@ -340,7 +340,7 @@
     }
   ],
   "exercised": 8,
-  "lockfile_blake3": "fdae1da3e5295bda56c6c1ed90a6e42d9d694726e666223e4daa8bd988c4f5b5",
+  "lockfile_blake3": "c602e6cab401aa334b976eac88aaf6a7b3ddf60e36079fcadad1108815b2a7cd",
   "registered": 8,
   "scenarios": [
     {
@@ -374,6 +374,6 @@
       "scenario": "dag_accept"
     }
   ],
-  "source_commit": "e6667f60df3b18e77ddfb322af19dcfde2e70351",
-  "source_tree": "46fc9e0403710ee0d807b8bec161925b855a90c6"
+  "source_commit": "b5df4ae25c7e0b047770d7c9d7ce1c6bee1f9b92",
+  "source_tree": "facf8501104dcc2225217bdd7e152a356992ecc1"
 }

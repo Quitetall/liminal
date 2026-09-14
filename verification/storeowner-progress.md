@@ -219,8 +219,11 @@ test-name/style nits are deferred, not correctness fixes.
 Four frozen mutant coordinates moved by one line, with independent pre-change
 review and source hashes in
 `docs/execution/reference-maintenance/2026-09-13-ilrp-validation.md`.
-Inventory passes. No expected result, threshold, frozen probe or historical
-evidence was changed. Full CI remains to run against the fixed candidate.
+Inventory passes. No expected result, threshold or frozen probe was changed.
+Fixed-source full CI and later independent stages have now run; the failed
+recipe, fresh producer-generated crash evidence, five remaining frozen-registry
+failures and resource measurements are recorded in
+`verification/ilrp-verification-2026-09-13.md`. DG17.4 needs Brian's decision.
 
 Observed build-cache interference: the packet-digest build lost a native BLAKE3
 archive and returned 101; target/debug disappeared during inspection. The
