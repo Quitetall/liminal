@@ -1,5 +1,6 @@
 import json
 import importlib.util
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -47,9 +48,29 @@ class ProofInputTests(unittest.TestCase):
         manifest_path = self.repository / "verification/proof/inputs.json"
         manifest_path.parent.mkdir(parents=True)
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        source_inventory = {
+            "schema": "liminal-proof-source-inventory-v1",
+            "source_commit": "3bd93a9617ff8705ace37f4a19440c70f867f689",
+            "files": {
+                path: {"sha256": ABC_SHA256, "mode": "100644"}
+                for path in SOURCE_PATHS
+            },
+        }
+        (self.repository / "verification/proof/source-inventory.json").write_text(
+            json.dumps(source_inventory), encoding="utf-8"
+        )
 
     def tearDown(self):
         self.temporary.cleanup()
+
+    def read_source_inventory(self):
+        path = self.repository / "verification/proof/source-inventory.json"
+        return path, json.loads(path.read_text(encoding="utf-8"))
+
+    def add_inventory_file(self, relative):
+        path, inventory = self.read_source_inventory()
+        inventory["files"][relative] = {"sha256": ABC_SHA256, "mode": "100644"}
+        path.write_text(json.dumps(inventory), encoding="utf-8")
 
     def test_changed_source_is_rejected(self):
         (self.repository / "Cargo.toml").write_bytes(b"changed")
@@ -223,6 +244,135 @@ class ProofInputTests(unittest.TestCase):
 
         with self.assertRaisesRegex(InputFailure, "invalid inputs.json"):
             check_inputs(self.repository, self.verus_root)
+
+    def test_added_build_script_outside_selected_pins_is_rejected(self):
+        (self.repository / "crates/liminal-safety/build.rs").write_bytes(b"abc")
+
+        with self.assertRaisesRegex(InputFailure, "source inventory"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_repository_cargo_configuration_is_rejected(self):
+        (self.repository / ".cargo").mkdir()
+        with self.assertRaisesRegex(InputFailure, "repository .cargo"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_missing_additional_inventoried_file_is_rejected(self):
+        relative = "crates/liminal-safety/src/additional.rs"
+        path = self.repository / relative
+        path.write_bytes(b"abc")
+        self.add_inventory_file(relative)
+        path.unlink()
+        with self.assertRaisesRegex(InputFailure, "source inventory"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_changed_additional_inventoried_file_is_rejected(self):
+        relative = "crates/liminal-safety/src/additional.rs"
+        path = self.repository / relative
+        path.write_bytes(b"changed")
+        self.add_inventory_file(relative)
+        with self.assertRaisesRegex(InputFailure, "additional.rs"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_extra_empty_directory_is_rejected(self):
+        (self.repository / "crates/liminal-safety/empty").mkdir()
+        with self.assertRaisesRegex(InputFailure, "directory set mismatch"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_source_executable_bit_drift_is_rejected(self):
+        source = self.repository / "crates/liminal-safety/src/lib.rs"
+        source.chmod(0o755)
+        with self.assertRaisesRegex(InputFailure, "source mode mismatch"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_malformed_source_inventory_is_rejected(self):
+        path = self.repository / "verification/proof/source-inventory.json"
+        path.write_text("{", encoding="utf-8")
+        with self.assertRaisesRegex(InputFailure, "invalid source inventory"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_extra_source_inventory_map_key_is_rejected(self):
+        self.add_inventory_file("crates/liminal-safety/src/not-present.rs")
+        with self.assertRaisesRegex(InputFailure, "source inventory"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_missing_source_inventory_map_key_is_rejected(self):
+        path, inventory = self.read_source_inventory()
+        del inventory["files"]["Cargo.toml"]
+        path.write_text(json.dumps(inventory), encoding="utf-8")
+        with self.assertRaisesRegex(InputFailure, "selected pin"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_oversized_source_inventory_is_rejected_before_parsing(self):
+        path = self.repository / "verification/proof/source-inventory.json"
+        path.write_bytes(b" " * (2 * 1024 * 1024 + 1))
+        with self.assertRaisesRegex(InputFailure, "source inventory exceeds 2 MiB"):
+            check_inputs(self.repository, self.verus_root)
+
+    @unittest.skipIf(os.geteuid() == 0, "root bypasses directory permission checks")
+    def test_source_scan_permission_error_is_rejected(self):
+        relative = "crates/liminal-safety/private/additional.rs"
+        source = self.repository / relative
+        source.parent.mkdir()
+        source.write_bytes(b"abc")
+        self.add_inventory_file(relative)
+        source.parent.chmod(0)
+        try:
+            with self.assertRaisesRegex(InputFailure, "source inventory scan failed"):
+                check_inputs(self.repository, self.verus_root)
+        finally:
+            source.parent.chmod(0o755)
+
+    @unittest.skipIf(os.geteuid() == 0, "root bypasses directory permission checks")
+    def test_unreadable_unknown_directory_is_rejected_without_descent(self):
+        directory = self.repository / "crates/heldout"
+        directory.mkdir()
+        directory.chmod(0)
+        try:
+            with self.assertRaisesRegex(InputFailure, "unexpected directory"):
+                check_inputs(self.repository, self.verus_root)
+        finally:
+            directory.chmod(0o755)
+
+    def test_unlisted_exact_conformance_manifest_is_rejected(self):
+        path = self.repository / "conformance/Cargo.toml"
+        path.parent.mkdir()
+        path.write_bytes(b"abc")
+        with self.assertRaisesRegex(InputFailure, "source inventory"):
+            check_inputs(self.repository, self.verus_root)
+
+    @unittest.skipIf(os.geteuid() == 0, "root bypasses directory permission checks")
+    def test_repository_cargo_lstat_permission_error_is_rejected(self):
+        self.repository.chmod(0)
+        try:
+            with self.assertRaisesRegex(InputFailure, "repository .cargo lstat failed"):
+                check_inputs(self.repository, self.verus_root)
+        finally:
+            self.repository.chmod(0o755)
+
+    def test_source_inventory_path_over_4096_bytes_is_rejected_early(self):
+        self.add_inventory_file("crates/" + "a" * 4_090)
+        with self.assertRaisesRegex(InputFailure, "source inventory path limit"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_source_inventory_path_over_128_components_is_rejected_early(self):
+        self.add_inventory_file("crates/" + "/".join("a" for _ in range(128)))
+        with self.assertRaisesRegex(InputFailure, "source inventory path limit"):
+            check_inputs(self.repository, self.verus_root)
+
+    def test_artifact_components_are_rejected_from_source_inventory(self):
+        path, baseline = self.read_source_inventory()
+        for component in ("target", "__pycache__", "node_modules", "liminal-5.3-spark"):
+            with self.subTest(component=component):
+                inventory = json.loads(json.dumps(baseline))
+                inventory["files"][f"crates/{component}/file.rs"] = {
+                    "sha256": ABC_SHA256,
+                    "mode": "100644",
+                }
+                path.write_text(json.dumps(inventory), encoding="utf-8")
+                with self.assertRaisesRegex(
+                    InputFailure, "forbidden source inventory component"
+                ):
+                    check_inputs(self.repository, self.verus_root)
 
 
 if __name__ == "__main__":

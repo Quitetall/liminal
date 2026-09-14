@@ -1,0 +1,670 @@
+{
+  "files": {
+    "Cargo.lock": {
+      "mode": "100644",
+      "sha256": "9edc0e116c0ede220f013bbd653a66a3105ae7652f5fe321190e935e5b02d0ec"
+    },
+    "Cargo.toml": {
+      "mode": "100644",
+      "sha256": "68257e6559919b4ade4145baabb122cc282d54704658fb55bb60585ae5705c42"
+    },
+    "benches/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "243ea71c352b8236f0371dab6e17f1363bd970d090c0e39e7680e5430a16a35f"
+    },
+    "benches/baselines/README.md": {
+      "mode": "100644",
+      "sha256": "0148aee0a6ad6397a32fa29c9c72effd0a865bd84b0706a3da20ff931a801647"
+    },
+    "benches/baselines/phase1.json": {
+      "mode": "100644",
+      "sha256": "c8d0c17ebdd7b464614a7cf4f259e8f87f532397ebb4ee4355942059a9df7a85"
+    },
+    "benches/benches/liminal.rs": {
+      "mode": "100644",
+      "sha256": "9379c3fe109ccc3968f5300da095f4be0828f046ac55a1a8109d7ea00532e4da"
+    },
+    "benches/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "0bf4623357e867e5e1ac4165c18510336fb8d896dd945a8fff8f4986cf1ab937"
+    },
+    "conformance/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "b01a2bf2c9e0c3ac27233da54cbed4e321d9b26bb95f3255ef56eabe00e1c619"
+    },
+    "conformance/spikes/real-cst/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "daced8890c33c93181fdb3025714c29077d12e3a46f4166ddb988ff6972a0734"
+    },
+    "conformance/spikes/real-cst/src/bin/report.rs": {
+      "mode": "100644",
+      "sha256": "37053cccc5af36c361ff93a8d2745616b64404ae84c5a1ab6a649f627c5f3a3d"
+    },
+    "conformance/spikes/real-cst/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "82dd188b1282fd9c157151c7d42c87f735de89f4660cdc7cf26cd08ae8bb7f86"
+    },
+    "conformance/spikes/spike-annotation/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "14268d50aea593c3906714ab99e9f52d62322a754ef634a48d55da1d7e8f922e"
+    },
+    "conformance/spikes/spike-annotation/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "72d6eca5e06d272a0e30f00483b9e5c975689676ec19fa45f3e948e9b71a0d41"
+    },
+    "conformance/spikes/spike-richedit/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "c22fd3b8b5a6fd44b6b1e502dd15f2b889a7a5992b1375a734f54d8075c541d3"
+    },
+    "conformance/spikes/spike-richedit/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "a8f081770d46a4c65873bbeb79b65520874ea4b4236476e0831d147009059398"
+    },
+    "conformance/src/bin/crash_evidence.rs": {
+      "mode": "100644",
+      "sha256": "898b4627e7c833ab6133844f4e9d953a05f42e72822967bd258eab125ed2da5e"
+    },
+    "conformance/src/bin/gates.rs": {
+      "mode": "100644",
+      "sha256": "9249cfb6768f62df94aeb82c6de4effac34fe970c31ad4e97961e6eecd2e5c5a"
+    },
+    "conformance/src/bin/gen_manifest.rs": {
+      "mode": "100644",
+      "sha256": "c1b669790b9dcf1544ed4f849266113220ebe806994785745e0b98db76f970a1"
+    },
+    "conformance/src/bin/lim-toy.rs": {
+      "mode": "100644",
+      "sha256": "04ec14742f4604ab32159a2ecd3ad0e0ba640cd5b6b0f55f4e24e7e4eea96317"
+    },
+    "conformance/src/bin/scorecard.rs": {
+      "mode": "100644",
+      "sha256": "dea864be142e6d3c96c359bd5af99989a256fdcbf5769e885af7e0f707af0cb6"
+    },
+    "conformance/src/bin/tracegen.rs": {
+      "mode": "100644",
+      "sha256": "454f34a4063d0cf198f84d87c63e9132983f1f19e0731ce5856488ef0a58984c"
+    },
+    "conformance/src/debt.rs": {
+      "mode": "100644",
+      "sha256": "3bd08bd4cb514df167b0910cc37f6693251396efd863da18eb8c80a706b4a81e"
+    },
+    "conformance/src/denominator.rs": {
+      "mode": "100644",
+      "sha256": "cac8261477dc4769876ac895deb407f9815ba03b5b26e4a612d57a5e7d8973a7"
+    },
+    "conformance/src/harness.rs": {
+      "mode": "100644",
+      "sha256": "a89b5a000d9740b085eca1d74bbadd75104b2eff415eaf5355d26ee5911a6f8f"
+    },
+    "conformance/src/identity/claims.rs": {
+      "mode": "100644",
+      "sha256": "1b6458db4258288e21c5be88ccb540df5d7b139fa0fffcf93d18cbb9020dd504"
+    },
+    "conformance/src/identity/gitenv.rs": {
+      "mode": "100644",
+      "sha256": "4a216ef4a9d921b1ce4f47c101b00ba1f512d40da00314da28e99aa00fd1a856"
+    },
+    "conformance/src/identity/matrix.rs": {
+      "mode": "100644",
+      "sha256": "40edbf75859cdbc12d18c84aa8a4ca38a5773a9c9cd56d66e5aaeeb74e87b60f"
+    },
+    "conformance/src/identity/mod.rs": {
+      "mode": "100644",
+      "sha256": "59ebd7661074ecaad05daf0de4d224672cdec044f97184397b782bd7909bbf54"
+    },
+    "conformance/src/identity/ops.rs": {
+      "mode": "100644",
+      "sha256": "5525926683765dea2c3c36c97c3962385ae4aa97dff2f410e992848e84a49199"
+    },
+    "conformance/src/identity/strategy.rs": {
+      "mode": "100644",
+      "sha256": "95ec9121543417761a04bae72cc284f9d8bea46fbb42f739ce7dfca97d651fab"
+    },
+    "conformance/src/laws.rs": {
+      "mode": "100644",
+      "sha256": "fd52676c226ee2e6b0c84e399590380a2439fbbab1285cb56684d3f64119c847"
+    },
+    "conformance/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "9f3ce33b06192d511d3bb82669de1c0082e56733f51b229c8c745912d5bb9365"
+    },
+    "conformance/src/memo.rs": {
+      "mode": "100644",
+      "sha256": "e537d439b187f43bb831c19f6dde94da6536b574fcde735f5edb085730b3072c"
+    },
+    "conformance/src/pandoc.rs": {
+      "mode": "100644",
+      "sha256": "1f82c7047ed7064983a1bef1b775e0398e48d55836462316f7540daab1f8ac69"
+    },
+    "conformance/src/pipeline.rs": {
+      "mode": "100644",
+      "sha256": "ce2d3b9a5b3818726a99b45afeb264da7c3f2f43422b2407bda7a4e1bc73daf7"
+    },
+    "conformance/src/replay.rs": {
+      "mode": "100644",
+      "sha256": "bb3f044e2cd4474e984714253d5571f18c9c87999ea4848f5cbb8566579865b8"
+    },
+    "conformance/src/scenario.rs": {
+      "mode": "100644",
+      "sha256": "106ea267f8902ca6d13430a5afe2f016fe503343eacc01597d1e6fc413d8a6a5"
+    },
+    "conformance/src/slo.rs": {
+      "mode": "100644",
+      "sha256": "dc3e7baf12491e8c803250b0b7f5adf618ff9ea3ac430508d7b6d2a06153d7b4"
+    },
+    "conformance/src/trace.rs": {
+      "mode": "100644",
+      "sha256": "2ad6ee4599942a2543f507cea1fe2aa66743365d1fb5b515ef728e8d40e07610"
+    },
+    "conformance/src/tracegen.rs": {
+      "mode": "100644",
+      "sha256": "a8fe5e212b9a661cb35429d87324ab0ffdea68b2f4edd1422597a225bfe60739"
+    },
+    "crates/liminal-cir/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "ca9d82c1799dea3ec52142c54bbf7d5f6b4a6706e98e248e4e5988d2aed26fec"
+    },
+    "crates/liminal-cir/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "6526d8a9fc1f05c0703205858ea52a7c61895953d37d77fc49da9878dfebaf64"
+    },
+    "crates/liminal-cli/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "a317b5ce097dab3f8747eb82bfdb171ebd924ee00d3a85a72cce76771e6e96be"
+    },
+    "crates/liminal-cli/src/cmd/check.rs": {
+      "mode": "100644",
+      "sha256": "898b192fd45c226bb1e3feb51e4ed669165b6b8aba51a4bd89b5f968d34338d2"
+    },
+    "crates/liminal-cli/src/cmd/jurisdiction.rs": {
+      "mode": "100644",
+      "sha256": "4680f57b25769110d77bdb40cee59a2de821ad99be0db859bddaf0443ac21d88"
+    },
+    "crates/liminal-cli/src/cmd/mod.rs": {
+      "mode": "100644",
+      "sha256": "ccb452bb613ffc6514c458c229fb5d54bf0fed814de2f3ccfddd694d39f356b4"
+    },
+    "crates/liminal-cli/src/cmd/overlays.rs": {
+      "mode": "100644",
+      "sha256": "b75e3657d7b7fbbdf5cd89d3b3ba0c8efd28b8eec4f49f253e8c1a5e7023054f"
+    },
+    "crates/liminal-cli/src/cmd/repair_undo.rs": {
+      "mode": "100644",
+      "sha256": "deff89f1f04125960ee1699d9019840226f027874fb46f802581b9ef5621229e"
+    },
+    "crates/liminal-cli/src/cmd/repairs.rs": {
+      "mode": "100644",
+      "sha256": "2f027a5bef570682b36375dc4fa315ff64709c91417ad7c82f5bb4bf5636f4a0"
+    },
+    "crates/liminal-cli/src/format.rs": {
+      "mode": "100644",
+      "sha256": "1f047cd02e715007409cfddcbc8318055b49a95dd21596019216ef505a9f7347"
+    },
+    "crates/liminal-cli/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "17fe36bfc175e70bb4985cfdbf4b5fedb6f0d2fb50dc72e3828bd095a1861030"
+    },
+    "crates/liminal-cli/src/main.rs": {
+      "mode": "100644",
+      "sha256": "4e4f115ad423bb7b395dac135b7b8101dfedd1f20821f159457636d6a614f256"
+    },
+    "crates/liminal-cst/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "90af97cc576b6a8104c9278ad0ce3dfc97ed7eb476e07a53684fb77b7ec4fd24"
+    },
+    "crates/liminal-cst/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "17fda93e28f51ade1f4cfe465e40ecd36c0de0fd51cfbe26b5e6297cf73749e4"
+    },
+    "crates/liminal-cst/src/parser.rs": {
+      "mode": "100644",
+      "sha256": "0c98d8cf6fcec160619de57db312ca7dc410436da6e4b551e4009b37416e35f7"
+    },
+    "crates/liminal-daemon/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "8720d7696ebaabdc2fca09809d6773ffb9a393738ffef4286d12532348d9ed82"
+    },
+    "crates/liminal-daemon/src/crash.rs": {
+      "mode": "100644",
+      "sha256": "7b86bd19dc68f45e0957b91307aa0e8c9cfab26f9183172d44b39d4861ccaa2f"
+    },
+    "crates/liminal-daemon/src/digest.rs": {
+      "mode": "100644",
+      "sha256": "7d6e9b0fa8dadf16b09ef0db0d08098a91b867548b7740b228af59af58974dcc"
+    },
+    "crates/liminal-daemon/src/executor.rs": {
+      "mode": "100644",
+      "sha256": "e7d5f6f37c0eb06417cfd63983928f2b872fc2b82d82838b1d797de5d4665b0b"
+    },
+    "crates/liminal-daemon/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "007e702b6c6cc2fb3552e506c78be04fe837c8711c231086e5d5309e4f776b1b"
+    },
+    "crates/liminal-daemon/src/main.rs": {
+      "mode": "100644",
+      "sha256": "62e6fd20bd53837d844fe61d824ac216c1e6199df626aaa18abe155655d8b2a5"
+    },
+    "crates/liminal-daemon/src/queries.rs": {
+      "mode": "100644",
+      "sha256": "a706303d7354888ede1faa5ba8be61f64e66bc20698b82d88d377454febd03d9"
+    },
+    "crates/liminal-daemon/src/reactor.rs": {
+      "mode": "100644",
+      "sha256": "5eb18455d17f8a1dc968ff222efac6fc8708934e0fa73282e3584f40d71debc1"
+    },
+    "crates/liminal-daemon/src/render.rs": {
+      "mode": "100644",
+      "sha256": "d562dd5644fc8cd03727bb66798f8a33ba2244e2c62688536751960dc1eba164"
+    },
+    "crates/liminal-daemon/src/runner.rs": {
+      "mode": "100644",
+      "sha256": "30ecb7f8d3f47254e4cf4fabfc83051d153362055611f6084451d5a43cc39c0d"
+    },
+    "crates/liminal-daemon/src/scenario.rs": {
+      "mode": "100644",
+      "sha256": "aa45178ef08396a7cb4a821cdb36bad829c015c9e44437a19ae14417495c972f"
+    },
+    "crates/liminal-daemon/src/session.rs": {
+      "mode": "100644",
+      "sha256": "1338eff571ab6eec86f85a90cfc0b96e2843900b0612ee101b699c4a66bc4d75"
+    },
+    "crates/liminal-daemon/src/workspace.rs": {
+      "mode": "100644",
+      "sha256": "d6b5a6e1ae603c49a159e72e8930e0bd23b40b3f81a972888839a5f1f3ddaf17"
+    },
+    "crates/liminal-daemon/tests/acceptance_actor.rs": {
+      "mode": "100644",
+      "sha256": "fd740c20ae9b55c54bd6d12d913d32c412518665916d7f418b3684a8339be22a"
+    },
+    "crates/liminal-daemon/tests/crash.rs": {
+      "mode": "100644",
+      "sha256": "2f24e770a4d2024f2d18ba87db2213b0b5c44fef1f3434a677f0a673777b1518"
+    },
+    "crates/liminal-daemon/tests/workspace_owner.rs": {
+      "mode": "100644",
+      "sha256": "2f1e19b97819f643ff57c47f80485a985be736481636d1bf2aff72d07b033756"
+    },
+    "crates/liminal-format/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "fb6cc26150a72c869deb0ef6ea4bc229695bb6deebb3d6a751a4050e22afbb16"
+    },
+    "crates/liminal-format/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "6b3cc8b90756ef8ae07e6634dd7fea5c041b229e9bc2dc5859e03269ae454342"
+    },
+    "crates/liminal-graph/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "28e414053bc1d111acddbe431995ff39fafe9c23b1803e0b65ee574a0fc45f42"
+    },
+    "crates/liminal-graph/src/kind.rs": {
+      "mode": "100644",
+      "sha256": "1d6f17891071df4318bde90e715b67ab2481d4d7c95324ad3467f0e8c762265f"
+    },
+    "crates/liminal-graph/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "2acb21a255c7c493f82739a83ef9ea23674e7a5aa1e19e5ded9c7e176f58cc14"
+    },
+    "crates/liminal-graph/src/node.rs": {
+      "mode": "100644",
+      "sha256": "0fa3aed96e80412df8d1abcd71163d8a50c389acc5fe246fa4052155e52918f1"
+    },
+    "crates/liminal-graph/src/op.rs": {
+      "mode": "100644",
+      "sha256": "9f4f4b628ed2f9acc95ab691c7b3d02f8d143ed075be5f1b7a86ce22aae8bf37"
+    },
+    "crates/liminal-graph/src/owner.rs": {
+      "mode": "100644",
+      "sha256": "9800a65d2a9233b7687c81d5c2511be064e3029a7562d0a19ce62e572184d82b"
+    },
+    "crates/liminal-graph/src/physical.rs": {
+      "mode": "100644",
+      "sha256": "8398cc9a8384b328fcdb64ff1a39dd158e4215a81b091dcde8ff677dac809f74"
+    },
+    "crates/liminal-graph/src/relation.rs": {
+      "mode": "100644",
+      "sha256": "84919d16ccf63045285aa1801aab0b4d6865f7a58b3365c8dbb66ccda53d1049"
+    },
+    "crates/liminal-graph/src/store/asof.rs": {
+      "mode": "100644",
+      "sha256": "b8e65b6739edbf53f9957ca4dbcc9811cc7f44b044d1460063a81f69259d8f39"
+    },
+    "crates/liminal-graph/src/store/log.rs": {
+      "mode": "100644",
+      "sha256": "11ce8ab5c0769fab553327ce025b27462ff9fb4846ad80e37d5952333d03e829"
+    },
+    "crates/liminal-graph/src/store/mod.rs": {
+      "mode": "100644",
+      "sha256": "196548f10063f06e122f0c46ffaabeac0ee822b8156ec03e6cea52051c591e1c"
+    },
+    "crates/liminal-graph/src/store/ns.rs": {
+      "mode": "100644",
+      "sha256": "f1fb248b9d0d8eb1d5254b327e59dc285b6c052ed7b4f02d22644c8cad680404"
+    },
+    "crates/liminal-graph/src/store/snapshot.rs": {
+      "mode": "100644",
+      "sha256": "60119d5d3e27a6a6173204f35ef62c48634fa73714193e17a9e31e9fd83acd44"
+    },
+    "crates/liminal-graph/tests/asof.rs": {
+      "mode": "100644",
+      "sha256": "3a1c524686996065dfab7b1fb9a1b8bca23c92e68d9d738941ac3b8f944d580c"
+    },
+    "crates/liminal-graph/tests/owner.rs": {
+      "mode": "100644",
+      "sha256": "81d4b6b2925f6641cea21a17b4e41b43389a1c726ff1d955fd1f238a5948fcf2"
+    },
+    "crates/liminal-graph/tests/store.rs": {
+      "mode": "100644",
+      "sha256": "405a5f263773ad2d62df74c1e2621828c3759adf1b680d068f12bced34ab110e"
+    },
+    "crates/liminal-hir/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "6bc2be0627c9240497b8d9e10dce086d89c7dec0624d1e9cf0d0d577ba6bfcf0"
+    },
+    "crates/liminal-hir/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "6a1071d146c7d1a486839d61ecfbdc209b32ad703ad445739e6e98abeb45f96f"
+    },
+    "crates/liminal-hir/src/schema.rs": {
+      "mode": "100644",
+      "sha256": "c310ade8f0983f001b9d030c42ec73bd052ce7cd2f4e97424a47e9857fbdb63b"
+    },
+    "crates/liminal-history/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "db77af492967c43321025fe08709b0ae90681d624b5d476aa0340794f6873862"
+    },
+    "crates/liminal-history/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "b9444a424535750fc3a03d892181af0f9787b1ff3123d1828ebab7b4c47ad277"
+    },
+    "crates/liminal-id/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "073cdf196086515e68a5274f63736bbc3157d55ae06ba42470b0204a5273d40b"
+    },
+    "crates/liminal-id/src/grade.rs": {
+      "mode": "100644",
+      "sha256": "14d5ccc244357aecfa8b41711c7501a74a871680aa57ab5b08bdf4988d8f74ff"
+    },
+    "crates/liminal-id/src/hash.rs": {
+      "mode": "100644",
+      "sha256": "266c85103bc60d3befcb1f372b9425c475c6ee3251207fd032b5efed3e24f799"
+    },
+    "crates/liminal-id/src/ids.rs": {
+      "mode": "100644",
+      "sha256": "106c2725b7c9043845ab0515587fdbcdcd24c60b3d1d1e6fd923d941607528b9"
+    },
+    "crates/liminal-id/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "dbcad4989ee81a51b8611fac2fe171ac1210e6aba14e293ee763f9018b28f4dd"
+    },
+    "crates/liminal-id/src/subject.rs": {
+      "mode": "100644",
+      "sha256": "c15057988fbc7ecaf138f2c27c6dfdcd93a9a843c53f1046c4f53c2503b892fa"
+    },
+    "crates/liminal-id/src/time.rs": {
+      "mode": "100644",
+      "sha256": "38b6f2418aa5d4028d11b6b5d4488b6cb8e5b97bf28287454c59081ca18594db"
+    },
+    "crates/liminal-jurisdiction/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "ace3e31c7c082daa39033083f4cde37573b75173cfa10f070da7d57dc9615bef"
+    },
+    "crates/liminal-jurisdiction/src/admission.rs": {
+      "mode": "100644",
+      "sha256": "1088b1c73e41a45f6b6657330c3903f3199eaba58dd38c5a9c1eee7a7b363908"
+    },
+    "crates/liminal-jurisdiction/src/blob.rs": {
+      "mode": "100644",
+      "sha256": "2cb056c96c8e477f092ebb500199c51ebcb3536e7dcb63e631933931969a492b"
+    },
+    "crates/liminal-jurisdiction/src/checker.rs": {
+      "mode": "100644",
+      "sha256": "529c309c2e27ab47d37e33a9241a1df7f3977a6ee7ee6af843334b1432b01da5"
+    },
+    "crates/liminal-jurisdiction/src/contract.rs": {
+      "mode": "100644",
+      "sha256": "d141a7f501b6f29458b557365a0571c75e0fd0a8ab12fde025c104d6f252d55a"
+    },
+    "crates/liminal-jurisdiction/src/explain.rs": {
+      "mode": "100644",
+      "sha256": "0de1d9a069af2d5ed2a17a67ead7d7f1e45835723cefc3dadfaf564bc596f181"
+    },
+    "crates/liminal-jurisdiction/src/holder.rs": {
+      "mode": "100644",
+      "sha256": "52ab962e52e11acef510d69955515ff59ded3a0de07e80155b3089f6ef9adac9"
+    },
+    "crates/liminal-jurisdiction/src/ilrp.rs": {
+      "mode": "100644",
+      "sha256": "287105c022110e555005f0b90db49c5961e8100985c2bc70c409abc03ff4c567"
+    },
+    "crates/liminal-jurisdiction/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "26791aeff9072caba0ada9891b5d886aa3d0bc5862466e1ce933c67d2873865a"
+    },
+    "crates/liminal-jurisdiction/src/overlay.rs": {
+      "mode": "100644",
+      "sha256": "bfc99fb929780077d9f151a304e8ab39003dda91c7e0fe1c33f1e8138f00e216"
+    },
+    "crates/liminal-jurisdiction/src/profile.rs": {
+      "mode": "100644",
+      "sha256": "be89bb2d2413e5501ce79694f9e1eeb95d4cfe1737ea670824b5268f48996562"
+    },
+    "crates/liminal-jurisdiction/src/reconcile.rs": {
+      "mode": "100644",
+      "sha256": "ca1fc009be905581221f49f0dc53cbf550f38a53112448ba75f40db6361591b4"
+    },
+    "crates/liminal-jurisdiction/src/repair.rs": {
+      "mode": "100644",
+      "sha256": "40a3e7763a081dab0bc90639467c9bf3ec986d7b95444cf6782b94a6ba52b0cd"
+    },
+    "crates/liminal-jurisdiction/tests/admission.rs": {
+      "mode": "100644",
+      "sha256": "a0b877ffcaf7768c4b58ebb2487a81dbce2bef4dec1487497a6a44d834b9dc1a"
+    },
+    "crates/liminal-jurisdiction/tests/ilrp_driver.rs": {
+      "mode": "100644",
+      "sha256": "8917b516eea6f4b98ff3f7165bbcfcaa3bc0cc3b678d8d9192b00b5e0a9b22dc"
+    },
+    "crates/liminal-lua/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "5dd05ee0bd445371fa17e24bdf57b750f1a6a778b6ea3d6b2039c117368b1d45"
+    },
+    "crates/liminal-lua/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "978d38c9e44286e02fe188c8b5335b0382505593b790aa0c24f39bcae86eca01"
+    },
+    "crates/liminal-plugin-api/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "ecdef10f5b82e78d39723394b5749c1f602fa78409eb46c238dcb502d8d95e04"
+    },
+    "crates/liminal-plugin-api/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "2ba4c399f36815c113e3565a9109c78c50eaa1f89e2011e107ef7368f7377910"
+    },
+    "crates/liminal-protocol/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "344902d79229e1511881d2c7f135f12979ce91cb1a18af910641f109d3929e03"
+    },
+    "crates/liminal-protocol/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "d97b0732325c4e012c6342a3fed03b6f2de4783de5d5357ca69710fc8493e4be"
+    },
+    "crates/liminal-query/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "4d1111b48a3910379d59de24cec96d721f1d9ce7577a8e5e7f9fde1ac2563443"
+    },
+    "crates/liminal-query/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "3b9a51ea667beb6473308c0c015f82c49cea61d8470029ac9b74504613200714"
+    },
+    "crates/liminal-query/src/memo.rs": {
+      "mode": "100644",
+      "sha256": "5dc3b606e117710538c90931e7759f5bb882575bee163a76462b9a16d7b4befa"
+    },
+    "crates/liminal-resolver/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "4fde395ae9df354f44b36a9022e076506dc9ba17fbdff83e608eb6d075b8f726"
+    },
+    "crates/liminal-resolver/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "567cd76e94a91e9dbb8cda122a61196943eb14657261035d9bee9aaa664090db"
+    },
+    "crates/liminal-resource/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "c98e5fd198b13d9972464ffd1290935d2509857dbc3e30666056ee420c562e44"
+    },
+    "crates/liminal-resource/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "64ac65cb5feaee07b514d1b06a524534510cfd2e906343641517a6d954739591"
+    },
+    "crates/liminal-revision/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "c5f9ba3da66f63f05afb1508cd3c288afe2851c8834c8e6f88504d8ef97ae2cc"
+    },
+    "crates/liminal-revision/src/basis.rs": {
+      "mode": "100644",
+      "sha256": "7e44bf34e4682de4ea53900680045c72a58e0bda64b31b7b1f2df952075c375f"
+    },
+    "crates/liminal-revision/src/deps.rs": {
+      "mode": "100644",
+      "sha256": "4c0cbbf5465c9e2ad9283f2b817c903a148ae8a658dab10e726e707116684bf9"
+    },
+    "crates/liminal-revision/src/durability.rs": {
+      "mode": "100644",
+      "sha256": "7be650d36604b8f419475dacbdf914477bb014a37de6fc58802abdb2ed587af5"
+    },
+    "crates/liminal-revision/src/inputs.rs": {
+      "mode": "100644",
+      "sha256": "2da28a8c2a287ea9879ec51ea683f6a7208efc7331b8b8b4a4cf90d613291e7c"
+    },
+    "crates/liminal-revision/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "8cbeaa5e402d3a3de43be8600cede189f6517a2eec6838c859ff7c7f0677d743"
+    },
+    "crates/liminal-revision/src/perspective.rs": {
+      "mode": "100644",
+      "sha256": "6f285b23eaf9e62674707b40b2b7cf0a173adc5e806884f8f274898ea9713c81"
+    },
+    "crates/liminal-safety/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "3bd35d545d6d892f16afcd6993659a4d2ca4cfd818a7cc844b4b3e717e1819f0"
+    },
+    "crates/liminal-safety/examples/acknowledgement_witness.rs": {
+      "mode": "100644",
+      "sha256": "ef1ce141ec4b5f0ee14f0258203f85c9d6f369485b96e3176613a66d15762a02"
+    },
+    "crates/liminal-safety/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "a96cf145ef072b23916d7bc92f6c90cde82102a8d0451c2b361f591f3795c5ba"
+    },
+    "crates/liminal-safety/tests/acknowledgement.rs": {
+      "mode": "100644",
+      "sha256": "88ab80177891657226fd084781d3861c5347cb156996747a26e7e56e78c368ce"
+    },
+    "crates/liminal-scratch/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "2465cb7240df326930fae11a36c6fc916ec0be28260aa35658551e1a8d351498"
+    },
+    "crates/liminal-scratch/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "2446f92bb4a4ab851395055ee79d6dcd397ca49c26502542017f85b2dc5bdece"
+    },
+    "crates/liminal-source/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "cf39060c6049117d7ebd570cee7feb185704177a433ea7372d27eb886bd1450d"
+    },
+    "crates/liminal-source/src/file.rs": {
+      "mode": "100644",
+      "sha256": "0c042387d8cff02ae2d772de8b5f9fdc7fe38aecfa80996b70d6bf32c528b624"
+    },
+    "crates/liminal-source/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "ab87981f03af01b0dd0a243d34fec094ffbc31714ab7998bb65d5712afd90908"
+    },
+    "crates/liminal-source/src/merge.rs": {
+      "mode": "100644",
+      "sha256": "86cf4e35099b042c88b215fbec483318b3a79098445db2849ce44dc65f98ea46"
+    },
+    "crates/liminal-source/src/paragraph.rs": {
+      "mode": "100644",
+      "sha256": "fd203d92328f370657ec964fd3caae481d97e50e4547b88633c60437cbb5884f"
+    },
+    "crates/liminal-source/src/range.rs": {
+      "mode": "100644",
+      "sha256": "57a91297fa6e03d3f56b05a514ab0b7b8593da080deee3e460dddc06c6a26728"
+    },
+    "crates/liminal-source/src/view.rs": {
+      "mode": "100644",
+      "sha256": "fb7968f1dcbda0863b82b2321ff74c17dd4dd374b2afdafec1f1fa4f2e1c1802"
+    },
+    "crates/liminal-sync/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "2ed68ab18443837d74efcbd31bdeb0b6b596afe940ed1c6787521f0f0ade54ff"
+    },
+    "crates/liminal-sync/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "036287b25c850fa9e1003aec7ad2bf1dff8321fff380b7c8870341cd5c90a631"
+    },
+    "crates/liminal-text/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "321567a727a9ca31e8943d12e2c26157e5d7d0cab51abbc0c79332f0b7a94e94"
+    },
+    "crates/liminal-text/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "cd870a3b544997a135add176dc2ce5688eb556c3f36593f9a915f8325feae464"
+    },
+    "crates/liminal-transform/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "c66a0041ed0c5f4624f7bb9216a55ac12239726f1dd10b7ff930a3b8881f5279"
+    },
+    "crates/liminal-transform/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "e3ec686505affa43bffb156de8010049fbc7446cc1ee6bce270ee626fe96f0de"
+    },
+    "crates/liminal-wasm-host/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "866f21fc873ee36caec914187758a893cc01569d399e3973aade48a6edd5f34e"
+    },
+    "crates/liminal-wasm-host/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "8f9960d455e666429d31d977535cdff682faf2a8727a595c03c9149ac84949f5"
+    },
+    "crates/liminal-xtask/Cargo.toml": {
+      "mode": "100644",
+      "sha256": "d5ac91b0d88eed1566d974d14e28486ea779d54c5851665d239c17854761dc4b"
+    },
+    "crates/liminal-xtask/src/bench.rs": {
+      "mode": "100644",
+      "sha256": "b538a00cd4831d4111628e462cf94dd337307b09a7d7ee842394a17cc4ab2055"
+    },
+    "crates/liminal-xtask/src/formal.rs": {
+      "mode": "100644",
+      "sha256": "5a7f6adc97295df0952e87d4befa49bf7da372f9e8320673c7e2346e70ca6c6b"
+    },
+    "crates/liminal-xtask/src/haq.rs": {
+      "mode": "100644",
+      "sha256": "a851fd86bcd077c0013e46a932ff2c91a38659685c030d80db65708cf092cbcc"
+    },
+    "crates/liminal-xtask/src/lib.rs": {
+      "mode": "100644",
+      "sha256": "79f3464b2fa61a41b28f5c5261dd637f4c178de203e7b56c6ee6ff5434daaae0"
+    },
+    "crates/liminal-xtask/src/main.rs": {
+      "mode": "100644",
+      "sha256": "b7ff96da28bd1cc0c97eb361e7605bcdb1966cd89473ab37fd0ca3967aa85730"
+    },
+    "crates/liminal-xtask/src/vstd_admission.rs": {
+      "mode": "100644",
+      "sha256": "532c7d44c09aefde864169121ecb0c8bfb6e44025d987b697774b4f259a4c38d"
+    },
+    "crates/liminal-xtask/tests/formal.rs": {
+      "mode": "100644",
+      "sha256": "91b31d3c077ae2166c2b097bec4b08c149df94bdb95b08702c9653d18d0e17cc"
+    },
+    "rust-toolchain.toml": {
+      "mode": "100644",
+      "sha256": "3fa5312726831c209741bbea6bd0d51c20cb40ad9eb733a331f9a8a86fc840b5"
+    }
+  },
+  "schema": "liminal-proof-source-inventory-v1",
+  "source_commit": "3bd93a9617ff8705ace37f4a19440c70f867f689"
+}

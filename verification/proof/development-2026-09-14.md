@@ -3,7 +3,7 @@
 Status: development evidence, not qualification. Source baseline:
 `3b1ec265b9ffc8bdd3da596011b4ac2593c2369c`.
 
-The three public proof-input seams have 46 passing temporary-filesystem controls.
+The three public proof-input seams have 63 passing temporary-filesystem controls.
 The original changed-source control failed against the permissive stub before
 implementation, then passed with hash validation. The later deep-JSON trial
 failed only because its expected error message was too specific: this Python
@@ -12,6 +12,27 @@ That trial does not demonstrate a prior admission defect. `RecursionError` is
 also translated to `InputFailure` for interpreters that impose a lower limit;
 no custom nesting scanner remains. Tests do not establish resistance to
 concurrent malicious filesystem swaps, which the trusted-host model excludes.
+
+`check_inputs` now also enforces `source-inventory.json`, generated mechanically
+from 166 Git blobs at baseline
+`3bd93a9617ff8705ace37f4a19440c70f867f689` (2,282,505 aggregate bytes; all mode
+`100644`). Public controls refuse the previously admitted added `build.rs`, root
+`.cargo`, missing or changed additional files, extra empty directories, executable
+bit drift, links, malformed or oversized inventories and visible scan failures.
+The projection excludes held-out, Git, nested-checkout and artifact traversal.
+Its embedded baseline is descriptive rather than self-authorizing: orchestration
+must still bind the runner, profile and execution commit before and after use.
+Path-length, component-count and forbidden artifact-component controls make the
+refusal work bounded before parent construction or traversal. The earlier checker
+also refused those scratch manifests later through set mismatch; these controls
+are bounded-work hardening, not evidence of a prior false-valid result.
+
+The current checkout itself has tracked `.cargo/mutants.toml`; it is not Cargo
+configuration. The public checker deliberately targets a reconstructed source
+stage and refuses any root `.cargo`, so the live-checkout refusal is expected and
+does not call for deleting or changing that file. `source-closure-live-v1.log`
+records the separate staged public call returning only `inputs-valid` with
+`qualification: false`; broader orchestration remains in progress.
 
 Durable logs are under `/mnt/4tb/liminal-formal-evidence/reviews/`:
 
@@ -123,8 +144,32 @@ expected witness. These runs establish feasibility only, not qualification.
 adding a new `crates/liminal-safety/build.rs` introduced a custom-build target
 while all eight selected pins remained unchanged. No build script was executed.
 The orchestrator therefore requires a closed source inventory; the selected eight
-paths alone cannot bind implicit Cargo build inputs. The log SHA-256 is
+paths alone cannot bind implicit Cargo build inputs. That inventory is now
+implemented as a 166-entry input-stage check, but it does not bind the runner,
+profile, execution commit or ambient build environment. The log SHA-256 is
 `ecb13498685523d9c1955d241d08d88b343331a0fcbbcc528a0cb1ddb6bfd735`.
+
+## Full-proof JSON format feasibility
+
+`full-proof-json-v1.log` records a strict-environment, exact-vendor full-crate
+format probe: exit 0 after 1m34.443s, 1.1 GiB peak memory and no swap. Verus emitted
+two whitespace-separated JSON values—not JSONL and not one JSON object—with
+`is-verifying-entire-crate: true`, zero errors, and verified counts 1,862 and 4.
+`schema-report.json` parsed both values. Neither record contains an explicit crate
+identity, source coordinate or cryptographic source binding; attribution to vstd
+and `liminal_safety` is inferred only from function namespaces and ordering.
+`func-details` cardinality differs from the verified count, so it cannot be treated
+as a direct per-function expansion of that count. This is format feasibility, not
+a formal receipt or qualification.
+
+For commit `570fcfc6`, `dependency-constructor-570fcfc6-disposition.md` records
+LAMU **PASS WITH NITS** and critic **PASS** after each finding was checked; the raw
+receipt is `dependency-constructor-570fcfc6-review.jsonl`. Source-map verification
+is recorded in `source-closure-independent-map.md`; the dependency source Spec and
+Standards PASS reports are `dependency-constructor-spec-review.md` and
+`dependency-constructor-standards-review.md`; and the source-closure Standards
+PASS is `source-closure-standards-review.md`. These reviews do not establish runner
+correctness, proof qualification, or phase authority.
 
 All sixteen obligations remain open. Archive reconstruction, dependency
 construction, ordinary builds, strict verified builds and witnesses are input

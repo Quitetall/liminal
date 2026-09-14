@@ -4,6 +4,20 @@
 source and executable hash maps in `inputs.json`. It rejects malformed manifests,
 symlink inputs and pin drift. Its only success status is `inputs-valid`, with
 `qualification: false`. It does not execute a proof or discharge an obligation.
+The same seam also validates `source-inventory.json`: 166 files and their Git
+executable semantics from baseline commit
+`3bd93a9617ff8705ace37f4a19440c70f867f689`, across only the declared repository
+roots. Added, missing or changed files, extra directories, links, special files,
+scan errors and root `.cargo` configuration refuse. The embedded baseline commit
+identifies the inventory; it does not bind the current runner or execution commit.
+The inventory is limited to 2 MiB and 10,000 files; paths to 4,096 UTF-8 bytes and
+128 components; each file to 32 MiB; and aggregate source bytes to 128 MiB.
+Artifact, held-out and Git-control directory components are never traversed.
+The current checkout contains tracked `.cargo/mutants.toml`, which is not Cargo
+configuration. `check_inputs` nevertheless targets a reconstructed source stage
+and intentionally refuses any root `.cargo`; this is a staging boundary, not an
+instruction to delete or change the tracked file. A staged public-seam probe is
+recorded separately while orchestration work continues.
 
 `check_distribution(archive, extracted_root, expected_sha256)` in
 `distribution.py` binds the complete extracted Verus file and directory inventory
@@ -45,6 +59,9 @@ be promoted to `formal-proof` or treated as full input closure. The full runner 
 pinned source/distribution/dependency authority, controlled fresh builds, two cold
 replays, negative proof/runtime controls, executable bindings and durable raw
 evidence. Existing formal qualification commands remain refusal-only.
+The source inventory is a closed repository projection, not the whole build
+environment. The orchestrator must independently bind the runner, profile and
+execution commit before and after use.
 
 The manifest pins the production acknowledgement fragment present at
 `3b1ec265b9ffc8bdd3da596011b4ac2593c2369c`. No pin refresh is automatic.
