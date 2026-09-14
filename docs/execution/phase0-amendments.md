@@ -119,3 +119,10 @@ digest mirror under AM-17.11, with a committed before/after audit record per
 or behavior-changing targets and golden changes require a separate decision,
 while qualifier logic, mutation identity, coverage, thresholds, historical
 evidence, and phase authority remain unchanged.
+
+AM-17.12 (M17): user-approved 2026-09-13, implement the six StoreOwner/read-only
+GraphStore interface obligations and migration witnesses recorded in
+`verification/authority-amendment-proposal.md`, preserving valid behavior and
+existing assertions while requiring checked admission, validated recovery and
+scoped durable receipts; full verification waits for the next user checkpoint,
+and formal adoption, phase GO and suite ratification remain separate.

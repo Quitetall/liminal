@@ -1,12 +1,14 @@
-# Proposed AM-17.12: close ordinary raw-write authority before proving ILRP
+# AM-17.12: close ordinary raw-write authority before proving ILRP
 
-Status: **draft for the user's T1 decision**, not an active amendment, SAS
-acceptance, phase authorization, or qualification result. The number is a
-candidate against baseline `fb172797ab715f5a44aec9d0563a86d865af550e`; recheck
-the active ledger before allocation. No production signature changes have
-been made under this proposal.
+Status: **user-approved for implementation, 2026-09-13**. Brian authorized
+steps 1–4: record this amendment, migrate scoped StoreOwner/read-only GraphStore,
+enforce checked repair admission/recovery/finalization/receipts, and add bypass
+controls while retaining existing behavior and assertions. Full verification
+requires the next checkpoint. Approval is not SAS successor acceptance, phase
+authorization, proof establishment, or suite ratification. The number was checked
+against baseline `64ee56528df5f95b0f3c12f7f881942a6b2343f3`; AM-17.12 was unused.
 
-## Decision requested
+## Approved decision
 
 Make ordinary `GraphStore` handles read-only. Move root write authority into an
 explicit, non-serializable `StoreOwner` capability held by trusted workspace
@@ -39,7 +41,7 @@ before follow-up bookkeeping (`crates/liminal-daemon/src/runner.rs:957`). The
 new receipt interface must make committed, contested, aborted, and deferred
 outcomes distinct; an `Ok(NeedsReview)` must not confer a committed receipt.
 
-## Proposed interface obligations
+## Approved interface obligations
 
 1. **Root authority.** Opening/creating an owned store yields `StoreOwner`,
    which lends a read-only store view and explicitly scoped coordinator
@@ -98,13 +100,12 @@ cannot realize this authority boundary, stop rather than weaken the claim.
 
 ## Adoption and protected surfaces
 
-After T1 approval, record the exact amendment in M17 and the active Phase 0
-ledger in a separate reviewed commit **before** production changes. Recheck
-the amendment number at that time. Record any later discovered semantic gap
-through the normal ambiguity procedure.
+Record this amendment in M17 and the active Phase 0 ledger in a separate
+reviewed commit **before** production changes. Record any later discovered
+semantic gap through the normal ambiguity procedure.
 
 Do not change the accepted SAS's 777 IDs or bytes, the frozen HAQP instrument,
 its thresholds or packet, locked corpora, or M18-M24 authorization. Successor
 adoption of formal qualification obligations remains a separate human action.
-This amendment would authorize interface migration only, not a phase GO or a
+This amendment authorizes interface migration only, not a phase GO or a
 claim that the new implementation has already met its proof obligations.

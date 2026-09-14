@@ -26,8 +26,10 @@ production same-body binding, adapters and formal evidence aggregation remain
 unimplemented. See `bootstrap/README.md` for reproducible tool-control commands.
 
 `authority-amendment-proposal.md` records the concrete StoreOwner/read-view
-split for the user's T1 decision before the frozen production API migration.
-It is a draft, not an active amendment or a human acceptance record.
+split approved by the user on 2026-09-13 as AM-17.12, recorded in M17 and the
+Phase 0 ledger before production migration. The user authorized implementation
+and targeted development controls (steps 1–4); full verification waits for the
+next checkpoint. This does not adopt the formal companion or authorize a phase.
 
 ## Authority and scope
 
