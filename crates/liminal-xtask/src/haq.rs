@@ -11794,8 +11794,8 @@ const CONCURRENCY_SCAN_EXCLUDED_CRATES: [&str; 2] = ["liminal-xtask", "liminal-s
 /// `tracing`'s macros record spans in the calling thread. `blake3` is taken at
 /// default features, so its optional `rayon` thread pool is not compiled in.
 /// `ropey`, `rowan`, `camino`, `crc32fast`, `fs4` and `toml` export no macro
-/// that spawns.
-const CONCURRENCY_SCAN_ALLOWED_DEPENDENCIES: [&str; 14] = [
+/// that spawns. `same-file` 1.0.6 exports no macros (DG17.4 source audit).
+const CONCURRENCY_SCAN_ALLOWED_DEPENDENCIES: [&str; 15] = [
     "anyhow",
     "blake3",
     "camino",
@@ -11804,6 +11804,7 @@ const CONCURRENCY_SCAN_ALLOWED_DEPENDENCIES: [&str; 14] = [
     "fs4",
     "ropey",
     "rowan",
+    "same-file",
     "serde",
     "serde_json",
     "thiserror",

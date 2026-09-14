@@ -223,7 +223,10 @@ Inventory passes. No expected result, threshold or frozen probe was changed.
 Fixed-source full CI and later independent stages have now run; the failed
 recipe, fresh producer-generated crash evidence, five remaining frozen-registry
 failures and resource measurements are recorded in
-`verification/ilrp-verification-2026-09-13.md`. DG17.4 needs Brian's decision.
+`verification/ilrp-verification-2026-09-13.md`. Brian approved DG17.4 on
+2026-09-14, conditional on the dependency audit and epoch-transaction comparison.
+The approval is recorded separately in commit 6451c0c6. The registry maintenance
+does not complete the remaining owner/admission work or qualify a new candidate.
 
 Observed build-cache interference: the packet-digest build lost a native BLAKE3
 archive and returned 101; target/debug disappeared during inspection. The

@@ -2419,9 +2419,9 @@
     "reason": "reactor commit; same open question as runner.rs"
    },
    {
-    "path": "crates/liminal-daemon/src/workspace.rs",
+    "path": "crates/liminal-graph/src/owner.rs",
     "sites": 1,
-    "reason": "workspace commit; same open question as runner.rs"
+    "reason": "existing workspace epoch commit relocated to EpochWriter::persist under AM-17.12/DG17.4; unchanged deferred classification, same open question as runner.rs"
    },
    {
     "path": "crates/liminal-cli/src/format.rs",
