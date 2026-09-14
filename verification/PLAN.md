@@ -46,7 +46,10 @@ scratch-source control observed strict forwarding in that reconstructed
 environment. A bounded same-source ordinary/verified witness pair also observed
 stable per-build binaries and identical runtime output. This remains development
 witness binding, not verifier-source correctness, a qualified executable, cold
-independent construction or qualification. Its 106 support controls and development statuses retain
+independent construction or qualification. A bounded stdout reader now preserves
+up to 64 ordered summary/report observations under a closed pinned-emitter schema;
+its self-reported metadata does not authenticate the command, source or tool.
+The 121 support controls and all development statuses retain
 `qualification: false`, never proof or qualification. The caller must bind
 source/tool/profile and lock/archive authority, and independent
 comparison—not the producer's returned map—checks constructed output. Real probes

@@ -106,6 +106,27 @@ output. This is development witness binding, not a qualified executable. Cold
 independent construction cycles and aggregate qualification remain unfinished. See
 `toolchain-development-2026-09-14.md` for the constructor evidence.
 
+`parse_verus_output(raw)` in `observation.py` is the bounded stdout reader. It
+accepts only `bytes` up to 2 MiB, preserves at most 64 ordered summary/report
+events, and requires at least one JSON report. Reports use the pinned emitter's
+closed, typed default/no-time schema; genuine failure, partial and zero-check
+reports are retained rather than promoted to success. Counts are canonical u64
+values. The exact partial-summary suffix is recorded as `partial: true`; a
+suffix-free summary has no `partial` member. JSON strings must be Unicode scalar
+values. Function-note arrays preserve emitter order but refuse duplicate strings
+within either note set.
+
+Reported profile, version, platform, toolchain and commit values are preserved
+as self-reported metadata. They do not authenticate source, tools, commands or
+pins. The result is always `output-parsed` with `qualification: false`. This
+reader is not yet called by the formal commands. Fifteen public-interface
+controls and their development evidence are described in
+`observation-development-2026-09-14.md`; the complete proof-support discovery
+currently passes 121 tests. Real-output replay v3 parsed the four retained
+positive and negative stdout artifacts with the final parser and test hashes
+held unchanged. That replay did not execute Verus or add authenticity or
+qualification evidence.
+
 Run all public-interface controls with:
 
 ```sh
