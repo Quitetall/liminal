@@ -203,7 +203,7 @@ struct Inner {
     log: SegmentLog,
     /// Held for the store's lifetime; advisory, so it survives SIGABRT of the
     /// holder (an O_EXCL lockfile would deadlock crash recovery).
-    _lock: fs::File,
+    lock_handle: same_file::Handle,
 }
 
 /// The toy transactional graph store and ILRP coordinator (v4 §92; ADR-0007).
@@ -292,7 +292,7 @@ impl GraphStore {
             inner: Mutex::new(Inner {
                 state,
                 log,
-                _lock: lock,
+                lock_handle: same_file::Handle::from_file(lock)?,
             }),
         })
     }
@@ -557,4 +557,25 @@ pub enum StoreError {
     /// Underlying I/O failure.
     #[error(transparent)]
     Io(#[from] std::io::Error),
+}
+
+impl GraphStore {
+    /// Compare the actual held lock with the currently named lock, not two
+    /// re-resolved path strings. A check at assembly time, not a filesystem
+    /// lease against arbitrary later same-user directory replacement.
+    pub(crate) fn matches_directory(&self, dir: &Utf8Path) -> Result<bool, StoreError> {
+        if self.dir != dir {
+            return Ok(false);
+        }
+        let inner = self.lock()?;
+        // Match the permissions required by the original write-lock open. Do
+        // not create, truncate, or write the named file while checking identity.
+        let named_file = match fs::OpenOptions::new().write(true).open(dir.join("lock")) {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+            Err(error) => return Err(error.into()),
+        };
+        let named = same_file::Handle::from_file(named_file)?;
+        Ok(inner.lock_handle == named)
+    }
 }

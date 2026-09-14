@@ -99,6 +99,63 @@ while the grant exists and succeeds after its drop; no deadlock is asserted away
 Some critic output was truncated by the review service; it is not an independent
 complete adversarial pass or qualification evidence.
 
+## Slice C: actual store-lock identity at assembly
+
+Post-commit review of slice B returned PASS WITH NITS, with several speculative
+critic findings. Verification at the actual code established:
+
+- `StoreOwner::store` still returns `&GraphStore`; the Arc fields are private.
+- Actor scenarios are freshly parsed inside each loop iteration.
+- `field` returns `&str`; ActorId parsing uses `Uuid::parse_str`, not an
+  arbitrary-nonempty-string check. Caller identity remains a claim by design.
+- GraphStore accepts an arbitrary store directory; only ToyWorkspace appends
+  `state`, so the graph-level lock test uses the correct directory.
+- Public owner-consuming assembly does not hand an owner to ordinary readers.
+
+The path concern produced a real counterexample: open an owner, rename its
+`state` directory, create a replacement at the same pathname, then assemble with
+the old owner. Path equality accepted the wrong store. The new test failed on
+that code (exit 101, `storeowner-replacement-red.log`) and passes after the fix
+(`storeowner-replacement-green.log`). No existing assertions were weakened.
+
+The coordinator now retains its originally locked File inside a `same-file`
+Handle and compares it with an independently opened handle to the named lock.
+Both handles stay open during comparison; no clone of the held lock is required.
+The named lock is opened without create/truncate/write effects. Path spelling
+must still match. Canonicalizing two path strings alone would not detect the
+replacement and is not the fix.
+
+`same-file` is pinned to the already locked version 1.0.6; only a direct dependency
+edge is added, not a version upgrade. Its cached source was inspected: Unix
+comparison uses device/inode while both files remain open. Windows file-ID
+limitations documented by that implementation, including ReFS, mean this is not
+Windows identity-qualification evidence. Current witness is Unix, under the
+approved Linux-first host scope. This is a point-in-time check, not a directory
+lease against later same-user replacement/hard-link tampering. Those stronger
+host guarantees are not established by this slice.
+
+Targeted store regression includes all nine existing store tests plus three owner
+tests (`storeowner-lock-regressions.log`); two actor and two workspace-owner tests
+pass in `storeowner-identity-regressions.log`. Full verification remains pending.
+
+Pre-commit identity review: PASS WITH NITS. Adopted the missing-lock result as
+`Ok(false)` rather than an I/O error; a targeted control first failed on the old
+result and then passed. Other I/O errors remain fail-closed errors. Kept the
+write-capable, non-creating/non-truncating open: it matches GraphStore's original
+write-lock permission requirement and does not introduce a requirement to read
+the lock file. The store is a writable coordinator, not a read-only mount service.
+Renamed the actively used field to `lock_handle` for clarity.
+
+## T1 blocker before completing raw-API closure
+
+DG17.3 in `docs/execution/M17.md` records the exact frozen qualifier dependency:
+`generated_ilrp_probe` constructs a raw driver and supplies unchecked safety
+evidence for a Node absent from an empty store. A checked admission cannot accept
+that fixture. AM-17.13's coordinate-only exception does not authorize adapting
+it. Request a narrow fixture/interface migration exception that retains all
+probe obligations, assertions, output bytes, goldens and thresholds. No qualifier
+code was changed; no unchecked compatibility bypass is authorized.
+
 ## Remaining work before the full-verification checkpoint
 
 - Close GraphStore raw begin/snapshot access after migrating all write callers.

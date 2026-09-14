@@ -23,3 +23,32 @@ fn workspace_rejects_another_roots_store_owner() {
         liminal_id::GraphRevisionId(0)
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn workspace_rejects_owner_after_store_directory_replacement() {
+    let root = liminal_scratch::ScratchDir::new("workspace-owner-replaced").unwrap();
+    let path = root.join("state");
+    let original = StoreOwner::open(&path).unwrap();
+    std::fs::rename(&path, root.join("previous-state")).unwrap();
+    let replacement = StoreOwner::open(&path).unwrap();
+    assert!(
+        ToyWorkspace::open_with_owner(&root, original).is_err(),
+        "equal path text must not attach the old store to its replacement"
+    );
+    assert_eq!(
+        replacement.store().head().unwrap(),
+        liminal_id::GraphRevisionId(0)
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn missing_named_lock_does_not_match_the_owner() {
+    let root = liminal_scratch::ScratchDir::new("workspace-owner-missing-lock").unwrap();
+    let path = root.join("state");
+    let owner = StoreOwner::open(&path).unwrap();
+    std::fs::rename(&path, root.join("previous-state")).unwrap();
+    std::fs::create_dir(&path).unwrap();
+    assert!(!owner.matches_directory(&path).unwrap());
+}

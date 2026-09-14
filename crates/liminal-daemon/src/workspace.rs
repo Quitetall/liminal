@@ -68,7 +68,7 @@ impl ToyWorkspace {
     /// The store must belong to this exact workspace; check before recovery or
     /// any staged-file cleanup. Ordinary callers receive no owner back.
     pub fn open_with_owner(root: &Utf8Path, owner: StoreOwner) -> Result<Self, WorkspaceError> {
-        if owner.store().dir() != root.join("state") {
+        if !owner.matches_directory(&root.join("state"))? {
             return Err(liminal_graph::StoreError::Conflict(
                 "store owner belongs to another workspace".into(),
             )

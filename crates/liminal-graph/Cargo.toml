@@ -14,6 +14,7 @@ liminal-scratch.workspace = true
 camino.workspace = true
 crc32fast.workspace = true
 fs4.workspace = true
+same-file.workspace = true
 liminal-id.workspace = true
 serde.workspace = true
 serde_json.workspace = true

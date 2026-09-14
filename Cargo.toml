@@ -36,6 +36,7 @@ sha2 = "0.10" # SHA-256 metadata for minimized regression corpus provenance
 zstd = "0.13" # heldout-corpus trace compression (AM-11.6): imported histories stored .zst in-tree
 crc32fast = "1" # log record checksums (v4 §92)
 fs4 = "0.13" # advisory single-writer lock; survives SIGABRT where O_EXCL lockfiles would not
+same-file = "=1.0.6" # compare held store-lock identity, not only path spelling
 clap = { version = "4", features = ["derive"] }
 toml = "0.8" # scenario fixture loading (conformance harness)
 insta = { version = "1", features = ["glob", "redactions"] }

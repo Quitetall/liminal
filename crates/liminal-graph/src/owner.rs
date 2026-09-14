@@ -35,6 +35,12 @@ impl StoreOwner {
         &self.store
     }
 
+    /// Check path and actual held-lock identity before workspace assembly.
+    /// This is a point-in-time host check, not a lease against later path edits.
+    pub fn matches_directory(&self, dir: &Utf8Path) -> Result<bool, StoreError> {
+        self.store.matches_directory(dir)
+    }
+
     /// Lend only the right to persist the workspace epoch counter.
     #[must_use]
     pub fn epoch_writer(&self) -> EpochWriter<'_> {

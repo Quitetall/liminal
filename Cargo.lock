@@ -668,6 +668,7 @@ dependencies = [
  "liminal-id",
  "liminal-scratch",
  "proptest",
+ "same-file",
  "serde",
  "serde_json",
  "thiserror",
