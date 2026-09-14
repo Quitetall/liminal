@@ -1,8 +1,9 @@
 # StoreOwner implementation ledger
 
 Baseline: `64ee56528df5f95b0f3c12f7f881942a6b2343f3`.
-Authority: AM-17.12 and its caller-supplied ActorId clarification. Full verification
-is not authorized yet. This is a staged migration, not a closed-authority claim.
+Authority: AM-17.12, its caller-supplied ActorId clarification, and approved
+DG17.3 supplement. Required full verification is now authorized with bounded
+local compute. This is a staged migration, not a closed-authority claim.
 
 ## Slice A: epoch and volatile working capture
 
@@ -157,6 +158,13 @@ probe obligations, assertions, output bytes, goldens and thresholds. No qualifie
 code was changed; no unchecked compatibility bypass is authorized.
 
 ## Remaining work before the full-verification checkpoint
+
+DG17.3 was approved in the subsequent conversation. Its narrow probe migration
+may now proceed subject to all preservation conditions above. On this host the
+initial check found 44 GiB available RAM and no active liminal-lane unit. Run
+one compute job at a time, with at most four Cargo workers and explicit cgroup
+memory/CPU limits for sustained jobs. Resource exhaustion is a retained failure,
+not a retry or a reduced qualification matrix.
 
 - Close GraphStore raw begin/snapshot access after migrating all write callers.
   StoreOwner::store still exposes the legacy GraphStore surface in this slice.

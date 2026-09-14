@@ -28,8 +28,10 @@ unimplemented. See `bootstrap/README.md` for reproducible tool-control commands.
 `authority-amendment-proposal.md` records the concrete StoreOwner/read-view
 split approved by the user on 2026-09-13 as AM-17.12, recorded in M17 and the
 Phase 0 ledger before production migration. The user authorized implementation
-and targeted development controls (steps 1–4); full verification waits for the
-next checkpoint. This does not adopt the formal companion or authorize a phase.
+and targeted development controls (steps 1–4). The subsequent DG17.3 approval
+authorizes the narrow frozen-probe migration recorded in M17 and required full
+verification with bounded local compute. This does not adopt the formal
+companion or authorize a phase.
 
 ## Authority and scope
 
@@ -52,7 +54,9 @@ source-crosswalk's original proposal label, determines human SAS acceptance.
 AM-17.11 freezes the existing HAQP instrument. AM-17.13 permits only tracked,
 independently verified, behavior-preserving reference maintenance under
 [`haqp-reference-maintenance.md`](../docs/execution/haqp-reference-maintenance.md).
-Otherwise do not modify `crates/liminal-xtask/src/haq.rs` or `scripts/haqp_*`.
+DG17.3 additionally permits the exact generated ILRP probe setup migration
+recorded in M17, preserving its assertions and outputs. Otherwise do not modify
+`crates/liminal-xtask/src/haq.rs` or `scripts/haqp_*`.
 Keep existing
 HAQP thresholds, packet, evidence, locked corpora, M18-M24 gate names and M24's
 exact seven-test aggregate intact. Separate candidate formal evidence is not

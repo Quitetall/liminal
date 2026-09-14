@@ -126,3 +126,9 @@ GraphStore interface obligations and migration witnesses recorded in
 existing assertions while requiring checked admission, validated recovery and
 scoped durable receipts; full verification waits for the next user checkpoint,
 and formal adoption, phase GO and suite ratification remain separate.
+
+AM-17.12 supplement (M17, DG17.3): user-approved 2026-09-13, permit the
+narrow generated ILRP probe setup migration documented in M17 without changing
+assertions, output bytes, budgets, goldens, coverage or thresholds. Required
+verification/local compute is now authorized with explicit resource bounds;
+phase authorization and formal adoption remain separate.
