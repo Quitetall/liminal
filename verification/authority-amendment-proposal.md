@@ -7,6 +7,10 @@ controls while retaining existing behavior and assertions. Full verification
 requires the next checkpoint. Approval is not SAS successor acceptance, phase
 authorization, proof establishment, or suite ratification. The number was checked
 against baseline `64ee56528df5f95b0f3c12f7f881942a6b2343f3`; AM-17.12 was unused.
+That is the consolidated implementation baseline; the original proposal was
+written against `fb172797ab715f5a44aec9d0563a86d865af550e`. Approval statements
+here are records of Brian's instructions in this conversation, not agent-made
+signatures or independently authenticated acceptance receipts.
 
 ## Approved decision
 
@@ -63,6 +67,11 @@ outcomes distinct; an `Ok(NeedsReview)` must not confer a committed receipt.
    Public DTOs, `SafetyEvidence`, caller-supplied Boolean claims and unchecked
    deserialization cannot mint that capability. Human acceptance is a distinct
    recorded route, not an invented actor or automatic approval.
+   Brian resolved the actor-input question in conversation on 2026-09-13:
+   "Require caller-supplied ActorId". Explicit acceptance therefore requires
+   a parseable caller-supplied `actor` field; missing or malformed identity
+   refuses before acceptance effects. No randomly generated fallback is allowed.
+   This records claimed caller identity, not authentication or identity proof.
 4. **Durable admission and recovery.** ILRP consumes authorized work, persists
    intent before external effects, and validates recovered DTOs against the
    store's durable history. A stored state label alone is not a capability.
