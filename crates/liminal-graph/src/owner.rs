@@ -14,7 +14,7 @@ use std::sync::Arc;
 use crate::{GraphStore, StoreError, TxnMeta, ns};
 
 /// Root capability held by trusted workspace assembly, not by query callers.
-/// Not clonable or serializable. Its borrowed capabilities cannot outlive it.
+/// Not cloneable or serializable. Its borrowed capabilities cannot outlive it.
 #[derive(Debug)]
 pub struct StoreOwner {
     store: Arc<GraphStore>,

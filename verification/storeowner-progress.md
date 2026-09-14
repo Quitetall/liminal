@@ -179,8 +179,6 @@ not a retry or a reduced qualification matrix.
 - Remaining public-interface bypass tests, same-body proof integration and
   reference-maintenance evidence. Full verification remains a later checkpoint.
 
-## Testing speed policy
-
 ## Slice D: ILRP acknowledgement and persisted-record structure
 
 DG17.3 approval is recorded in amendment commit `1fb7b34a`; its mandatory
@@ -229,6 +227,8 @@ archive and returned 101; target/debug disappeared during inspection. The
 cleanup actor is unknown. An isolated external Cargo target directory passed
 the identical build; no code fix or cache deletion was needed. Largest observed
 job was the milestone test build/run at 2.1 GiB, with zero cgroup swap use.
+
+## Testing speed policy
 
 Reuse normal Cargo development artifacts and run affected-package controls during
 implementation. Final qualification retains its prescribed clean source, fresh
