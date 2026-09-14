@@ -127,7 +127,7 @@ class ProofInputTests(unittest.TestCase):
     def test_malformed_hash_is_rejected(self):
         manifest_path = self.repository / "verification/proof/inputs.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        manifest["tool_sha256"]["z3"] = "BA78"
+        manifest["tool_sha256"]["z3"] = ABC_SHA256.upper()
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
         with self.assertRaisesRegex(InputFailure, "lowercase SHA-256"):
