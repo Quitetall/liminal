@@ -45,6 +45,12 @@ This is not yet integrated with the formal
 commands. See `proof/development-2026-09-14.md` for exact limits, failures,
 environment boundaries, evidence hashes and remaining execution work.
 
+The fast proof-input recipe is now part of local CI. Full `just ci` at
+`f31d727c` passed: 620 Rust tests, 47 skipped, 85 Python controls and all 33
+existing canaries. See `proof-ci-2026-09-14.md` for fixed-source evidence,
+resource bounds and the preserved pre-CI launcher failure. This does not qualify
+the formal runner or replace the required HAQP campaign.
+
 `authority-amendment-proposal.md` records the concrete StoreOwner/read-view
 split approved by the user on 2026-09-13 as AM-17.12, recorded in M17 and the
 Phase 0 ledger before production migration. The user authorized implementation
