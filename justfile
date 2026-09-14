@@ -106,6 +106,27 @@ bench-baseline-check:
 bench-gate:
     cargo run -p liminal-xtask -- bench gate
 
+formal-check:
+    cargo run -p liminal-xtask -- formal check
+
+formal-bootstrap verus_root tlc_jar output:
+    python3 -B verification/bootstrap/run.py --verus-root {{ quote(verus_root) }} --tlc-jar {{ quote(tlc_jar) }} --output {{ quote(output) }}
+
+formal-bootstrap-self-test:
+    python3 -B -m unittest -v verification/bootstrap/test_run.py
+
+formal-proof:
+    cargo run -p liminal-xtask -- formal proof
+
+formal-model:
+    cargo run -p liminal-xtask -- formal model
+
+formal-adapters:
+    cargo run -p liminal-xtask -- formal adapters
+
+formal-gate phase:
+    cargo run -p liminal-xtask -- formal gate {{ phase }}
+
 # Threaded lane (M17.5 F-11). nextest gives every test its own PROCESS, so the
 # suite's green status under `cargo test` — tests as THREADS in one process —
 # was never exercised by CI. That is the runner cargo-mutants drives, and it is
@@ -145,6 +166,7 @@ haq-lane run="run-1":
 
 # Everything CI runs, locally, in CI order
 ci: fmt-check lint
+    just formal-bootstrap-self-test
     cargo nextest run --workspace --all-features --profile ci
     just test-threaded
     cargo test --workspace --doc

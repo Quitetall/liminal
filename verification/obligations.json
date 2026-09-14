@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "adoption": {
+    "state": "pending",
+    "accepted_sas_revision": "0.1.0-proposed.1",
+    "accepted_sas_sha256": "53eb3ebf1616ae7017e2ed22e39acee9823c56f16b3c527f0035d769b582ec73",
+    "metadata_semantics": "historical-reference-only"
+  },
+  "obligations": [
+    {
+      "id": "identity-only",
+      "requirement_anchors": ["LIM-SAS-RQ-104", "Law 1"],
+      "applicability": "current-core",
+      "assumption_ids": ["compiler-verifier", "non-hostile-qualifier"],
+      "status": "not-established",
+      "source_anchors": [{"path": "spec/v4/liminal_master_architecture_plan_v4.md", "start_line": 85, "end_line": 87, "sha256": "d4cafcbb1ab2d716001a02c92db347131f6e3412afe7f234ec7f753b582d1ce2"}]
+    },
+    {
+      "id": "authority",
+      "requirement_anchors": ["LIM-SAS-RQ-107", "LIM-SAS-RQ-108", "LIM-SAS-RQ-110", "LIM-SAS-RQ-113", "LIM-SAS-RQ-114", "Law 3", "Law 3A", "Law 3C", "Law 3F", "Law 3G"],
+      "applicability": "current-core",
+      "assumption_ids": ["compiler-verifier", "non-hostile-qualifier", "trusted-host"],
+      "status": "not-established",
+      "source_anchors": [{"path": "spec/v4/liminal_master_architecture_plan_v4.md", "start_line": 97, "end_line": 131, "sha256": "a9bcbca5b05b56347dc810e445dde08162a08beb4a13b20b60c43e6a8bb6d7ec"}]
+    },
+    {
+      "id": "capture",
+      "requirement_anchors": ["LIM-SAS-RQ-109", "LIM-SAS-RQ-116", "Law 3B", "Law 3I"],
+      "applicability": "current-core",
+      "assumption_ids": ["compiler-verifier", "filesystem-durability", "linux-only", "non-hostile-qualifier", "trusted-host"],
+      "status": "not-established",
+      "source_anchors": [
+        {"path": "spec/v4/liminal_master_architecture_plan_v4.md", "start_line": 107, "end_line": 109, "sha256": "a59112974bd8ea095a099231c374285039873ee3324038d747bafbd06648c83b"},
+        {"path": "spec/v4/liminal_master_architecture_plan_v4.md", "start_line": 137, "end_line": 139, "sha256": "bd486e000169968d2ecf3498bbe69b97827a3d7259742195e18ba76ed7c091c2"}
+      ]
+    },
+    {
+      "id": "basis",
+      "requirement_anchors": ["LIM-SAS-RQ-111", "LIM-SAS-RQ-117", "Law 3D", "Law 3J"],
+      "applicability": "current-core",
+      "assumption_ids": ["compiler-verifier", "cryptographic-integrity", "non-hostile-qualifier"],
+      "status": "not-established",
+      "source_anchors": [
+        {"path": "spec/v4/liminal_master_architecture_plan_v4.md", "start_line": 115, "end_line": 117, "sha256": "a8d16455e2ddb7d7d46575d05005087e75c4d95077c7e8972919dbe81c910649"},
+        {"path": "spec/v4/liminal_master_architecture_plan_v4.md", "start_line": 141, "end_line": 143, "sha256": "a9add201768a663cff5ad78080bbfde627a1b6bf1ce0fa8eff83232edad60ef6"}
+      ]
+    },
+    {
+      "id": "ilrp-order",
+      "requirement_anchors": ["LIM-SAS-RQ-115", "Law 3H", "v4 7.7", "v4 7.8"],
+      "applicability": "current-core",
+      "assumption_ids": ["compiler-verifier", "non-hostile-qualifier"],
+      "status": "not-established",
+      "source_anchors": [
+        {"path": "spec/v4/liminal_master_architecture_plan_v4.md", "start_line": 133, "end_line": 135, "sha256": "ff23185fee6445ff702ea8b34146c90104f848500bde6ef61b694a11a0ed8408"},
+        {"path": "spec/v4/liminal_master_architecture_plan_v4.md", "start_line": 695, "end_line": 718, "sha256": "f9df59550699a9442a7cebe84149d2ebbc910d251c8f7318da6618c5ed2fb683"}
+      ]
+    },
+    {
+      "id": "ilrp-intent",
+      "requirement_anchors": ["LIM-SAS-RQ-115", "v4 7.8 Prepare"],
+      "applicability": "current-core",
+      "assumption_ids": ["compiler-verifier", "filesystem-durability", "linux-only", "non-hostile-qualifier", "trusted-host"],
+      "status": "not-established",
+      "source_anchors": [{"path": "spec/v4/liminal_master_architecture_plan_v4.md", "start_line": 766, "end_line": 766, "sha256": "ca085fa28859ffd044cc495b2f3749b355d6147a642db60ac3afcd7e1ee9242b"}]
+    },
+    {
+      "id": "ilrp-apply",
+      "requirement_anchors": ["LIM-SAS-RQ-115", "v4 7.8 Apply"],
+      "applicability": "current-core",
+      "assumption_ids": ["compiler-verifier", "cryptographic-integrity", "filesystem-durability", "linux-only", "non-hostile-qualifier", "trusted-host"],
+      "status": "not-established",
+      "source_anchors": [{"path": "spec/v4/liminal_master_architecture_plan_v4.md", "start_line": 767, "end_line": 767, "sha256": "ffb294356231cb39b032ac37eb1f5d9da7c2a466733fe1c729fddd15d7ed4a41"}]
+    },
+    {
+      "id": "ilrp-ack",
+      "requirement_anchors": ["LIM-SAS-RQ-115", "v4 7.8 Acknowledge"],
+      "applicability": "current-core",
+      "assumption_ids": ["compiler-verifier", "cryptographic-integrity", "non-hostile-qualifier", "trusted-host"],
+      "status": "not-established",
+      "source_anchors": [{"path": "spec/v4/liminal_master_architecture_plan_v4.md", "start_line": 768, "end_line": 768, "sha256": "3f97ccadcb8e4cfff5791ddcae68db4cdf2932e4052f9efa08aad917c48126c8"}]
+    },
+    {
+      "id": "ilrp-finalize",
+      "requirement_anchors": ["LIM-SAS-RQ-115", "v4 7.8 Finalize"],
+      "applicability": "current-core",
+      "assumption_ids": ["compiler-verifier", "filesystem-durability", "linux-only", "non-hostile-qualifier", "trusted-host"],
+      "status": "not-established",
+      "source_anchors": [{"path": "spec/v4/liminal_master_architecture_plan_v4.md", "start_line": 769, "end_line": 769, "sha256": "e8cb8f13e6cae7818d4607abc49a2834ed23f19c6d9fa032480cf63ab3900885"}]
+    },
+    {
+      "id": "ilrp-recover",
+      "requirement_anchors": ["LIM-SAS-RQ-115", "v4 7.8 Recover"],
+      "applicability": "current-core",
+      "assumption_ids": ["compiler-verifier", "conditional-progress", "filesystem-durability", "finite-model", "linux-only", "non-hostile-qualifier", "trusted-host"],
+      "status": "not-established",
+      "source_anchors": [{"path": "spec/v4/liminal_master_architecture_plan_v4.md", "start_line": 770, "end_line": 770, "sha256": "cf82c227918e3dc826cfac4e96b8653719c85ecad5a56ba647cef1f2be1cc704"}]
+    },
+    {
+      "id": "ilrp-revert",
+      "requirement_anchors": ["LIM-SAS-RQ-115", "v4 7.8 Revert"],
+      "applicability": "current-core",
+      "assumption_ids": ["trusted-host", "filesystem-durability", "compiler-verifier", "cryptographic-integrity", "finite-model", "conditional-progress", "linux-only", "non-hostile-qualifier"],
+      "status": "not-established",
+      "source_anchors": [{"path": "spec/v4/liminal_master_architecture_plan_v4.md", "start_line": 771, "end_line": 771, "sha256": "379c9dd7696fe7376b4c0479033df6f171fa2f89f4e000d6d093f3c1585f8882"}]
+    },
+    {
+      "id": "store",
+      "requirement_anchors": ["v4 92", "ADR-0007", "TM-01", "TM-02"],
+      "applicability": "current-core",
+      "assumption_ids": ["compiler-verifier", "cryptographic-integrity", "filesystem-durability", "linux-only", "non-hostile-qualifier", "trusted-host"],
+      "status": "not-established",
+      "source_anchors": [
+        {"path": "spec/v4/liminal_master_architecture_plan_v4.md", "start_line": 2681, "end_line": 2696, "sha256": "4d976b083da2d0ea550dab83f3d8a7ef797e42b2fb73cca7c4d76c5f12982dd1"},
+        {"path": "docs/adr/0007-hand-rolled-phase-minus-1-toy-store.md", "start_line": 28, "end_line": 40, "sha256": "56a8e372a55c912750aa8ce72be931ed1b578e23b73a3d663daeb37028d094d1"}
+      ]
+    },
+    {
+      "id": "receipt",
+      "requirement_anchors": ["v4 7.8", "TM-02", "TM-10"],
+      "applicability": "current-core",
+      "assumption_ids": ["compiler-verifier", "filesystem-durability", "linux-only", "non-hostile-qualifier", "trusted-host"],
+      "status": "not-established",
+      "source_anchors": [
+        {"path": "spec/v4/liminal_master_architecture_plan_v4.md", "start_line": 2683, "end_line": 2692, "sha256": "38f73aeb4e12bce35f716ca514e0135f231a339f8b046586bab7da5f79cb45a1"},
+        {"path": "docs/adr/0007-hand-rolled-phase-minus-1-toy-store.md", "start_line": 30, "end_line": 35, "sha256": "15e908db325db4e78d7abcd5d46bdf4d98d2ba845110eedc492a283f9f062023"}
+      ]
+    },
+    {
+      "id": "evidence",
+      "requirement_anchors": ["LIM-SAS-RQ-003", "LIM-SAS-RQ-005", "LIM-SAS-RQ-012", "LIM-SAS-RQ-017", "ADR-0020", "ADR-0021"],
+      "applicability": "current-core",
+      "assumption_ids": ["compiler-verifier", "cryptographic-integrity", "non-hostile-qualifier"],
+      "status": "not-established",
+      "source_anchors": [
+        {"path": "docs/adr/0020-require-high-assurance-phase-1-suite-qualification.md", "start_line": 23, "end_line": 40, "sha256": "21d8cd3b6fa47ac965f4c43b135075dab47e73f31a34353ea810de53737b1d29"},
+        {"path": "docs/adr/0020-require-high-assurance-phase-1-suite-qualification.md", "start_line": 52, "end_line": 64, "sha256": "e62cc92795a922a957ceae8ebd805fefaee1cf0f864730dff54efa0c803bfea3"},
+        {"path": "docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md", "start_line": 44, "end_line": 62, "sha256": "3c821e3257bfe11f62a29f8f9a7c6671249612bce8e4d3f68dbe9c90e6192891"}
+      ]
+    },
+    {
+      "id": "phase1-extension",
+      "requirement_anchors": ["LIM-SAS-RQ-006", "LIM-SAS-RQ-007", "LIM-SAS-RQ-008", "LIM-SAS-RQ-009", "LIM-SAS-RQ-010", "LIM-SAS-RQ-011", "LIM-SAS-RQ-012"],
+      "applicability": "phase-1",
+      "assumption_ids": ["trusted-host", "filesystem-durability", "compiler-verifier", "cryptographic-integrity", "finite-model", "conditional-progress", "linux-only", "non-hostile-qualifier"],
+      "status": "not-established",
+      "source_anchors": [{"path": "spec/v4/liminal_master_architecture_plan_v4.md", "start_line": 3379, "end_line": 3400, "sha256": "3476430f027de17938b67097a186231b6b6d6205b0811e079fae8b3359b128e1"}]
+    },
+    {
+      "id": "program-extension",
+      "requirement_anchors": ["LIM-SAS-RQ-018"],
+      "applicability": "future-phases",
+      "assumption_ids": ["trusted-host", "filesystem-durability", "compiler-verifier", "cryptographic-integrity", "finite-model", "conditional-progress", "linux-only", "non-hostile-qualifier"],
+      "status": "not-established",
+      "source_anchors": [{"path": "spec/v4/liminal_master_architecture_plan_v4.md", "start_line": 3402, "end_line": 3421, "sha256": "a4aef02b38a0f13c67f087e78f24f9bf50217108d5e4bb6e5665c9d9c152fee0"}]
+    }
+  ]
+}

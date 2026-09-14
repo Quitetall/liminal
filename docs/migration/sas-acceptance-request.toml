@@ -1,0 +1,13 @@
+schema = "oh.war/sas-acceptance-request/v1"
+version = "0.1.0-proposed.1"
+source = "docs/sas/LIMINAL_Software_Architecture_Specification.md"
+sha256 = "53eb3ebf1616ae7017e2ed22e39acee9823c56f16b3c527f0035d769b582ec73"
+architecture_changing = false
+adr_required = false
+requirement_count = 777
+eligible_acceptors = []
+
+[diff]
+added = []
+removed = []
+retitled = []

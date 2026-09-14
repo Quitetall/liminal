@@ -19,5 +19,7 @@ pub fn repo_root() -> Result<Utf8PathBuf> {
 }
 
 pub mod bench;
+/// Candidate-only formal-safety registry verification (v4 §§7.4 and 7.8).
+pub mod formal;
 /// HAQP-1 packet verification.
 pub mod haq;

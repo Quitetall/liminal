@@ -40,4 +40,10 @@ extend-exclude = [
   "**/snapshots/*.snap",
   "*.lock",
   "spec/v4/**",
+  # Byte-identical accepted transcriptions restored from the migration archive.
+  # Their exact bytes are checked in the baseline consolidation record; authored
+  # policy and Warrant atoms remain spellchecked. Never rewrite quoted evidence.
+  "docs/sas/LIMINAL_Software_Architecture_Specification.md",
+  "docs/migration/source-map.json",
+  "docs/migration/source-crosswalk.json",
 ]

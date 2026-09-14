@@ -13,15 +13,19 @@ Excel, Pandoc, or Jupyter: it is the infrastructure layer *beneath* editors,
 notes, papers, and media (v4 §0). Existing tools remain sovereign and may
 themselves hold Jurisdiction over the data they govern (v4 Law 7).
 
-> **STATUS: PRE-ALPHA — PHASE -1 FALSIFICATION LABORATORY.**
-> **Nothing here is usable. The current goal is to DISPROVE the architecture
-> as cheaply as possible, not to ship features (v4 Law 14, Part XXII).**
-> Risk-retirement order precedes dependency order: identity round-trips,
-> cross-Jurisdiction repair, crash-recoverable cross-Holder mutation (ILRP),
-> Overlay lifecycle, and concurrent-buffer Basis selection are being tested
-> with a deliberately small interpretive toy before any production parser,
-> daemon, or optimization exists. If a Phase -1 gate fails, the constitution
-> is revised — that outcome counts as success for this phase.
+> **STATUS: PRE-ALPHA — PHASE 0 OPEN AT M17.**
+> Current sequence: consolidate the baseline, harden the existing core by
+> construction, close M17 with evidence and a separate human GO, then Phase 1.
+> Formal bootstrap success is not a production proof or release qualification.
+
+The [central production roadmap](docs/roadmap/PRODUCTION_ROADMAP.md) retains the
+complete Phase -1–12 program and qualified OpenWarrant compiler delivery chain.
+The [current baseline record](docs/migration/baseline-consolidation-2026-09-13.md)
+tracks integration, preserved source differences, verification and open decisions.
+The [governing SAS](docs/sas/LIMINAL_Software_Architecture_Specification.md) was
+[accepted at its exact revision and digest](docs/migration/sas-acceptance-receipt.md).
+OpenWarrant registration remains pending human authority records; acceptance is
+not Phase 1 authorization, suite ratification or release eligibility.
 
 ## What Liminal is
 
@@ -79,7 +83,8 @@ liminal/
 │   │                  liminal-daemon       toy harness `liminald` + crash
 │   │                                       injection (not a real daemon)
 │   │                  liminal-cli          `lim` — check / overlays / repairs
-│   │                Tier B (reserved stubs, doc-only until their phase):
+│   │                Later-phase and qualification substrate
+│   │                (existence does not establish phase completion):
 │   │                  text, cst, hir, cir, query, transform, format,
 │   │                  resource, history, resolver, sync, plugin-api,
 │   │                  wasm-host, lua, protocol
@@ -92,22 +97,30 @@ liminal/
 ├── backends/        Planned output backends — deliberately empty. See README.
 ├── integrations/    Planned tool integrations — deliberately empty. See README.
 ├── apps/            Planned rich clients (Phase 9) — deliberately empty.
-└── docs/            docs/implementation-plan.md (Phase -1 milestones),
+├── verification/    Candidate formal obligations and proof-tool bootstrap;
+│                    production safety proofs remain unestablished.
+└── docs/            docs/roadmap/PRODUCTION_ROADMAP.md (central sequence),
+                     docs/sas/ (accepted SAS), docs/warrants/ (draft records),
+                     docs/implementation-plan.md (historical milestones),
                      docs/execution/ (execution-grade work orders), and
                      docs/adr/ (architecture decision records).
 ```
 
 ## Reading order
 
-1. [`ARCHITECTURE.md`](ARCHITECTURE.md) — the codemap: crate layering, the
+1. [Central roadmap](docs/roadmap/PRODUCTION_ROADMAP.md),
+   [baseline record](docs/migration/baseline-consolidation-2026-09-13.md), and
+   [accepted SAS](docs/sas/LIMINAL_Software_Architecture_Specification.md) —
+   current sequence, authority, evidence limits and the complete program.
+2. [`ARCHITECTURE.md`](ARCHITECTURE.md) — the codemap: crate layering, the
    correctness laws, and the boundary invariants a contributor must not break.
-2. [`spec/v4/`](spec/v4/) — the canonical architecture: the master plan
-   (cited as "v4 §N") and Revision 4 (cited as "R4 §N"). These documents are
-   the constitution; code cites them, never the reverse.
-3. [`docs/implementation-plan.md`](docs/implementation-plan.md) — the Phase -1
+3. [`spec/v4/`](spec/v4/) — the preserved architecture: the master plan
+   (cited as "v4 §N") and Revision 4 (cited as "R4 §N"). These documents
+   are incorporated verbatim by the accepted SAS; code cites them, never the reverse.
+4. [`docs/implementation-plan.md`](docs/implementation-plan.md) — the historical
    milestone plan, the crash-injection architecture, and the explicit list of
    what must NOT be built yet.
-4. [`docs/execution/`](docs/execution/00-protocol.md) — execution-grade work
+5. [`docs/execution/`](docs/execution/00-protocol.md) — execution-grade work
    orders: every milestone's algorithms, schemas, constants, and step-by-step
    checklists, pre-decided so implementation is mechanical. Start with the
    protocol, then the current milestone's `M<nn>.md`.

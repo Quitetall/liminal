@@ -1,0 +1,13 @@
+[workspace]
+
+[package]
+name = "cargo-admission"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[package.metadata.verus]
+verify = true
+
+[dependencies]
+vstd = "=0.0.0-2026-08-30-0159"

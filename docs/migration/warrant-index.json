@@ -1,0 +1,1137 @@
+{
+  "schema": "liminal.migration.warrant-index/v1",
+  "description": "Proposed bounded work; completion derives from Warrant records and independently admissible evidence. No authorization, verification or resolution is asserted.",
+  "warrants": [
+    {
+      "alias": "LIM-WAR-0001",
+      "uuid": "01a07471-b7c3-7f23-a3f8-24423e27a11b",
+      "milestone": "M17",
+      "phase": 0,
+      "roadmap_ref": "roadmap://LIM-PHASE-0/m17-closeout",
+      "sas_requirement_refs": [
+        "sas://LIM-SAS-RQ-005"
+      ],
+      "contribution": "partial",
+      "manifest": "docs/warrants/LIM-WAR-0001/manifest.toml",
+      "dependencies": [],
+      "source_coordinates": [
+        "docs/execution/M17.md",
+        "docs/sas/LIMINAL_Software_Architecture_Specification.md",
+        "docs/migration/consolidation-policy.md",
+        "docs/execution/00-protocol.md",
+        "docs/adr/0020-require-high-assurance-phase-1-suite-qualification.md",
+        "docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md",
+        "docs/execution/phase0-amendments.md",
+        "docs/execution/phase1-suite-review.md"
+      ],
+      "evidence_requirements": [
+        {
+          "obligation": "OBL-001",
+          "path": "docs/warrants/LIM-WAR-0001/atoms/60-assurance.md",
+          "statement": "HAQP-1a and fresh blind findings support the proposed packet"
+        },
+        {
+          "obligation": "OBL-002",
+          "path": "docs/warrants/LIM-WAR-0001/atoms/60-assurance.md",
+          "statement": "Missing evidence and false mutation claims block packet qualification"
+        },
+        {
+          "obligation": "OBL-003",
+          "path": "docs/warrants/LIM-WAR-0001/atoms/60-assurance.md",
+          "statement": "Phase GO and repository closeout remain separately evidenced"
+        },
+        {
+          "obligation": "OBL-004",
+          "path": "docs/warrants/LIM-WAR-0001/atoms/60-assurance.md",
+          "statement": "Independent evidence and scoped decisions control completion"
+        }
+      ],
+      "pending_decision_roles": [
+        {
+          "role": "Brian",
+          "purpose": "Actual scoped authorization and final decision; T1 semantics/goldens/baselines remain human-owned."
+        },
+        {
+          "role": "independent verifier (not selected)",
+          "purpose": "Actual identity, separation facts, bounded evidence assessment and findings; no self-verification."
+        }
+      ],
+      "stages": [
+        {
+          "id": "STAGE-001",
+          "source_coordinate": "M17.5",
+          "responsibility_tier": "T1",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-002",
+          "source_coordinate": "M17.6",
+          "responsibility_tier": "T1",
+          "executor_kind": "human"
+        },
+        {
+          "id": "STAGE-003",
+          "source_coordinate": "M17.7",
+          "responsibility_tier": "T1",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-004",
+          "source_coordinate": "M17.8",
+          "responsibility_tier": "T4",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-005",
+          "source_coordinate": "M17.9",
+          "responsibility_tier": "T1",
+          "executor_kind": "agent"
+        }
+      ]
+    },
+    {
+      "alias": "LIM-WAR-0002",
+      "uuid": "01a07471-b7c9-7f31-9cc2-098f7d32db3e",
+      "milestone": "M18",
+      "phase": 1,
+      "roadmap_ref": "roadmap://LIM-PHASE-1/m18-source-cst",
+      "sas_requirement_refs": [
+        "sas://LIM-SAS-RQ-006"
+      ],
+      "contribution": "partial",
+      "manifest": "docs/warrants/LIM-WAR-0002/manifest.toml",
+      "dependencies": [
+        "LIM-WAR-0001"
+      ],
+      "source_coordinates": [
+        "docs/execution/M18.md",
+        "docs/sas/LIMINAL_Software_Architecture_Specification.md",
+        "docs/migration/consolidation-policy.md",
+        "docs/execution/00-protocol.md",
+        "docs/adr/0020-require-high-assurance-phase-1-suite-qualification.md",
+        "docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md"
+      ],
+      "evidence_requirements": [
+        {
+          "obligation": "OBL-001",
+          "path": "docs/warrants/LIM-WAR-0002/atoms/60-assurance.md",
+          "statement": "Source and CST satisfy the complete frozen M18 contract"
+        },
+        {
+          "obligation": "OBL-002",
+          "path": "docs/warrants/LIM-WAR-0002/atoms/60-assurance.md",
+          "statement": "Invalid loading and unsafe parsing never fabricate source"
+        },
+        {
+          "obligation": "OBL-003",
+          "path": "docs/warrants/LIM-WAR-0002/atoms/60-assurance.md",
+          "statement": "Independent evidence and scoped decisions control completion"
+        }
+      ],
+      "pending_decision_roles": [
+        {
+          "role": "Brian",
+          "purpose": "Actual scoped authorization and final decision; T1 semantics/goldens/baselines remain human-owned."
+        },
+        {
+          "role": "independent verifier (not selected)",
+          "purpose": "Actual identity, separation facts, bounded evidence assessment and findings; no self-verification."
+        }
+      ],
+      "stages": [
+        {
+          "id": "STAGE-001",
+          "source_coordinate": "M18.1",
+          "responsibility_tier": "T4",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-002",
+          "source_coordinate": "M18.2",
+          "responsibility_tier": "T3",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-003",
+          "source_coordinate": "M18.3",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-004",
+          "source_coordinate": "M18.4",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-005",
+          "source_coordinate": "M18.5",
+          "responsibility_tier": "T3",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-006",
+          "source_coordinate": "M18.6",
+          "responsibility_tier": "T4",
+          "executor_kind": "agent"
+        }
+      ]
+    },
+    {
+      "alias": "LIM-WAR-0003",
+      "uuid": "01a07471-b7ce-7ea0-8c2c-69cd2cd64f7c",
+      "milestone": "M19",
+      "phase": 1,
+      "roadmap_ref": "roadmap://LIM-PHASE-1/m19-hir-graph",
+      "sas_requirement_refs": [
+        "sas://LIM-SAS-RQ-007"
+      ],
+      "contribution": "partial",
+      "manifest": "docs/warrants/LIM-WAR-0003/manifest.toml",
+      "dependencies": [
+        "LIM-WAR-0002"
+      ],
+      "source_coordinates": [
+        "docs/execution/M19.md",
+        "docs/sas/LIMINAL_Software_Architecture_Specification.md",
+        "docs/migration/consolidation-policy.md",
+        "docs/execution/00-protocol.md",
+        "docs/adr/0020-require-high-assurance-phase-1-suite-qualification.md",
+        "docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md"
+      ],
+      "evidence_requirements": [
+        {
+          "obligation": "OBL-001",
+          "path": "docs/warrants/LIM-WAR-0003/atoms/60-assurance.md",
+          "statement": "All M19 layers agree through the canonical laws"
+        },
+        {
+          "obligation": "OBL-002",
+          "path": "docs/warrants/LIM-WAR-0003/atoms/60-assurance.md",
+          "statement": "Invalid interchange and authority escalation are refused"
+        },
+        {
+          "obligation": "OBL-003",
+          "path": "docs/warrants/LIM-WAR-0003/atoms/60-assurance.md",
+          "statement": "Independent evidence and scoped decisions control completion"
+        }
+      ],
+      "pending_decision_roles": [
+        {
+          "role": "Brian",
+          "purpose": "Actual scoped authorization and final decision; T1 semantics/goldens/baselines remain human-owned."
+        },
+        {
+          "role": "independent verifier (not selected)",
+          "purpose": "Actual identity, separation facts, bounded evidence assessment and findings; no self-verification."
+        }
+      ],
+      "stages": [
+        {
+          "id": "STAGE-001",
+          "source_coordinate": "M19.1",
+          "responsibility_tier": "T3",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-002",
+          "source_coordinate": "M19.2",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-003",
+          "source_coordinate": "M19.3",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-004",
+          "source_coordinate": "M19.4",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-005",
+          "source_coordinate": "M19.5",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-006",
+          "source_coordinate": "M19.6",
+          "responsibility_tier": "T3",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-007",
+          "source_coordinate": "M19.7",
+          "responsibility_tier": "T4",
+          "executor_kind": "agent"
+        }
+      ]
+    },
+    {
+      "alias": "LIM-WAR-0004",
+      "uuid": "01a07471-b7d1-7081-b846-87cd85197403",
+      "milestone": "M20",
+      "phase": 1,
+      "roadmap_ref": "roadmap://LIM-PHASE-1/m20-formatter-cli",
+      "sas_requirement_refs": [
+        "sas://LIM-SAS-RQ-008"
+      ],
+      "contribution": "partial",
+      "manifest": "docs/warrants/LIM-WAR-0004/manifest.toml",
+      "dependencies": [
+        "LIM-WAR-0003"
+      ],
+      "source_coordinates": [
+        "docs/execution/M20.md",
+        "docs/sas/LIMINAL_Software_Architecture_Specification.md",
+        "docs/migration/consolidation-policy.md",
+        "docs/execution/00-protocol.md",
+        "docs/adr/0020-require-high-assurance-phase-1-suite-qualification.md",
+        "docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md"
+      ],
+      "evidence_requirements": [
+        {
+          "obligation": "OBL-001",
+          "path": "docs/warrants/LIM-WAR-0004/atoms/60-assurance.md",
+          "statement": "Formatter and CLI satisfy exact source and output contracts"
+        },
+        {
+          "obligation": "OBL-002",
+          "path": "docs/warrants/LIM-WAR-0004/atoms/60-assurance.md",
+          "statement": "Preflight and partial failure behavior are observed"
+        },
+        {
+          "obligation": "OBL-003",
+          "path": "docs/warrants/LIM-WAR-0004/atoms/60-assurance.md",
+          "statement": "Independent evidence and scoped decisions control completion"
+        }
+      ],
+      "pending_decision_roles": [
+        {
+          "role": "Brian",
+          "purpose": "Actual scoped authorization and final decision; T1 semantics/goldens/baselines remain human-owned."
+        },
+        {
+          "role": "independent verifier (not selected)",
+          "purpose": "Actual identity, separation facts, bounded evidence assessment and findings; no self-verification."
+        }
+      ],
+      "stages": [
+        {
+          "id": "STAGE-001",
+          "source_coordinate": "M20.1",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-002",
+          "source_coordinate": "M20.2",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-003",
+          "source_coordinate": "M20.3",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-004",
+          "source_coordinate": "M20.4",
+          "responsibility_tier": "T4",
+          "executor_kind": "agent"
+        }
+      ]
+    },
+    {
+      "alias": "LIM-WAR-0005",
+      "uuid": "01a07471-b7d3-7772-84b2-e3576e7e6073",
+      "milestone": "M21",
+      "phase": 1,
+      "roadmap_ref": "roadmap://LIM-PHASE-1/m21-incremental",
+      "sas_requirement_refs": [
+        "sas://LIM-SAS-RQ-009"
+      ],
+      "contribution": "partial",
+      "manifest": "docs/warrants/LIM-WAR-0005/manifest.toml",
+      "dependencies": [
+        "LIM-WAR-0004"
+      ],
+      "source_coordinates": [
+        "docs/execution/M21.md",
+        "docs/sas/LIMINAL_Software_Architecture_Specification.md",
+        "docs/migration/consolidation-policy.md",
+        "docs/execution/00-protocol.md",
+        "docs/adr/0020-require-high-assurance-phase-1-suite-qualification.md",
+        "docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md"
+      ],
+      "evidence_requirements": [
+        {
+          "obligation": "OBL-001",
+          "path": "docs/warrants/LIM-WAR-0005/atoms/60-assurance.md",
+          "statement": "Incremental output equals the independent full compiler"
+        },
+        {
+          "obligation": "OBL-002",
+          "path": "docs/warrants/LIM-WAR-0005/atoms/60-assurance.md",
+          "statement": "Stale or hidden inputs cannot pass equality"
+        },
+        {
+          "obligation": "OBL-003",
+          "path": "docs/warrants/LIM-WAR-0005/atoms/60-assurance.md",
+          "statement": "Independent evidence and scoped decisions control completion"
+        }
+      ],
+      "pending_decision_roles": [
+        {
+          "role": "Brian",
+          "purpose": "Actual scoped authorization and final decision; T1 semantics/goldens/baselines remain human-owned."
+        },
+        {
+          "role": "independent verifier (not selected)",
+          "purpose": "Actual identity, separation facts, bounded evidence assessment and findings; no self-verification."
+        }
+      ],
+      "stages": [
+        {
+          "id": "STAGE-001",
+          "source_coordinate": "M21.1",
+          "responsibility_tier": "T4",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-002",
+          "source_coordinate": "M21.2",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-003",
+          "source_coordinate": "M21.3",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-004",
+          "source_coordinate": "M21.4",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-005",
+          "source_coordinate": "M21.5",
+          "responsibility_tier": "T4",
+          "executor_kind": "agent"
+        }
+      ]
+    },
+    {
+      "alias": "LIM-WAR-0006",
+      "uuid": "01a07471-b7d6-72e3-a81a-51f22a1ec521",
+      "milestone": "M22",
+      "phase": 1,
+      "roadmap_ref": "roadmap://LIM-PHASE-1/m22-html",
+      "sas_requirement_refs": [
+        "sas://LIM-SAS-RQ-010"
+      ],
+      "contribution": "partial",
+      "manifest": "docs/warrants/LIM-WAR-0006/manifest.toml",
+      "dependencies": [
+        "LIM-WAR-0005"
+      ],
+      "source_coordinates": [
+        "docs/execution/M22.md",
+        "docs/sas/LIMINAL_Software_Architecture_Specification.md",
+        "docs/migration/consolidation-policy.md",
+        "docs/execution/00-protocol.md",
+        "docs/adr/0020-require-high-assurance-phase-1-suite-qualification.md",
+        "docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md"
+      ],
+      "evidence_requirements": [
+        {
+          "obligation": "OBL-001",
+          "path": "docs/warrants/LIM-WAR-0006/atoms/60-assurance.md",
+          "statement": "Full and patch rendering produce the required exact bytes"
+        },
+        {
+          "obligation": "OBL-002",
+          "path": "docs/warrants/LIM-WAR-0006/atoms/60-assurance.md",
+          "statement": "Unsafe markup and malformed patch sets are refused"
+        },
+        {
+          "obligation": "OBL-003",
+          "path": "docs/warrants/LIM-WAR-0006/atoms/60-assurance.md",
+          "statement": "Independent evidence and scoped decisions control completion"
+        }
+      ],
+      "pending_decision_roles": [
+        {
+          "role": "Brian",
+          "purpose": "Actual scoped authorization and final decision; T1 semantics/goldens/baselines remain human-owned."
+        },
+        {
+          "role": "independent verifier (not selected)",
+          "purpose": "Actual identity, separation facts, bounded evidence assessment and findings; no self-verification."
+        }
+      ],
+      "stages": [
+        {
+          "id": "STAGE-001",
+          "source_coordinate": "M22.1",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-002",
+          "source_coordinate": "M22.2",
+          "responsibility_tier": "T1",
+          "executor_kind": "human"
+        },
+        {
+          "id": "STAGE-003",
+          "source_coordinate": "M22.3",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-004",
+          "source_coordinate": "M22.4",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-005",
+          "source_coordinate": "M22.5",
+          "responsibility_tier": "T4",
+          "executor_kind": "agent"
+        }
+      ]
+    },
+    {
+      "alias": "LIM-WAR-0007",
+      "uuid": "01a07471-b7df-7062-8c69-bd19f6e47bf5",
+      "milestone": "M23",
+      "phase": 1,
+      "roadmap_ref": "roadmap://LIM-PHASE-1/m23-fuzz-benchmarks",
+      "sas_requirement_refs": [
+        "sas://LIM-SAS-RQ-011"
+      ],
+      "contribution": "partial",
+      "manifest": "docs/warrants/LIM-WAR-0007/manifest.toml",
+      "dependencies": [
+        "LIM-WAR-0006"
+      ],
+      "source_coordinates": [
+        "docs/execution/M23.md",
+        "docs/sas/LIMINAL_Software_Architecture_Specification.md",
+        "docs/migration/consolidation-policy.md",
+        "docs/execution/00-protocol.md",
+        "docs/adr/0020-require-high-assurance-phase-1-suite-qualification.md",
+        "docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md"
+      ],
+      "evidence_requirements": [
+        {
+          "obligation": "OBL-001",
+          "path": "docs/warrants/LIM-WAR-0007/atoms/60-assurance.md",
+          "statement": "Every production fuzz target and benchmark has complete evidence"
+        },
+        {
+          "obligation": "OBL-002",
+          "path": "docs/warrants/LIM-WAR-0007/atoms/60-assurance.md",
+          "statement": "Missing evidence and regressions block the gate"
+        },
+        {
+          "obligation": "OBL-003",
+          "path": "docs/warrants/LIM-WAR-0007/atoms/60-assurance.md",
+          "statement": "Independent evidence and scoped decisions control completion"
+        }
+      ],
+      "pending_decision_roles": [
+        {
+          "role": "Brian",
+          "purpose": "Actual scoped authorization and final decision; T1 semantics/goldens/baselines remain human-owned."
+        },
+        {
+          "role": "independent verifier (not selected)",
+          "purpose": "Actual identity, separation facts, bounded evidence assessment and findings; no self-verification."
+        }
+      ],
+      "stages": [
+        {
+          "id": "STAGE-001",
+          "source_coordinate": "M23.1",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-002",
+          "source_coordinate": "M23.2",
+          "responsibility_tier": "T3",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-003",
+          "source_coordinate": "M23.3",
+          "responsibility_tier": "T3",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-004",
+          "source_coordinate": "M23.4",
+          "responsibility_tier": "T3",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-005",
+          "source_coordinate": "M23.5",
+          "responsibility_tier": "T3",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-006",
+          "source_coordinate": "M23.6",
+          "responsibility_tier": "T3",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-007",
+          "source_coordinate": "M23.6a",
+          "responsibility_tier": "T3",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-008",
+          "source_coordinate": "M23.6b",
+          "responsibility_tier": "T3",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-009",
+          "source_coordinate": "M23.7",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-010",
+          "source_coordinate": "M23.8",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-011",
+          "source_coordinate": "M23.9",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-012",
+          "source_coordinate": "M23.10",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-013",
+          "source_coordinate": "M23.11",
+          "responsibility_tier": "T3",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-014",
+          "source_coordinate": "M23.12",
+          "responsibility_tier": "T1",
+          "executor_kind": "human"
+        },
+        {
+          "id": "STAGE-015",
+          "source_coordinate": "M23.13",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-016",
+          "source_coordinate": "M23.14",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-017",
+          "source_coordinate": "M23.15",
+          "responsibility_tier": "T4",
+          "executor_kind": "agent"
+        }
+      ]
+    },
+    {
+      "alias": "LIM-WAR-0008",
+      "uuid": "01a07471-b7e5-7190-9879-8fc830d60965",
+      "milestone": "M24",
+      "phase": 1,
+      "roadmap_ref": "roadmap://LIM-PHASE-1/m24-qualification",
+      "sas_requirement_refs": [
+        "sas://LIM-SAS-RQ-012"
+      ],
+      "contribution": "partial",
+      "manifest": "docs/warrants/LIM-WAR-0008/manifest.toml",
+      "dependencies": [
+        "LIM-WAR-0007"
+      ],
+      "source_coordinates": [
+        "docs/execution/M24.md",
+        "docs/sas/LIMINAL_Software_Architecture_Specification.md",
+        "docs/migration/consolidation-policy.md",
+        "docs/execution/00-protocol.md",
+        "docs/adr/0020-require-high-assurance-phase-1-suite-qualification.md",
+        "docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md",
+        "docs/execution/phase1-suite-review.md"
+      ],
+      "evidence_requirements": [
+        {
+          "obligation": "OBL-001",
+          "path": "docs/warrants/LIM-WAR-0008/atoms/60-assurance.md",
+          "statement": "Aggregate and both HAQP stages qualify the final Phase 1 baseline"
+        },
+        {
+          "obligation": "OBL-002",
+          "path": "docs/warrants/LIM-WAR-0008/atoms/60-assurance.md",
+          "statement": "Incomplete or circular qualification is refused"
+        },
+        {
+          "obligation": "OBL-003",
+          "path": "docs/warrants/LIM-WAR-0008/atoms/60-assurance.md",
+          "statement": "Final ratification is an actual separate human decision"
+        },
+        {
+          "obligation": "OBL-004",
+          "path": "docs/warrants/LIM-WAR-0008/atoms/60-assurance.md",
+          "statement": "Independent evidence and scoped decisions control completion"
+        }
+      ],
+      "pending_decision_roles": [
+        {
+          "role": "Brian",
+          "purpose": "Actual scoped authorization and final decision; T1 semantics/goldens/baselines remain human-owned."
+        },
+        {
+          "role": "independent verifier (not selected)",
+          "purpose": "Actual identity, separation facts, bounded evidence assessment and findings; no self-verification."
+        }
+      ],
+      "stages": [
+        {
+          "id": "STAGE-001",
+          "source_coordinate": "M24.1",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-002",
+          "source_coordinate": "M24.2",
+          "responsibility_tier": "T1",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-003",
+          "source_coordinate": "M24.3",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-004",
+          "source_coordinate": "M24.4",
+          "responsibility_tier": "T4",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-005",
+          "source_coordinate": "ADR-0021 HAQP-1b",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-006",
+          "source_coordinate": "ADR-0020 \u00a76; ADR-0021",
+          "responsibility_tier": "T1",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-007",
+          "source_coordinate": "M24.5; ADR-0021",
+          "responsibility_tier": "T1",
+          "executor_kind": "agent"
+        }
+      ]
+    },
+    {
+      "alias": "LIM-WAR-0009",
+      "uuid": "01a07471-b7f0-7d72-83b7-7cd4017226fd",
+      "milestone": "INTEGRATION",
+      "phase": 1,
+      "roadmap_ref": "roadmap://LIM-PHASE-1/openwarrant-integration",
+      "sas_requirement_refs": [
+        "sas://LIM-SAS-RQ-013"
+      ],
+      "contribution": "partial",
+      "manifest": "docs/warrants/LIM-WAR-0009/manifest.toml",
+      "dependencies": [
+        "LIM-WAR-0008"
+      ],
+      "source_coordinates": [
+        "docs/sas/LIMINAL_Software_Architecture_Specification.md",
+        "docs/migration/consolidation-policy.md",
+        "docs/execution/00-protocol.md",
+        "docs/adr/0020-require-high-assurance-phase-1-suite-qualification.md",
+        "docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md"
+      ],
+      "evidence_requirements": [
+        {
+          "obligation": "OBL-001",
+          "path": "docs/warrants/LIM-WAR-0009/atoms/60-assurance.md",
+          "statement": "Accepted interfaces precede the bounded working adapter"
+        },
+        {
+          "obligation": "OBL-002",
+          "path": "docs/warrants/LIM-WAR-0009/atoms/60-assurance.md",
+          "statement": "Unsupported inputs and protocol deviations are refused"
+        },
+        {
+          "obligation": "OBL-003",
+          "path": "docs/warrants/LIM-WAR-0009/atoms/60-assurance.md",
+          "statement": "Independent evidence and scoped decisions control completion"
+        },
+        {
+          "obligation": "OBL-004",
+          "path": "docs/warrants/LIM-WAR-0009/atoms/60-assurance.md",
+          "statement": "Accepted protocol and canonical IR precede adapter implementation"
+        }
+      ],
+      "pending_decision_roles": [
+        {
+          "role": "Brian",
+          "purpose": "Actual scoped authorization and final decision; T1 semantics/goldens/baselines remain human-owned."
+        },
+        {
+          "role": "independent verifier (not selected)",
+          "purpose": "Actual identity, separation facts, bounded evidence assessment and findings; no self-verification."
+        }
+      ],
+      "stages": [
+        {
+          "id": "STAGE-001",
+          "source_coordinate": "sas://LIM-SAS-RQ-013",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-002",
+          "source_coordinate": "sas://LIM-SAS-RQ-013",
+          "responsibility_tier": "T1",
+          "executor_kind": "human"
+        },
+        {
+          "id": "STAGE-003",
+          "source_coordinate": "sas://LIM-SAS-RQ-013",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-004",
+          "source_coordinate": "sas://LIM-SAS-RQ-013",
+          "responsibility_tier": "T3",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-005",
+          "source_coordinate": "sas://LIM-SAS-RQ-013",
+          "responsibility_tier": "T4",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-006",
+          "source_coordinate": "sas://LIM-SAS-RQ-013",
+          "responsibility_tier": "T1",
+          "executor_kind": "human"
+        }
+      ]
+    },
+    {
+      "alias": "LIM-WAR-0010",
+      "uuid": "01a07471-b7f3-7ff2-a166-3d23930852b4",
+      "milestone": "PROFILE",
+      "phase": 1,
+      "roadmap_ref": "roadmap://LIM-PHASE-1/openwarrant-profile",
+      "sas_requirement_refs": [
+        "sas://LIM-SAS-RQ-014"
+      ],
+      "contribution": "partial",
+      "manifest": "docs/warrants/LIM-WAR-0010/manifest.toml",
+      "dependencies": [
+        "LIM-WAR-0009"
+      ],
+      "source_coordinates": [
+        "docs/sas/LIMINAL_Software_Architecture_Specification.md",
+        "docs/migration/consolidation-policy.md",
+        "docs/execution/00-protocol.md",
+        "docs/adr/0020-require-high-assurance-phase-1-suite-qualification.md",
+        "docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md"
+      ],
+      "evidence_requirements": [
+        {
+          "obligation": "OBL-001",
+          "path": "docs/warrants/LIM-WAR-0010/atoms/60-assurance.md",
+          "statement": "The selected profile binds all real qualification inputs"
+        },
+        {
+          "obligation": "OBL-002",
+          "path": "docs/warrants/LIM-WAR-0010/atoms/60-assurance.md",
+          "statement": "Pin drift and undeclared inputs prevent qualification"
+        },
+        {
+          "obligation": "OBL-003",
+          "path": "docs/warrants/LIM-WAR-0010/atoms/60-assurance.md",
+          "statement": "Independent evidence and scoped decisions control completion"
+        },
+        {
+          "obligation": "OBL-004",
+          "path": "docs/warrants/LIM-WAR-0010/atoms/60-assurance.md",
+          "statement": "Accepted interfaces and dependency evidence precede exact profile pinning"
+        }
+      ],
+      "pending_decision_roles": [
+        {
+          "role": "Brian",
+          "purpose": "Actual scoped authorization and final decision; T1 semantics/goldens/baselines remain human-owned."
+        },
+        {
+          "role": "independent verifier (not selected)",
+          "purpose": "Actual identity, separation facts, bounded evidence assessment and findings; no self-verification."
+        }
+      ],
+      "stages": [
+        {
+          "id": "STAGE-001",
+          "source_coordinate": "sas://LIM-SAS-RQ-014",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-002",
+          "source_coordinate": "sas://LIM-SAS-RQ-014",
+          "responsibility_tier": "T1",
+          "executor_kind": "human"
+        },
+        {
+          "id": "STAGE-003",
+          "source_coordinate": "sas://LIM-SAS-RQ-014",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-004",
+          "source_coordinate": "sas://LIM-SAS-RQ-014",
+          "responsibility_tier": "T3",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-005",
+          "source_coordinate": "sas://LIM-SAS-RQ-014",
+          "responsibility_tier": "T4",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-006",
+          "source_coordinate": "sas://LIM-SAS-RQ-014",
+          "responsibility_tier": "T1",
+          "executor_kind": "human"
+        }
+      ]
+    },
+    {
+      "alias": "LIM-WAR-0011",
+      "uuid": "01a07471-b7fa-7291-a24d-ced6a633a34e",
+      "milestone": "PARITY",
+      "phase": 1,
+      "roadmap_ref": "roadmap://LIM-PHASE-1/openwarrant-parity",
+      "sas_requirement_refs": [
+        "sas://LIM-SAS-RQ-015"
+      ],
+      "contribution": "partial",
+      "manifest": "docs/warrants/LIM-WAR-0011/manifest.toml",
+      "dependencies": [
+        "LIM-WAR-0010"
+      ],
+      "source_coordinates": [
+        "docs/sas/LIMINAL_Software_Architecture_Specification.md",
+        "docs/migration/consolidation-policy.md",
+        "docs/execution/00-protocol.md",
+        "docs/adr/0020-require-high-assurance-phase-1-suite-qualification.md",
+        "docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md"
+      ],
+      "evidence_requirements": [
+        {
+          "obligation": "OBL-001",
+          "path": "docs/warrants/LIM-WAR-0011/atoms/60-assurance.md",
+          "statement": "Complete corpus parity is zero on both declared axes"
+        },
+        {
+          "obligation": "OBL-002",
+          "path": "docs/warrants/LIM-WAR-0011/atoms/60-assurance.md",
+          "statement": "Differences and omissions cannot report parity"
+        },
+        {
+          "obligation": "OBL-003",
+          "path": "docs/warrants/LIM-WAR-0011/atoms/60-assurance.md",
+          "statement": "Independent evidence and scoped decisions control completion"
+        },
+        {
+          "obligation": "OBL-004",
+          "path": "docs/warrants/LIM-WAR-0011/atoms/60-assurance.md",
+          "statement": "Accepted observables are fixed before any parity comparison"
+        }
+      ],
+      "pending_decision_roles": [
+        {
+          "role": "Brian",
+          "purpose": "Actual scoped authorization and final decision; T1 semantics/goldens/baselines remain human-owned."
+        },
+        {
+          "role": "independent verifier (not selected)",
+          "purpose": "Actual identity, separation facts, bounded evidence assessment and findings; no self-verification."
+        }
+      ],
+      "stages": [
+        {
+          "id": "STAGE-001",
+          "source_coordinate": "sas://LIM-SAS-RQ-015",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-002",
+          "source_coordinate": "sas://LIM-SAS-RQ-015",
+          "responsibility_tier": "T1",
+          "executor_kind": "human"
+        },
+        {
+          "id": "STAGE-003",
+          "source_coordinate": "sas://LIM-SAS-RQ-015",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-004",
+          "source_coordinate": "sas://LIM-SAS-RQ-015",
+          "responsibility_tier": "T3",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-005",
+          "source_coordinate": "sas://LIM-SAS-RQ-015",
+          "responsibility_tier": "T4",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-006",
+          "source_coordinate": "sas://LIM-SAS-RQ-015",
+          "responsibility_tier": "T1",
+          "executor_kind": "human"
+        }
+      ]
+    },
+    {
+      "alias": "LIM-WAR-0012",
+      "uuid": "01a07471-b800-7ef1-879c-209fe2912fc8",
+      "milestone": "RELEASE",
+      "phase": 1,
+      "roadmap_ref": "roadmap://LIM-PHASE-1/compiler-release",
+      "sas_requirement_refs": [
+        "sas://LIM-SAS-RQ-016"
+      ],
+      "contribution": "partial",
+      "manifest": "docs/warrants/LIM-WAR-0012/manifest.toml",
+      "dependencies": [
+        "LIM-WAR-0011"
+      ],
+      "source_coordinates": [
+        "docs/sas/LIMINAL_Software_Architecture_Specification.md",
+        "docs/migration/consolidation-policy.md",
+        "docs/execution/00-protocol.md",
+        "docs/adr/0020-require-high-assurance-phase-1-suite-qualification.md",
+        "docs/adr/0021-stage-haqp-1-qualification-around-phase-1-authorization.md"
+      ],
+      "evidence_requirements": [
+        {
+          "obligation": "OBL-001",
+          "path": "docs/warrants/LIM-WAR-0012/atoms/60-assurance.md",
+          "statement": "Release artifacts reproduce from the exact qualified baseline"
+        },
+        {
+          "obligation": "OBL-002",
+          "path": "docs/warrants/LIM-WAR-0012/atoms/60-assurance.md",
+          "statement": "Unqualified or unsupported release inputs are refused"
+        },
+        {
+          "obligation": "OBL-003",
+          "path": "docs/warrants/LIM-WAR-0012/atoms/60-assurance.md",
+          "statement": "Independent evidence and scoped decisions control completion"
+        },
+        {
+          "obligation": "OBL-004",
+          "path": "docs/warrants/LIM-WAR-0012/atoms/60-assurance.md",
+          "statement": "Eligible qualification inputs precede release construction"
+        }
+      ],
+      "pending_decision_roles": [
+        {
+          "role": "Brian",
+          "purpose": "Actual scoped authorization and final decision; T1 semantics/goldens/baselines remain human-owned."
+        },
+        {
+          "role": "independent verifier (not selected)",
+          "purpose": "Actual identity, separation facts, bounded evidence assessment and findings; no self-verification."
+        }
+      ],
+      "stages": [
+        {
+          "id": "STAGE-001",
+          "source_coordinate": "sas://LIM-SAS-RQ-016",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-002",
+          "source_coordinate": "sas://LIM-SAS-RQ-016",
+          "responsibility_tier": "T1",
+          "executor_kind": "human"
+        },
+        {
+          "id": "STAGE-003",
+          "source_coordinate": "sas://LIM-SAS-RQ-016",
+          "responsibility_tier": "T2",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-004",
+          "source_coordinate": "sas://LIM-SAS-RQ-016",
+          "responsibility_tier": "T3",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-005",
+          "source_coordinate": "sas://LIM-SAS-RQ-016",
+          "responsibility_tier": "T4",
+          "executor_kind": "agent"
+        },
+        {
+          "id": "STAGE-006",
+          "source_coordinate": "sas://LIM-SAS-RQ-016",
+          "responsibility_tier": "T1",
+          "executor_kind": "human"
+        }
+      ]
+    }
+  ]
+}

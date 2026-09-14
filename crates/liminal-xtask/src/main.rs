@@ -99,8 +99,23 @@ fn main() -> Result<()> {
                 liminal_xtask::bench::gate_repo(&liminal_xtask::repo_root()?)?;
             }
         },
+        Command::Formal { command } => run_formal(&command)?,
     }
     Ok(())
+}
+
+fn run_formal(command: &FormalCommand) -> Result<()> {
+    match command {
+        FormalCommand::Check => {
+            liminal_xtask::formal::verify_registry_repo(&liminal_xtask::repo_root()?)?;
+            println!("formal registry structurally valid — NOT QUALIFICATION");
+            Ok(())
+        }
+        FormalCommand::Proof => liminal_xtask::formal::proof_unimplemented(),
+        FormalCommand::Model => liminal_xtask::formal::model_unimplemented(),
+        FormalCommand::Adapters => liminal_xtask::formal::adapters_unimplemented(),
+        FormalCommand::Gate { phase } => liminal_xtask::formal::gate_unimplemented(*phase),
+    }
 }
 
 #[derive(Debug, Parser)]
@@ -121,6 +136,28 @@ enum Command {
     Bench {
         #[command(subcommand)]
         command: BenchCommand,
+    },
+    /// Candidate formal-safety package helpers.
+    Formal {
+        #[command(subcommand)]
+        command: FormalCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum FormalCommand {
+    /// Validate the closed registries. Structural only; never qualification.
+    Check,
+    /// Run registered implementation proofs (not implemented yet).
+    Proof,
+    /// Run registered finite models (not implemented yet).
+    Model,
+    /// Run registered adapter contracts (not implemented yet).
+    Adapters,
+    /// Aggregate adopted evidence for one phase (not implemented yet).
+    Gate {
+        /// Phase number, restricted to 0 through 12 by the gate.
+        phase: u8,
     },
 }
 

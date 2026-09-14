@@ -1,0 +1,99 @@
+schema: "oh.war/milestones/v1"
+
+milestones:
+  - id: "M1"
+    title: "Bounded delivery and refusal evidence collected"
+    stage_refs: ["STAGE-001", "STAGE-002", "STAGE-003", "STAGE-004", "STAGE-005", "STAGE-006", "STAGE-007", "STAGE-008", "STAGE-009", "STAGE-010", "STAGE-011", "STAGE-012", "STAGE-013", "STAGE-014", "STAGE-015", "STAGE-016", "STAGE-017"]
+    obligation_refs: ["OBL-001", "OBL-002"]
+
+  - id: "M2"
+    title: "Independent evidence and actual scoped decisions established"
+    depends_on: ["M1"]
+    obligation_refs: ["OBL-003"]
+
+stages:
+  - id: "STAGE-001"
+    title: "Implement the seven frozen fuzz targets and seed manifest"
+    executor_kind: "agent"
+    responsibility_tier: "T2"
+
+  - id: "STAGE-002"
+    title: "Run the `cst_parse` sanitizer campaign"
+    executor_kind: "agent"
+    responsibility_tier: "T3"
+
+  - id: "STAGE-003"
+    title: "Run the `format_idempotent` sanitizer campaign"
+    executor_kind: "agent"
+    responsibility_tier: "T3"
+
+  - id: "STAGE-004"
+    title: "Run the `canonical_round_trip` sanitizer campaign"
+    executor_kind: "agent"
+    responsibility_tier: "T3"
+
+  - id: "STAGE-005"
+    title: "Run the `incremental_full_equivalence` sanitizer campaign"
+    executor_kind: "agent"
+    responsibility_tier: "T3"
+
+  - id: "STAGE-006"
+    title: "Run the `html_render` sanitizer campaign"
+    executor_kind: "agent"
+    responsibility_tier: "T3"
+
+  - id: "STAGE-007"
+    title: "Run the `graph_interchange_codec` sanitizer campaign"
+    executor_kind: "agent"
+    responsibility_tier: "T3"
+
+  - id: "STAGE-008"
+    title: "Run the `ilrp_recovery` sanitizer campaign"
+    executor_kind: "agent"
+    responsibility_tier: "T3"
+
+  - id: "STAGE-009"
+    title: "Replay committed minimized failures and flip the existing regression test"
+    executor_kind: "agent"
+    responsibility_tier: "T2"
+
+  - id: "STAGE-010"
+    title: "Implement the real Phase 1 cold-start benchmark"
+    executor_kind: "agent"
+    responsibility_tier: "T2"
+
+  - id: "STAGE-011"
+    title: "Implement the real Phase 1 memory benchmark"
+    executor_kind: "agent"
+    responsibility_tier: "T2"
+
+  - id: "STAGE-012"
+    title: "Implement the sampler, baseline verifier, and comparator recipes"
+    executor_kind: "agent"
+    responsibility_tier: "T2"
+
+  - id: "STAGE-013"
+    title: "Capture 30-sample candidate benchmark evidence"
+    executor_kind: "agent"
+    responsibility_tier: "T3"
+
+  - id: "STAGE-014"
+    title: "Accept the initial Phase 1 benchmark baseline after inspecting all samples"
+    executor_kind: "human"
+    responsibility_tier: "T1"
+
+  - id: "STAGE-015"
+    title: "Enforce the frozen benchmark regression policy"
+    executor_kind: "agent"
+    responsibility_tier: "T2"
+
+  - id: "STAGE-016"
+    title: "Run the complete repository continuous lane after the last fix"
+    executor_kind: "agent"
+    responsibility_tier: "T2"
+
+  - id: "STAGE-017"
+    title: "Reconcile the milestone meter without activating migration"
+    executor_kind: "agent"
+    responsibility_tier: "T4"
+

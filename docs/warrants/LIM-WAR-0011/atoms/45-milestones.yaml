@@ -1,0 +1,51 @@
+schema: "oh.war/milestones/v1"
+
+milestones:
+  - id: "M1"
+    title: "Concrete design and actual semantic acceptance before implementation"
+    stage_refs: ["STAGE-001", "STAGE-002"]
+    obligation_refs: ["OBL-004"]
+
+  - id: "M2"
+    title: "Bounded implementation and complete positive and refusal evidence"
+    depends_on: ["M1"]
+    stage_refs: ["STAGE-003", "STAGE-004", "STAGE-005"]
+    obligation_refs: ["OBL-001", "OBL-002"]
+
+  - id: "M3"
+    title: "Independent evidence and actual scoped decisions established"
+    depends_on: ["M2"]
+    stage_refs: ["STAGE-006"]
+    obligation_refs: ["OBL-003"]
+
+stages:
+  - id: "STAGE-001"
+    title: "Design exhaustive byte and semantic observable declarations from the accepted profile and complete pinned corpus"
+    executor_kind: "agent"
+    responsibility_tier: "T2"
+
+  - id: "STAGE-002"
+    title: "Brian accepts the observable declaration and independent oracle boundary before either compiler comparison"
+    executor_kind: "human"
+    responsibility_tier: "T1"
+
+  - id: "STAGE-003"
+    title: "Execute the existing OpenWarrant oracle and Liminal adapter over the entire pinned corpus and compare both axes"
+    executor_kind: "agent"
+    responsibility_tier: "T2"
+
+  - id: "STAGE-004"
+    title: "Run byte-only/semantic differences, omitted/extra document, empty-set and corrupted-output refusal controls"
+    executor_kind: "agent"
+    responsibility_tier: "T3"
+
+  - id: "STAGE-005"
+    title: "Reconcile full corpus coverage, prior declaration digest, zero differences on both axes and reproducible replay evidence"
+    executor_kind: "agent"
+    responsibility_tier: "T4"
+
+  - id: "STAGE-006"
+    title: "Obtain independent full-corpus parity assessment and Brian's actual scoped acceptance before release construction"
+    executor_kind: "human"
+    responsibility_tier: "T1"
+
