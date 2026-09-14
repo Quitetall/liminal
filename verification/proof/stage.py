@@ -21,7 +21,16 @@ RUN_SPEC.loader.exec_module(RUN)
 COMMIT = re.compile(r"[0-9a-f]{40}")
 MANIFESTS = ("verification/proof/inputs.json", "verification/proof/source-inventory.json")
 TREE_PATHS = (*sorted(RUN.EXACT_SOURCE_FILES), *RUN.SOURCE_ROOTS, *MANIFESTS)
+RUNNER_PATHS = tuple(
+    "verification/proof/" + name
+    for name in (
+        "run.py", "stage.py", "dependencies.py", "toolchain.py",
+        "distribution.py", "command.py", "observation.py", "sandbox.py",
+    )
+)
 TREE_OUTPUT_LIMIT = 4 * 1024 * 1024
+RUNNER_FILE_LIMIT = 1024 * 1024
+RUNNER_TOTAL_LIMIT = 8 * 1024 * 1024
 GIT_ENV = {
     "PATH": "/usr/bin:/bin",
     "LANG": "C.UTF-8",
@@ -101,8 +110,10 @@ def _validate_inventory(raw: bytes, selected: dict) -> dict:
         raise StageFailure(f"invalid committed source inventory: {error}") from error
 
 
-def _tree(repository: Path, commit: str) -> dict[str, tuple[str, str]]:
-    raw = _git(repository, ["ls-tree", "-r", "-z", commit, "--", *TREE_PATHS], TREE_OUTPUT_LIMIT)
+def _tree(
+    repository: Path, commit: str, paths: tuple[str, ...] = TREE_PATHS
+) -> dict[str, tuple[str, str]]:
+    raw = _git(repository, ["ls-tree", "-r", "-z", commit, "--", *paths], TREE_OUTPUT_LIMIT)
     entries = {}
     try:
         records = raw.split(b"\0")
@@ -201,6 +212,68 @@ def stage_source(repository: Path, commit: str, destination: Path) -> dict:
         "qualification": False,
         "commit": commit,
         "inventory_origin": RUN.SOURCE_COMMIT,
+        "file_sha256": hashes,
+        "file_mode": modes,
+    }
+
+
+def stage_runner(repository: Path, commit: str, destination: Path) -> dict:
+    """Stage the closed proof-runner projection from one exact Git commit."""
+    if type(commit) is not str or COMMIT.fullmatch(commit) is None:
+        raise StageFailure("runner staging requires an exact lowercase commit hash")
+    try:
+        repository = repository.resolve(strict=True)
+        if not repository.is_dir():
+            raise StageFailure("runner repository must be a directory")
+    except StageFailure:
+        raise
+    except OSError as error:
+        raise StageFailure("runner repository is unavailable") from error
+    target = _destination(repository, destination)
+    resolved = _git(repository, ["rev-parse", "--verify", commit + "^{commit}"], 128)
+    try:
+        if resolved.decode("ascii").strip() != commit:
+            raise StageFailure("requested Git commit identity does not match")
+    except UnicodeError as error:
+        raise StageFailure("invalid Git commit identity") from error
+    tree = _tree(repository, commit, RUNNER_PATHS)
+    if set(tree) != set(RUNNER_PATHS):
+        raise StageFailure("Git runner tree does not match the closed projection")
+
+    blobs = {}
+    hashes = {}
+    modes = {}
+    total = 0
+    for path in RUNNER_PATHS:
+        mode, object_id = tree[path]
+        raw = _git(repository, ["cat-file", "blob", object_id], RUNNER_FILE_LIMIT)
+        total += len(raw)
+        if total > RUNNER_TOTAL_LIMIT:
+            raise StageFailure("Git runner projection exceeds 8 MiB")
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeError as error:
+            raise StageFailure(f"Git runner file is not UTF-8: {path}") from error
+        if "\0" in text:
+            raise StageFailure(f"Git runner file contains NUL: {path}")
+        blobs[path] = raw
+        hashes[path] = hashlib.sha256(raw).hexdigest()
+        modes[path] = mode
+
+    try:
+        target.mkdir(mode=0o700)
+        for relative in RUNNER_PATHS:
+            path = target / relative
+            path.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+            with path.open("xb") as output:
+                output.write(blobs[relative])
+            path.chmod(0o755 if modes[relative] == "100755" else 0o644)
+    except OSError as error:
+        raise StageFailure("runner staging write failed; partial output retained") from error
+    return {
+        "status": "runner-staged",
+        "qualification": False,
+        "commit": commit,
         "file_sha256": hashes,
         "file_mode": modes,
     }

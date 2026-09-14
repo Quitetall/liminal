@@ -39,6 +39,23 @@ Ten real scratch-Git controls bring the proof-support suite to 91 controls.
 This constructor does not establish toolchain closure, execute a proof, or provide
 crash-durable/replay-qualified evidence.
 
+`stage_runner(repository, commit, destination)` uses the same bounded Git plumbing
+to reconstruct exactly eight committed proof modules: `run.py`, `stage.py`,
+`dependencies.py`, `toolchain.py`, `distribution.py`, `command.py`,
+`observation.py`, and `sandbox.py`. It reads no working-tree modules, tests,
+documentation, manifests or bytecode. Each UTF-8, NUL-free module is limited to
+1 MiB and the projection to 8 MiB; only Git modes `100644` and `100755` are
+accepted and preserved. All blobs are validated before a new private external
+root is created, and partial write failure is retained. The result is
+`runner-staged` with `qualification: false`.
+
+This constructor does not import or execute the staged modules. The caller must
+independently authorize and compare the commit and runner, then launch the fresh
+tree with an isolated interpreter. Seven public controls bring proof-support
+discovery to 136 tests at this slice. Independent comparison matched all 11
+staged rows and detected a one-file mutation; isolated execution remains pending.
+See `runner-stage-development-2026-09-14.md`.
+
 `check_distribution(archive, extracted_root, expected_sha256)` in
 `distribution.py` binds the complete extracted Verus file and directory inventory
 to a checksum-validated distribution archive. It compares all file contents,

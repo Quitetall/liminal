@@ -59,6 +59,11 @@ reconstructed all 167 locked packages and demonstrated ordinary and strict
 verified build feasibility. The selected-eight build-script counterexample is now
 closed at the input stage by the 166-entry source inventory; runner/profile/commit
 authority, controlled replay and formal receipt aggregation remain unfinished.
+Exact-commit runner staging now reconstructs only eight bounded proof modules at
+a new external root; it neither authenticates nor executes them. At this slice,
+proof-support discovery passed 136 controls. Independent comparison matched the
+11-row projection and detected a one-file mutation; isolated orchestration and
+authority binding remain pending.
 This is not yet integrated with the formal
 commands. See `proof/development-2026-09-14.md` and
 `proof/selection-development-2026-09-14.md` for exact limits, failures,
