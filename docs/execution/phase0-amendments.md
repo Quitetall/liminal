@@ -132,3 +132,10 @@ narrow generated ILRP probe setup migration documented in M17 without changing
 assertions, output bytes, budgets, goldens, coverage or thresholds. Required
 verification/local compute is now authorized with explicit resource bounds;
 phase authorization and formal adoption remain separate.
+
+AM-17.12 supplement (M17, DG17.4): user-approved 2026-09-14, conditional on
+source audit and before/after transaction evidence, add only `same-file` to the
+closed concurrency dependency list with its exact existing version pin and
+relocate the existing single deferred epoch write from workspace.rs to owner.rs.
+Preserve all negative controls, classifications, counts and qualification
+criteria; regenerate the derived packet digest. This is not phase authorization.
