@@ -19,6 +19,26 @@ and intentionally refuses any root `.cargo`; this is a staging boundary, not an
 instruction to delete or change the tracked file. A staged public-seam probe is
 recorded separately while orchestration work continues.
 
+`stage_source(repository, commit, destination)` in `stage.py` reconstructs the
+closed source projection and its two manifests from exact Git blobs, ignoring
+dirty working files. It accepts only a full lowercase commit identity, compares
+the entire selected Git file set, modes and SHA-256 values with the committed
+inventory, and validates all blobs before creating a new external destination.
+Git output is bounded while reading, with a 30-second per-command deadline;
+replacement objects, lazy fetch, global/system configuration and prompting are
+disabled. Existing destinations and physical aliases into the repository refuse.
+Partial output after write failure is retained, never deleted or overwritten.
+
+The constructor and input checker share the same byte-level manifest validators.
+Its result separates the requested `commit` from historical `inventory_origin`
+and includes both manifest hashes. A different requested commit can reproduce
+the same inventory when its exact selected source projection is unchanged.
+Commit identity is not approval: the caller must bind authorized commit/profile
+hashes and runner identity. `source-staged` always has `qualification: false`.
+Ten real scratch-Git controls bring the proof-support suite to 91 controls.
+This constructor does not establish toolchain closure, execute a proof, or provide
+crash-durable/replay-qualified evidence.
+
 `check_distribution(archive, extracted_root, expected_sha256)` in
 `distribution.py` binds the complete extracted Verus file and directory inventory
 to a checksum-validated distribution archive. It compares all file contents,

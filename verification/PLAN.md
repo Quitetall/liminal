@@ -35,7 +35,9 @@ The runner slice under `proof/` validates selected source pins and complete
 extracted Verus distribution bytes, and constructs a checksum-closed dependency
 tree from an explicit archive set at a new external destination. It also supplies
 a bounded Linux command-execution seam with raw output and observed service
-receipts. Its 81 unit controls and development statuses retain
+receipts. Exact-commit Git reconstruction now supplies fresh source stages;
+the constructor and checker share bounded manifest validators. Requested commit
+and historical inventory origin remain distinct. Its 91 unit controls and development statuses retain
 `qualification: false`, never proof or qualification. The caller must bind
 source/tool/profile and lock/archive authority, and independent
 comparison—not the producer's returned map—checks constructed output. Real probes

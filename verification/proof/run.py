@@ -80,9 +80,20 @@ def _load_manifest(repository: Path) -> dict:
     try:
         if manifest_path.stat().st_size > MAX_MANIFEST_BYTES:
             raise InputFailure("inputs.json exceeds 64 KiB")
-        raw = manifest_path.read_bytes().decode("utf-8")
+        raw = manifest_path.read_bytes()
+    except InputFailure:
+        raise
+    except OSError as error:
+        raise InputFailure("invalid inputs.json") from error
+    return _parse_manifest(raw)
+
+
+def _parse_manifest(raw: bytes) -> dict:
+    if len(raw) > MAX_MANIFEST_BYTES:
+        raise InputFailure("inputs.json exceeds 64 KiB")
+    try:
         manifest = json.loads(
-            raw,
+            raw.decode("utf-8"),
             object_pairs_hook=_unique_object,
             parse_constant=_reject_constant,
         )
@@ -157,8 +168,20 @@ def _load_source_inventory(repository: Path, selected_pins: dict) -> dict:
     try:
         if path.stat().st_size > MAX_SOURCE_INVENTORY_BYTES:
             raise InputFailure("source inventory exceeds 2 MiB")
+        raw = path.read_bytes()
+    except InputFailure:
+        raise
+    except OSError as error:
+        raise InputFailure("invalid source inventory") from error
+    return _parse_source_inventory(raw, selected_pins)
+
+
+def _parse_source_inventory(raw: bytes, selected_pins: dict) -> dict:
+    if len(raw) > MAX_SOURCE_INVENTORY_BYTES:
+        raise InputFailure("source inventory exceeds 2 MiB")
+    try:
         inventory = json.loads(
-            path.read_bytes().decode("utf-8"),
+            raw.decode("utf-8"),
             object_pairs_hook=_unique_object,
             parse_constant=_reject_constant,
         )

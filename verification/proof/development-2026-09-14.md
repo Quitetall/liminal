@@ -261,6 +261,42 @@ not redundant because only the parent is resolved. Existing caller-controlled
 `TMPDIR`, bounded observation slack and exclusive evidence files remain
 intentional, documented development boundaries, not new qualification claims.
 
+### Exact-commit source reconstruction
+
+`stage.py` reconstructs the selected source files and two committed manifests
+from immutable Git objects, rather than copying dirty working files. The input
+checker and constructor now share byte-level schema validators. Ten real
+scratch-Git controls bring the proof-support suite to 91; the combined run
+returned exit 0 (`source-stage-blob-controls-full.log`, SHA-256
+`ea099465b9387216e5744cf2119ede865e5771f0dd825b903a0a6886ff74b28a`).
+The initial RED is retained in `source-stage-red.log` (SHA-256
+`d9970a7801d042df1f7d93db48d8eb721586759facc442e86e39b9a4d2d44bcd`).
+
+Two separate scratch mutants removed the exact blob-hash and Git-mode guards.
+Each original targeted control exited 0; each corresponding mutant exited 1
+with `StageFailure not raised`, not an import/build failure. Exact patches and
+source before/after hashes are retained under
+`probes/stage-mutation-sensitivity-v1`; raw test logs are
+`stage-mutation-{original-hash,original-mode,hash-mutant,mode-mutant}.log`.
+The candidate checkout was not modified by these probes.
+
+Real reconstruction at requested commit `bd8b280b` matched all 168 selected files
+(166 sources plus two manifests) against separate Git-blob and staged-file maps:
+paths, bytes, sizes and executable modes matched. `check_inputs` also returned
+`inputs-valid`, with `qualification: false`. Its historical inventory origin
+remains `3bd93a96`; a scoped Git diff between those commits returned exit 0.
+Those are distinct identities, not a reason to refresh the inventory blindly.
+The first probe's outer zsh wrapper exited 1 after assigning a reserved variable;
+that failure remains preserved. A fresh v2 probe used direct process-exit capture
+and returned exit 0. Its receipt is
+`probes/stage-source-bd8b280b-v2/receipt.json`, SHA-256
+`2f330fa6903caad1c499d66e287b5c3c42ad1bf01aabbaf9833eb6a5a63f1d80`.
+The v1 and v2 data receipts are byte-identical; the launcher outcomes are not.
+
+This is source reconstruction only. Caller-selected commit/profile approval,
+runner authority, compiler-library closure, complete proof execution and cold
+replay remain separate. Exact identity does not grant approval or qualification.
+
 All sixteen obligations remain open. Archive reconstruction, dependency
 construction, ordinary builds, strict verified builds and witnesses are input
 closure or feasibility observations only; none is a full qualification result.
