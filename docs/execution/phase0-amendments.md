@@ -139,3 +139,11 @@ closed concurrency dependency list with its exact existing version pin and
 relocate the existing single deferred epoch write from workspace.rs to owner.rs.
 Preserve all negative controls, classifications, counts and qualification
 criteria; regenerate the derived packet digest. This is not phase authorization.
+
+AM-17.12 supplement (M17, DG17.5): user-approved 2026-09-14, "Approve
+constrained admission." Permit exact `vstd` version `0.0.0-2026-08-30-0159`
+only with default/std/alloc features disabled and pin/feature drift refused by
+the frozen concurrency dependency admission check. Retain every other registry
+refusal and qualification criterion. This enables leaf-core integration only;
+proof establishment, formal adoption, suite ratification and Phase 1 remain
+separate.
