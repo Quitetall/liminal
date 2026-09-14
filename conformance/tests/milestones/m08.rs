@@ -686,7 +686,10 @@ fn file_blob_fresh_after_accept_repair() {
             },
             Step {
                 kind: "accept_repair".to_owned(),
-                extra: toml::Table::new(),
+                extra: toml::Table::from_iter([(
+                    "actor".into(),
+                    toml::Value::String("actor:018f0000-0000-7000-8000-000000000001".into()),
+                )]),
             },
         ],
         expect: Expectation::default(),
@@ -736,7 +739,9 @@ fn freeze_rejects_stale_file_bytes() {
     let exec = run.exec_scenario(scenario).expect("exec must run");
     assert!(exec.status.success());
 
-    let mut ws = ToyWorkspace::open(&run.root).expect("open");
+    let owner = liminal_graph::StoreOwner::open(&run.root.join("state")).expect("open owner");
+    let faults = owner.blob_fault_injector();
+    let mut ws = ToyWorkspace::open_with_owner(&run.root, owner).expect("open");
     let basis = ws
         .basis(BasisPerspective::DurableOnly)
         .expect("durable basis");
@@ -790,12 +795,8 @@ fn freeze_rejects_stale_file_bytes() {
     else {
         panic!("client basis must select a buffer generation");
     };
-    ws.store()
-        .put_working_aux(
-            liminal_graph::ns::SYS_BLOB,
-            &format!("buf/{client}/{buffer}/{generation}"),
-            serde_json::Value::String("tampered buffer".into()),
-        )
+    faults
+        .corrupt_buffer(client, buffer, *generation, "tampered buffer")
         .expect("tamper buffer blob");
     assert!(
         freeze(&buffer_basis, &ws).is_err(),
@@ -815,12 +816,8 @@ fn freeze_rejects_stale_file_bytes() {
     let liminal_revision::BasisComponent::Observation { source, hash, .. } = observation else {
         unreachable!();
     };
-    ws.store()
-        .put_working_aux(
-            liminal_graph::ns::SYS_BLOB,
-            &format!("obs/{source}/{hash}"),
-            serde_json::json!({"price": "tampered"}),
-        )
+    faults
+        .corrupt_observation(*source, *hash, serde_json::json!({"price": "tampered"}))
         .expect("tamper observation blob");
     assert!(
         freeze(&basis, &ws).is_err(),
@@ -828,6 +825,7 @@ fn freeze_rejects_stale_file_bytes() {
     );
 
     drop(ws);
+    drop(faults);
     let ws = ToyWorkspace::open(&run.root).expect("reopen after working tamper");
     let basis = ws
         .basis(BasisPerspective::DurableOnly)

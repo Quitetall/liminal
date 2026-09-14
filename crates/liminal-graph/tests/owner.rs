@@ -60,3 +60,21 @@ fn epoch_capability_commits_only_its_owners_epoch() {
         Some(serde_json::json!(17))
     );
 }
+
+#[test]
+fn fault_grant_keeps_the_store_locked_until_it_is_dropped() {
+    let dir = liminal_scratch::ScratchDir::new("owner-fault-lifetime").unwrap();
+    let owner = StoreOwner::open(&dir).unwrap();
+    let faults = owner.blob_fault_injector();
+    drop(owner);
+    assert!(matches!(
+        StoreOwner::open(&dir),
+        Err(liminal_graph::StoreError::Locked(_))
+    ));
+    drop(faults);
+    let reopened = StoreOwner::open(&dir).unwrap();
+    assert_eq!(
+        reopened.store().head().unwrap(),
+        liminal_id::GraphRevisionId(0)
+    );
+}

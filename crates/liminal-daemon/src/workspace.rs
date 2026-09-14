@@ -60,6 +60,20 @@ impl ToyWorkspace {
     pub fn open(root: &Utf8Path) -> Result<Self, WorkspaceError> {
         let store_dir = root.join("state");
         let owner = StoreOwner::open(&store_dir)?;
+        Self::open_with_owner(root, owner)
+    }
+
+    /// Assemble with explicitly acquired root authority. Conformance fixtures
+    /// may retain a narrowly scoped fault grant before transferring the owner.
+    /// The store must belong to this exact workspace; check before recovery or
+    /// any staged-file cleanup. Ordinary callers receive no owner back.
+    pub fn open_with_owner(root: &Utf8Path, owner: StoreOwner) -> Result<Self, WorkspaceError> {
+        if owner.store().dir() != root.join("state") {
+            return Err(liminal_graph::StoreError::Conflict(
+                "store owner belongs to another workspace".into(),
+            )
+            .into());
+        }
         let store = owner.store();
 
         // Sweep abandoned staged files (D02.4: delete all).

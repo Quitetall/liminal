@@ -602,7 +602,11 @@ fn single_file(store: &GraphStore, root: &Utf8Path) -> anyhow::Result<(PathId, S
 /// store-aware `FsExecutor` (with the entity→alias snapshot) so the DAG's
 /// `InsertSourceId` step can resolve its marker; honors the ambient crash
 /// arming so accept is crash-tested like any other repair.
-fn accept_repair(store: &GraphStore, root: &Utf8Path) -> anyhow::Result<()> {
+fn accept_repair(
+    store: &GraphStore,
+    root: &Utf8Path,
+    actor: liminal_id::ActorId,
+) -> anyhow::Result<()> {
     let executor = crate::executor::FsExecutor::with_store(root.to_owned(), store)?;
     let crash = crate::crash::EnvCrashInjector::from_env();
     let driver = IlrpDriver {
@@ -633,7 +637,7 @@ fn accept_repair(store: &GraphStore, root: &Utf8Path) -> anyhow::Result<()> {
     let plan: RepairPlan = serde_json::from_value(plan_value)?;
 
     let evidence = SafetyEvidence::HumanApproval {
-        actor: liminal_id::ActorId::new(),
+        actor,
         at: Timestamp::now(),
     };
     let id = driver.prepare(plan.clone(), evidence.clone())?;
@@ -1770,7 +1774,12 @@ impl<X: ExternalExecutor, C: CrashInjector> StepRunner<X, C> {
                     .expect("StepRunner workspace is always present");
                 apply_query(ws, &self.buffers, step)?;
             }
-            "accept_repair" => accept_repair(self.ws().store(), &self.root)?,
+            "accept_repair" => {
+                // AM-17.12: a caller identity is required before any acceptance
+                // effect. This records the caller's claim, not authentication.
+                let actor = field(step, "actor")?.parse::<liminal_id::ActorId>()?;
+                accept_repair(self.ws().store(), &self.root, actor)?;
+            }
             "holder_unavailable" => mark_holder_unavailable(self.ws().store(), step)?,
             "holder_available" => mark_holder_available(self.ws().store(), step)?,
             "advance_clock" => apply_advance_clock(self.ws().store(), step)?,

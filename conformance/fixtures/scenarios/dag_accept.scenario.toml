@@ -18,7 +18,7 @@
 # `crash_matrix_two_step_dag` drives.
 #
 # TO IMPLEMENT (runner `accept_repair` step, AM-4.2):
-#   step kind = "accept_repair" with no extra fields → look up the single
+#   step kind = "accept_repair" with caller-supplied actor (AM-17.12) → look up the single
 #   persisted JUR_PLAN whose JUR_DECISION is NeedsReview; call the daemon
 #   `accept_repair(plan_id)` fn which records HumanApproval evidence and
 #   drives driver.prepare + driver.run to Committed. Assert alias `p-fourier`
@@ -51,6 +51,7 @@ replace = ""
 [[step]]
 # Human accepts the proposed two-step DAG (HumanApproval evidence, D04.5).
 kind = "accept_repair"
+actor = "actor:018f0000-0000-7000-8000-000000000001"
 
 [expect]
 plan_steps = ["insert_source_id", "reattach_relation"]

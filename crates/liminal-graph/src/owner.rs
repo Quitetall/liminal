@@ -6,7 +6,10 @@
 //! callers migrate; these types alone do not establish closed write authority.
 
 use camino::Utf8Path;
-use liminal_id::{BufferId, ClientId, GraphRevisionId, SessionEpoch, TransactionId};
+use liminal_id::{
+    BufferId, ClientId, ContentHash, GraphRevisionId, SessionEpoch, SourceId, TransactionId,
+};
+use std::sync::Arc;
 
 use crate::{GraphStore, StoreError, TxnMeta, ns};
 
@@ -14,14 +17,14 @@ use crate::{GraphStore, StoreError, TxnMeta, ns};
 /// Not clonable or serializable. Its borrowed capabilities cannot outlive it.
 #[derive(Debug)]
 pub struct StoreOwner {
-    store: GraphStore,
+    store: Arc<GraphStore>,
 }
 
 impl StoreOwner {
     /// Open or create the owned store using the existing recovery/locking path.
     pub fn open(dir: &Utf8Path) -> Result<Self, StoreError> {
         Ok(Self {
-            store: GraphStore::open(dir)?,
+            store: Arc::new(GraphStore::open(dir)?),
         })
     }
 
@@ -42,6 +45,50 @@ impl StoreOwner {
     #[must_use]
     pub fn working_capture(&self) -> WorkingCapture<'_> {
         WorkingCapture { store: &self.store }
+    }
+
+    /// Explicitly grant the conformance adapter authority to corrupt only
+    /// volatile buffer and observation blobs. Never provided by a read view or
+    /// ordinary workspace request. The grant keeps this same store open until
+    /// dropped; fixtures must drop it before testing reopen semantics.
+    #[must_use]
+    pub fn blob_fault_injector(&self) -> BlobFaultInjector {
+        BlobFaultInjector {
+            store: Arc::clone(&self.store),
+        }
+    }
+}
+
+/// Owner-granted corruption adapter for existing hash-pin rejection witnesses.
+/// This is not normal capture, not durable, and cannot write ILRP or graph state.
+/// Construction occurs explicitly at trusted fixture assembly before the owner
+/// is handed to the workspace. No serialization or public fields mint a grant.
+#[derive(Debug)]
+pub struct BlobFaultInjector {
+    store: Arc<GraphStore>,
+}
+
+impl BlobFaultInjector {
+    /// Replace exactly one buffer-generation blob without changing its Basis.
+    pub fn corrupt_buffer(
+        &self,
+        client: ClientId,
+        buffer: BufferId,
+        generation: u64,
+        text: &str,
+    ) -> Result<(), StoreError> {
+        WorkingCapture { store: &self.store }.put_buffer(client, buffer, generation, text)
+    }
+
+    /// Replace a pinned observation blob without changing its key/hash metadata.
+    pub fn corrupt_observation(
+        &self,
+        source: SourceId,
+        hash: ContentHash,
+        value: serde_json::Value,
+    ) -> Result<(), StoreError> {
+        self.store
+            .put_working_aux(ns::SYS_BLOB, &format!("obs/{source}/{hash}"), value)
     }
 }
 
