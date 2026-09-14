@@ -166,3 +166,32 @@ def prepare_sandbox(
         "environment": {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
         "output": str(destination / "command-evidence"),
     }
+
+
+def prepare_bounded_sandbox(
+    source: Path,
+    rust: Path,
+    verus: Path,
+    vendor: Path,
+    destination: Path,
+    operation: str,
+) -> dict:
+    """Prepare a proof request with an explicit, bounded initial CPU affinity."""
+    try:
+        allowed = os.sched_getaffinity(0)
+    except (AttributeError, OSError, NotImplementedError) as error:
+        raise SandboxFailure("cannot observe CPU affinity") from error
+    if type(allowed) is not set or not allowed or any(
+        type(cpu) is not int or cpu < 0 for cpu in allowed
+    ):
+        raise SandboxFailure("invalid CPU affinity observation")
+    cpus = sorted(allowed)[:3]
+    request = prepare_sandbox(source, rust, verus, vendor, destination, operation)
+    return {
+        **request,
+        "schema": "liminal-bounded-sandbox-request-v1",
+        "resource_profile": "linux-initial-affinity-at-most-three-v1",
+        "cpu_affinity": cpus,
+        "base_argv": request["argv"],
+        "argv": ["/usr/bin/taskset", "--cpu-list", ",".join(map(str, cpus)), *request["argv"]],
+    }

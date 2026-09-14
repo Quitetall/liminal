@@ -3,6 +3,7 @@ import stat
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 MODULE_PATH = Path(__file__).with_name("sandbox.py")
@@ -23,6 +24,70 @@ class SandboxPreparationTests(unittest.TestCase):
         for path in (self.source, self.rust, self.verus, self.vendor):
             path.mkdir()
         self.destination = self.root / "request"
+
+    def test_bounded_request_refuses_unavailable_affinity_before_creation(self):
+        with patch("os.sched_getaffinity", side_effect=OSError("affinity unavailable")):
+            with self.assertRaises(sandbox.SandboxFailure) as context:
+                sandbox.prepare_bounded_sandbox(
+                    self.source, self.rust, self.verus, self.vendor,
+                    self.destination, "verify",
+                )
+            self.assertIn("affinity", str(context.exception))
+            self.assertFalse(self.destination.exists())
+
+    def test_bounded_request_refuses_malformed_affinity_before_creation(self):
+        cases = (
+            ("empty", set()),
+            ("none", None),
+            ("list", [0, 1]),
+            ("negative", {-1, 0}),
+            ("bool", {True, 2}),
+            ("string", {"0", 1}),
+        )
+        for name, affinity in cases:
+            with self.subTest(name=name):
+                destination = self.root / f"request-{name}"
+                with patch("os.sched_getaffinity", return_value=affinity):
+                    with self.assertRaises(sandbox.SandboxFailure) as context:
+                        sandbox.prepare_bounded_sandbox(
+                            self.source, self.rust, self.verus, self.vendor,
+                            destination, "verify",
+                        )
+                self.assertIn("affinity", str(context.exception))
+                self.assertFalse(destination.exists())
+
+    def test_bounded_request_selects_sorted_one_or_two_cpus(self):
+        cases = (
+            ("one", {7}, [7], "7"),
+            ("two", {9, 2}, [2, 9], "2,9"),
+        )
+        for name, affinity, expected_cpus, expected_taskset in cases:
+            with self.subTest(name=name):
+                destination = self.root / f"request-{name}"
+                with patch("os.sched_getaffinity", return_value=affinity):
+                    result = sandbox.prepare_bounded_sandbox(
+                        self.source, self.rust, self.verus, self.vendor,
+                        destination, "verify",
+                    )
+                self.assertEqual(result["cpu_affinity"], expected_cpus)
+                self.assertEqual(result["argv"][:4], [
+                    "/usr/bin/taskset", "--cpu-list", expected_taskset,
+                    "/usr/bin/bwrap",
+                ])
+                self.assertIs(result["qualification"], False)
+
+    def test_bounded_request_refuses_unsupported_affinity_before_creation(self):
+        for error in (AttributeError("missing"), NotImplementedError("unsupported")):
+            with self.subTest(error=type(error).__name__):
+                destination = self.root / f"request-{type(error).__name__}"
+                with patch("os.sched_getaffinity", side_effect=error):
+                    with self.assertRaises(sandbox.SandboxFailure) as context:
+                        sandbox.prepare_bounded_sandbox(
+                            self.source, self.rust, self.verus, self.vendor,
+                            destination, "verify",
+                        )
+                self.assertIn("affinity", str(context.exception))
+                self.assertFalse(destination.exists())
 
     def test_verify_request_reproduces_the_fixed_successful_sandbox(self):
         result = sandbox.prepare_sandbox(
@@ -91,6 +156,37 @@ class SandboxPreparationTests(unittest.TestCase):
             path = self.destination / name
             self.assertTrue(path.is_dir())
             self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o700)
+        self.assertFalse((self.destination / "command-evidence").exists())
+
+    def test_bounded_request_selects_lowest_three_allowed_cpus(self):
+        with patch("os.sched_getaffinity", return_value={9, 2, 7, 3}):
+            result = sandbox.prepare_bounded_sandbox(
+                self.source, self.rust, self.verus, self.vendor,
+                self.destination, "verify",
+            )
+        self.assertEqual(result["schema"], "liminal-bounded-sandbox-request-v1")
+        self.assertEqual(result["status"], "sandbox-prepared")
+        self.assertIs(result["qualification"], False)
+        self.assertEqual(result["resource_profile"], "linux-initial-affinity-at-most-three-v1")
+        self.assertEqual(result["cpu_affinity"], [2, 3, 7])
+        self.assertEqual(result["argv"][:4], [
+            "/usr/bin/taskset", "--cpu-list", "2,3,7", "/usr/bin/bwrap",
+        ])
+        self.assertEqual(result["argv"][3:], result["base_argv"])
+        self.assertEqual(len(result["base_argv"]), 116)
+        self.assertEqual(result["base_argv"][:3], [
+            "/usr/bin/bwrap", "--unshare-all", "--unshare-user",
+        ])
+        marker = result["base_argv"].index("/verus/cargo-verus")
+        self.assertEqual(result["base_argv"][marker:], [
+            "/verus/cargo-verus", "verify", "--fwd-verus-args-to", "roots",
+            "--config", 'source.crates-io.replace-with="vendored-sources"',
+            "--config", 'source.vendored-sources.directory="/vendor"',
+            "--locked", "--offline", "-p", "liminal-safety", "--",
+            "--output-json", "--no-cheating",
+        ])
+        self.assertEqual(result["cwd"], str(self.destination / "command-parent"))
+        self.assertEqual(result["output"], str(self.destination / "command-evidence"))
         self.assertFalse((self.destination / "command-evidence").exists())
 
     def test_unknown_operation_is_refused_before_destination_creation(self):

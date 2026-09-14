@@ -179,6 +179,17 @@ public controls bring the current proof-support suite to 129; see
 complete argv values; this did not execute them. A real execution control remains
 pending.
 
+`prepare_bounded_sandbox` is an additive request constructor with the same
+arguments. It selects the lowest at most three CPUs from the caller's observed
+Linux affinity and prefixes the unchanged sandbox argv with
+`/usr/bin/taskset --cpu-list <selected CPUs>`. Its distinct request schema records
+`cpu_affinity`, `base_argv`, and the
+`linux-initial-affinity-at-most-three-v1` resource profile. This limits initial
+CPU visibility, not the number of child threads or a hostile child's ability to
+widen affinity. The independent command-execution resource limits still apply.
+The original constructor and verifier flags are unchanged; neither constructor
+authenticates execution or establishes qualification.
+
 `run_command(argv, cwd, environment, output)` in `command.py` now supplies the
 Linux execution seam. It requires an absolute executable, an allow-listed child
 environment, an existing source directory and a new external evidence directory.
