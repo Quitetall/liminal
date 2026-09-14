@@ -181,7 +181,8 @@ impl<'w> ClientSession<'w> {
             created_at: liminal_id::Timestamp::now(),
             status: liminal_jurisdiction::ReconciliationStatus::Pending,
         };
-        if let Ok(mut txn) = store.begin() {
+        let writer = self.workspace.reconciliation_writer();
+        if let Ok(mut txn) = writer.begin() {
             let _ = queue.upsert_coalesced(&mut txn, item);
             let _ = txn.commit(liminal_graph::TxnMeta {
                 actor: None,
@@ -224,7 +225,8 @@ impl<'w> ClientSession<'w> {
                 && item.status == liminal_jurisdiction::ReconciliationStatus::Pending
             {
                 item.status = liminal_jurisdiction::ReconciliationStatus::Resolved;
-                if let Ok(mut txn) = store.begin() {
+                let writer = self.workspace.reconciliation_writer();
+                if let Ok(mut txn) = writer.begin() {
                     let _ = txn.put_aux(
                         liminal_jurisdiction::reconcile::RECONCILE_NS,
                         &item.id.to_string(),

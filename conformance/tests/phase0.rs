@@ -438,7 +438,7 @@ fn production_rust_sources() -> Vec<std::path::PathBuf> {
 
 fn materialize_and_assert_governance(example: &RepresentationExample) -> Result<(), String> {
     use liminal_graph::{
-        GraphStore, Node, NodeFlags, Operation, Origin, PayloadRef, Relation, RelationFlags,
+        Node, NodeFlags, Operation, Origin, PayloadRef, Relation, RelationFlags, StoreOwner,
         Target, TxnMeta, kind,
     };
     use liminal_id::{JurisdictionSubject, NodeId, RelationId, RevisionId, Timestamp};
@@ -447,8 +447,8 @@ fn materialize_and_assert_governance(example: &RepresentationExample) -> Result<
     let sequence = NEXT_DIR.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let dir = phase0_temp_dir(sequence)?;
     let _ = std::fs::remove_dir_all(&dir);
-    let store = GraphStore::open(&dir).map_err(|error| error.to_string())?;
-    let mut txn = store.begin().map_err(|error| error.to_string())?;
+    let owner = StoreOwner::open(&dir).map_err(|error| error.to_string())?;
+    let mut txn = owner.begin().map_err(|error| error.to_string())?;
     let mut aliases = std::collections::BTreeMap::new();
     let mut expected = std::collections::BTreeMap::new();
 
@@ -538,8 +538,8 @@ fn materialize_and_assert_governance(example: &RepresentationExample) -> Result<
         })
         .map_err(|error| error.to_string())?;
 
-    assert_governed_subjects(example, &store, transaction, &expected)?;
-    drop(store);
+    assert_governed_subjects(example, owner.store(), transaction, &expected)?;
+    drop(owner);
     std::fs::remove_dir_all(&dir).map_err(|error| error.to_string())?;
     Ok(())
 }

@@ -5,7 +5,7 @@
 //! from the writing handle's memory.
 
 use camino::{Utf8Path, Utf8PathBuf};
-use liminal_graph::{GraphStore, Node, NodeFlags, Operation, Origin, PayloadRef, TxnMeta};
+use liminal_graph::{Node, NodeFlags, Operation, Origin, PayloadRef, StoreOwner, TxnMeta};
 use liminal_id::{KindId, NodeId, RevisionId, Timestamp};
 use proptest::prelude::*;
 
@@ -25,9 +25,9 @@ fn fresh_dir(name: &str) -> liminal_scratch::ScratchDir {
     liminal_scratch::ScratchDir::new(&format!("store-test-{name}")).expect("scratch dir")
 }
 
-fn create_node(store: &GraphStore, text: &str) -> NodeId {
+fn create_node(owner: &StoreOwner, text: &str) -> NodeId {
     let id = NodeId::new();
-    let mut txn = store.begin().unwrap();
+    let mut txn = owner.begin().unwrap();
     txn.apply(Operation::CreateNode {
         node: Node {
             id,
@@ -50,10 +50,10 @@ fn log_segment_path(dir: &Utf8Path) -> Utf8PathBuf {
 fn commits_survive_reopen() {
     let dir = fresh_dir("reopen");
     let id = {
-        let store = GraphStore::open(&dir).unwrap();
-        create_node(&store, "hello")
+        let owner = StoreOwner::open(&dir).unwrap();
+        create_node(&owner, "hello")
     };
-    let store = GraphStore::open(&dir).unwrap();
+    let store = StoreOwner::open(&dir).unwrap();
     let head = store.head().unwrap();
     let node = store.node_at(head, id).unwrap().unwrap();
     assert_eq!(node.payload, PayloadRef::Text("hello".to_owned()));
@@ -64,8 +64,8 @@ fn aux_commits_atomically_with_ops() {
     let dir = fresh_dir("aux");
     let id = NodeId::new();
     {
-        let store = GraphStore::open(&dir).unwrap();
-        let mut txn = store.begin().unwrap();
+        let owner = StoreOwner::open(&dir).unwrap();
+        let mut txn = owner.begin().unwrap();
         txn.apply(Operation::CreateNode {
             node: Node {
                 id,
@@ -84,7 +84,7 @@ fn aux_commits_atomically_with_ops() {
         .unwrap();
         txn.commit(meta()).unwrap();
     }
-    let store = GraphStore::open(&dir).unwrap();
+    let store = StoreOwner::open(&dir).unwrap();
     let value = store.get_aux("ilrp.intent", "intent-1").unwrap().unwrap();
     assert_eq!(value["state"], "prepared");
     assert!(store.node_at(store.head().unwrap(), id).unwrap().is_some());
@@ -93,16 +93,16 @@ fn aux_commits_atomically_with_ops() {
 #[test]
 fn invalid_transaction_leaves_no_trace() {
     let dir = fresh_dir("invalid");
-    let store = GraphStore::open(&dir).unwrap();
-    let head_before = store.head().unwrap();
-    let mut txn = store.begin().unwrap();
+    let owner = StoreOwner::open(&dir).unwrap();
+    let head_before = owner.head().unwrap();
+    let mut txn = owner.begin().unwrap();
     txn.apply(Operation::DeleteNode { id: NodeId::new() })
         .unwrap();
     assert!(txn.commit(meta()).is_err());
-    assert_eq!(store.head().unwrap(), head_before);
+    assert_eq!(owner.head().unwrap(), head_before);
     // And durably: reopening sees the same head.
-    drop(store);
-    let store = GraphStore::open(&dir).unwrap();
+    drop(owner);
+    let store = StoreOwner::open(&dir).unwrap();
     assert_eq!(store.head().unwrap(), head_before);
 }
 
@@ -110,15 +110,15 @@ fn invalid_transaction_leaves_no_trace() {
 fn snapshot_replace_atomic_under_abort() {
     let dir = fresh_dir("snapshot-abort");
     let id = {
-        let store = GraphStore::open(&dir).unwrap();
-        let id = create_node(&store, "survives");
-        store.snapshot().unwrap();
+        let owner = StoreOwner::open(&dir).unwrap();
+        let id = create_node(&owner, "survives");
+        owner.snapshot().unwrap();
         id
     };
     // Simulate a crash BETWEEN tmp-write and rename on a later snapshot
     // attempt: a garbage .tmp must be ignored, the committed snapshot rules.
     std::fs::write(dir.join("snapshot.json.tmp"), b"{ torn garbage").unwrap();
-    let store = GraphStore::open(&dir).unwrap();
+    let store = StoreOwner::open(&dir).unwrap();
     let node = store.node_at(store.head().unwrap(), id).unwrap().unwrap();
     assert_eq!(node.payload, PayloadRef::Text("survives".to_owned()));
 }
@@ -129,10 +129,10 @@ fn mid_file_corruption_is_detected_never_served() {
     // must fail loudly, not replay partially.
     let dir = fresh_dir("bitflip");
     {
-        let store = GraphStore::open(&dir).unwrap();
-        create_node(&store, "one");
-        create_node(&store, "two");
-        create_node(&store, "three");
+        let owner = StoreOwner::open(&dir).unwrap();
+        create_node(&owner, "one");
+        create_node(&owner, "two");
+        create_node(&owner, "three");
     }
     let path = log_segment_path(&dir);
     let mut bytes = std::fs::read(&path).unwrap();
@@ -140,7 +140,7 @@ fn mid_file_corruption_is_detected_never_served() {
     let target = 20;
     bytes[target] ^= 0x40;
     std::fs::write(&path, &bytes).unwrap();
-    let err = GraphStore::open(&dir).unwrap_err();
+    let err = StoreOwner::open(&dir).unwrap_err();
     assert!(
         err.to_string().contains("corrupt") || err.to_string().contains("invalid record"),
         "expected loud corruption error, got: {err}"
@@ -150,10 +150,10 @@ fn mid_file_corruption_is_detected_never_served() {
 #[test]
 fn store_lock_excludes_second_writer() {
     let dir = fresh_dir("lock");
-    let store = GraphStore::open(&dir).unwrap();
+    let store = StoreOwner::open(&dir).unwrap();
 
     // Second open while the first handle is live must fail with Locked.
-    let err = GraphStore::open(&dir).unwrap_err();
+    let err = StoreOwner::open(&dir).unwrap_err();
     assert!(
         matches!(err, liminal_graph::StoreError::Locked(_)),
         "expected Locked error, got: {err}"
@@ -161,7 +161,7 @@ fn store_lock_excludes_second_writer() {
 
     // Advisory lock dies with the holder — drop and reopen succeeds.
     drop(store);
-    let store2 = GraphStore::open(&dir);
+    let store2 = StoreOwner::open(&dir);
     assert!(store2.is_ok(), "reopen after drop must succeed: {store2:?}");
 }
 
@@ -180,10 +180,10 @@ proptest! {
         let dir = fresh_dir("torn");
         let mut committed = Vec::new();
         {
-            let store = GraphStore::open(&dir).unwrap();
+            let owner = StoreOwner::open(&dir).unwrap();
             for (i, size) in payload_sizes.iter().enumerate() {
                 let text = format!("record-{i}-{}", "x".repeat(*size));
-                committed.push(create_node(&store, &text));
+                committed.push(create_node(&owner, &text));
             }
         }
 
@@ -200,7 +200,7 @@ proptest! {
         std::fs::write(&path, &bytes[..cut]).unwrap();
 
         // Reopen: must not panic, must recover a clean prefix.
-        let store = GraphStore::open(&dir).unwrap();
+        let store = StoreOwner::open(&dir).unwrap();
         let head = store.head().unwrap();
         let survivors = usize::try_from(head.0).unwrap();
         prop_assert!(survivors <= committed.len());
@@ -222,7 +222,7 @@ proptest! {
 
         // Recovery is idempotent: a second reopen sees the identical world.
         drop(store);
-        let store2 = GraphStore::open(&dir).unwrap();
+        let store2 = StoreOwner::open(&dir).unwrap();
         prop_assert_eq!(store2.head().unwrap(), head);
     }
 }
@@ -233,7 +233,7 @@ proptest! {
 // forked while we hold the lock co-owns it until it reaches `execve`. Closing
 // our own descriptor inside that window does NOT release the lock, and a
 // reopen of the same store saw `EWOULDBLOCK` against a lock no live writer
-// held. `GraphStore::open` now waits a transient holder out.
+// held. `StoreOwner::open` now waits a transient holder out.
 //
 // These two tests are a pair and must stay one: the first proves the wait
 // happens, the second proves the wait did not turn the lock into a no-op.
@@ -264,7 +264,7 @@ fn open_waits_out_a_transient_lock_holder() {
     });
 
     let started = std::time::Instant::now();
-    let store = GraphStore::open(&dir).expect(
+    let store = StoreOwner::open(&dir).expect(
         "open must wait out a holder that releases inside the budget — a bare \
          try_lock fails here, which is exactly the F-11 defect",
     );
@@ -302,7 +302,7 @@ fn open_still_rejects_a_lock_holder_that_never_releases() {
         "the squatter must hold the lock before the store tries to open"
     );
 
-    let err = GraphStore::open(&dir).expect_err("a store held by another writer must not open");
+    let err = StoreOwner::open(&dir).expect_err("a store held by another writer must not open");
     assert!(
         matches!(err, liminal_graph::StoreError::Locked(_)),
         "expected StoreError::Locked, got {err:?}"

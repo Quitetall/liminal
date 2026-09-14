@@ -133,10 +133,10 @@ mod tests {
     /// A fresh scratch store that removes its directory on drop (M17.5 F-12).
     /// The guard is returned alongside the store because dropping it deletes the
     /// directory the store is reading.
-    fn scratch_store(label: &str) -> (GraphStore, liminal_scratch::ScratchDir) {
+    fn scratch_store(label: &str) -> (liminal_graph::StoreOwner, liminal_scratch::ScratchDir) {
         let dir =
             liminal_scratch::ScratchDir::new(&format!("reconcile-{label}")).expect("scratch dir");
-        let store = GraphStore::open(&dir).expect("open store");
+        let store = liminal_graph::StoreOwner::open(&dir).expect("open store");
         (store, dir)
     }
 

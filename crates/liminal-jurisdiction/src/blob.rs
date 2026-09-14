@@ -12,9 +12,27 @@ use liminal_id::ContentHash;
 
 /// Read a blob by its content hash. `Ok(None)` if absent.
 pub fn get(store: &GraphStore, hash: ContentHash) -> Result<Option<String>, StoreError> {
-    Ok(store
-        .get_aux(SYS_BLOB, &hash.to_hex())?
-        .and_then(|v| v.as_str().map(str::to_owned)))
+    if let Some(value) = store.get_aux(SYS_BLOB, &hash.to_hex())? {
+        let text = value
+            .as_str()
+            .ok_or_else(|| StoreError::Corrupt("text blob has wrong shape".into()))?;
+        if ContentHash::of(text.as_bytes()) != hash {
+            return Err(StoreError::Corrupt("text blob hash mismatch".into()));
+        }
+        return Ok(Some(text.to_owned()));
+    }
+    // Committed file mirrors also carry bytes, not authority by their path.
+    // Recompute the requested hash before using them; do not add a write or
+    // silently substitute a different file version for a missing preimage.
+    for (key, value) in store.scan_aux(SYS_BLOB)? {
+        if key.starts_with("file/")
+            && let Some(text) = value.as_str()
+            && ContentHash::of(text.as_bytes()) == hash
+        {
+            return Ok(Some(text.to_owned()));
+        }
+    }
+    Ok(None)
 }
 
 /// Queue a blob write (`SYS_BLOB[hash] = text`) in an open transaction.

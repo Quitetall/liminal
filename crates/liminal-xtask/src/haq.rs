@@ -10242,13 +10242,13 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
-            100,
+            127,
             "node.revision.0 += 1;",
         ),
-        ("crates/liminal-graph/src/store/mod.rs", 81, "match op {"),
+        ("crates/liminal-graph/src/store/mod.rs", 108, "match op {"),
         (
             "crates/liminal-graph/src/store/mod.rs",
-            302,
+            334,
             "Ok(self.lock()?.state.head)",
         ),
         (
@@ -10258,32 +10258,32 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
-            320,
+            440,
             "return Ok(inner.state.nodes.get(&id).cloned());",
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
-            475,
+            629,
             "inner.log.append(&record)?;",
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
-            122,
+            149,
             "rel.revision.0 += 1;",
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
-            160,
+            187,
             "n.revision.0 += 1;",
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
-            186,
+            213,
             "match &aux.value {",
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
-            84,
+            111,
             "return Err(StoreError::Conflict(format!(\"node exists: {}\", node.id)));",
         ),
     ];
@@ -10368,7 +10368,7 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
             178,
             "match self {",
         ),
-        ("crates/liminal-jurisdiction/src/ilrp.rs", 278, "Ok(())"),
+        ("crates/liminal-jurisdiction/src/ilrp.rs", 575, "Ok(())"),
         (
             "crates/liminal-jurisdiction/src/checker.rs",
             288,
@@ -10381,22 +10381,22 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            292,
+            589,
             "self.commit_intent(id, intent, &format!(\"ack:{step_id}\"), origin)?;",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            291,
+            588,
             "self.crash.crash_if_armed(CrashPoint::BeforeAcknowledge);",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            311,
+            611,
             "let graph_steps: std::collections::BTreeSet<RepairStepId> = plan",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            319,
+            619,
             "if graph_steps.contains(&dep.before) && after_is_external {",
         ),
         (
@@ -13265,14 +13265,49 @@ impl liminal_jurisdiction::ExternalExecutor for GeneratedIlrpExecutor {
     }
 }
 
+// DG17.3 retains the existing assertions and output; explicit trusted setup
+// makes this bounded probe longer without relocating its fixture machinery.
+#[allow(clippy::too_many_lines)]
 fn generated_ilrp_probe() -> Result<&'static [u8]> {
     static PROBE: std::sync::OnceLock<std::result::Result<Vec<u8>, String>> =
         std::sync::OnceLock::new();
     let result = PROBE.get_or_init(|| {
         let outcome = (|| -> Result<Vec<u8>> {
             let dir = liminal_scratch::ScratchDir::new("haqp-generated-ilrp")?;
-            let store = liminal_graph::GraphStore::open(&dir)?;
+            let owner = liminal_graph::StoreOwner::open(&dir)?;
+            let store = owner.store();
             let fixed = uuid::Uuid::from_u128(1);
+            // DG17.3: trusted fixture assembly now precedes checked admission.
+            // Probe assertions and its deterministic Committed:8 output remain unchanged.
+            let path = liminal_id::PathId("generated-ilrp.md".into());
+            let empty_hash = liminal_id::ContentHash::of(b"");
+            let mut setup = owner.begin()?;
+            setup.apply(liminal_graph::Operation::CreateNode {
+                node: liminal_graph::Node {
+                    id: liminal_id::NodeId::from_uuid(fixed),
+                    kind: liminal_graph::kind::FILE,
+                    payload: liminal_graph::PayloadRef::Text(String::new()),
+                    revision: liminal_id::RevisionId(0),
+                    flags: liminal_graph::NodeFlags::default(),
+                },
+            })?;
+            setup.put_aux(
+                liminal_graph::ns::SYS_BLOB,
+                "file/generated-ilrp.md",
+                serde_json::json!(""),
+            )?;
+            setup.put_aux(
+                liminal_graph::ns::SYS_BLOB,
+                &empty_hash.to_hex(),
+                serde_json::json!(""),
+            )?;
+            setup.commit(liminal_graph::TxnMeta {
+                actor: None,
+                origin: liminal_graph::Origin::Human,
+                at: liminal_id::Timestamp::now(),
+                provenance: Some("haqp-generated-ilrp:fixture".into()),
+                inverse: None,
+            })?;
             let step_id = liminal_id::RepairStepId::from_uuid(fixed);
             let mutation = liminal_jurisdiction::ProposedMutation {
                 id: step_id,
@@ -13283,8 +13318,14 @@ fn generated_ilrp_probe() -> Result<&'static [u8]> {
                     path: liminal_id::PathId("generated-ilrp.md".into()),
                     contents: b"generated-ilrp".to_vec(),
                 },
-                expected_prestate: liminal_jurisdiction::StatePredicate::Any,
-                expected_poststate: liminal_jurisdiction::StatePredicate::Any,
+                expected_prestate: liminal_jurisdiction::StatePredicate::FileContent {
+                    path: path.clone(),
+                    hash: empty_hash,
+                },
+                expected_poststate: liminal_jurisdiction::StatePredicate::FileContent {
+                    path: path.clone(),
+                    hash: liminal_id::ContentHash::of(b"generated-ilrp"),
+                },
                 idempotency_key: liminal_id::IdempotencyKey::from_uuid(fixed),
             };
             let plan = liminal_jurisdiction::RepairPlan {
@@ -13292,23 +13333,29 @@ fn generated_ilrp_probe() -> Result<&'static [u8]> {
                 basis: liminal_revision::WorkspaceBasis {
                     transaction: liminal_id::TransactionId::from_uuid(fixed),
                     perspective: liminal_revision::BasisPerspective::DurableOnly,
-                    components: BTreeMap::new(),
+                    components: BTreeMap::from([(
+                        liminal_id::JurisdictionKey::Path(path.clone()),
+                        liminal_revision::BasisComponent::FileContent {
+                            path,
+                            hash: empty_hash,
+                        },
+                    )]),
                 },
                 steps: BTreeMap::from([(step_id, mutation)]),
                 dependencies: Vec::new(),
                 inverse: None,
             };
-            let driver = liminal_jurisdiction::IlrpDriver {
-                store: &store,
-                executor: GeneratedIlrpExecutor,
-                crash: liminal_jurisdiction::NoCrash,
+            let driver = liminal_jurisdiction::IlrpDriver::new(
+                owner.coordinator_writer(),
+                GeneratedIlrpExecutor,
+                liminal_jurisdiction::NoCrash,
+            );
+            let profiles = liminal_jurisdiction::ProfileSet::phase_minus_1();
+            let checker = liminal_jurisdiction::Checker {
+                store,
+                profiles: &profiles,
             };
-            let id = driver.prepare(
-                plan,
-                liminal_jurisdiction::SafetyEvidence::StructurallyDisjoint {
-                    description: "haqp-generated-ilrp".into(),
-                },
-            )?;
+            let id = driver.prepare(checker.authorize_repair(plan)?)?;
             let state = driver.run(id)?;
             anyhow::ensure!(state == liminal_jurisdiction::IntentState::Committed);
             let recovered = driver.recover_all()?;

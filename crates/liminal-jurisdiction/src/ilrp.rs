@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 
 use liminal_graph::ns::ILRP_INTENT;
-use liminal_graph::{GraphStore, Origin, TxnMeta};
+use liminal_graph::{CoordinatorWriter, GraphStore, Origin, TxnMeta};
 use liminal_id::{RepairId, RepairStepId, Timestamp};
 use serde::{Deserialize, Serialize};
 
@@ -241,17 +241,304 @@ impl<X: ExternalExecutor> ExternalExecutor for &X {
 #[derive(Debug)]
 pub struct IlrpDriver<'s, X, C> {
     /// The coordinating store (holds intents in aux ns `ilrp.intent`).
-    pub store: &'s GraphStore,
+    store: &'s GraphStore,
+    coordinator: CoordinatorWriter<'s>,
     /// External-world executor.
-    pub executor: X,
+    executor: X,
     /// Crash injection at durable boundaries.
-    pub crash: C,
+    crash: C,
+}
+
+/// Evidence of an accepted graph finalization, reconstructed from the log.
+#[derive(Debug)]
+pub struct CommittedRepair<'s> {
+    store: &'s GraphStore,
+    plan: RepairPlan,
+    evidence: SafetyEvidence,
+    resulting_basis: liminal_revision::WorkspaceBasis,
+    applied_steps: Vec<RepairStepId>,
+    repair: RepairId,
+    revision: liminal_id::GraphRevisionId,
+    transaction: liminal_id::TransactionId,
+}
+
+impl CommittedRepair<'_> {
+    /// Whether this receipt belongs to this exact live store instance.
+    pub fn belongs_to(&self, store: &GraphStore) -> bool {
+        std::ptr::eq(self.store, store)
+    }
+    /// The immutable plan verified across the accepted intent history.
+    pub fn plan(&self) -> &RepairPlan {
+        &self.plan
+    }
+    /// Admission evidence from that same history, not replacement caller data.
+    pub fn evidence(&self) -> &SafetyEvidence {
+        &self.evidence
+    }
+    /// Finalized graph revision plus acknowledged external observations. This
+    /// is a historical vector, not a claim that external files cannot change.
+    pub fn resulting_basis(&self) -> &liminal_revision::WorkspaceBasis {
+        &self.resulting_basis
+    }
+    /// External steps in topological order, then graph steps at finalization.
+    pub fn applied_steps(&self) -> &[RepairStepId] {
+        &self.applied_steps
+    }
+    /// Repair whose graph effects committed atomically with its terminal state.
+    pub fn repair(&self) -> RepairId {
+        self.repair
+    }
+    /// Accepted revision of that transaction.
+    pub fn revision(&self) -> liminal_id::GraphRevisionId {
+        self.revision
+    }
+    /// Identity from the accepted transaction, not a caller-supplied label.
+    pub fn transaction(&self) -> liminal_id::TransactionId {
+        self.transaction
+    }
+}
+
+fn finalized_basis(
+    intent: &RepairIntent,
+    revision: liminal_id::GraphRevisionId,
+    transaction: liminal_id::TransactionId,
+) -> Result<liminal_revision::WorkspaceBasis, IlrpError> {
+    use liminal_revision::{BasisComponent, BasisPerspective, WorkspaceBasis};
+    let mut components = intent.plan.basis.components.clone();
+    components.retain(|_, component| !matches!(component, BasisComponent::BufferGeneration { .. }));
+    components.insert(
+        liminal_revision::graph_key(),
+        BasisComponent::GraphSnapshot { revision },
+    );
+    for step in crate::repair::topo_order(&intent.plan)? {
+        match &intent.acks[&step].observed_poststate {
+            StatePredicate::FileContent { path, hash } => {
+                components.insert(
+                    liminal_id::JurisdictionKey::Path(path.clone()),
+                    BasisComponent::FileContent {
+                        path: path.clone(),
+                        hash: *hash,
+                    },
+                );
+            }
+            StatePredicate::FileAbsent { path } => {
+                components.remove(&liminal_id::JurisdictionKey::Path(path.clone()));
+            }
+            _ => {}
+        }
+    }
+    Ok(WorkspaceBasis {
+        transaction,
+        perspective: BasisPerspective::DurableOnly,
+        components,
+    })
+}
+
+fn applied_order(plan: &RepairPlan) -> Result<Vec<RepairStepId>, crate::repair::CycleError> {
+    let order = crate::repair::topo_order(plan)?;
+    let (mut external, graph): (Vec<_>, Vec<_>) = order
+        .into_iter()
+        .partition(|id| !matches!(plan.steps[id].operation, RepairOperation::Graph(_)));
+    external.extend(graph);
+    Ok(external)
+}
+
+/// Runtime outcome; terminal state alone does not manufacture a receipt.
+#[derive(Debug)]
+pub struct RepairOutcome<'s> {
+    state: IntentState,
+    committed: Option<CommittedRepair<'s>>,
+}
+
+/// Ephemeral permission for exactly these graph effects at one checked head.
+/// Never serialized or exposed to callers.
+struct FinalizationPermit {
+    repair: RepairId,
+    head: liminal_id::GraphRevisionId,
+    operations: Vec<liminal_graph::Operation>,
+}
+
+fn graph_predicate(view: &liminal_graph::StateView, predicate: &StatePredicate) -> bool {
+    match predicate {
+        StatePredicate::Any => true,
+        StatePredicate::NodeAt { node, revision } => view
+            .node(*node)
+            .is_some_and(|value| value.revision == *revision),
+        StatePredicate::RelationAt { relation, revision } => view
+            .relation(*relation)
+            .is_some_and(|value| value.revision == *revision),
+        _ => false,
+    }
+}
+
+impl FinalizationPermit {
+    fn validate(
+        store: &GraphStore,
+        repair: RepairId,
+        intent: &RepairIntent,
+    ) -> Result<Self, IlrpError> {
+        validate_intent(repair, intent)?;
+        if intent.state != IntentState::Finalizing {
+            return Err(IlrpError::Executor(
+                "finalization requires Finalizing state".into(),
+            ));
+        }
+        let head = store.head()?;
+        if store.get_aux(AUX_NS_INTENT, &repair.to_string())? != Some(serde_json::to_value(intent)?)
+        {
+            return Err(liminal_graph::StoreError::Conflict(
+                "intent changed before finalization".into(),
+            )
+            .into());
+        }
+        let mut operations = Vec::new();
+        let mut view = store.state_at(head)?;
+        for id in crate::repair::topo_order(&intent.plan)? {
+            let step = &intent.plan.steps[&id];
+            if let RepairOperation::Graph(operation) = &step.operation {
+                if !graph_predicate(&view, &step.expected_prestate) {
+                    return Err(liminal_graph::StoreError::Conflict(
+                        "graph repair prestate changed".into(),
+                    )
+                    .into());
+                }
+                operations.push(operation.clone());
+                view = store.preview_ops(&operations)?;
+                if view.head() != head || !graph_predicate(&view, &step.expected_poststate) {
+                    return Err(liminal_graph::StoreError::Conflict(
+                        "graph repair poststate not established".into(),
+                    )
+                    .into());
+                }
+            }
+        }
+        if store.head()? != head {
+            return Err(liminal_graph::StoreError::Conflict(
+                "store changed during finalization validation".into(),
+            )
+            .into());
+        }
+        Ok(Self {
+            repair,
+            head,
+            operations,
+        })
+    }
+}
+
+impl<'s> RepairOutcome<'s> {
+    /// Observed lifecycle state.
+    pub fn state(&self) -> IntentState {
+        self.state
+    }
+    /// Present only for a verified durable graph finalization.
+    pub fn committed(&self) -> Option<&CommittedRepair<'s>> {
+        self.committed.as_ref()
+    }
 }
 
 /// Re-export for local readability.
 const AUX_NS_INTENT: &str = ILRP_INTENT;
 
-impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
+impl<'s, X: ExternalExecutor, C: CrashInjector> IlrpDriver<'s, X, C> {
+    /// Assemble the coordinator from trusted store ownership.
+    pub fn new(coordinator: CoordinatorWriter<'s>, executor: X, crash: C) -> Self {
+        Self {
+            store: coordinator.store(),
+            coordinator,
+            executor,
+            crash,
+        }
+    }
+
+    /// Read access does not convey transaction authority.
+    pub fn store(&self) -> &'s GraphStore {
+        self.store
+    }
+
+    /// Execute and return durable completion evidence for downstream bookkeeping.
+    pub fn run_checked(&self, repair: RepairId) -> Result<RepairOutcome<'s>, IlrpError> {
+        let state = self.run(repair)?;
+        let committed = self.verify_history(repair)?;
+        if (state == IntentState::Committed) != committed.is_some() {
+            return Err(IlrpError::Executor(
+                "intent state and durable receipt disagree".into(),
+            ));
+        }
+        Ok(RepairOutcome { state, committed })
+    }
+
+    fn verify_history(&self, repair: RepairId) -> Result<Option<CommittedRepair<'s>>, IlrpError> {
+        let fail = || {
+            IlrpError::Store(liminal_graph::StoreError::Corrupt(
+                "intent history does not prove checked admission and legal progress".into(),
+            ))
+        };
+        let history = self
+            .store
+            .committed_aux_history(AUX_NS_INTENT, &repair.to_string())?;
+        if history.is_empty() {
+            return Err(fail());
+        }
+        let mut previous: Option<RepairIntent> = None;
+        let mut previous_revision = None;
+        let mut receipt = None;
+        for record in &history {
+            if previous_revision.is_some_and(|revision| record.revision <= revision) {
+                return Err(fail());
+            }
+            previous_revision = Some(record.revision);
+            let current: RepairIntent =
+                serde_json::from_value(record.value.clone().ok_or_else(fail)?)?;
+            validate_intent(repair, &current)?;
+            let note = record.transaction.meta.provenance.as_deref();
+            if let Some(old) = &previous {
+                validate_progress(old, &current, note)?;
+            } else if current.state != IntentState::Prepared
+                || note != Some("ilrp:prepare:checked-v1")
+            {
+                // Legacy records remain untouched. They require explicit readmission;
+                // an old DTO or arbitrary terminal label is not current authority.
+                return Err(fail());
+            }
+            if current.state == IntentState::Committed {
+                let operations = crate::repair::topo_order(&current.plan)?
+                    .into_iter()
+                    .filter_map(|id| match &current.plan.steps[&id].operation {
+                        RepairOperation::Graph(op) => Some(op.clone()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                if operations != record.transaction.ops {
+                    return Err(fail());
+                }
+                receipt = Some(CommittedRepair {
+                    store: self.store,
+                    plan: current.plan.clone(),
+                    evidence: current.evidence.clone(),
+                    resulting_basis: finalized_basis(
+                        &current,
+                        record.revision,
+                        record.transaction.id,
+                    )?,
+                    applied_steps: applied_order(&current.plan)?,
+                    repair,
+                    revision: record.revision,
+                    transaction: record.transaction.id,
+                });
+            } else if !record.transaction.ops.is_empty() {
+                return Err(fail());
+            }
+            previous = Some(current);
+        }
+        if self.store.get_aux(AUX_NS_INTENT, &repair.to_string())?
+            != history.last().and_then(|r| r.value.clone())
+        {
+            return Err(fail());
+        }
+        Ok(receipt)
+    }
+
     /// Build `TxnMeta` with a provenance string.
     fn meta(provenance: &str, origin: Origin) -> TxnMeta {
         TxnMeta {
@@ -272,7 +559,17 @@ impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
         origin: Origin,
     ) -> Result<(), IlrpError> {
         let key = id.to_string();
-        let mut txn = self.store.begin()?;
+        let head = self.store.head()?;
+        self.verify_history(id)?;
+        let previous: RepairIntent = serde_json::from_value(
+            self.store
+                .get_aux(AUX_NS_INTENT, &key)?
+                .ok_or_else(|| IlrpError::Executor("intent disappeared".into()))?,
+        )?;
+        validate_intent(id, intent)?;
+        validate_progress(&previous, intent, Some(note))
+            .map_err(|error| liminal_graph::StoreError::Conflict(error.to_string()))?;
+        let mut txn = self.coordinator.begin()?.expect_head(head);
         txn.put_aux(AUX_NS_INTENT, &key, serde_json::to_value(intent)?)?;
         txn.commit(Self::meta(note, origin))?;
         Ok(())
@@ -299,9 +596,12 @@ impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
     /// idempotency keys, and safety evidence. The intent enters `Prepared`.
     pub fn prepare(
         &self,
-        plan: RepairPlan,
-        evidence: SafetyEvidence,
+        authorized: crate::admission::AuthorizedRepair<'s>,
     ) -> Result<RepairId, IlrpError> {
+        let head = authorized.basis().revision();
+        let (plan, evidence) = authorized
+            .consume(self.store)
+            .map_err(|error| IlrpError::Executor(error.to_string()))?;
         // Validate DAG up front.
         let order = crate::repair::topo_order(&plan)?;
 
@@ -342,10 +642,10 @@ impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
         };
 
         // One transaction: persist the intent.
-        let mut txn = self.store.begin()?;
+        let mut txn = self.coordinator.begin()?.expect_head(head);
         txn.put_aux(AUX_NS_INTENT, &key, serde_json::to_value(&intent)?)?;
         self.crash.crash_if_armed(CrashPoint::BeforeIntentCommit);
-        txn.commit(Self::meta("ilrp:prepare", Origin::Human))?;
+        txn.commit(Self::meta("ilrp:prepare:checked-v1", Origin::Human))?;
 
         // Fault point: after the Prepare transaction commits.
         self.crash.crash_if_armed(CrashPoint::AfterIntentCommit);
@@ -355,6 +655,7 @@ impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
 
     /// **Apply → Acknowledge → Finalize** (v4 §7.8 steps 2–4).
     pub fn run(&self, repair: RepairId) -> Result<IntentState, IlrpError> {
+        self.verify_history(repair)?;
         let key = repair.to_string();
         let value = self
             .store
@@ -386,6 +687,7 @@ impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
             let mut intent: RepairIntent = serde_json::from_value(value)
                 .map_err(|e| IlrpError::Store(liminal_graph::StoreError::Corrupt(e.to_string())))?;
             validate_intent(id, &intent)?;
+            self.verify_history(id)?;
 
             if intent.state.is_terminal() {
                 continue;
@@ -399,6 +701,9 @@ impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
     }
 
     /// Shared advance logic for run and recover_all (D02.1).
+    // Keep the audited durable commit and crash boundaries in this one
+    // interpreter; splitting finalization would relocate a frozen census site.
+    #[allow(clippy::too_many_lines)]
     fn advance(
         &self,
         id: RepairId,
@@ -494,20 +799,26 @@ impl<X: ExternalExecutor, C: CrashInjector> IlrpDriver<'_, X, C> {
             self.crash.crash_if_armed(CrashPoint::BeforeFinalize);
 
             // Build ONE txn: graph ops + state=committed.
-            let order = crate::repair::topo_order(&intent.plan)?;
-            let mut txn = self.store.begin()?;
-
-            for step_id in &order {
-                let step = &intent.plan.steps[step_id];
-                if let RepairOperation::Graph(op) = &step.operation {
-                    txn.apply(op.clone())?;
+            let permit = match FinalizationPermit::validate(self.store, id, intent) {
+                Ok(permit) => permit,
+                Err(IlrpError::Store(
+                    liminal_graph::StoreError::Conflict(_) | liminal_graph::StoreError::NotFound(_),
+                )) => {
+                    intent.state = IntentState::NeedsReview;
+                    self.commit_intent(id, intent, "state:needs-review", origin)?;
+                    return Ok(IntentState::NeedsReview);
                 }
+                Err(error) => return Err(error),
+            };
+            let mut txn = self.coordinator.begin()?.expect_head(permit.head);
+            for operation in permit.operations {
+                txn.apply(operation)?;
             }
 
             intent.state = IntentState::Committed;
             txn.put_aux(
                 AUX_NS_INTENT,
-                &id.to_string(),
+                &permit.repair.to_string(),
                 serde_json::to_value(&intent)?,
             )?;
 
@@ -565,6 +876,59 @@ pub enum IlrpError {
     /// Serialization/deserialization of an intent record failed.
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
+}
+
+// One progress relation is used both before publication and during recovery.
+fn validate_progress(
+    old: &RepairIntent,
+    current: &RepairIntent,
+    note: Option<&str>,
+) -> Result<(), IlrpError> {
+    let fail = || {
+        IlrpError::Store(liminal_graph::StoreError::Corrupt(
+            "invalid intent progress".into(),
+        ))
+    };
+    if old.plan != current.plan || old.evidence != current.evidence || old.state.is_terminal() {
+        return Err(fail());
+    }
+    if current.state == old.state {
+        if current.state != IntentState::Applying
+            || current.acks.len() != old.acks.len() + 1
+            || old
+                .acks
+                .iter()
+                .any(|(id, ack)| current.acks.get(id) != Some(ack))
+        {
+            return Err(fail());
+        }
+        let (id, ack) = current
+            .acks
+            .iter()
+            .find(|(id, _)| !old.acks.contains_key(id))
+            .ok_or_else(fail)?;
+        validate_ack(old, *id, ack)?;
+        if note != Some(format!("ack:{id}").as_str()) {
+            return Err(fail());
+        }
+    } else {
+        if !old.state.may_transition_to(current.state) || old.acks != current.acks {
+            return Err(fail());
+        }
+        let expected = match current.state {
+            IntentState::Applying => "state:applying",
+            IntentState::ExternalApplied => "state:external-applied",
+            IntentState::Finalizing => "state:finalizing",
+            IntentState::Committed => "ilrp:finalize",
+            IntentState::NeedsReview => "state:needs-review",
+            IntentState::Aborted => "state:aborted",
+            IntentState::Prepared => return Err(fail()),
+        };
+        if note != Some(expected) {
+            return Err(fail());
+        }
+    }
+    Ok(())
 }
 
 // Structural admission of untrusted persisted DTOs. This does not establish

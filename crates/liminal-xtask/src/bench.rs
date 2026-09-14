@@ -7,7 +7,7 @@ use std::time::Instant;
 use anyhow::{Context, Result};
 use camino::Utf8Path;
 use liminal_graph::{
-    GraphStore, Node, NodeFlags, Operation, Origin, PayloadRef, Relation, RelationFlags, Target,
+    Node, NodeFlags, Operation, Origin, PayloadRef, Relation, RelationFlags, StoreOwner, Target,
     TxnMeta,
 };
 use liminal_id::{KindId, NodeId, RelationId, RevisionId, Timestamp};
@@ -131,7 +131,7 @@ fn exercise(name: &str) {
         }
         "store_append_txn" => {
             let dir = ScratchDir::new("bench-sample-append").expect("scratch directory");
-            let store = GraphStore::open(&dir).expect("open store");
+            let store = StoreOwner::open(&dir).expect("open store");
             commit_ops(
                 &store,
                 vec![Operation::CreateNode {
@@ -141,7 +141,7 @@ fn exercise(name: &str) {
         }
         "store_commit_fsync" => {
             let dir = ScratchDir::new("bench-sample-fsync").expect("scratch directory");
-            let store = GraphStore::open(&dir).expect("open store");
+            let store = StoreOwner::open(&dir).expect("open store");
             commit_ops(
                 &store,
                 vec![Operation::CreateNode {
@@ -151,7 +151,7 @@ fn exercise(name: &str) {
         }
         "store_recover_1k_records" => {
             let dir = ScratchDir::new("bench-sample-recover").expect("scratch directory");
-            let store = GraphStore::open(&dir).expect("open store");
+            let store = StoreOwner::open(&dir).expect("open store");
             for _ in 0..10 {
                 let ops = (0..100)
                     .map(|_| Operation::CreateNode {
@@ -161,11 +161,11 @@ fn exercise(name: &str) {
                 commit_ops(&store, ops);
             }
             drop(store);
-            std::hint::black_box(GraphStore::open(&dir).expect("recover store"));
+            std::hint::black_box(StoreOwner::open(&dir).expect("recover store"));
         }
         "relation_traversal" => {
             let dir = ScratchDir::new("bench-sample-traversal").expect("scratch directory");
-            let store = GraphStore::open(&dir).expect("open store");
+            let store = StoreOwner::open(&dir).expect("open store");
             let hub = text_node("hub");
             let hub_id = hub.id;
             let mut ops = vec![Operation::CreateNode { node: hub }];
@@ -184,7 +184,7 @@ fn exercise(name: &str) {
         }
         "graph_query_latency" => {
             let dir = ScratchDir::new("bench-sample-query").expect("scratch directory");
-            let store = GraphStore::open(&dir).expect("open store");
+            let store = StoreOwner::open(&dir).expect("open store");
             let mut ids = Vec::with_capacity(1000);
             let mut ops = Vec::with_capacity(1000);
             for _ in 0..1000 {
@@ -223,7 +223,7 @@ fn empty_relation(source: NodeId, target: NodeId) -> Relation {
     }
 }
 
-fn commit_ops(store: &GraphStore, ops: Vec<Operation>) {
+fn commit_ops(store: &StoreOwner, ops: Vec<Operation>) {
     let mut txn = store.begin().expect("begin transaction");
     for op in ops {
         txn.apply(op).expect("apply operation");

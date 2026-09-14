@@ -20,6 +20,10 @@ pub struct StateView {
 }
 
 impl StateView {
+    pub(crate) fn from_state(state: State) -> Self {
+        Self { state }
+    }
+
     /// The Node with `id` at this revision, if present.
     #[must_use]
     pub fn node(&self, id: NodeId) -> Option<&Node> {

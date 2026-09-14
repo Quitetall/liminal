@@ -10,7 +10,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use liminal_graph::{
-    GraphStore, Node, NodeFlags, Operation, Origin, PayloadRef, Relation, RelationFlags, Target,
+    Node, NodeFlags, Operation, Origin, PayloadRef, Relation, RelationFlags, StoreOwner, Target,
     TxnMeta,
 };
 use liminal_id::{KindId, NodeId, RelationId, RevisionId, Timestamp};
@@ -77,9 +77,9 @@ fn meta() -> TxnMeta {
     }
 }
 
-/// Commit `ops` against `store` as one transaction.
-fn commit_ops(store: &GraphStore, ops: Vec<Operation>) {
-    let mut txn = store.begin().expect("begin txn");
+/// Commit `ops` through the trusted fixture owner as one transaction.
+fn commit_ops(owner: &StoreOwner, ops: Vec<Operation>) {
+    let mut txn = owner.begin().expect("begin txn");
     for op in ops {
         txn.apply(op).expect("apply op");
     }
@@ -91,7 +91,7 @@ fn commit_ops(store: &GraphStore, ops: Vec<Operation>) {
 /// optimization proposals start from evidence, and so the harness itself is
 /// proven real before any subsystem it will one day measure exists.
 mod store_baselines {
-    use liminal_graph::{GraphStore, Operation};
+    use liminal_graph::{Operation, StoreOwner};
 
     use super::{commit_ops, empty_relation, meta, scratch_dir, text_node};
 
@@ -105,9 +105,9 @@ mod store_baselines {
     #[divan::bench]
     fn store_append_txn(bencher: divan::Bencher<'_, '_>) {
         let dir = scratch_dir("append");
-        let store = GraphStore::open(&dir).expect("open store");
+        let owner = StoreOwner::open(&dir).expect("open store");
         bencher.bench_local(|| {
-            let mut txn = store.begin().expect("begin txn");
+            let mut txn = owner.begin().expect("begin txn");
             txn.apply(Operation::CreateNode {
                 node: text_node("a steady-state paragraph-sized payload of ordinary prose text"),
             })
@@ -122,9 +122,9 @@ mod store_baselines {
     #[divan::bench]
     fn store_commit_fsync(bencher: divan::Bencher<'_, '_>) {
         let dir = scratch_dir("fsync");
-        let store = GraphStore::open(&dir).expect("open store");
+        let owner = StoreOwner::open(&dir).expect("open store");
         bencher.bench_local(|| {
-            let mut txn = store.begin().expect("begin txn");
+            let mut txn = owner.begin().expect("begin txn");
             txn.apply(Operation::CreateNode {
                 node: text_node(""),
             })
@@ -133,7 +133,7 @@ mod store_baselines {
         });
     }
 
-    /// Metric: `GraphStore::open` recovery/replay over a log holding 1000
+    /// Metric: `StoreOwner::open` recovery/replay over a log holding 1000
     /// committed operations — the cost model for the Phase -1 ILRP crash
     /// matrix (v4 §7.7, §92), where every experiment reopens the store.
     #[divan::bench(sample_count = 10, sample_size = 1)]
@@ -141,18 +141,18 @@ mod store_baselines {
         bencher
             .with_inputs(|| {
                 let dir = scratch_dir("recover");
-                let store = GraphStore::open(&dir).expect("open store");
+                let owner = StoreOwner::open(&dir).expect("open store");
                 for _ in 0..10 {
                     let ops = (0..100)
                         .map(|_| Operation::CreateNode {
                             node: text_node("recovery record"),
                         })
                         .collect();
-                    commit_ops(&store, ops);
+                    commit_ops(&owner, ops);
                 }
                 dir
             })
-            .bench_local_values(|dir| GraphStore::open(&dir).expect("recover store"));
+            .bench_local_values(|dir| StoreOwner::open(&dir).expect("recover store"));
     }
 
     /// Metric: v4 §116 "Relation traversal" — `relations_from` on a hub Node
@@ -160,7 +160,7 @@ mod store_baselines {
     #[divan::bench]
     fn relation_traversal(bencher: divan::Bencher<'_, '_>) {
         let dir = scratch_dir("traversal");
-        let store = GraphStore::open(&dir).expect("open store");
+        let owner = StoreOwner::open(&dir).expect("open store");
         let hub = text_node("hub");
         let hub_id = hub.id;
         let mut ops = vec![Operation::CreateNode { node: hub }];
@@ -172,7 +172,8 @@ mod store_baselines {
                 relation: empty_relation(hub_id, spoke_id),
             });
         }
-        commit_ops(&store, ops);
+        commit_ops(&owner, ops);
+        let store = owner.store();
         let head = store.head().expect("head revision");
         bencher.bench_local(|| store.relations_from(head, hub_id).expect("traverse"));
     }
@@ -182,7 +183,7 @@ mod store_baselines {
     #[divan::bench]
     fn graph_query_latency(bencher: divan::Bencher<'_, '_>) {
         let dir = scratch_dir("query");
-        let store = GraphStore::open(&dir).expect("open store");
+        let owner = StoreOwner::open(&dir).expect("open store");
         let mut ids = Vec::with_capacity(1000);
         let mut ops = Vec::with_capacity(1000);
         for _ in 0..1000 {
@@ -190,7 +191,8 @@ mod store_baselines {
             ids.push(node.id);
             ops.push(Operation::CreateNode { node });
         }
-        commit_ops(&store, ops);
+        commit_ops(&owner, ops);
+        let store = owner.store();
         let head = store.head().expect("head revision");
         let target = ids[ids.len() / 2];
         bencher.bench_local(|| store.node_at(head, target).expect("query"));

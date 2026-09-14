@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use liminal_graph::{
-    GraphStore, Node, NodeFlags, Operation as GraphOp, Origin, PayloadRef, TxnMeta, kind,
+    Node, NodeFlags, Operation as GraphOp, Origin, PayloadRef, StoreOwner, TxnMeta, kind,
     ns::{JUR_ALIAS, SYS_BLOB},
 };
 use liminal_id::{
@@ -47,9 +47,9 @@ pub fn graph_native_floor() -> IdentityGrade {
 /// empty store (the floor is a profile constant, independent of store state).
 fn profile_floor(profile: &dyn JurisdictionProfile, subject: JurisdictionSubject) -> IdentityGrade {
     let dir = tempdir_for("floor");
-    let store = GraphStore::open(&dir).expect("open floor store");
+    let owner = StoreOwner::open(&dir).expect("open floor store");
     profile
-        .contract_for(subject, &store)
+        .contract_for(subject, owner.store())
         .continuity
         .required_identity
 }
@@ -89,12 +89,12 @@ pub fn strategy_index(matrix: &Matrix, strat: Strategy) -> Option<usize> {
 #[must_use]
 pub fn checker_findings(text: &str, label: &str) -> usize {
     let dir = tempdir_for(label);
-    let store = GraphStore::open(&dir).expect("open replay store");
-    ingest_text(&store, "notes.md", text);
+    let owner = StoreOwner::open(&dir).expect("open replay store");
+    ingest_text(&owner, "notes.md", text);
 
     let profiles = ProfileSet::default();
     let checker = Checker {
-        store: &store,
+        store: owner.store(),
         profiles: &profiles,
     };
     let basis = WorkspaceBasis {
@@ -113,7 +113,7 @@ pub fn checker_findings(text: &str, label: &str) -> usize {
 /// `SYS_BLOB`, and one PARAGRAPH node per block with a first-wins `{#id}` alias
 /// (later duplicates get NO alias → the checker surfaces the orphaned durable-id
 /// marker as JUR042).
-fn ingest_text(store: &GraphStore, path: &str, text: &str) {
+fn ingest_text(owner: &StoreOwner, path: &str, text: &str) {
     let meta = || TxnMeta {
         actor: None,
         origin: Origin::Human,
@@ -124,7 +124,7 @@ fn ingest_text(store: &GraphStore, path: &str, text: &str) {
 
     let file_node = NodeId::new();
     {
-        let mut txn = store.begin().expect("begin");
+        let mut txn = owner.begin().expect("begin");
         txn.apply(GraphOp::CreateNode {
             node: Node {
                 id: file_node,
@@ -151,7 +151,7 @@ fn ingest_text(store: &GraphStore, path: &str, text: &str) {
             NodeFlags::default()
         };
         let para_node = NodeId::new();
-        let mut txn = store.begin().expect("begin");
+        let mut txn = owner.begin().expect("begin");
         txn.apply(GraphOp::CreateNode {
             node: Node {
                 id: para_node,
@@ -169,7 +169,11 @@ fn ingest_text(store: &GraphStore, path: &str, text: &str) {
         })
         .expect("insert child");
         if let Some(ref id) = block.id
-            && store.get_aux(JUR_ALIAS, id).expect("get alias").is_none()
+            && owner
+                .store()
+                .get_aux(JUR_ALIAS, id)
+                .expect("get alias")
+                .is_none()
         {
             let entity = EntityId::new();
             txn.put_aux(

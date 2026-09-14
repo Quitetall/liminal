@@ -54,7 +54,8 @@ impl ToyWorkspace {
             payload,
         } = obs;
 
-        let store = self.store();
+        let writer = self.reactor_writer(source);
+        let store = writer.store();
         let (node, create_node) = external_value_node(store)?;
 
         let payload_bytes = serde_json::to_vec(&payload).unwrap_or_default();
@@ -68,7 +69,7 @@ impl ToyWorkspace {
         let component_value = serde_json::to_value(&component)
             .map_err(|error| liminal_graph::StoreError::Corrupt(error.to_string()))?;
 
-        let mut txn = store.begin()?;
+        let mut txn = writer.begin()?;
         if create_node {
             txn.apply(Operation::CreateNode {
                 node: Node {

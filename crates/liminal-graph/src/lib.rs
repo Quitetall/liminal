@@ -24,7 +24,11 @@ pub mod store;
 pub use liminal_id::KindId;
 pub use node::{Node, NodeFlags, PayloadRef};
 pub use op::{Operation, Origin, Transaction, TxnMeta};
-pub use owner::{BlobFaultInjector, EpochWriter, StoreOwner, WorkingCapture};
+pub use owner::{
+    BlobFaultInjector, BookkeepingWriter, BootstrapWriter, CaptureWriter, CoordinatorWriter,
+    EpochWriter, HostControlWriter, ReactorWriter, ReconciliationWriter, StoreOwner,
+    WorkingCapture,
+};
 pub use relation::{AnchorRef, IdentityRequirement, Relation, RelationFlags, Target};
 pub use store::ns;
-pub use store::{AuxWrite, GraphStore, GraphTxn, StateView, StoreError};
+pub use store::{AuxWrite, CommittedAuxRecord, GraphStore, GraphTxn, StateView, StoreError};

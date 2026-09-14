@@ -9,9 +9,9 @@ use camino::Utf8Path;
 use liminal_id::{
     BufferId, ClientId, ContentHash, GraphRevisionId, SessionEpoch, SourceId, TransactionId,
 };
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 
-use crate::{GraphStore, StoreError, TxnMeta, ns};
+use crate::{GraphStore, StoreError, TxnMeta, ns, store::TxnAuthority};
 
 /// Root capability held by trusted workspace assembly, not by query callers.
 /// Not cloneable or serializable. Its borrowed capabilities cannot outlive it.
@@ -28,11 +28,21 @@ impl StoreOwner {
         })
     }
 
-    /// Borrow the store for reads. Legacy raw-write callers are being migrated
-    /// separately; this accessor does not yet claim a read-only type boundary.
+    /// Borrow the store for reads.
     #[must_use]
     pub fn store(&self) -> &GraphStore {
         &self.store
+    }
+
+    /// Start an unrestricted transaction at the trusted root boundary.
+    /// Ordinary daemon code uses a named scoped writer instead.
+    pub fn begin(&self) -> Result<crate::GraphTxn<'_>, StoreError> {
+        self.store.begin()
+    }
+
+    /// Persist a snapshot at the trusted root boundary.
+    pub fn snapshot(&self) -> Result<(), StoreError> {
+        self.store.snapshot()
     }
 
     /// Check path and actual held-lock identity before workspace assembly.
@@ -53,6 +63,51 @@ impl StoreOwner {
         WorkingCapture { store: &self.store }
     }
 
+    /// Lend graph-plus-intent authority only to the ILRP coordinator.
+    #[must_use]
+    pub fn coordinator_writer(&self) -> CoordinatorWriter<'_> {
+        CoordinatorWriter { store: &self.store }
+    }
+
+    /// Lend setup-ingest authority.
+    #[must_use]
+    pub fn bootstrap_writer(&self) -> BootstrapWriter<'_> {
+        BootstrapWriter { store: &self.store }
+    }
+
+    /// Lend proposal/capture authority.
+    #[must_use]
+    pub fn capture_writer(&self) -> CaptureWriter<'_> {
+        CaptureWriter { store: &self.store }
+    }
+
+    /// Lend committed-result bookkeeping authority.
+    #[must_use]
+    pub fn bookkeeping_writer(&self) -> BookkeepingWriter<'_> {
+        BookkeepingWriter { store: &self.store }
+    }
+
+    /// Lend host-control state authority.
+    #[must_use]
+    pub fn host_control_writer(&self) -> HostControlWriter<'_> {
+        HostControlWriter { store: &self.store }
+    }
+
+    /// Lend reactor authority bound to exactly one external source.
+    #[must_use]
+    pub fn reactor_writer(&self, source: SourceId) -> ReactorWriter<'_> {
+        ReactorWriter {
+            store: &self.store,
+            source,
+        }
+    }
+
+    /// Lend only reconciliation-debt writes; no graph or accepted ILRP effects.
+    #[must_use]
+    pub fn reconciliation_writer(&self) -> ReconciliationWriter<'_> {
+        ReconciliationWriter { store: &self.store }
+    }
+
     /// Explicitly grant the conformance adapter authority to corrupt only
     /// volatile buffer and observation blobs. Never provided by a read view or
     /// ordinary workspace request. The grant keeps this same store open until
@@ -62,6 +117,137 @@ impl StoreOwner {
         BlobFaultInjector {
             store: Arc::clone(&self.store),
         }
+    }
+}
+
+impl Deref for StoreOwner {
+    type Target = GraphStore;
+
+    fn deref(&self) -> &Self::Target {
+        self.store()
+    }
+}
+
+macro_rules! aux_writer {
+    ($name:ident, $authority:expr, $doc:literal) => {
+        #[doc = $doc]
+        #[derive(Debug)]
+        pub struct $name<'s> {
+            store: &'s GraphStore,
+        }
+
+        impl<'s> $name<'s> {
+            /// Borrow the same store for reads.
+            #[must_use]
+            pub fn store(&self) -> &'s GraphStore {
+                self.store
+            }
+
+            /// Start a transaction permanently bound to this writer's scope.
+            pub fn begin(&self) -> Result<crate::GraphTxn<'s>, StoreError> {
+                self.store.begin_scoped($authority)
+            }
+        }
+    };
+}
+
+aux_writer!(
+    CaptureWriter,
+    TxnAuthority::Capture,
+    "Owner-issued writer for proposal, decision, overlay, debt, and content-addressed capture."
+);
+aux_writer!(
+    BookkeepingWriter,
+    TxnAuthority::Bookkeeping,
+    "Owner-issued writer for committed repair bookkeeping and durable mirrors."
+);
+aux_writer!(
+    HostControlWriter,
+    TxnAuthority::HostControl,
+    "Owner-issued writer for the fake clock and unavailable-holder state."
+);
+
+/// Owner-issued ILRP coordinator writer. Graph operations and `ILRP_INTENT`
+/// may share one durable transaction; no other auxiliary namespace is allowed.
+#[derive(Debug)]
+pub struct CoordinatorWriter<'s> {
+    store: &'s GraphStore,
+}
+
+impl<'s> CoordinatorWriter<'s> {
+    /// Borrow the same store for reads with the owner's lifetime.
+    #[must_use]
+    pub fn store(&self) -> &'s GraphStore {
+        self.store
+    }
+
+    /// Start a coordinator-scoped transaction.
+    pub fn begin(&self) -> Result<crate::GraphTxn<'s>, StoreError> {
+        self.store.begin_scoped(TxnAuthority::Coordinator)
+    }
+}
+
+/// Owner-issued setup-ingest writer.
+#[derive(Debug)]
+pub struct BootstrapWriter<'s> {
+    store: &'s GraphStore,
+}
+
+impl<'s> BootstrapWriter<'s> {
+    /// Borrow the same store for reads.
+    #[must_use]
+    pub fn store(&self) -> &'s GraphStore {
+        self.store
+    }
+
+    /// Start a setup-scoped transaction.
+    pub fn begin(&self) -> Result<crate::GraphTxn<'s>, StoreError> {
+        self.store.begin_scoped(TxnAuthority::Bootstrap)
+    }
+}
+
+/// Owner-issued reactor writer, permanently bound to one external source.
+#[derive(Debug)]
+pub struct ReactorWriter<'s> {
+    store: &'s GraphStore,
+    source: SourceId,
+}
+
+impl<'s> ReactorWriter<'s> {
+    /// Borrow the same store for reads.
+    #[must_use]
+    pub fn store(&self) -> &'s GraphStore {
+        self.store
+    }
+
+    /// The only source this writer may materialize.
+    #[must_use]
+    pub fn source(&self) -> SourceId {
+        self.source
+    }
+
+    /// Start a transaction bound to this source.
+    pub fn begin(&self) -> Result<crate::GraphTxn<'s>, StoreError> {
+        self.store.begin_scoped(TxnAuthority::Reactor(self.source))
+    }
+}
+
+/// Owner-issued writer for reconciliation debt only. Failed out-of-scope
+/// operations poison the entire transaction, even when a caller ignores errors.
+///
+/// ```compile_fail
+/// use liminal_graph::{GraphStore, ReconciliationWriter};
+/// fn forge(store: &GraphStore) { let _ = ReconciliationWriter { store }; }
+/// ```
+#[derive(Debug)]
+pub struct ReconciliationWriter<'s> {
+    store: &'s GraphStore,
+}
+
+impl ReconciliationWriter<'_> {
+    /// Start a transaction accepting only `JUR_RECONCILE` put/delete operations.
+    pub fn begin(&self) -> Result<crate::GraphTxn<'_>, StoreError> {
+        self.store.begin_scoped(TxnAuthority::Reconciliation)
     }
 }
 
@@ -83,7 +269,11 @@ impl BlobFaultInjector {
         generation: u64,
         text: &str,
     ) -> Result<(), StoreError> {
-        WorkingCapture { store: &self.store }.put_buffer(client, buffer, generation, text)
+        self.store.inject_aux_fault(
+            ns::SYS_BLOB,
+            &format!("buf/{client}/{buffer}/{generation}"),
+            serde_json::Value::String(text.to_owned()),
+        )
     }
 
     /// Replace a pinned observation blob without changing its key/hash metadata.
@@ -94,7 +284,7 @@ impl BlobFaultInjector {
         value: serde_json::Value,
     ) -> Result<(), StoreError> {
         self.store
-            .put_working_aux(ns::SYS_BLOB, &format!("obs/{source}/{hash}"), value)
+            .inject_aux_fault(ns::SYS_BLOB, &format!("obs/{source}/{hash}"), value)
     }
 }
 
@@ -117,7 +307,7 @@ impl EpochWriter<'_> {
         epoch: SessionEpoch,
         meta: TxnMeta,
     ) -> Result<(GraphRevisionId, TransactionId), StoreError> {
-        let mut txn = self.store.begin()?;
+        let mut txn = self.store.begin_scoped(TxnAuthority::Epoch)?;
         txn.put_aux(ns::SYS_EPOCH, "epoch", serde_json::Value::from(epoch.0))?;
         txn.commit(meta)
     }

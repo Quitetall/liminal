@@ -1,28 +1,25 @@
-//! In-process ILRP driver tests (M02.3).
+//! In-process ILRP driver tests (M02.3; AM-17.12 checked admission).
 //!
-//! These tests exercise `IlrpDriver` against a real `GraphStore` in a temp dir,
-//! using a `MockExecutor` that records verify/apply calls. Crashed intermediate
-//! states are hand-crafted by committing aux records at target states.
+//! Tests use real durable stores. Positive histories begin with a Checker-issued
+//! capability. Malformed histories use explicit trusted-root writes and must be
+//! rejected without effects.
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
-use liminal_graph::ns::ILRP_INTENT;
-use liminal_graph::{GraphStore, Origin, TxnMeta};
+use liminal_graph::ns::{ILRP_INTENT, SYS_BLOB};
+use liminal_graph::{Node, NodeFlags, Origin, PayloadRef, StoreOwner, TxnMeta, kind};
 use liminal_id::{
-    ContentHash, IdempotencyKey, JurisdictionSubject, NodeId, PathId, RepairId, RepairStepId,
-    Timestamp, TransactionId,
+    ActorId, ContentHash, IdempotencyKey, JurisdictionSubject, NodeId, PathId, RepairId,
+    RepairStepId, RevisionId, Timestamp, TransactionId,
 };
 use liminal_jurisdiction::{
-    ExternalExecutor, IlrpDriver, IlrpError, IntentState, NoCrash, PrestateMatch, RepairIntent,
-    StepAck,
-};
-use liminal_jurisdiction::{
-    ProposedMutation, RepairOperation, RepairPlan, SafetyEvidence, StatePredicate,
+    AuthorizedRepair, Checker, CrashInjector, CrashPoint, ExternalExecutor, IlrpDriver, IlrpError,
+    IntentState, NoCrash, PrestateMatch, ProfileSet, ProposedMutation, RepairIntent,
+    RepairOperation, RepairPlan, SafetyEvidence, StatePredicate, StepAck,
 };
 use liminal_revision::{BasisPerspective, WorkspaceBasis};
 
-/// A scratch store directory that removes itself (M17.5 F-12).
 fn fresh_dir(name: &str) -> liminal_scratch::ScratchDir {
     liminal_scratch::ScratchDir::new(&format!("ilrp-test-{name}")).expect("scratch dir")
 }
@@ -35,15 +32,48 @@ fn empty_basis() -> WorkspaceBasis {
     }
 }
 
-fn write_file_step(path: &str, contents: &[u8]) -> ProposedMutation {
+fn setup_file(owner: &StoreOwner, path: &str) -> NodeId {
+    let node = NodeId::new();
+    let writer = owner.bootstrap_writer();
+    let mut txn = writer.begin().unwrap();
+    txn.apply(liminal_graph::Operation::CreateNode {
+        node: Node {
+            id: node,
+            kind: kind::FILE,
+            payload: PayloadRef::Text(String::new()),
+            revision: RevisionId(0),
+            flags: NodeFlags::default(),
+        },
+    })
+    .unwrap();
+    txn.put_aux(
+        SYS_BLOB,
+        &format!("file/{path}"),
+        serde_json::Value::String(String::new()),
+    )
+    .unwrap();
+    txn.commit(TxnMeta {
+        actor: None,
+        origin: Origin::Human,
+        at: Timestamp(1),
+        provenance: Some("test:trusted-file-setup".into()),
+        inverse: None,
+    })
+    .unwrap();
+    node
+}
+
+fn write_file_step(subject: NodeId, path: &str, contents: &[u8]) -> ProposedMutation {
     ProposedMutation {
         id: RepairStepId::new(),
-        subject: JurisdictionSubject::Node(NodeId::new()),
+        subject: JurisdictionSubject::Node(subject),
         operation: RepairOperation::WriteFile {
             path: PathId(path.into()),
             contents: contents.to_vec(),
         },
-        expected_prestate: StatePredicate::Any,
+        expected_prestate: StatePredicate::FileAbsent {
+            path: PathId(path.into()),
+        },
         expected_poststate: StatePredicate::FileContent {
             path: PathId(path.into()),
             hash: ContentHash::of(contents),
@@ -52,8 +82,8 @@ fn write_file_step(path: &str, contents: &[u8]) -> ProposedMutation {
     }
 }
 
-fn single_step_plan(path: &str, contents: &[u8]) -> RepairPlan {
-    let step = write_file_step(path, contents);
+fn single_step_plan(subject: NodeId, path: &str, contents: &[u8]) -> RepairPlan {
+    let step = write_file_step(subject, path, contents);
     RepairPlan {
         id: RepairId::new(),
         basis: empty_basis(),
@@ -63,16 +93,24 @@ fn single_step_plan(path: &str, contents: &[u8]) -> RepairPlan {
     }
 }
 
-/// A mock executor that records verify/apply calls and returns configurable results.
+fn accept<'s>(
+    owner: &'s StoreOwner,
+    profiles: &'s ProfileSet,
+    plan: RepairPlan,
+) -> AuthorizedRepair<'s> {
+    Checker {
+        store: owner.store(),
+        profiles,
+    }
+    .accept_repair(plan, ActorId::new())
+    .unwrap()
+}
+
 #[derive(Debug)]
 struct MockExecutor {
-    /// What verify returns for each call.
     verify_results: Mutex<Vec<PrestateMatch>>,
-    /// Recorded verify calls.
     verify_calls: Mutex<Vec<StatePredicate>>,
-    /// What apply returns.
     apply_results: Mutex<Vec<Result<StepAck, String>>>,
-    /// Recorded apply calls.
     apply_calls: Mutex<Vec<StatePredicate>>,
 }
 
@@ -101,8 +139,7 @@ impl ExternalExecutor for &MockExecutor {
             .lock()
             .unwrap()
             .push(mutation.expected_prestate.clone());
-        let result = self.verify_results.lock().unwrap().remove(0);
-        Ok(result)
+        Ok(self.verify_results.lock().unwrap().remove(0))
     }
 
     fn apply(&self, mutation: &ProposedMutation) -> Result<StepAck, IlrpError> {
@@ -110,33 +147,74 @@ impl ExternalExecutor for &MockExecutor {
             .lock()
             .unwrap()
             .push(mutation.expected_poststate.clone());
-        let result = self.apply_results.lock().unwrap().remove(0);
-        result.map_err(IlrpError::Executor)
+        self.apply_results
+            .lock()
+            .unwrap()
+            .remove(0)
+            .map_err(IlrpError::Executor)
     }
 }
 
-/// Helper: build an intent at a specific state and commit it to the store.
-fn hand_craft_intent(store: &GraphStore, intent: &RepairIntent) {
+fn append_intent(owner: &StoreOwner, intent: &RepairIntent, provenance: &str) {
     let key = intent.plan.id.to_string();
-    let mut txn = store.begin().unwrap();
+    let mut txn = owner.begin().unwrap();
     txn.put_aux(ILRP_INTENT, &key, serde_json::to_value(intent).unwrap())
         .unwrap();
     txn.commit(TxnMeta {
         actor: None,
         origin: Origin::Human,
         at: Timestamp::now(),
-        provenance: Some("test:hand-craft".into()),
+        provenance: Some(provenance.into()),
         inverse: None,
     })
     .unwrap();
+}
+
+fn current_intent(owner: &StoreOwner, id: RepairId) -> RepairIntent {
+    serde_json::from_value(
+        owner
+            .get_aux(ILRP_INTENT, &id.to_string())
+            .unwrap()
+            .unwrap(),
+    )
+    .unwrap()
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PanicAt(CrashPoint);
+
+impl CrashInjector for PanicAt {
+    fn crash_if_armed(&self, at: CrashPoint) {
+        assert!(at != self.0, "controlled fixture stop at {at:?}");
+    }
+}
+
+/// Synthesize only the durable state with no runtime crash hook. Production
+/// commits `ExternalApplied` and immediately commits `Finalizing`; a real
+/// driver run reaches Applying-with-ack first, then trusted test assembly adds
+/// exactly the missing legal transition. This is not a crash witness and does
+/// not claim root authority cannot forge.
+fn synthesize_external_applied(owner: &StoreOwner, id: RepairId) {
+    let mut intent = current_intent(owner, id);
+    assert_eq!(intent.state, IntentState::Applying);
+    assert_eq!(intent.acks.len(), intent.plan.steps.len());
+    intent.state = IntentState::ExternalApplied;
+    append_intent(owner, &intent, "state:external-applied");
+}
+
+/// Root fixture corruption. Unlike `synthesize_legal_progress`, this creates no
+/// checked prepare record and must always be rejected by run and recovery.
+fn hand_craft_intent(owner: &StoreOwner, intent: &RepairIntent) {
+    append_intent(owner, intent, "test:hand-craft");
 }
 
 #[test]
 fn ilrp_rejects_mismatched_ack_before_persistence() {
     for wrong_identity in [true, false] {
         let dir = fresh_dir("mismatched-ack");
-        let store = GraphStore::open(&dir).unwrap();
-        let plan = single_step_plan("note.md", b"hello");
+        let owner = StoreOwner::open(&dir).unwrap();
+        let subject = setup_file(&owner, "note.md");
+        let plan = single_step_plan(subject, "note.md", b"hello");
         let step = plan.steps.values().next().unwrap();
         let executor = MockExecutor::new();
         executor.push_verify(PrestateMatch::Prestate);
@@ -153,28 +231,16 @@ fn ilrp_rejects_mismatched_ack_before_persistence() {
             },
             at: Timestamp::now(),
         }));
-        let driver = IlrpDriver {
-            store: &store,
-            executor: &executor,
-            crash: NoCrash,
-        };
-        let id = driver
-            .prepare(
-                plan,
-                SafetyEvidence::StructurallyDisjoint {
-                    description: "ack validation control".into(),
-                },
-            )
-            .unwrap();
+        let profiles = ProfileSet::phase_minus_1();
+        let authorized = accept(&owner, &profiles, plan);
+        let driver = IlrpDriver::new(owner.coordinator_writer(), &executor, NoCrash);
+        let id = driver.prepare(authorized).unwrap();
+
         assert!(
             driver.run(id).is_err(),
             "invalid acknowledgement must refuse"
         );
-        let value = store
-            .get_aux(ILRP_INTENT, &id.to_string())
-            .unwrap()
-            .unwrap();
-        let intent: RepairIntent = serde_json::from_value(value).unwrap();
+        let intent = current_intent(&owner, id);
         assert_eq!(intent.state, IntentState::Applying);
         assert!(
             intent.acks.is_empty(),
@@ -191,9 +257,10 @@ fn ilrp_missing_acks_cannot_authorize_finalization_or_terminal_success() {
         IntentState::Committed,
     ] {
         let dir = fresh_dir("missing-acks");
-        let store = GraphStore::open(&dir).unwrap();
+        let owner = StoreOwner::open(&dir).unwrap();
+        let subject = setup_file(&owner, "note.md");
         let intent = RepairIntent {
-            plan: single_step_plan("note.md", b"hello"),
+            plan: single_step_plan(subject, "note.md", b"hello"),
             state,
             evidence: SafetyEvidence::StructurallyDisjoint {
                 description: "fault input".into(),
@@ -201,14 +268,11 @@ fn ilrp_missing_acks_cannot_authorize_finalization_or_terminal_success() {
             acks: BTreeMap::new(),
         };
         let id = intent.plan.id;
-        hand_craft_intent(&store, &intent);
-        let head = store.head().unwrap();
+        hand_craft_intent(&owner, &intent);
+        let head = owner.head().unwrap();
         let executor = MockExecutor::new();
-        let driver = IlrpDriver {
-            store: &store,
-            executor: &executor,
-            crash: NoCrash,
-        };
+        let driver = IlrpDriver::new(owner.coordinator_writer(), &executor, NoCrash);
+
         assert!(
             driver.run(id).is_err(),
             "state label cannot replace acknowledgements"
@@ -218,7 +282,7 @@ fn ilrp_missing_acks_cannot_authorize_finalization_or_terminal_success() {
             "recovery must validate terminal rows too"
         );
         assert_eq!(
-            store.head().unwrap(),
+            owner.head().unwrap(),
             head,
             "invalid record must remain preserved"
         );
@@ -230,30 +294,21 @@ fn ilrp_missing_acks_cannot_authorize_finalization_or_terminal_success() {
 #[test]
 fn ilrp_prepare_persists_prepared_intent() {
     let dir = fresh_dir("prepare");
-    let store = GraphStore::open(&dir).unwrap();
+    let owner = StoreOwner::open(&dir).unwrap();
+    let subject = setup_file(&owner, "note.md");
     let executor = MockExecutor::new();
-    let driver = IlrpDriver {
-        store: &store,
-        executor: &executor,
-        crash: NoCrash,
-    };
-
-    let plan = single_step_plan("note.md", b"hello");
+    let profiles = ProfileSet::phase_minus_1();
+    let plan = single_step_plan(subject, "note.md", b"hello");
     let id = plan.id;
-    let evidence = SafetyEvidence::StructurallyDisjoint {
-        description: "test".into(),
-    };
+    let authorized = accept(&owner, &profiles, plan);
+    let evidence = authorized.evidence().clone();
+    let driver = IlrpDriver::new(owner.coordinator_writer(), &executor, NoCrash);
 
-    let result = driver.prepare(plan, evidence.clone());
+    let result = driver.prepare(authorized);
     assert!(result.is_ok(), "prepare must succeed: {:?}", result.err());
     assert_eq!(result.unwrap(), id);
 
-    // Verify the intent is persisted as Prepared.
-    let value = store
-        .get_aux(ILRP_INTENT, &id.to_string())
-        .unwrap()
-        .unwrap();
-    let intent: RepairIntent = serde_json::from_value(value).unwrap();
+    let intent = current_intent(&owner, id);
     assert_eq!(intent.state, IntentState::Prepared);
     assert_eq!(intent.evidence, evidence);
     assert!(intent.acks.is_empty());
@@ -262,77 +317,55 @@ fn ilrp_prepare_persists_prepared_intent() {
 #[test]
 fn ilrp_run_happy_path_reaches_committed() {
     let dir = fresh_dir("happy");
-    let store = GraphStore::open(&dir).unwrap();
+    let owner = StoreOwner::open(&dir).unwrap();
+    let subject = setup_file(&owner, "note.md");
     let executor = MockExecutor::new();
-    let plan = single_step_plan("note.md", b"hello");
+    let plan = single_step_plan(subject, "note.md", b"hello");
     let step = plan.steps.values().next().unwrap();
-
-    // Verify returns Prestate → apply is called.
     executor.push_verify(PrestateMatch::Prestate);
     executor.push_apply(Ok(StepAck {
         step: step.id,
         observed_poststate: step.expected_poststate.clone(),
         at: Timestamp::now(),
     }));
+    let profiles = ProfileSet::phase_minus_1();
+    let authorized = accept(&owner, &profiles, plan);
+    let driver = IlrpDriver::new(owner.coordinator_writer(), &executor, NoCrash);
 
-    let driver = IlrpDriver {
-        store: &store,
-        executor: &executor,
-        crash: NoCrash,
-    };
-
-    let evidence = SafetyEvidence::StructurallyDisjoint {
-        description: "test".into(),
-    };
-
-    let head_before = store.head().unwrap();
-    let id = driver.prepare(plan, evidence).unwrap();
+    let head_before = owner.head().unwrap();
+    let id = driver.prepare(authorized).unwrap();
     let state = driver.run(id).unwrap();
 
     assert_eq!(state, IntentState::Committed);
-
-    // Head advanced: prepare (1) + applying (1) + ack (1) + external-applied (1)
-    // + finalizing (1) + finalize (1) = 6 commits.
-    let head_after = store.head().unwrap();
+    let head_after = owner.head().unwrap();
     assert_eq!(
         head_after.0 - head_before.0,
         6,
         "head must advance by exactly 6 commits post-prepare"
     );
-
-    // Terminal intent persisted.
-    let value = store
-        .get_aux(ILRP_INTENT, &id.to_string())
-        .unwrap()
-        .unwrap();
-    let intent: RepairIntent = serde_json::from_value(value).unwrap();
-    assert_eq!(intent.state, IntentState::Committed);
+    assert_eq!(current_intent(&owner, id).state, IntentState::Committed);
 }
 
 #[test]
 fn ilrp_contested_step_lands_needs_review_and_preserves_target() {
     let dir = fresh_dir("contested");
-    let store = GraphStore::open(&dir).unwrap();
+    let owner = StoreOwner::open(&dir).unwrap();
+    let subject = setup_file(&owner, "note.md");
     let executor = MockExecutor::new();
-
-    // Verify returns Neither → contested path, zero apply calls.
     executor.push_verify(PrestateMatch::Neither);
+    let profiles = ProfileSet::phase_minus_1();
+    let plan = single_step_plan(subject, "note.md", b"hello");
+    let authorized = accept(&owner, &profiles, plan);
+    let driver = IlrpDriver::new(owner.coordinator_writer(), &executor, NoCrash);
 
-    let driver = IlrpDriver {
-        store: &store,
-        executor: &executor,
-        crash: NoCrash,
-    };
+    let id = driver.prepare(authorized).unwrap();
+    let outcome = driver.run_checked(id).unwrap();
 
-    let plan = single_step_plan("note.md", b"hello");
-    let evidence = SafetyEvidence::StructurallyDisjoint {
-        description: "test".into(),
-    };
-
-    let id = driver.prepare(plan, evidence).unwrap();
-    let state = driver.run(id).unwrap();
-
-    assert_eq!(state, IntentState::NeedsReview);
+    assert_eq!(outcome.state(), IntentState::NeedsReview);
+    assert!(
+        outcome.committed().is_none(),
+        "contested result must not carry a committed receipt"
+    );
     assert_eq!(
         executor.apply_calls.lock().unwrap().len(),
         0,
@@ -343,9 +376,9 @@ fn ilrp_contested_step_lands_needs_review_and_preserves_target() {
 #[test]
 fn ilrp_recover_all_terminalizes_each_nonterminal_state() {
     let dir = fresh_dir("recover");
-    let store = GraphStore::open(&dir).unwrap();
-
-    // Hand-craft intents at each nonterminal state.
+    let owner = StoreOwner::open(&dir).unwrap();
+    let subject = setup_file(&owner, "note.md");
+    let profiles = ProfileSet::phase_minus_1();
     let states_and_expected = [
         (IntentState::Prepared, IntentState::Committed),
         (IntentState::Applying, IntentState::Committed),
@@ -355,49 +388,87 @@ fn ilrp_recover_all_terminalizes_each_nonterminal_state() {
 
     let mut expected_acks = BTreeMap::new();
     for (initial, _) in &states_and_expected {
-        let plan = single_step_plan("note.md", b"data");
+        let plan = single_step_plan(subject, "note.md", b"data");
         let step = plan.steps.values().next().unwrap();
         let ack = StepAck {
             step: step.id,
             observed_poststate: step.expected_poststate.clone(),
             at: Timestamp::now(),
         };
-        let acks = if matches!(
-            initial,
-            IntentState::ExternalApplied | IntentState::Finalizing
-        ) {
-            BTreeMap::from([(step.id, ack)])
-        } else {
-            expected_acks.insert(plan.id, ack);
-            BTreeMap::new()
-        };
-        let intent = RepairIntent {
-            plan,
-            state: *initial,
-            evidence: SafetyEvidence::StructurallyDisjoint {
-                description: "test".into(),
-            },
-            acks,
-        };
-        hand_craft_intent(&store, &intent);
+        let id = plan.id;
+        let authorized = accept(&owner, &profiles, plan);
+        let prepare_executor = MockExecutor::new();
+        IlrpDriver::new(owner.coordinator_writer(), &prepare_executor, NoCrash)
+            .prepare(authorized)
+            .unwrap();
+
+        match initial {
+            IntentState::Prepared => {
+                expected_acks.insert(id, ack);
+            }
+            IntentState::Applying => {
+                let progress = MockExecutor::new();
+                progress.push_verify(PrestateMatch::Prestate);
+                let driver = IlrpDriver::new(
+                    owner.coordinator_writer(),
+                    &progress,
+                    PanicAt(CrashPoint::BeforeExternalApply),
+                );
+                assert!(
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        let _ = driver.run(id);
+                    }))
+                    .is_err()
+                );
+                expected_acks.insert(id, ack);
+            }
+            IntentState::ExternalApplied => {
+                let progress = MockExecutor::new();
+                progress.push_verify(PrestateMatch::Prestate);
+                progress.push_apply(Ok(ack));
+                let driver = IlrpDriver::new(
+                    owner.coordinator_writer(),
+                    &progress,
+                    PanicAt(CrashPoint::AfterAcknowledge),
+                );
+                assert!(
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        let _ = driver.run(id);
+                    }))
+                    .is_err()
+                );
+                synthesize_external_applied(&owner, id);
+            }
+            IntentState::Finalizing => {
+                let progress = MockExecutor::new();
+                progress.push_verify(PrestateMatch::Prestate);
+                progress.push_apply(Ok(ack));
+                let driver = IlrpDriver::new(
+                    owner.coordinator_writer(),
+                    &progress,
+                    PanicAt(CrashPoint::BeforeFinalize),
+                );
+                assert!(
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        let _ = driver.run(id);
+                    }))
+                    .is_err()
+                );
+            }
+            _ => unreachable!("nonterminal fixture table"),
+        }
+        assert_eq!(current_intent(&owner, id).state, *initial);
     }
 
-    // Queue exact planned acknowledgements in the same repair-key order as scan_aux.
     let executor = MockExecutor::new();
     for ack in expected_acks.into_values() {
         executor.push_verify(PrestateMatch::Prestate);
         executor.push_apply(Ok(ack));
     }
-
-    let driver = IlrpDriver {
-        store: &store,
-        executor: &executor,
-        crash: NoCrash,
-    };
+    let driver = IlrpDriver::new(owner.coordinator_writer(), &executor, NoCrash);
 
     let results = driver.recover_all().unwrap();
     assert_eq!(results.len(), states_and_expected.len());
-
     for (_, state) in &results {
         assert!(
             state.is_terminal(),
@@ -409,43 +480,31 @@ fn ilrp_recover_all_terminalizes_each_nonterminal_state() {
 #[test]
 fn ilrp_recover_twice_is_noop() {
     let dir = fresh_dir("recover-twice");
-    let store = GraphStore::open(&dir).unwrap();
+    let owner = StoreOwner::open(&dir).unwrap();
+    let subject = setup_file(&owner, "note.md");
     let executor = MockExecutor::new();
-    let plan = single_step_plan("note.md", b"hello");
+    let plan = single_step_plan(subject, "note.md", b"hello");
     let step = plan.steps.values().next().unwrap();
-
-    // Prepare + run one intent to committed.
     executor.push_verify(PrestateMatch::Prestate);
     executor.push_apply(Ok(StepAck {
         step: step.id,
         observed_poststate: step.expected_poststate.clone(),
         at: Timestamp::now(),
     }));
+    let profiles = ProfileSet::phase_minus_1();
+    let authorized = accept(&owner, &profiles, plan);
+    let driver = IlrpDriver::new(owner.coordinator_writer(), &executor, NoCrash);
 
-    let driver = IlrpDriver {
-        store: &store,
-        executor: &executor,
-        crash: NoCrash,
-    };
-
-    let evidence = SafetyEvidence::StructurallyDisjoint {
-        description: "test".into(),
-    };
-
-    let id = driver.prepare(plan, evidence).unwrap();
+    let id = driver.prepare(authorized).unwrap();
     driver.run(id).unwrap();
+    let head_after_run = owner.head().unwrap();
 
-    let head_after_run = store.head().unwrap();
-
-    // First recover: nothing nonterminal → empty.
     let r1 = driver.recover_all().unwrap();
     assert!(r1.is_empty(), "all intents already terminal");
-
-    // Second recover: same result, head unchanged.
     let r2 = driver.recover_all().unwrap();
     assert!(r2.is_empty());
     assert_eq!(
-        store.head().unwrap(),
+        owner.head().unwrap(),
         head_after_run,
         "head must not change"
     );

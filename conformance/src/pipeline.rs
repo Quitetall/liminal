@@ -447,7 +447,7 @@ pub fn replay_trace(trace: &Trace) -> anyhow::Result<TraceReplay> {
                 })?;
                 // Parity with the runner's post-step sweep (Algorithm B runs
                 // after every scenario step).
-                sweep_overlays(runner.workspace().store(), &root)?;
+                sweep_overlays(runner.workspace(), &root)?;
             }
         }
 

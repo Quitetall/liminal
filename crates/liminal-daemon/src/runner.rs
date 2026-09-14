@@ -11,8 +11,8 @@ use liminal_graph::ns::{
     SYS_BLOB, SYS_CLOCK, SYS_UNAVAILABLE,
 };
 use liminal_graph::{
-    GraphStore, IdentityRequirement, Node, NodeFlags, Operation, PayloadRef, Relation,
-    RelationFlags, Target,
+    BookkeepingWriter, BootstrapWriter, CaptureWriter, GraphStore, HostControlWriter,
+    IdentityRequirement, Node, NodeFlags, Operation, PayloadRef, Relation, RelationFlags, Target,
 };
 use liminal_id::{
     ClientId, ContentHash, EntityId, IdempotencyKey, IdentityGrade, JurisdictionKey,
@@ -34,14 +34,15 @@ use std::collections::BTreeMap;
 
 use crate::reactor::{Observation, ScriptedStockResolver, parse_utc_timestamp};
 use crate::scenario::{ScenarioScript, SetupGraph};
-use crate::workspace::ToyWorkspace;
+use crate::workspace::{DaemonWriters, ToyWorkspace};
 
 /// Ingest setup files: parse paragraphs, create FILE/PARAGRAPH nodes, store
 /// aliases (M03 Data schemas).
 pub(crate) fn ingest_files(
-    store: &GraphStore,
+    writer: &BootstrapWriter<'_>,
     files: &[crate::scenario::SetupFile],
 ) -> anyhow::Result<()> {
+    let store = writer.store();
     let meta = liminal_graph::TxnMeta {
         actor: None,
         origin: liminal_graph::Origin::Human,
@@ -54,7 +55,7 @@ pub(crate) fn ingest_files(
         // 1. Create FILE node.
         let file_node = NodeId::new();
         {
-            let mut txn = store.begin()?;
+            let mut txn = writer.begin()?;
             txn.apply(Operation::CreateNode {
                 node: Node {
                     id: file_node,
@@ -82,7 +83,7 @@ pub(crate) fn ingest_files(
                 NodeFlags::default()
             };
             let para_node = NodeId::new();
-            let mut txn = store.begin()?;
+            let mut txn = writer.begin()?;
             txn.apply(Operation::CreateNode {
                 node: Node {
                     id: para_node,
@@ -121,7 +122,11 @@ pub(crate) fn ingest_files(
 }
 
 /// Ingest setup graph entries: COMMENT nodes + relations (M03 Data schemas).
-pub(crate) fn ingest_graph(store: &GraphStore, graph_entries: &[SetupGraph]) -> anyhow::Result<()> {
+pub(crate) fn ingest_graph(
+    writer: &BootstrapWriter<'_>,
+    graph_entries: &[SetupGraph],
+) -> anyhow::Result<()> {
+    let store = writer.store();
     let meta = liminal_graph::TxnMeta {
         actor: None,
         origin: liminal_graph::Origin::Human,
@@ -160,7 +165,7 @@ pub(crate) fn ingest_graph(store: &GraphStore, graph_entries: &[SetupGraph]) -> 
                     .map_err(|_| anyhow::anyhow!("unknown grade: {requires_grade}"))?;
 
                 let comment_node = NodeId::new();
-                let mut txn = store.begin()?;
+                let mut txn = writer.begin()?;
                 txn.apply(Operation::CreateNode {
                     node: Node {
                         id: comment_node,
@@ -310,8 +315,9 @@ fn build_save_plan(
 fn plan_foreign_changes(
     profiles: &ProfileSet,
     root: &Utf8Path,
-    store: &GraphStore,
+    writer: &CaptureWriter<'_>,
 ) -> anyhow::Result<()> {
+    let store = writer.store();
     let head = store.head()?;
 
     for relation in store.relations()? {
@@ -389,7 +395,7 @@ fn plan_foreign_changes(
 
         // Persist blobs (base = current file) so any downstream recompute works.
         {
-            let mut txn = store.begin()?;
+            let mut txn = writer.begin()?;
             blob::put(&mut txn, &file_text)?;
             txn.commit(save_meta())?;
         }
@@ -400,15 +406,15 @@ fn plan_foreign_changes(
         let decision = checker
             .evaluate_repair(&plan)
             .map_err(|e| anyhow::anyhow!("{e}"))?;
-        persist_plan(store, &plan)?;
-        persist_decision(store, plan.id, &decision)?;
+        persist_plan(writer, &plan)?;
+        persist_decision(writer, plan.id, &decision)?;
 
         // Creation site (3), M05.md Data schemas: a NeedsReview DAG proposal
         // writes TWO overlays (source-id insertion + relation endpoint) plus
         // ONE coalesced `identity:` item (D05.5) — the plan stays actionable
         // via `accept_repair` until explicitly accepted or discarded (D05.6).
         if matches!(decision, RepairDecision::NeedsReview { .. }) {
-            propose_dag_review(store, profiles, &plan, &rel_path, &alias)?;
+            propose_dag_review(writer, profiles, &plan, &rel_path, &alias)?;
         }
     }
     Ok(())
@@ -447,10 +453,11 @@ fn review_overlay(
 /// that came back NeedsReview writes ONE Overlay plus ONE coalesced
 /// `<category>:path:<p>` item, in one transaction.
 fn propose_review(
-    store: &GraphStore,
+    writer: &CaptureWriter<'_>,
     profiles: &ProfileSet,
     plan: &RepairPlan,
 ) -> anyhow::Result<()> {
+    let store = writer.store();
     let step = plan
         .steps
         .values()
@@ -477,7 +484,7 @@ fn propose_review(
         created_at: now,
         status: ReconciliationStatus::Pending,
     };
-    let mut txn = store.begin()?;
+    let mut txn = writer.begin()?;
     txn.put_aux(
         JUR_OVERLAY,
         &overlay.id.to_string(),
@@ -492,12 +499,13 @@ fn propose_review(
 /// (source-id insertion + Relation reattachment) writes TWO overlays plus ONE
 /// coalesced `identity:path:<p>#<alias>` item (D05.5), in one transaction.
 fn propose_dag_review(
-    store: &GraphStore,
+    writer: &CaptureWriter<'_>,
     profiles: &ProfileSet,
     plan: &RepairPlan,
     rel_path: &PathId,
     alias: &str,
 ) -> anyhow::Result<()> {
+    let store = writer.store();
     let now = now_with_offset(store)?;
     let mut overlays = Vec::with_capacity(plan.steps.len());
     for step in plan.steps.values() {
@@ -520,7 +528,7 @@ fn propose_dag_review(
         created_at: now,
         status: ReconciliationStatus::Pending,
     };
-    let mut txn = store.begin()?;
+    let mut txn = writer.begin()?;
     for overlay in &overlays {
         txn.put_aux(
             JUR_OVERLAY,
@@ -536,8 +544,12 @@ fn propose_dag_review(
 /// Retire every Overlay proposed for an accepted plan (D05.6: accepted repair
 /// is a departure path — the Finalize txn deletes the overlay key, history
 /// stays in the log) and resolve any reconciliation item that covered it.
-fn retire_proposed_overlays(store: &GraphStore, plan_id: RepairId) -> anyhow::Result<()> {
-    let mut txn = store.begin()?;
+fn retire_proposed_overlays(
+    writer: &BookkeepingWriter<'_>,
+    plan_id: RepairId,
+) -> anyhow::Result<()> {
+    let store = writer.store();
+    let mut txn = writer.begin()?;
     let mut any = false;
     for (key, value) in store.scan_aux(JUR_OVERLAY)? {
         let overlay: Overlay = serde_json::from_value(value)?;
@@ -603,17 +615,15 @@ fn single_file(store: &GraphStore, root: &Utf8Path) -> anyhow::Result<(PathId, S
 /// `InsertSourceId` step can resolve its marker; honors the ambient crash
 /// arming so accept is crash-tested like any other repair.
 fn accept_repair(
-    store: &GraphStore,
+    writers: &DaemonWriters<'_>,
     root: &Utf8Path,
     actor: liminal_id::ActorId,
 ) -> anyhow::Result<()> {
+    let capture = writers.capture();
+    let bookkeeping = writers.bookkeeping();
+    let store = capture.store();
     let executor = crate::executor::FsExecutor::with_store(root.to_owned(), store)?;
     let crash = crate::crash::EnvCrashInjector::from_env();
-    let driver = IlrpDriver {
-        store,
-        executor: &executor,
-        crash,
-    };
     // Find the single plan whose decision is NeedsReview.
     let decisions = store.scan_aux(JUR_DECISION)?;
     let pending: Vec<RepairId> = decisions
@@ -636,20 +646,33 @@ fn accept_repair(
         .ok_or_else(|| anyhow::anyhow!("pending plan not found"))?;
     let plan: RepairPlan = serde_json::from_value(plan_value)?;
 
-    let evidence = SafetyEvidence::HumanApproval {
-        actor,
-        at: Timestamp::now(),
+    let profiles = ProfileSet::phase_minus_1();
+    let checker = Checker {
+        store,
+        profiles: &profiles,
     };
-    let id = driver.prepare(plan.clone(), evidence.clone())?;
-    driver.run(id)?;
+    let authorized = checker.accept_repair(plan.clone(), actor)?;
+    let evidence = authorized.evidence().clone();
+    let driver = IlrpDriver::new(writers.coordinator(), &executor, crash);
+    let id = driver.prepare(authorized)?;
+    let outcome = driver.run_checked(id)?;
+    let Some(receipt) = outcome.committed() else {
+        return Ok(());
+    };
     // DG-8.3: `InsertSourceId` mutates the file on disk without carrying the
     // landed bytes in-plan, so the save-time mirror (`refresh_file_blobs`)
     // never sees it — re-read the landed files here or the `file/<path>` blob
     // is a stale pre-acceptance echo.
-    refresh_inserted_file_blobs(store, root, &plan)?;
-    record_repair(store, &plan, "id-insert-then-reattach", &evidence)?;
+    refresh_inserted_file_blobs(&bookkeeping, root, &plan)?;
+    record_repair(
+        &bookkeeping,
+        receipt,
+        &plan,
+        "id-insert-then-reattach",
+        &evidence,
+    )?;
     // D05.6: acceptance is a departure path — retire the proposal's overlays.
-    retire_proposed_overlays(store, plan.id)?;
+    retire_proposed_overlays(&bookkeeping, plan.id)?;
     Ok(())
 }
 
@@ -754,8 +777,14 @@ pub fn build_dag_plan(i: &DagPlanInputs) -> RepairPlan {
 /// Perform one `save` step (M04 Algorithm C): merge, evaluate, persist plan +
 /// decision, and either auto-apply through ILRP or leave a NeedsReview
 /// proposal. Save IS Promotion IS a RepairPlan through the ONE interpreter.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "explicit scoped writers preserve the audited save commit sites"
+)]
 fn perform_save<X: ExternalExecutor, C: CrashInjector>(
     driver: &IlrpDriver<'_, X, C>,
+    capture: &CaptureWriter<'_>,
+    bookkeeping: &BookkeepingWriter<'_>,
     profiles: &ProfileSet,
     root: &Utf8Path,
     bases: &BTreeMap<String, String>,
@@ -763,7 +792,7 @@ fn perform_save<X: ExternalExecutor, C: CrashInjector>(
     client: &str,
     path: &str,
 ) -> anyhow::Result<RepairId> {
-    let store = driver.store;
+    let store = capture.store();
     let key = (client.to_owned(), path.to_owned());
     let ours = String::from_utf8(
         buffers
@@ -788,7 +817,7 @@ fn perform_save<X: ExternalExecutor, C: CrashInjector>(
 
     // Persist base + current blobs so the safety predicate can recompute merges.
     {
-        let mut txn = store.begin()?;
+        let mut txn = capture.begin()?;
         if let Some(b) = &base {
             blob::put(&mut txn, b)?;
         }
@@ -815,7 +844,7 @@ fn perform_save<X: ExternalExecutor, C: CrashInjector>(
                     current_bytes.as_deref().map(str::as_bytes),
                     ours.as_bytes(),
                 );
-                persist_plan(store, &plan)?;
+                persist_plan(capture, &plan)?;
                 return Ok(plan.id);
             }
         },
@@ -836,10 +865,10 @@ fn perform_save<X: ExternalExecutor, C: CrashInjector>(
     // persist the plan and coalesce a durable Overlay instead of driving
     // ILRP; no decision, no reconciliation item.
     if !holder_available(store, path)? {
-        return offline_save(store, profiles, &plan, file_node, merged.as_bytes());
+        return offline_save(capture, profiles, &plan, file_node, merged.as_bytes());
     }
 
-    apply_or_review(driver, profiles, &plan)
+    apply_or_review(driver, capture, bookkeeping, profiles, &plan)
 }
 
 /// Whether `path`'s Holder currently accepts writes (D05.1): true iff
@@ -855,12 +884,13 @@ pub fn holder_available(store: &GraphStore, path: &str) -> anyhow::Result<bool> 
 /// prior operation to `JUR_OVERLAY_LOG` before overwriting it (D05.3: coalesce
 /// without erasing history).
 fn offline_save(
-    store: &GraphStore,
+    writer: &CaptureWriter<'_>,
     profiles: &ProfileSet,
     plan: &RepairPlan,
     file_node: NodeId,
     ours: &[u8],
 ) -> anyhow::Result<RepairId> {
+    let store = writer.store();
     let subject = JurisdictionSubject::Node(file_node);
     let operation = plan
         .steps
@@ -874,7 +904,7 @@ fn offline_save(
         .ok_or_else(|| anyhow::anyhow!("no profile governs {subject}"))?;
     let lifecycle = profile.contract_for(subject, store).lifecycle;
 
-    let mut txn = store.begin()?;
+    let mut txn = writer.begin()?;
     txn.put_aux(JUR_PLAN, &plan.id.to_string(), serde_json::to_value(plan)?)?;
     blob::put(&mut txn, &String::from_utf8_lossy(ours))?;
 
@@ -944,28 +974,39 @@ fn next_overlay_log_seq(store: &GraphStore, overlay: OverlayId) -> anyhow::Resul
 /// steps 5–7).
 fn apply_or_review<X: ExternalExecutor, C: CrashInjector>(
     driver: &IlrpDriver<'_, X, C>,
+    capture: &CaptureWriter<'_>,
+    bookkeeping: &BookkeepingWriter<'_>,
     profiles: &ProfileSet,
     plan: &RepairPlan,
 ) -> anyhow::Result<RepairId> {
-    let store = driver.store;
+    let store = capture.store();
     let checker = Checker { store, profiles };
     let decision = checker
         .evaluate_repair(plan)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
-    persist_plan(store, plan)?;
-    persist_decision(store, plan.id, &decision)?;
+    persist_plan(capture, plan)?;
+    persist_decision(capture, plan.id, &decision)?;
 
     match decision {
         RepairDecision::AutoApply { evidence } => {
-            let id = driver.prepare(plan.clone(), evidence.clone())?;
-            driver.run(id)?;
-            refresh_file_blobs(store, plan)?;
-            record_repair(store, plan, "save-promotion", &evidence)?;
+            let authorized = checker.authorize_repair(plan.clone())?;
+            anyhow::ensure!(
+                authorized.evidence() == &evidence,
+                "checker decision changed during repair admission"
+            );
+            let id = driver.prepare(authorized)?;
+            let outcome = driver.run_checked(id)?;
+            if let Some(receipt) = outcome.committed() {
+                refresh_file_blobs(bookkeeping, plan)?;
+                record_repair(bookkeeping, receipt, plan, "save-promotion", &evidence)?;
+            } else if outcome.state() == IntentState::NeedsReview {
+                propose_review(capture, profiles, plan)?;
+            }
             Ok(plan.id)
         }
         RepairDecision::NeedsReview { .. } => {
             // Creation site (2), M04 Algorithm C step 7 (D05.2/D05.5).
-            propose_review(store, profiles, plan)?;
+            propose_review(capture, profiles, plan)?;
             Ok(plan.id)
         }
     }
@@ -980,8 +1021,8 @@ fn apply_or_review<X: ExternalExecutor, C: CrashInjector>(
 /// (`seed_durable_inputs`, `file_paths`) is never reading a stale ingest-time
 /// echo. A no-op when `plan` carries no `WriteFile` step (e.g. the
 /// id-then-reattach DAG, which is graph + `InsertSourceId` only).
-fn refresh_file_blobs(store: &GraphStore, plan: &RepairPlan) -> anyhow::Result<()> {
-    let writes: Vec<(&PathId, &[u8])> = plan
+fn refresh_file_blobs(writer: &BookkeepingWriter<'_>, plan: &RepairPlan) -> anyhow::Result<()> {
+    let file_updates: Vec<(&PathId, &[u8])> = plan
         .steps
         .values()
         .filter_map(|step| match &step.operation {
@@ -989,11 +1030,11 @@ fn refresh_file_blobs(store: &GraphStore, plan: &RepairPlan) -> anyhow::Result<(
             _ => None,
         })
         .collect();
-    if writes.is_empty() {
+    if file_updates.is_empty() {
         return Ok(());
     }
-    let mut txn = store.begin()?;
-    for (path, contents) in writes {
+    let mut txn = writer.begin()?;
+    for (path, contents) in file_updates {
         txn.put_aux(
             SYS_BLOB,
             &format!("file/{path}"),
@@ -1009,7 +1050,7 @@ fn refresh_file_blobs(store: &GraphStore, plan: &RepairPlan) -> anyhow::Result<(
 /// must read the landed file back from disk AFTER the driver commits. A no-op
 /// for plans with no `InsertSourceId` step.
 fn refresh_inserted_file_blobs(
-    store: &GraphStore,
+    writer: &BookkeepingWriter<'_>,
     root: &Utf8Path,
     plan: &RepairPlan,
 ) -> anyhow::Result<()> {
@@ -1024,7 +1065,7 @@ fn refresh_inserted_file_blobs(
     if paths.is_empty() {
         return Ok(());
     }
-    let mut txn = store.begin()?;
+    let mut txn = writer.begin()?;
     for path in paths {
         let bytes = std::fs::read(root.join(&path.0))?;
         txn.put_aux(
@@ -1063,8 +1104,8 @@ fn save_meta() -> liminal_graph::TxnMeta {
 }
 
 /// Persist a plan under `JUR_PLAN[repair:<uuid>]`.
-fn persist_plan(store: &GraphStore, plan: &RepairPlan) -> anyhow::Result<()> {
-    let mut txn = store.begin()?;
+fn persist_plan(writer: &CaptureWriter<'_>, plan: &RepairPlan) -> anyhow::Result<()> {
+    let mut txn = writer.begin()?;
     txn.put_aux(JUR_PLAN, &plan.id.to_string(), serde_json::to_value(plan)?)?;
     txn.commit(save_meta())?;
     Ok(())
@@ -1072,11 +1113,11 @@ fn persist_plan(store: &GraphStore, plan: &RepairPlan) -> anyhow::Result<()> {
 
 /// Persist a decision under `JUR_DECISION[repair:<uuid>]`.
 fn persist_decision(
-    store: &GraphStore,
+    writer: &CaptureWriter<'_>,
     id: RepairId,
     decision: &RepairDecision,
 ) -> anyhow::Result<()> {
-    let mut txn = store.begin()?;
+    let mut txn = writer.begin()?;
     txn.put_aux(
         JUR_DECISION,
         &id.to_string(),
@@ -1088,21 +1129,32 @@ fn persist_decision(
 
 /// Record an accepted repair under `JUR_REPAIR[repair:<uuid>]` (R4 §6).
 fn record_repair(
-    store: &GraphStore,
+    writer: &BookkeepingWriter<'_>,
+    receipt: &liminal_jurisdiction::CommittedRepair<'_>,
     plan: &RepairPlan,
     selected_rule: &str,
     evidence: &SafetyEvidence,
 ) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        receipt.belongs_to(writer.store()),
+        "receipt belongs to another store"
+    );
+    anyhow::ensure!(
+        receipt.plan() == plan && receipt.evidence() == evidence,
+        "receipt does not establish supplied repair metadata"
+    );
+    let plan = receipt.plan();
+    let evidence = receipt.evidence();
     let record = RepairRecord {
         repair: plan.id,
         input_basis: plan.basis.clone(),
         selected_rule: selected_rule.to_owned(),
         evidence: evidence.clone(),
-        applied_steps: plan.steps.keys().copied().collect(),
-        resulting_basis: plan.basis.clone(),
+        applied_steps: receipt.applied_steps().to_vec(),
+        resulting_basis: receipt.resulting_basis().clone(),
         inverse: plan.inverse.as_ref().map(|i| (*i.0).clone()),
     };
-    let mut txn = store.begin()?;
+    let mut txn = writer.begin()?;
     txn.put_aux(
         JUR_REPAIR,
         &plan.id.to_string(),
@@ -1127,12 +1179,13 @@ pub fn now_with_offset(store: &GraphStore) -> anyhow::Result<Timestamp> {
 
 /// `advance_clock { by_secs }`: accumulate `by_secs * 1000` into
 /// `SYS_CLOCK["offset_ms"]` (D05.4).
-fn advance_clock(store: &GraphStore, by_secs: i64) -> anyhow::Result<()> {
+fn advance_clock(writer: &HostControlWriter<'_>, by_secs: i64) -> anyhow::Result<()> {
+    let store = writer.store();
     let current = store
         .get_aux(SYS_CLOCK, "offset_ms")?
         .and_then(|v| v.as_i64())
         .unwrap_or(0);
-    let mut txn = store.begin()?;
+    let mut txn = writer.begin()?;
     txn.put_aux(
         SYS_CLOCK,
         "offset_ms",
@@ -1157,11 +1210,12 @@ fn overlay_basis_file_hash(base: &WorkspaceBasis, path: &PathId) -> Option<Conte
 /// surfaces one coalesced `offline:path:<p>` item (declared-transient
 /// profiles escalate at `escalate_after`; others surface at `surface_after`).
 fn age_overlay(
-    store: &GraphStore,
+    writer: &CaptureWriter<'_>,
     overlay: &Overlay,
     now: Timestamp,
     path: &PathId,
 ) -> anyhow::Result<()> {
+    let store = writer.store();
     let age_ms = now.0 - overlay.created_at.0;
     let escalate_ms =
         i64::try_from(overlay.lifecycle.escalate_after.as_millis()).unwrap_or(i64::MAX);
@@ -1183,7 +1237,7 @@ fn age_overlay(
         created_at: now,
         status: ReconciliationStatus::Pending,
     };
-    let mut txn = store.begin()?;
+    let mut txn = writer.begin()?;
     ReconciliationQueue { store }.upsert_coalesced(&mut txn, item)?;
     txn.commit(save_meta())?;
     Ok(())
@@ -1247,25 +1301,38 @@ fn rebuild_holder_return_draft(
 
 /// `AutoApply` half of holder-return: commit through ILRP and retire the
 /// overlay (D05.6 — accepted repair is a departure path).
+#[allow(
+    clippy::too_many_arguments,
+    reason = "explicit scoped writers preserve the audited holder-return commit sites"
+)]
 fn commit_holder_return(
-    store: &GraphStore,
+    writers: &DaemonWriters<'_>,
+    capture: &CaptureWriter<'_>,
+    bookkeeping: &BookkeepingWriter<'_>,
+    profiles: &ProfileSet,
     root: &Utf8Path,
     plan: &RepairPlan,
     evidence: &SafetyEvidence,
     overlay: OverlayId,
 ) -> anyhow::Result<()> {
+    let store = capture.store();
     let executor = crate::executor::FsExecutor::with_store(root.to_owned(), store)?;
     let crash = crate::crash::EnvCrashInjector::from_env();
-    let driver = IlrpDriver {
-        store,
-        executor: &executor,
-        crash,
+    let checker = Checker { store, profiles };
+    let authorized = checker.authorize_repair(plan.clone())?;
+    anyhow::ensure!(
+        authorized.evidence() == evidence,
+        "checker decision changed during holder-return admission"
+    );
+    let driver = IlrpDriver::new(writers.coordinator(), &executor, crash);
+    let id = driver.prepare(authorized)?;
+    let outcome = driver.run_checked(id)?;
+    let Some(receipt) = outcome.committed() else {
+        return Ok(());
     };
-    let id = driver.prepare(plan.clone(), evidence.clone())?;
-    driver.run(id)?;
-    record_repair(store, plan, "holder-return", evidence)?;
+    record_repair(bookkeeping, receipt, plan, "holder-return", evidence)?;
 
-    let mut txn = store.begin()?;
+    let mut txn = bookkeeping.begin()?;
     txn.delete_aux(JUR_OVERLAY, &overlay.to_string())?;
     resolve_covering_item(store, &mut txn, overlay)?;
     txn.commit(save_meta())?;
@@ -1275,11 +1342,12 @@ fn commit_holder_return(
 /// `NeedsReview` half of holder-return: leave the overlay `RepairProposed`
 /// alongside one coalesced `conflict:path:<p>` item.
 fn requeue_holder_return(
-    store: &GraphStore,
+    writer: &CaptureWriter<'_>,
     overlay: &Overlay,
     path: &PathId,
     plan_id: RepairId,
 ) -> anyhow::Result<()> {
+    let store = writer.store();
     let now = now_with_offset(store)?;
     let mut updated = overlay.clone();
     updated.state = OverlayState::RepairProposed(plan_id);
@@ -1293,7 +1361,7 @@ fn requeue_holder_return(
         created_at: now,
         status: ReconciliationStatus::Pending,
     };
-    let mut txn = store.begin()?;
+    let mut txn = writer.begin()?;
     txn.put_aux(
         JUR_OVERLAY,
         &overlay.id.to_string(),
@@ -1310,12 +1378,15 @@ fn requeue_holder_return(
 /// `AutoApply` commits through ILRP and retires the overlay (D05.6);
 /// `NeedsReview` leaves it `RepairProposed` alongside one coalesced item.
 fn holder_return(
-    store: &GraphStore,
+    writers: &DaemonWriters<'_>,
+    capture: &CaptureWriter<'_>,
+    bookkeeping: &BookkeepingWriter<'_>,
     root: &Utf8Path,
     profiles: &ProfileSet,
     overlay: &Overlay,
     path: &PathId,
 ) -> anyhow::Result<()> {
+    let store = capture.store();
     let file_node = match overlay.subject {
         JurisdictionSubject::Node(n) => n,
         JurisdictionSubject::Relation(_) => anyhow::bail!("holder-return expects a file subject"),
@@ -1331,7 +1402,7 @@ fn holder_return(
 
     // Persist blobs so the safety predicate can recompute disjointness.
     {
-        let mut txn = store.begin()?;
+        let mut txn = capture.begin()?;
         if let Some(c) = &state.current_bytes {
             blob::put(&mut txn, c)?;
         }
@@ -1352,21 +1423,36 @@ fn holder_return(
     let decision = checker
         .evaluate_repair(&plan)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
-    persist_plan(store, &plan)?;
-    persist_decision(store, plan.id, &decision)?;
+    persist_plan(capture, &plan)?;
+    persist_decision(capture, plan.id, &decision)?;
 
     match decision {
-        RepairDecision::AutoApply { evidence } => {
-            commit_holder_return(store, root, &plan, &evidence, overlay.id)
+        RepairDecision::AutoApply { evidence } => commit_holder_return(
+            writers,
+            capture,
+            bookkeeping,
+            profiles,
+            root,
+            &plan,
+            &evidence,
+            overlay.id,
+        ),
+        RepairDecision::NeedsReview { .. } => {
+            requeue_holder_return(capture, overlay, path, plan.id)
         }
-        RepairDecision::NeedsReview { .. } => requeue_holder_return(store, overlay, path, plan.id),
     }
 }
 
 /// Algorithm B: age every `Active` overlay and re-verify any whose write
 /// route has returned. Runs at workspace open (after recovery), after every
 /// scenario step, and before `lim overlays` / `lim check` render.
-pub fn sweep_overlays(store: &GraphStore, root: &Utf8Path) -> anyhow::Result<()> {
+pub(crate) fn sweep_overlays_scoped(
+    writers: &DaemonWriters<'_>,
+    root: &Utf8Path,
+) -> anyhow::Result<()> {
+    let capture = writers.capture();
+    let bookkeeping = writers.bookkeeping();
+    let store = capture.store();
     let profiles = ProfileSet::phase_minus_1();
     let now = now_with_offset(store)?;
 
@@ -1379,12 +1465,26 @@ pub fn sweep_overlays(store: &GraphStore, root: &Utf8Path) -> anyhow::Result<()>
             continue;
         };
         if holder_available(store, path.0.as_str())? {
-            holder_return(store, root, &profiles, &overlay, &path)?;
+            holder_return(
+                writers,
+                &capture,
+                &bookkeeping,
+                root,
+                &profiles,
+                &overlay,
+                &path,
+            )?;
         } else {
-            age_overlay(store, &overlay, now, &path)?;
+            age_overlay(&capture, &overlay, now, &path)?;
         }
     }
     Ok(())
+}
+
+/// Run overlay aging and holder-return through the workspace's named scoped
+/// writers. Public harness callers receive no owner or raw transaction grant.
+pub fn sweep_overlays(workspace: &ToyWorkspace, root: &Utf8Path) -> anyhow::Result<()> {
+    sweep_overlays_scoped(&workspace.writers(), root)
 }
 
 /// Run one scripted scenario to completion (or to an armed crash point).
@@ -1417,9 +1517,12 @@ fn apply_buffer_edit(
 /// `holder_unavailable`: the durable Holder loses its write route (D05.1).
 /// The value is fixed per the schema — `{"mode":"read-only"}`, independent of
 /// the step's own descriptive `mode` field — the file stays readable.
-fn mark_holder_unavailable(store: &GraphStore, step: &crate::scenario::Step) -> anyhow::Result<()> {
+fn mark_holder_unavailable(
+    writer: &HostControlWriter<'_>,
+    step: &crate::scenario::Step,
+) -> anyhow::Result<()> {
     let path = field(step, "path")?;
-    let mut txn = store.begin()?;
+    let mut txn = writer.begin()?;
     txn.put_aux(
         SYS_UNAVAILABLE,
         path,
@@ -1432,22 +1535,28 @@ fn mark_holder_unavailable(store: &GraphStore, step: &crate::scenario::Step) -> 
 /// `holder_available`: the durable Holder's write route returns (D05.1).
 /// Deletes the `SYS_UNAVAILABLE` key; the generic post-step sweep (Algorithm
 /// B) then re-verifies any Active overlay waiting on this path.
-fn mark_holder_available(store: &GraphStore, step: &crate::scenario::Step) -> anyhow::Result<()> {
+fn mark_holder_available(
+    writer: &HostControlWriter<'_>,
+    step: &crate::scenario::Step,
+) -> anyhow::Result<()> {
     let path = field(step, "path")?;
-    let mut txn = store.begin()?;
+    let mut txn = writer.begin()?;
     txn.delete_aux(SYS_UNAVAILABLE, path)?;
     txn.commit(save_meta())?;
     Ok(())
 }
 
 /// `advance_clock { by_secs }` (D05.4; AM-5.1).
-fn apply_advance_clock(store: &GraphStore, step: &crate::scenario::Step) -> anyhow::Result<()> {
+fn apply_advance_clock(
+    writer: &HostControlWriter<'_>,
+    step: &crate::scenario::Step,
+) -> anyhow::Result<()> {
     let by_secs = step
         .extra
         .get("by_secs")
         .and_then(toml::Value::as_integer)
         .ok_or_else(|| anyhow::anyhow!("advance_clock missing by_secs"))?;
-    advance_clock(store, by_secs)
+    advance_clock(writer, by_secs)
 }
 
 /// `resolver_observe { source, price, at }` (M08.6, AM-8.1): script one
@@ -1575,7 +1684,8 @@ fn apply_query(
     };
 
     let key = format!("query/{query_name}:{label}");
-    let mut txn = store.begin()?;
+    let writer = ws.bookkeeping_writer();
+    let mut txn = writer.begin()?;
     txn.put_aux(SYS_BLOB, &key, serde_json::Value::String(output))?;
     txn.commit(save_meta())?;
     Ok(())
@@ -1674,8 +1784,9 @@ impl<X: ExternalExecutor, C: CrashInjector> StepRunner<X, C> {
         let profiles = ProfileSet::phase_minus_1();
 
         // Ingest files and graph entries (M03).
-        ingest_files(ws.store(), &setup.files)?;
-        ingest_graph(ws.store(), &setup.graph)?;
+        let bootstrap = ws.bootstrap_writer();
+        ingest_files(&bootstrap, &setup.files)?;
+        ingest_graph(&bootstrap, &setup.graph)?;
 
         // M08.7: `seed_durable_inputs` (D06.5) runs at `open`, BEFORE the ingest
         // above — so this session's own `AvailableInputs` still lacks the
@@ -1739,19 +1850,20 @@ impl<X: ExternalExecutor, C: CrashInjector> StepRunner<X, C> {
                 // `{#id}` vanished gets a two-step repair DAG proposed (M04.3
                 // ingest::foreign_change). Refused for AUTOMATIC acceptance
                 // (heuristic reattachment), so it persists as NeedsReview.
-                plan_foreign_changes(&self.profiles, &self.root, self.ws().store())?;
+                let capture = self.ws().capture_writer();
+                plan_foreign_changes(&self.profiles, &self.root, &capture)?;
             }
             "save" => {
                 let client = field(step, "client")?;
                 let path = field(step, "path")?;
-                let store = self.ws().store();
-                let driver = IlrpDriver {
-                    store,
-                    executor: &self.executor,
-                    crash: &self.crash,
-                };
+                let writers = self.ws().writers();
+                let capture = writers.capture();
+                let bookkeeping = writers.bookkeeping();
+                let driver = IlrpDriver::new(writers.coordinator(), &self.executor, &self.crash);
                 perform_save(
                     &driver,
+                    &capture,
+                    &bookkeeping,
                     &self.profiles,
                     &self.root,
                     &self.bases,
@@ -1778,11 +1890,14 @@ impl<X: ExternalExecutor, C: CrashInjector> StepRunner<X, C> {
                 // AM-17.12: a caller identity is required before any acceptance
                 // effect. This records the caller's claim, not authentication.
                 let actor = field(step, "actor")?.parse::<liminal_id::ActorId>()?;
-                accept_repair(self.ws().store(), &self.root, actor)?;
+                let writers = self.ws().writers();
+                accept_repair(&writers, &self.root, actor)?;
             }
-            "holder_unavailable" => mark_holder_unavailable(self.ws().store(), step)?,
-            "holder_available" => mark_holder_available(self.ws().store(), step)?,
-            "advance_clock" => apply_advance_clock(self.ws().store(), step)?,
+            "holder_unavailable" => {
+                mark_holder_unavailable(&self.ws().host_control_writer(), step)?;
+            }
+            "holder_available" => mark_holder_available(&self.ws().host_control_writer(), step)?,
+            "advance_clock" => apply_advance_clock(&self.ws().host_control_writer(), step)?,
             // AM-5.1: drop + reopen the workspace — the store's advisory lock
             // is exclusive, so the old handle must release it first. Exercises
             // open-time sweep/recovery in-process (D05.1: SYS_UNAVAILABLE
@@ -1793,7 +1908,7 @@ impl<X: ExternalExecutor, C: CrashInjector> StepRunner<X, C> {
             }
             other => anyhow::bail!("step kind {other:?} not implemented until M3/M4"),
         }
-        sweep_overlays(self.ws().store(), &self.root)?;
+        sweep_overlays(self.ws(), &self.root)?;
         Ok(())
     }
 
@@ -1960,8 +2075,8 @@ pub fn normalized_digest(root: &Utf8Path) -> anyhow::Result<String> {
 }
 
 /// D04.4 self-check for the gate test: a plan whose file/external step depends
-/// on a Graph step is unexecutable under ILRP and refused at `prepare`. Returns
-/// true iff `IlrpDriver::prepare` rejects such a plan (reattach-before-insert).
+/// on a Graph step is unexecutable under ILRP and refused before a prepare
+/// capability exists. Returns true iff checked admission rejects the plan.
 #[must_use]
 pub fn graph_before_file_is_refused() -> bool {
     // Hand-build an inverted DAG: a Graph step BEFORE a file step.
@@ -2009,28 +2124,19 @@ pub fn graph_before_file_is_refused() -> bool {
         inverse: None,
     };
 
-    // A throwaway in-memory store to attempt prepare against.
+    // A throwaway store to attempt checked admission against.
     let Ok(dir) = tempdir_for("d044") else {
         return false;
     };
-    let Ok(store) = GraphStore::open(&dir) else {
+    let Ok(owner) = liminal_graph::StoreOwner::open(&dir) else {
         return false;
     };
-    let executor = crate::executor::FsExecutor::new(dir.path().to_owned());
-    let driver = IlrpDriver {
-        store: &store,
-        executor: &executor,
-        crash: liminal_jurisdiction::NoCrash,
+    let profiles = ProfileSet::phase_minus_1();
+    let checker = Checker {
+        store: owner.store(),
+        profiles: &profiles,
     };
-    matches!(
-        driver.prepare(
-            plan,
-            SafetyEvidence::StructurallyDisjoint {
-                description: "d044 check".into(),
-            }
-        ),
-        Err(liminal_jurisdiction::IlrpError::Executor(_))
-    )
+    checker.authorize_repair(plan).is_err()
 }
 
 /// A fresh scratch store dir that removes itself on drop (M17.5 F-12).
@@ -2145,7 +2251,10 @@ pub fn undo(root: &Utf8Path, repair_id: &str) -> anyhow::Result<UndoOutcome> {
         .map_err(|e| anyhow::anyhow!("bad repair id: {e}"))?;
 
     let ws = ToyWorkspace::open(root)?;
-    let store = ws.store();
+    let writers = ws.writers();
+    let capture = writers.capture();
+    let bookkeeping = writers.bookkeeping();
+    let store = capture.store();
 
     // Load the accepted record.
     let record = store
@@ -2158,22 +2267,40 @@ pub fn undo(root: &Utf8Path, repair_id: &str) -> anyhow::Result<UndoOutcome> {
     let current = current_basis_for(store, root, &record)?;
 
     let executor = crate::executor::FsExecutor::new(root.to_owned());
-    let driver = IlrpDriver {
-        store,
-        executor: &executor,
-        crash: liminal_jurisdiction::NoCrash,
-    };
+    let driver = IlrpDriver::new(
+        writers.coordinator(),
+        &executor,
+        liminal_jurisdiction::NoCrash,
+    );
 
     match liminal_jurisdiction::plan_undo(&record, &current) {
         Ok(plan) => {
-            let evidence = SafetyEvidence::StructurallyDisjoint {
-                description: format!("undo of {target}: restores recorded preimages"),
-            };
             let id = plan.id;
-            let d = driver.prepare(plan.clone(), evidence.clone())?;
-            driver.run(d)?;
-            record_repair(store, &plan, &format!("undo:{target}"), &evidence)?;
-            Ok(UndoOutcome::Undone { repair: id })
+            let authorized = ws.checker().authorize_repair(plan.clone())?;
+            let evidence = authorized.evidence().clone();
+            let d = driver.prepare(authorized)?;
+            let outcome = driver.run_checked(d)?;
+            if let Some(receipt) = outcome.committed() {
+                record_repair(
+                    &bookkeeping,
+                    receipt,
+                    &plan,
+                    &format!("undo:{target}"),
+                    &evidence,
+                )?;
+                Ok(UndoOutcome::Undone { repair: id })
+            } else {
+                let detail = "undo became contested during checked execution".to_owned();
+                persist_plan(&capture, &plan)?;
+                persist_decision(
+                    &capture,
+                    plan.id,
+                    &RepairDecision::NeedsReview {
+                        reasons: vec![liminal_jurisdiction::ReviewReason(detail.clone())],
+                    },
+                )?;
+                Ok(UndoOutcome::QueuedForReview { repair: id, detail })
+            }
         }
         Err(liminal_jurisdiction::UndoBlocked::NoInverse) => Ok(UndoOutcome::NoInverse),
         Err(liminal_jurisdiction::UndoBlocked::StaleState { detail }) => {
@@ -2181,9 +2308,9 @@ pub fn undo(root: &Utf8Path, repair_id: &str) -> anyhow::Result<UndoOutcome> {
             // prestate is the CURRENTLY observed hash (acknowledging it would
             // overwrite intervening edits — hence review).
             let proposal = build_review_undo(&record, root)?;
-            persist_plan(store, &proposal)?;
+            persist_plan(&capture, &proposal)?;
             persist_decision(
-                store,
+                &capture,
                 proposal.id,
                 &RepairDecision::NeedsReview {
                     reasons: vec![liminal_jurisdiction::ReviewReason(detail.clone())],

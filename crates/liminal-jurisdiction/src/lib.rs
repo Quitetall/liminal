@@ -18,6 +18,7 @@
 //!
 //! Spec: v4 §7.2–7.11; R4 §4–9.
 
+pub mod admission;
 pub mod blob;
 pub mod checker;
 pub mod contract;
@@ -29,6 +30,7 @@ pub mod profile;
 pub mod reconcile;
 pub mod repair;
 
+pub use admission::{AdmissionError, AuthorizedRepair, ValidatedBasis};
 pub use checker::{
     AuthorizationReport, CheckReport, Checker, CheckerError, Finding, codes, everyday_rendering,
 };
@@ -39,8 +41,8 @@ pub use contract::{
 pub use explain::{Explanation, explain, render_holder};
 pub use holder::{Holder, MergeRuntimeRef};
 pub use ilrp::{
-    CrashInjector, CrashPoint, ExternalExecutor, IlrpDriver, IlrpError, IntentState, NoCrash,
-    PrestateMatch, RepairIntent, StepAck,
+    CommittedRepair, CrashInjector, CrashPoint, ExternalExecutor, IlrpDriver, IlrpError,
+    IntentState, NoCrash, PrestateMatch, RepairIntent, RepairOutcome, StepAck,
 };
 pub use overlay::{Overlay, OverlayState};
 pub use profile::{

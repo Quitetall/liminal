@@ -32,7 +32,7 @@ use std::sync::Mutex;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use fs4::fs_std::FileExt as _;
-use liminal_id::{GraphRevisionId, NodeId, RelationId, TransactionId};
+use liminal_id::{GraphRevisionId, NodeId, RelationId, SourceId, TransactionId};
 use serde::{Deserialize, Serialize};
 
 use crate::node::{Node, PayloadRef};
@@ -40,6 +40,21 @@ use crate::op::{Operation, Transaction, TxnMeta};
 use crate::relation::Relation;
 
 pub(crate) use log::SegmentLog;
+
+/// Non-serializable authority attached to a transaction at private
+/// construction. A scoped transaction can never widen or remove this value.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum TxnAuthority {
+    Root,
+    Coordinator,
+    Bootstrap,
+    Capture,
+    Bookkeeping,
+    HostControl,
+    Reactor(SourceId),
+    Reconciliation,
+    Epoch,
+}
 
 /// One auxiliary durable write, committed atomically with graph operations.
 /// `value: None` deletes the key.
@@ -50,6 +65,18 @@ pub struct AuxWrite {
     /// Key within the namespace.
     pub key: String,
     /// New value, or `None` to delete.
+    pub value: Option<serde_json::Value>,
+}
+
+/// One accepted historical write to an auxiliary key. Read-only provenance;
+/// possessing this DTO grants no write authority.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CommittedAuxRecord {
+    /// Graph revision containing the write.
+    pub revision: GraphRevisionId,
+    /// Accepted transaction recorded at that revision.
+    pub transaction: Transaction,
+    /// Written value, or `None` for a deletion.
     pub value: Option<serde_json::Value>,
 }
 
@@ -210,6 +237,11 @@ struct Inner {
 ///
 /// Single-writer (advisory file lock). All reads are head-revision reads;
 /// as-of/history queries are the Phase -1.3 (M8) milestone.
+/// Ordinary store references cannot open transactions:
+/// ```compile_fail
+/// use liminal_graph::GraphStore;
+/// fn raw_write(store: &GraphStore) { let _ = store.begin(); }
+/// ```
 #[derive(Debug)]
 pub struct GraphStore {
     dir: Utf8PathBuf,
@@ -276,7 +308,7 @@ fn acquire_write_lock(lock: &fs::File, dir: &Utf8Path) -> Result<(), StoreError>
 impl GraphStore {
     /// Open (or create) a store at `dir`, recovering state per §92: load the
     /// snapshot if present, replay checksummed segments, truncate a torn tail.
-    pub fn open(dir: &Utf8Path) -> Result<Self, StoreError> {
+    pub(crate) fn open(dir: &Utf8Path) -> Result<Self, StoreError> {
         fs::create_dir_all(dir)?;
         let lock_path = dir.join("lock");
         let lock = fs::File::create(&lock_path)?;
@@ -302,12 +334,100 @@ impl GraphStore {
         Ok(self.lock()?.state.head)
     }
 
+    /// Transaction that produced the current head, or `None` at genesis.
+    pub fn head_transaction(&self) -> Result<Option<Transaction>, StoreError> {
+        let inner = self.lock()?;
+        let head = inner.state.head;
+        Ok(inner
+            .state
+            .transactions
+            .values()
+            .find(|transaction| transaction.parent.0.checked_add(1) == Some(head.0))
+            .cloned())
+    }
+
+    /// Validate graph operations against a clone of current state without
+    /// mutating memory, appending a record, or advancing the head.
+    pub fn preview_ops(&self, ops: &[Operation]) -> Result<StateView, StoreError> {
+        let mut state = self.lock()?.state.clone();
+        for op in ops {
+            state.apply(op)?;
+        }
+        Ok(StateView::from_state(state))
+    }
+
+    /// Replay retained checksummed history and return every accepted write to
+    /// `namespace[key]`, including overwrites and deletions, in append order.
+    pub fn committed_aux_history(
+        &self,
+        namespace: &str,
+        key: &str,
+    ) -> Result<Vec<CommittedAuxRecord>, StoreError> {
+        let inner = self.lock()?;
+        let accepted_head = inner.state.head;
+        let mut replayed = State::default();
+        let mut history = Vec::new();
+        log::replay_from_genesis(self.dir(), |record| {
+            if record.revision.0 > accepted_head.0 {
+                return Err(format!(
+                    "history revision {:?} exceeds accepted head {accepted_head:?}",
+                    record.revision
+                ));
+            }
+            replayed
+                .apply_commit(record)
+                .map_err(|error| error.to_string())?;
+            for write in &record.aux {
+                if write.ns == namespace && write.key == key {
+                    history.push(CommittedAuxRecord {
+                        revision: record.revision,
+                        transaction: record.txn.clone(),
+                        value: write.value.clone(),
+                    });
+                }
+            }
+            Ok(())
+        })?;
+        let requested_replayed = replayed
+            .aux
+            .get(namespace)
+            .and_then(|values| values.get(key));
+        let requested_accepted = inner
+            .state
+            .aux
+            .get(namespace)
+            .and_then(|values| values.get(key));
+        if replayed.head != inner.state.head
+            || replayed.nodes != inner.state.nodes
+            || replayed.relations != inner.state.relations
+            || replayed.children != inner.state.children
+            || replayed.transactions != inner.state.transactions
+            || requested_replayed != requested_accepted
+        {
+            return Err(StoreError::Corrupt(
+                "retained history does not reconstruct requested accepted state".into(),
+            ));
+        }
+        Ok(history)
+    }
+
     /// Begin a transaction. Nothing is durable until [`GraphTxn::commit`].
-    pub fn begin(&self) -> Result<GraphTxn<'_>, StoreError> {
+    pub(crate) fn begin(&self) -> Result<GraphTxn<'_>, StoreError> {
+        self.begin_scoped(TxnAuthority::Root)
+    }
+
+    pub(crate) fn begin_scoped(&self, authority: TxnAuthority) -> Result<GraphTxn<'_>, StoreError> {
         Ok(GraphTxn {
             store: self,
             ops: Vec::new(),
             aux: Vec::new(),
+            authority,
+            expected_head: if matches!(authority, TxnAuthority::Root) {
+                None
+            } else {
+                Some(self.head()?)
+            },
+            denied: false,
         })
     }
 
@@ -395,7 +515,32 @@ impl GraphStore {
         value: serde_json::Value,
     ) -> Result<(), StoreError> {
         let mut inner = self.lock()?;
+        if let Some(previous) = inner.state.aux.get(ns).and_then(|values| values.get(key)) {
+            if previous != &value {
+                return Err(StoreError::Conflict(
+                    "captured buffer generation is immutable".into(),
+                ));
+            }
+            return Ok(());
+        }
         inner
+            .state
+            .aux
+            .entry(ns.to_owned())
+            .or_default()
+            .insert(key.to_owned(), value);
+        Ok(())
+    }
+
+    /// Explicit test fault injection bypasses working-generation immutability.
+    /// Only the owner-issued fault grant can reach this path.
+    pub(crate) fn inject_aux_fault(
+        &self,
+        ns: &str,
+        key: &str,
+        value: serde_json::Value,
+    ) -> Result<(), StoreError> {
+        self.lock()?
             .state
             .aux
             .entry(ns.to_owned())
@@ -429,7 +574,7 @@ impl GraphStore {
 
     /// Write a snapshot with atomic replacement and rotate to a fresh segment
     /// (v4 §92). Old segments are retained — the toy never garbage-collects.
-    pub fn snapshot(&self) -> Result<(), StoreError> {
+    pub(crate) fn snapshot(&self) -> Result<(), StoreError> {
         let mut inner = self.lock()?;
         let next_segment = inner.log.current_segment() + 1;
         snapshot::write(&self.dir, &inner.state, next_segment)?;
@@ -454,8 +599,17 @@ impl GraphStore {
         ops: Vec<Operation>,
         aux: Vec<AuxWrite>,
         meta: TxnMeta,
+        expected_head: Option<GraphRevisionId>,
     ) -> Result<(GraphRevisionId, TransactionId), StoreError> {
         let mut inner = self.lock()?;
+        if let Some(expected) = expected_head
+            && inner.state.head != expected
+        {
+            return Err(StoreError::Conflict(format!(
+                "transaction expected head {expected:?}, found {:?}",
+                inner.state.head
+            )));
+        }
         let revision = GraphRevisionId(inner.state.head.0 + 1);
         let txn = Transaction {
             id: TransactionId::new(),
@@ -486,11 +640,27 @@ pub struct GraphTxn<'s> {
     store: &'s GraphStore,
     ops: Vec<Operation>,
     aux: Vec<AuxWrite>,
+    authority: TxnAuthority,
+    expected_head: Option<GraphRevisionId>,
+    denied: bool,
 }
 
 impl GraphTxn<'_> {
     /// Queue a graph operation.
     pub fn apply(&mut self, op: Operation) -> Result<(), StoreError> {
+        let allowed = match self.operation_allowed(&op) {
+            Ok(allowed) => allowed,
+            Err(error) => {
+                self.denied = true;
+                return Err(error);
+            }
+        };
+        if !allowed {
+            self.denied = true;
+            return Err(StoreError::Conflict(
+                "writer cannot apply graph operations".into(),
+            ));
+        }
         self.ops.push(op);
         Ok(())
     }
@@ -504,6 +674,7 @@ impl GraphTxn<'_> {
         key: &str,
         value: serde_json::Value,
     ) -> Result<(), StoreError> {
+        self.require_aux_scope(ns, key)?;
         self.aux.push(AuxWrite {
             ns: ns.to_owned(),
             key: key.to_owned(),
@@ -514,6 +685,7 @@ impl GraphTxn<'_> {
 
     /// Queue an auxiliary deletion in the same transaction.
     pub fn delete_aux(&mut self, ns: &str, key: &str) -> Result<(), StoreError> {
+        self.require_aux_scope(ns, key)?;
         self.aux.push(AuxWrite {
             ns: ns.to_owned(),
             key: key.to_owned(),
@@ -525,8 +697,124 @@ impl GraphTxn<'_> {
     /// Validate, append one fsynced checksummed record, and advance head.
     /// On error nothing is written and state is unchanged.
     pub fn commit(self, meta: TxnMeta) -> Result<(GraphRevisionId, TransactionId), StoreError> {
-        self.store.commit_txn(self.ops, self.aux, meta)
+        if self.denied {
+            return Err(StoreError::Conflict(
+                "transaction contains a denied write".into(),
+            ));
+        }
+        self.store
+            .commit_txn(self.ops, self.aux, meta, self.expected_head)
     }
+
+    /// Require the store to remain at `head` until this transaction commits.
+    /// The comparison occurs under the same mutex as validation and append.
+    #[must_use]
+    pub fn expect_head(mut self, head: GraphRevisionId) -> Self {
+        // A caller may add a guard, never retarget a guard under which writer
+        // scope was already checked. Ignoring this refusal cannot revive it.
+        if self.expected_head.is_some_and(|expected| expected != head) {
+            self.denied = true;
+        }
+        self.expected_head = Some(head);
+        self
+    }
+
+    fn require_aux_scope(&mut self, namespace: &str, key: &str) -> Result<(), StoreError> {
+        if !self.aux_allowed(namespace, key) {
+            self.denied = true;
+            return Err(StoreError::Conflict(
+                "writer cannot mutate this namespace".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn aux_allowed(&self, namespace: &str, key: &str) -> bool {
+        match self.authority {
+            TxnAuthority::Root => true,
+            TxnAuthority::Coordinator => namespace == ns::ILRP_INTENT,
+            TxnAuthority::Bootstrap => {
+                namespace == ns::JUR_ALIAS
+                    || (namespace == ns::SYS_BLOB && key.starts_with("file/"))
+            }
+            TxnAuthority::Capture => {
+                matches!(
+                    namespace,
+                    ns::JUR_PLAN
+                        | ns::JUR_DECISION
+                        | ns::JUR_OVERLAY
+                        | ns::JUR_OVERLAY_LOG
+                        | ns::JUR_RECONCILE
+                ) || (namespace == ns::SYS_BLOB && is_content_hash_key(key))
+            }
+            TxnAuthority::Bookkeeping => {
+                matches!(
+                    namespace,
+                    ns::JUR_REPAIR | ns::JUR_OVERLAY | ns::JUR_RECONCILE
+                ) || (namespace == ns::SYS_BLOB
+                    && (key.starts_with("file/") || key.starts_with("query/")))
+            }
+            TxnAuthority::HostControl => {
+                matches!(namespace, ns::SYS_CLOCK | ns::SYS_UNAVAILABLE)
+            }
+            TxnAuthority::Reactor(source) => {
+                let observation_prefix = format!("obs/{source}/");
+                namespace == ns::SYS_BLOB
+                    && (key
+                        .strip_prefix(&observation_prefix)
+                        .is_some_and(is_content_hash_key)
+                        || key == format!("obs-current/{source}"))
+            }
+            TxnAuthority::Reconciliation => namespace == ns::JUR_RECONCILE,
+            TxnAuthority::Epoch => namespace == ns::SYS_EPOCH && key == "epoch",
+        }
+    }
+
+    fn operation_allowed(&self, op: &Operation) -> Result<bool, StoreError> {
+        Ok(match self.authority {
+            TxnAuthority::Root | TxnAuthority::Coordinator => true,
+            TxnAuthority::Bootstrap => matches!(
+                op,
+                Operation::CreateNode { .. }
+                    | Operation::InsertChild { .. }
+                    | Operation::AddRelation { .. }
+            ),
+            TxnAuthority::Reactor(source) => match op {
+                Operation::CreateNode { node } => node.kind == crate::kind::EXTERNAL_VALUE,
+                Operation::MaterializeExternal {
+                    node,
+                    source: observed_source,
+                    ..
+                } => {
+                    *observed_source == source
+                        && (self.ops.iter().any(|queued| {
+                            matches!(
+                                queued,
+                                Operation::CreateNode { node: queued_node }
+                                    if queued_node.id == *node
+                                        && queued_node.kind == crate::kind::EXTERNAL_VALUE
+                            )
+                        }) || self
+                            .store
+                            .node_at(self.store.head()?, *node)?
+                            .is_some_and(|existing| existing.kind == crate::kind::EXTERNAL_VALUE))
+                }
+                _ => false,
+            },
+            TxnAuthority::Capture
+            | TxnAuthority::Bookkeeping
+            | TxnAuthority::HostControl
+            | TxnAuthority::Reconciliation
+            | TxnAuthority::Epoch => false,
+        })
+    }
+}
+
+fn is_content_hash_key(key: &str) -> bool {
+    key.len() == 64
+        && key
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 /// Store failure.

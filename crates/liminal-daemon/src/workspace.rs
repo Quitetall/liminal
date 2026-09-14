@@ -12,6 +12,47 @@ use liminal_revision::{AvailableInputs, BasisPerspective, PerspectiveError, Work
 
 use crate::session::ClientSession;
 
+/// Crate-private trusted assembly bundle. Exposes only named scoped grants;
+/// it has no catch-all transaction method and never yields the root owner.
+#[derive(Debug, Clone)]
+pub(crate) struct DaemonWriters<'s> {
+    owner: &'s StoreOwner,
+}
+
+impl<'s> DaemonWriters<'s> {
+    fn new(owner: &'s StoreOwner) -> Self {
+        Self { owner }
+    }
+
+    pub(crate) fn bootstrap(&self) -> liminal_graph::BootstrapWriter<'s> {
+        self.owner.bootstrap_writer()
+    }
+
+    pub(crate) fn capture(&self) -> liminal_graph::CaptureWriter<'s> {
+        self.owner.capture_writer()
+    }
+
+    pub(crate) fn bookkeeping(&self) -> liminal_graph::BookkeepingWriter<'s> {
+        self.owner.bookkeeping_writer()
+    }
+
+    pub(crate) fn host_control(&self) -> liminal_graph::HostControlWriter<'s> {
+        self.owner.host_control_writer()
+    }
+
+    pub(crate) fn coordinator(&self) -> liminal_graph::CoordinatorWriter<'s> {
+        self.owner.coordinator_writer()
+    }
+
+    pub(crate) fn reactor(&self, source: SourceId) -> liminal_graph::ReactorWriter<'s> {
+        self.owner.reactor_writer(source)
+    }
+
+    pub(crate) fn reconciliation(&self) -> liminal_graph::ReconciliationWriter<'s> {
+        self.owner.reconciliation_writer()
+    }
+}
+
 /// Per-open buffer bookkeeping (D06.3/D06.4): which path a buffer covers, its
 /// monotonic generation, and the durable base hash it was opened against.
 #[derive(Debug, Clone)]
@@ -84,17 +125,18 @@ impl ToyWorkspace {
         // Run ILRP recovery over every nonterminal intent. The executor is
         // store-aware so a resumed InsertSourceId step can resolve its alias.
         let executor = crate::executor::FsExecutor::with_store(root.to_owned(), store)?;
-        let driver = liminal_jurisdiction::IlrpDriver {
-            store,
-            executor: &executor,
-            crash: liminal_jurisdiction::NoCrash,
-        };
+        let driver = liminal_jurisdiction::IlrpDriver::new(
+            owner.coordinator_writer(),
+            &executor,
+            liminal_jurisdiction::NoCrash,
+        );
         let _recovery_outcomes = driver.recover_all()?;
 
         // Algorithm B (M05): age Active overlays and re-verify any whose
         // write route returned while the process was down, BEFORE the
         // workspace is handed to a caller.
-        crate::runner::sweep_overlays(store, root)
+        let writers = DaemonWriters::new(&owner);
+        crate::runner::sweep_overlays_scoped(&writers, root)
             .map_err(|e| WorkspaceError::Sweep(e.to_string()))?;
 
         // D06.3: this session's epoch is one past the durable counter. It is
@@ -284,6 +326,40 @@ impl ToyWorkspace {
     /// Session capture receives no epoch or accepted-transaction capability.
     pub(crate) fn working_capture(&self) -> liminal_graph::WorkingCapture<'_> {
         self.owner.working_capture()
+    }
+
+    /// Setup ingest receives only its enumerated graph/alias/file-blob scope.
+    pub(crate) fn bootstrap_writer(&self) -> liminal_graph::BootstrapWriter<'_> {
+        self.writers().bootstrap()
+    }
+
+    /// Repair planning and unresolved-state capture scope.
+    pub(crate) fn capture_writer(&self) -> liminal_graph::CaptureWriter<'_> {
+        self.writers().capture()
+    }
+
+    /// Committed-result records, mirrors, and departure bookkeeping scope.
+    pub(crate) fn bookkeeping_writer(&self) -> liminal_graph::BookkeepingWriter<'_> {
+        self.writers().bookkeeping()
+    }
+
+    /// Host clock and availability controls only.
+    pub(crate) fn host_control_writer(&self) -> liminal_graph::HostControlWriter<'_> {
+        self.writers().host_control()
+    }
+
+    /// External materialization bound to one source.
+    pub(crate) fn reactor_writer(&self, source: SourceId) -> liminal_graph::ReactorWriter<'_> {
+        self.writers().reactor(source)
+    }
+
+    /// Session debt is not graph or ILRP authority.
+    pub(crate) fn reconciliation_writer(&self) -> liminal_graph::ReconciliationWriter<'_> {
+        self.writers().reconciliation()
+    }
+
+    pub(crate) fn writers(&self) -> DaemonWriters<'_> {
+        DaemonWriters::new(&self.owner)
     }
 
     /// Mutable input map (session plumbing).

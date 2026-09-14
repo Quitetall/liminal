@@ -423,14 +423,14 @@ to the complex plane. {#p-laplace}
                 path: "notes.md".into(),
                 text: NOTES.into(),
             }];
-            crate::runner::ingest_files(ws.store(), &files).unwrap();
+            crate::runner::ingest_files(&ws.bootstrap_writer(), &files).unwrap();
             let graph = vec![SetupGraph {
                 kind: "comment-relation".into(),
                 target: Some("p-fourier".into()),
                 requires_grade: Some("explicit".into()),
                 extra: toml::toml! { body = "see also" },
             }];
-            crate::runner::ingest_graph(ws.store(), &graph).unwrap();
+            crate::runner::ingest_graph(&ws.bootstrap_writer(), &graph).unwrap();
         }
         let ws = ToyWorkspace::open(&root).unwrap();
         (root, ws)
