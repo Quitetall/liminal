@@ -25,6 +25,7 @@ pub mod contract;
 pub mod explain;
 pub mod holder;
 pub mod ilrp;
+pub mod order_proof;
 pub mod overlay;
 pub mod profile;
 pub mod reconcile;
