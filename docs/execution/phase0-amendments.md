@@ -147,3 +147,14 @@ the frozen concurrency dependency admission check. Retain every other registry
 refusal and qualification criterion. This enables leaf-core integration only;
 proof establishment, formal adoption, suite ratification and Phase 1 remain
 separate.
+
+AM-17.12 supplement (M17, DG17.6): user-approved 2026-09-14, "Approved. Your
+recommendation is approved in full." Permit temporary host proof buffers with
+checked size arithmetic and fallible allocation, and require an explicit
+nonallocating `ResourceExhaustion` refusal for this preparation before intent
+acceptance, effects, or recovery progress. Preserve prior validation
+diagnostics and ordering, and accepted semantics when resources are available.
+The leaf remains allocation-free; `vstd` default/std/alloc remain off. No fixed
+plan cap or ID-layout change, blanket conversion of old allocations, proof/SAS
+adoption, qualification, or phase GO is implied. This resolution is consistent
+with DG17.5 and does not change its admission criteria.
