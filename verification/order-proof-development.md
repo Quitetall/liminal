@@ -46,6 +46,14 @@ uses checked `usize` arithmetic, not one combined pointer-offset domain.
 Reservation guarantees sufficient capacity, not exact allocator capacity.
 A panic test would not establish the required typed-refusal behavior.
 
+Commit `9c2279f5485e3533a67c0718c5df016dd935a8f6` received the required
+LAMU `review_commit` review: process exit 0, primary PASS, critic PASS.
+Raw receipt: `dg176-buffer-commit-review.jsonl` in the durable directory above.
+The primary review's arithmetic explanation was incorrect: four individual
+`isize::MAX`-bounded sizes can sum past `usize::MAX`. The implementation already
+uses checked aggregate addition and needs no correction. Neither review found
+a code defect. Review prose is not a proof of arithmetic or qualification.
+
 Compute limits: CPU quota 200%, 4 GiB memory, no swap, 256 tasks, 600 seconds.
 These observations are development evidence, not qualification receipts.
 
@@ -57,3 +65,23 @@ The proof-source inventory predates this new module/test and changed `lib.rs`.
 Reconstruct and bind a new committed source projection before any new proof;
 do not refresh historical cold-replay artifacts or claim they cover this diff.
 No whole-core proof, full CI, HAQP, suite ratification, or phase GO is claimed.
+
+## Successor source binding
+
+The successor development inventory binds the exact selected Git projection
+of `9c2279f5485e3533a67c0718c5df016dd935a8f6`: 168 entries. An independent
+Git-blob comparison checked every path, mode, and SHA-256. Compared with the
+prior inventory, only `src/lib.rs` in jurisdiction changed hash; the two
+`order_proof.rs` source/test paths were added and no entries were removed.
+The parser's fixed origin and two fixture literals move together; assertions,
+selected acknowledgement pins, source-root scope, and rejection rules do not
+change. Historical cold-replay inputs remain immutable. Since `run.py` is part
+of the staged runner, later execution must bind its new runner bytes too.
+
+`dg176-inventory-self-test.*` records launcher exit 1: the restricted service
+environment lacked `HOME`, so `just` failed before executing tests. The exact
+recipe's Python command was then run directly under the same compute bounds:
+`python3 -B -m unittest discover -v -s verification/proof -p 'test_*.py'`.
+`dg176-inventory-self-test-python.*` records exit 0, 142 tests passed in
+6.000 seconds, service peak memory 87.8M and zero swap. This is proof-support
+regression evidence, not a proof run or a successful invocation of `just`.

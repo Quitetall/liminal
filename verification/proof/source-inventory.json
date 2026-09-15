@@ -438,7 +438,11 @@
     },
     "crates/liminal-jurisdiction/src/lib.rs": {
       "mode": "100644",
-      "sha256": "26791aeff9072caba0ada9891b5d886aa3d0bc5862466e1ce933c67d2873865a"
+      "sha256": "cad72ab4323b5d951516d53a469c5c878c4ea1da22048fc236fc542f736e4e89"
+    },
+    "crates/liminal-jurisdiction/src/order_proof.rs": {
+      "mode": "100644",
+      "sha256": "a436188f462bdd08cce6cdf132bcc6fd635ce5eb48754a05601e0bdc46e96abc"
     },
     "crates/liminal-jurisdiction/src/overlay.rs": {
       "mode": "100644",
@@ -463,6 +467,10 @@
     "crates/liminal-jurisdiction/tests/ilrp_driver.rs": {
       "mode": "100644",
       "sha256": "8917b516eea6f4b98ff3f7165bbcfcaa3bc0cc3b678d8d9192b00b5e0a9b22dc"
+    },
+    "crates/liminal-jurisdiction/tests/order_proof.rs": {
+      "mode": "100644",
+      "sha256": "8fc4598454950ef1aa54d59cdde2da00fbf56ba3f0071aa69125754c486c767f"
     },
     "crates/liminal-lua/Cargo.toml": {
       "mode": "100644",
@@ -666,5 +674,5 @@
     }
   },
   "schema": "liminal-proof-source-inventory-v1",
-  "source_commit": "3bd93a9617ff8705ace37f4a19440c70f867f689"
+  "source_commit": "9c2279f5485e3533a67c0718c5df016dd935a8f6"
 }
