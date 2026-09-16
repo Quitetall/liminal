@@ -2,6 +2,83 @@
 
 use std::process::Command;
 
+fn fixture_git(root: &std::path::Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .current_dir(root)
+        .args([
+            "-c",
+            "user.name=Assurance Fixture",
+            "-c",
+            "user.email=fixture@invalid",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).unwrap().trim().to_owned()
+}
+
+#[test]
+fn coordinate_proposal_binds_committed_versions_without_authorizing_apply() {
+    let root = fixture();
+    fixture_git(&root, &["init", "--quiet"]);
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "pub fn example() -> bool {\n    false\n}\n",
+    )
+    .unwrap();
+    fixture_git(&root, &["add", "."]);
+    fixture_git(&root, &["commit", "--quiet", "-m", "base"]);
+    let base = fixture_git(&root, &["rev-parse", "HEAD"]);
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "\n\npub fn example() -> bool {\n    false\n}\n",
+    )
+    .unwrap();
+    fixture_git(&root, &["add", "src/lib.rs"]);
+    fixture_git(&root, &["commit", "--quiet", "-m", "move"]);
+    let candidate = fixture_git(&root, &["rev-parse", "HEAD"]);
+    let output = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"))
+        .current_dir(&root)
+        .args([
+            "assurance",
+            "amend",
+            "propose",
+            "--base",
+            &base,
+            "--candidate",
+            &candidate,
+            "--source",
+            "src/lib.rs",
+            "--line",
+            "2",
+            "--anchor",
+            "    false",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let proposal: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(proposal["base_commit"], base);
+    assert_eq!(proposal["candidate_commit"], candidate);
+    assert_eq!(proposal["old_line"], 2);
+    assert_eq!(proposal["new_line"], 4);
+    assert_eq!(proposal["authority"], "none");
+    assert_eq!(proposal["status"], "proposal-only");
+    assert_eq!(fixture_git(&root, &["status", "--porcelain"]), "");
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 fn fixture() -> std::path::PathBuf {
     let root = std::env::temp_dir().join(format!("liminal-assurance-{}", uuid::Uuid::now_v7()));
     std::fs::create_dir_all(root.join("docs/execution")).unwrap();
@@ -44,6 +121,124 @@ fn fixture() -> std::path::PathBuf {
         String::from_utf8_lossy(&generated.stderr)
     );
     root
+}
+
+#[test]
+fn coordinate_proposal_refuses_git_repository_redirection() {
+    let root = fixture();
+    let foreign = fixture();
+    fixture_git(&root, &["init", "--quiet"]);
+    fixture_git(&foreign, &["init", "--quiet"]);
+    std::fs::write(
+        foreign.join("src/lib.rs"),
+        "pub fn example() -> bool {\n    false\n}\n",
+    )
+    .unwrap();
+    fixture_git(&foreign, &["add", "."]);
+    fixture_git(&foreign, &["commit", "--quiet", "-m", "foreign"]);
+    let revision = fixture_git(&foreign, &["rev-parse", "HEAD"]);
+    let output = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"))
+        .current_dir(&root)
+        .env("GIT_DIR", foreign.join(".git"))
+        .args([
+            "assurance",
+            "amend",
+            "propose",
+            "--base",
+            &revision,
+            "--candidate",
+            &revision,
+            "--source",
+            "src/lib.rs",
+            "--line",
+            "2",
+            "--anchor",
+            "    false",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "foreign repository silently supplied source: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("committed source lookup failed"));
+    std::fs::remove_dir_all(root).unwrap();
+    std::fs::remove_dir_all(foreign).unwrap();
+}
+
+#[test]
+fn coordinate_proposal_refuses_changed_ambiguous_and_nonexpression_targets() {
+    for (old, new, anchor, expected) in [
+        (
+            "pub fn example() -> bool {\n    false\n}\n",
+            "pub fn renamed() -> bool {\n    false\n}\n",
+            "    false",
+            "enclosing implementation changed",
+        ),
+        (
+            "pub fn example() -> bool {\n    false\n}\n",
+            "pub fn example() -> bool {\n    false\n}\npub fn other() -> bool {\n    false\n}\n",
+            "    false",
+            "ambiguous candidate target",
+        ),
+        (
+            "pub fn example() -> bool {\n    // false\n    true\n}\n",
+            "\npub fn example() -> bool {\n    // false\n    true\n}\n",
+            "    // false",
+            "whole-line expression",
+        ),
+        (
+            "pub fn example() -> bool {\n    false\n}\n",
+            "pub fn example() -> bool {\n    true\n}\n",
+            "    false",
+            "missing or ambiguous candidate target",
+        ),
+        (
+            "pub fn example() -> bool {\n    false\n}\n",
+            "\nnot valid rust",
+            "    false",
+            "missing or ambiguous candidate target",
+        ),
+    ] {
+        let root = fixture();
+        fixture_git(&root, &["init", "--quiet"]);
+        std::fs::write(root.join("src/lib.rs"), old).unwrap();
+        fixture_git(&root, &["add", "."]);
+        fixture_git(&root, &["commit", "--quiet", "-m", "base"]);
+        let base = fixture_git(&root, &["rev-parse", "HEAD"]);
+        std::fs::write(root.join("src/lib.rs"), new).unwrap();
+        fixture_git(&root, &["add", "src/lib.rs"]);
+        fixture_git(&root, &["commit", "--quiet", "-m", "candidate"]);
+        let candidate = fixture_git(&root, &["rev-parse", "HEAD"]);
+        let output = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"))
+            .current_dir(&root)
+            .args([
+                "assurance",
+                "amend",
+                "propose",
+                "--base",
+                &base,
+                "--candidate",
+                &candidate,
+                "--source",
+                "src/lib.rs",
+                "--line",
+                "2",
+                "--anchor",
+                anchor,
+            ])
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !output.status.success() && stderr.contains(expected),
+            "expected {expected}: {stderr}"
+        );
+        assert!(output.stdout.is_empty());
+        assert_eq!(fixture_git(&root, &["status", "--porcelain"]), "");
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }
 
 #[test]

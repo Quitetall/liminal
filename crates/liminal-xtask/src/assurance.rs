@@ -6,6 +6,7 @@ use anyhow::{Context, Result, ensure};
 use camino::{Utf8Path, Utf8PathBuf};
 use serde::Deserialize;
 
+pub mod amendment;
 mod runner;
 mod workflows;
 pub use runner::{report, run_profile};

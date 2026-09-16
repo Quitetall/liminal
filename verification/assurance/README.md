@@ -63,3 +63,21 @@ Coordinate maintenance remains governed by AM-17.13. Planned automatic apply
 requires exact unchanged enclosing code, a unique target, independent review and
 human-signed policy with external trust pins. Agents never sign or enroll policy.
 No automatic apply is implemented or activated by this catalog slice.
+
+## Read-only coordinate proposals (partial S5)
+
+`cargo run -p liminal-xtask -- assurance amend propose --base FULL_COMMIT_ID
+--candidate FULL_COMMIT_ID --source RELATIVE.rs --line OLD_LINE --anchor EXACT_LINE`
+reads committed regular-file blobs and prints JSON. Commit IDs must be full,
+lowercase SHA-1 IDs. The exact line must occur uniquely in both versions and
+identify a whole-line expression inside a top-level Rust function whose complete
+enclosing source lines remain identical. Changed nonblank lines elsewhere in the
+source are refused. Unsupported shapes are refused rather than guessed.
+
+This deliberately narrow proposal slice does not consult the mutant registry,
+produce a mutation patch, authenticate a batch, obtain target review, or apply
+anything. File and enclosing-context hashes are evidence bindings, not behavioral
+equivalence. Blank lines elsewhere can affect literal data; unchanged functions
+can depend on changed external code. Output explicitly says `proposal-only`,
+`authority: none`, and `independent_review: not-established`. Never treat CLI
+success as automatic-maintenance eligibility. `amend check|apply` remain pending.

@@ -827,9 +827,11 @@ dependencies = [
  "liminal-revision",
  "liminal-scratch",
  "liminal-source",
+ "proc-macro2",
  "serde",
  "serde_json",
  "sha2",
+ "syn",
  "uuid",
  "zstd",
 ]

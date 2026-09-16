@@ -55,6 +55,30 @@ unchanged expression/operator and unique exact target. Unsupported syntax and
 semantic changes are proposal-only. Independent target/mutation review remains
 mandatory.
 
+### Human-authorized batches and independent review
+
+Brian approved this boundary in conversation on 2026-09-16 ("yep" in response
+to the explicit coordinate-only boundary). Human approval defines each batch's
+base revision, permitted targets, change class, and tool/policy versions. The
+standing signed policy does not let the maintenance tool authorize or expand its
+own batch. Activation still requires the external trust enrollment described
+above; this conversation does not constitute a cryptographic signature.
+
+Automatic maintenance is limited to the coordinate-only changes described here:
+the target remains unique and the enclosing implementation remains unchanged.
+Changes to behavior, mutation operators, expected results, thresholds, trust pins,
+or qualification rules require human approval and are outside automatic apply.
+Ambiguous eligibility and out-of-scope changes stop for human review.
+
+The externally pinned maintenance tool obtains independent target/mutation review
+directly and binds it to the exact proposed patch. Its record includes reviewer
+identity, patch digest, verdict, and verified finding dispositions. LAMU supplies
+review evidence, not authorization. Candidate-supplied review metadata is not
+authentication; unavailable, inconclusive, or mismatched review refuses apply.
+Routine changes inside a human-authorized batch do not require a separate human
+review signature for every proposal. This decision defines authority, not proof
+that the acceptance checks have been implemented or exercised.
+
 Only exact registry coordinates, matching packet sources, producer-derived digest
 mirrors and audit records are eligible. Apply uses a trusted tool revision in a
 fresh isolated worktree, rechecks bindings, and never overwrites user work or

@@ -123,7 +123,7 @@ S4 local implementation is verified; its checkbox remains open for hosted
 execution evidence. S6 remains open for the unimplemented S5 controls and final
 whole-system independent review. Nothing here closes M17 or authorizes Phase 1.
 
-## Pending T1 boundary for S5
+## Review dispositions and approved T1 boundary for S5
 
 Latest local code commit: `2845197317d11e15d8258f8299d676f487549277`.
 LAMU primary review returned PASS WITH NITS; critic output was incomplete and
@@ -149,10 +149,73 @@ does not supply separate clearance. Exact receipt under the evidence root:
 two deferred M17 gates. No main-branch merge, push, hosted result, signing or
 Phase 1 authorization is implied by these local development results.
 
-Do not implement acceptance of independent-review claims until Brian selects how
-they are authenticated. Candidate-supplied `reviewed` metadata is insufficient.
-Recommendation sent: the externally pinned trusted maintenance tool obtains
-LAMU review itself and binds the receipt to the exact proposal; unavailable or
-inconclusive review refuses apply. Alternative: separate human-signed review
-attestation per proposal. Human standing-policy signing and external enrollment
-remain required under either choice. Ordinary tests do not depend on this choice.
+Brian approved the hybrid boundary on 2026-09-16: humans authorize critical
+changes and batch scope; the externally pinned trusted maintenance tool handles
+coordinate-only updates within that scope. Each batch binds base revision,
+permitted targets, change class, and tool/policy versions. The tool cannot expand
+its authority. Semantic changes, ambiguity, or out-of-scope changes require human
+review rather than automatic apply.
+
+The trusted tool obtains independent LAMU review directly, binding reviewer
+identity, patch digest, verdict, and verified finding dispositions to the exact
+proposal. Candidate-supplied `reviewed` metadata is insufficient. Unavailable,
+inconclusive, or mismatched review refuses apply. Human standing-policy signing,
+batch authorization, and external enrollment remain required; no per-proposal
+human review signature is required for eligible changes within an approved batch.
+This approval resolves the policy boundary, not S5 implementation or activation.
+
+S5 CLI controls must demonstrate refusal of unauthorized batches, changed base
+revisions, targets outside scope, mismatched tool/policy versions, semantic changes,
+ambiguous targets, and substituted review receipts. Positive controls must use
+disposable signing keys and an explicitly authorized fixture batch. Existing
+signature, source/patch drift, isolation, and interruption controls remain required.
+
+## S5 first slice: read-only proposals (not complete)
+
+Added `amend propose` at the approved CLI seam. It reads exact committed blobs,
+requires one whole-line expression inside an unchanged parsed top-level function,
+and binds both source revisions/hashes plus the enclosing source hash. It grants
+no authority and establishes no registry membership, mutation equivalence, review,
+or apply eligibility. Parser versions were already locked: syn 2.0.119 and
+proc-macro2 1.0.106. Only xtask dependency edges/features were added.
+
+Evidence under `/mnt/4tb/liminal-formal-evidence/reviews/`:
+
+- `assurance-s5-red1` selected zero tests due to an abbreviated exact filter;
+  it is not red evidence. Corrected `assurance-s5-red2` ran the named test and
+  exited 101 on the missing `amend` command. `assurance-s5-green1` passed it.
+- `assurance-s5-red3` reproduced inherited `GIT_DIR` redirecting source reads
+  into a foreign fixture repository. Git environment overrides are now stripped;
+  no environment values are logged. `assurance-s5-green2` passed 18 controls.
+- `assurance-s5-green3` passed all 19 CLI controls, including five refusal cases
+  in one test. Named delta is +3 active since the previous 646-test baseline,
+  zero ignore flips. Disposable fixture commits are not project commits.
+- MiMo draft `assurance-s5-test-draft.stdout` was not adopted verbatim: wrong
+  anchors, changed-body acceptance, invented eligibility metadata, and missing
+  fixture root markers were rejected. Main agent verified the adapted controls.
+- `assurance-s5-review1` is the actual LAMU diff review, PASS WITH NITS. Attached
+  MCP transport was closed; fresh stdio worked. Runtime logged a model fallback,
+  so the review header alone is not evidence of the final provider identity.
+  Two factual nits were checked and rejected: filtering blank lines permits, not
+  refuses, blank-line additions outside the function; pinned proc-macro2's
+  `src/location.rs:12` explicitly defines columns in UTF-8 characters, not bytes.
+  Naming/single-element-vector suggestions are nonblocking. No critic clearance
+  is claimed. Review predates the equivalent Clippy formatting correction and
+  final explanatory documentation/comments.
+- `assurance-s5-ci1` stopped at Clippy's inline-format-argument lint. Failure is
+  retained; the correction changes no behavior. `assurance-s5-ci2` failed with
+  648 passed / 1 failed / 47 skipped. The crash-replay test rejected historical
+  crash evidence's old lockfile hash after the approved parser dependency edges
+  changed Cargo.lock. `assurance-s5-crash-probe1` reproduced this exact failure
+  (exit 101). Both replays exercised 8/8 boundaries; all boundary and scenario
+  rows match the historical artifact. Only source commit/tree and lockfile hash
+  differ. Producer source `conformance/src/bin/crash_evidence.rs:29` reads HEAD
+  and the live lockfile, so promotion of dirty-tree replay output would misbind
+  provenance. Commit source first, then rerun the existing producer from that
+  committed source; never copy hash fields or change the frozen checker. Full
+  verification remains failed until that producer refresh and a full rerun pass.
+
+Remaining S5: closed-registry and patch binding, authenticated human batch and
+external tool/policy admission, direct independently bound review, disposable-key
+negative/positive controls, and isolated apply with producer refresh. No human
+signing, key reads, enrollment, main merge, push, or qualification occurred.

@@ -152,6 +152,11 @@ enum Command {
 
 #[derive(Debug, Subcommand)]
 enum AssuranceCommand {
+    /// Prepare reference-maintenance evidence; never grants authority.
+    Amend {
+        #[command(subcommand)]
+        command: AssuranceAmendCommand,
+    },
     /// Explicitly regenerate hosted workflow wiring; does not execute CI.
     GenerateWorkflows,
     /// Check catalog completeness (not a test or qualification run).
@@ -177,6 +182,7 @@ enum AssuranceCommand {
 impl AssuranceCommand {
     fn dispatch_assurance(self) -> Result<()> {
         match self {
+            Self::Amend { command } => command.dispatch_amendment(),
             Self::GenerateWorkflows => {
                 liminal_xtask::assurance::generate_workflows(&liminal_xtask::repo_root()?)
             }
@@ -192,6 +198,48 @@ impl AssuranceCommand {
                 &cache_state,
             ),
             Self::Report { receipt } => liminal_xtask::assurance::report(&receipt),
+        }
+    }
+}
+
+#[derive(Debug, Subcommand)]
+enum AssuranceAmendCommand {
+    /// Read-only proposal for a unique, unchanged top-level expression target.
+    Propose {
+        #[arg(long)]
+        base: String,
+        #[arg(long)]
+        candidate: String,
+        #[arg(long)]
+        source: camino::Utf8PathBuf,
+        #[arg(long)]
+        line: usize,
+        #[arg(long)]
+        anchor: String,
+    },
+}
+
+impl AssuranceAmendCommand {
+    fn dispatch_amendment(self) -> Result<()> {
+        match self {
+            Self::Propose {
+                base,
+                candidate,
+                source,
+                line,
+                anchor,
+            } => {
+                let proposal = liminal_xtask::assurance::amendment::propose_coordinate(
+                    &liminal_xtask::repo_root()?,
+                    &base,
+                    &candidate,
+                    &source,
+                    line,
+                    &anchor,
+                )?;
+                println!("{}", serde_json::to_string_pretty(&proposal)?);
+                Ok(())
+            }
         }
     }
 }
