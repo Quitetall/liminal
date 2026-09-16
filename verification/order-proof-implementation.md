@@ -51,6 +51,12 @@ Prepare/recovery. Allocation-fault controls must exercise
 the allocation/resource seam, not replace the checker with a mock or exhaust
 the host machine. Exact fault-injection mechanics remain to be selected.
 
+The user additionally confirmed the direct leaf seam: "Confirm direct leaf
+seam". Tests may call the public allocation-free
+`liminal_safety::ordering_matches(steps, dependencies, schedule, applied)`
+Boolean predicate with malformed raw inputs. This does not replace host,
+Checker, or ILRP integration controls and grants no repair authority.
+
 1. One red/green translation control using literal nontrivial 128-bit IDs,
    mismatched declared IDs, duplicate dependencies, and explicitly ordered
    schedules. Invalid input must remain visible to subsequent validation.
