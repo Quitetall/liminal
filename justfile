@@ -14,6 +14,10 @@ setup:
 check:
     cargo check --workspace --all-targets --all-features
 
+# Classification only; not execution or qualification (ADR-0022).
+assurance-check:
+    cargo run -p liminal-xtask -- assurance check
+
 fmt:
     cargo fmt --all
     taplo fmt

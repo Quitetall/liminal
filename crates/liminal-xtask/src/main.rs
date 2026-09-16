@@ -6,6 +6,7 @@ use clap::{Parser, Subcommand};
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
+        Command::Assurance { command } => command.run()?,
         Command::Haq { command } => match command {
             HaqCommand::Verify => {
                 liminal_xtask::haq::verify_qualified_repo(&liminal_xtask::repo_root()?)?;
@@ -127,6 +128,11 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Maintain test classification without granting qualification.
+    Assurance {
+        #[command(subcommand)]
+        command: AssuranceCommand,
+    },
     /// HAQP-1 qualification helpers.
     Haq {
         #[command(subcommand)]
@@ -142,6 +148,20 @@ enum Command {
         #[command(subcommand)]
         command: FormalCommand,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum AssuranceCommand {
+    /// Check catalog completeness (not a test or qualification run).
+    Check,
+}
+
+impl AssuranceCommand {
+    fn run(self) -> Result<()> {
+        match self {
+            Self::Check => liminal_xtask::assurance::check(&liminal_xtask::repo_root()?),
+        }
+    }
 }
 
 #[derive(Debug, Subcommand)]
