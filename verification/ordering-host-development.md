@@ -224,3 +224,45 @@ Commands, exits, bounds and hashed raw receipts are in
 [`dg17-6-ordering-host-2026-09-16.md`](../docs/execution/reference-maintenance/dg17-6-ordering-host-2026-09-16.md).
 This is development integration, not a replacement HAQP campaign or formal
 qualification. The separate resource harness is still not part of `just ci`.
+
+## Host commit review
+
+Actual LAMU `review_commit` for
+`fbb324606c6fa4c9127d1c2a5670cebf8cf8d0fd` returned primary PASS WITH NITS;
+the critic ended with `NO_CRITIC_FINDINGS`. Client exit was 0. Raw receipt:
+`/mnt/4tb/liminal-formal-evidence/reviews/order-host-fbb32460-commit-review.stdout`,
+SHA-256 `275de2b0794e23ed58b08482d10108e3a6f8dfee344f7e3996ecadc90fca6fed`.
+The review is of this development slice, not an independent security audit or
+qualification of the full implementation plan.
+
+Each finding was checked at the committed source before disposition:
+
+- `ilrp.rs:732-775`: the old match already returned the same `from` and `to`
+  values. The review's claim that the old code did not check is false. The
+  earlier guard preserves refusal precedence; inventing a target state would
+  change the existing error. The redundant later guard is harmless.
+- `ilrp.rs:698-716,745-753`: each nonterminal intent advances once per recovery
+  scan. Later retries revalidate recovered data deliberately. Additional cost
+  is real but is not a demonstrated correctness bug or a qualified performance
+  claim. Caching authority in persisted intent is not an acceptable cosmetic
+  fix. Broad resource/performance qualification remains unfinished.
+- `ilrp.rs:607-609,895-899`: the explicit match unwraps the underlying typed
+  resource error; its derived conversion selects the driver's resource variant.
+  It does not transitively convert all `AdmissionError` values or stringify the
+  resource variant. Existing successful compile/lint and typed refusal controls
+  cover the implemented boundary; no extra conversion API is added.
+- The standalone allocator's atomic load is short-circuited by the size and
+  alignment comparisons. Production does not use this allocator. Layout drift
+  cannot produce a vacuous pass: `main.rs:415-416` checks layout, refusal
+  controls require a typed error and exactly one matching allocation, and legacy
+  precedence controls require zero. These are still platform-bounded controls.
+- `main.rs:488-490` has three cutoff calls, not four; Prepared has a separate
+  control. Literal state names deliberately check the persisted wire value.
+  Enum substitution is optional style, not a correctness repair.
+- `order_proof.rs:45-76,133-139`: the two constructors intentionally provide
+  different applied-length sources; the guard rejects before an extra push.
+  The review's alleged realloc comment at line 109 does not exist there;
+  realloc is in the standalone harness. No change follows that inaccurate cite.
+
+No production changes resulted from this review. This follow-up records its
+dispositions without changing runtime bytes or the previously reported CI result.
