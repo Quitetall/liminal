@@ -13,6 +13,12 @@ the work orders are its mechanical projection.
 
 ## 1. Definition of done
 
+Testing-maintenance work follows
+[`verification/assurance/PLAN.md`](../../verification/assurance/PLAN.md) and
+ADR-0022. Catalog metadata and development selections never replace full gates;
+maintenance success does not confer qualification. Existing assertions and the
+held-out-corpus ban remain binding.
+
 A milestone is done when, and only when:
 
 1. Every test named in the work order's **Exit gate** table either (a) was authored

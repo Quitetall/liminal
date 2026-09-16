@@ -158,3 +158,10 @@ The leaf remains allocation-free; `vstd` default/std/alloc remain off. No fixed
 plan cap or ID-layout change, blanket conversion of old allocations, proof/SAS
 adoption, qualification, or phase GO is implied. This resolution is consistent
 with DG17.5 and does not change its admission criteria.
+
+AM-17.14 (M17): user-approved 2026-09-16, implement ADR-0022 assurance maintenance:
+family catalog, fixed-command profiles, Linux CI parity, bounded resource controls,
+cost observations and narrowly signed AM-17.13 coordinate maintenance. Frozen
+HAQP behavior, assertions and authorities remain unchanged. Human external trust
+enrollment is required before automatic apply; no signing, qualification, proof
+adoption or phase authorization is delegated.

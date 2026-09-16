@@ -10,6 +10,12 @@ resolve a Warrant.
 
 ## Baseline and evidence
 
+Current assurance-maintenance delivery starts from
+`54b6450c15f161978ad63cc0f999d5090bc577f4`; follow the
+[ordered checklist](../../verification/assurance/PLAN.md) under ADR-0022/AM-17.14.
+This is current-core maintenance before M17 closeout, not Phase 1 authorization.
+The migration baseline below remains historical.
+
 Migration starts from Liminal `0d8c32a4ae1afda9808e55c3c291445aad4e3d60`,
 matching fetched `origin/main` at migration start. Phase 0 remains open at
 [M17.5](../execution/M17.md). The committed
