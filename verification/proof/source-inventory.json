@@ -562,11 +562,15 @@
     },
     "crates/liminal-safety/src/lib.rs": {
       "mode": "100644",
-      "sha256": "a96cf145ef072b23916d7bc92f6c90cde82102a8d0451c2b361f591f3795c5ba"
+      "sha256": "9e0a62e2fd96ece112c19b9ed732a01f78e78d156735ff39e14ef18860dd9fad"
     },
     "crates/liminal-safety/tests/acknowledgement.rs": {
       "mode": "100644",
       "sha256": "88ab80177891657226fd084781d3861c5347cb156996747a26e7e56e78c368ce"
+    },
+    "crates/liminal-safety/tests/ordering.rs": {
+      "mode": "100644",
+      "sha256": "5f871e84aa38fb99625277933130e0add1eac3318630ee3d8b2f56e24e61689c"
     },
     "crates/liminal-scratch/Cargo.toml": {
       "mode": "100644",
@@ -674,5 +678,5 @@
     }
   },
   "schema": "liminal-proof-source-inventory-v1",
-  "source_commit": "9c2279f5485e3533a67c0718c5df016dd935a8f6"
+  "source_commit": "ba9d9ae9c88ceae74307f440657d1ecaf7b81ab9"
 }

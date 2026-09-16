@@ -15,7 +15,7 @@ StageFailure = STAGE.StageFailure
 stage_source = STAGE.stage_source
 
 ABC_SHA256 = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
-SOURCE_COMMIT = "9c2279f5485e3533a67c0718c5df016dd935a8f6"
+SOURCE_COMMIT = "ba9d9ae9c88ceae74307f440657d1ecaf7b81ab9"
 SOURCE_PATHS = (
     "Cargo.toml",
     "Cargo.lock",

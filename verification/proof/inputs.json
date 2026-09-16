@@ -7,7 +7,7 @@
     "Cargo.lock": "9edc0e116c0ede220f013bbd653a66a3105ae7652f5fe321190e935e5b02d0ec",
     "rust-toolchain.toml": "3fa5312726831c209741bbea6bd0d51c20cb40ad9eb733a331f9a8a86fc840b5",
     "crates/liminal-safety/Cargo.toml": "3bd35d545d6d892f16afcd6993659a4d2ca4cfd818a7cc844b4b3e717e1819f0",
-    "crates/liminal-safety/src/lib.rs": "a96cf145ef072b23916d7bc92f6c90cde82102a8d0451c2b361f591f3795c5ba",
+    "crates/liminal-safety/src/lib.rs": "9e0a62e2fd96ece112c19b9ed732a01f78e78d156735ff39e14ef18860dd9fad",
     "crates/liminal-safety/examples/acknowledgement_witness.rs": "ef1ce141ec4b5f0ee14f0258203f85c9d6f369485b96e3176613a66d15762a02",
     "crates/liminal-jurisdiction/Cargo.toml": "ace3e31c7c082daa39033083f4cde37573b75173cfa10f070da7d57dc9615bef",
     "crates/liminal-jurisdiction/src/ilrp.rs": "287105c022110e555005f0b90db49c5961e8100985c2bc70c409abc03ff4c567"

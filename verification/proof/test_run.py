@@ -50,7 +50,7 @@ class ProofInputTests(unittest.TestCase):
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
         source_inventory = {
             "schema": "liminal-proof-source-inventory-v1",
-            "source_commit": "9c2279f5485e3533a67c0718c5df016dd935a8f6",
+            "source_commit": "ba9d9ae9c88ceae74307f440657d1ecaf7b81ab9",
             "files": {
                 path: {"sha256": ABC_SHA256, "mode": "100644"}
                 for path in SOURCE_PATHS
