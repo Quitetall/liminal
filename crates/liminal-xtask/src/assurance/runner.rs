@@ -45,10 +45,15 @@ struct Observation {
 /// # Errors
 /// Refuses malformed catalogs, unknown profiles, existing/in-tree outputs and
 /// failed mandatory commands. Receipts never establish qualification.
-pub fn run(root: &Utf8Path, profile: &str, output: &Utf8Path, cache: &str) -> Result<()> {
+pub fn run_profile(root: &Utf8Path, profile: &str, output: &Utf8Path, cache: &str) -> Result<()> {
     let root = root.canonicalize_utf8()?;
+    ensure!(
+        profile != "merge" || std::env::var_os("CARGO_TARGET_DIR").is_none(),
+        "merge requires unset CARGO_TARGET_DIR: crash and sanitizer replay need independent checkout-local targets"
+    );
     let catalog = super::load_catalog(&root)?;
     super::check_catalog(&root, &catalog)?;
+    super::workflows::check(&root, &catalog)?;
     let ids = catalog
         .profiles
         .get(profile)
@@ -86,10 +91,16 @@ pub fn run(root: &Utf8Path, profile: &str, output: &Utf8Path, cache: &str) -> Re
             .collect(),
     };
     save(&output, &receipt)?;
-    for index in 0..receipt.commands.len() {
+    // Cargo can atomically replace this executable while tests build. Resolve
+    // command paths before starting any child, not from a later deleted inode.
+    let commands = ids
+        .iter()
+        .map(|id| registered(id, &output))
+        .collect::<Result<Vec<_>>>()?;
+    for (index, command) in commands.into_iter().enumerate() {
         receipt.commands[index].state = "running".into();
         save(&output, &receipt)?;
-        observe(&root, &output, &mut receipt.commands[index]);
+        observe(&root, &output, &mut receipt.commands[index], command);
         let failed =
             receipt.commands[index].state != "passed" && !receipt.commands[index].informational;
         if failed {
@@ -190,9 +201,9 @@ fn save(output: &Utf8Path, receipt: &Receipt) -> Result<()> {
     Ok(())
 }
 
-fn observe(root: &Utf8Path, output: &Utf8Path, observation: &mut Observation) {
+fn observe(root: &Utf8Path, output: &Utf8Path, observation: &mut Observation, command: Command) {
     let start = Instant::now();
-    match execute(root, output, observation) {
+    match execute(root, output, observation, command) {
         Ok(status) => {
             observation.exit_code = status.code();
             #[cfg(unix)]
@@ -232,8 +243,8 @@ fn execute(
     root: &Utf8Path,
     output: &Utf8Path,
     observation: &mut Observation,
+    mut command: Command,
 ) -> Result<std::process::ExitStatus> {
-    let mut command = registered(&observation.id, output)?;
     observation.argv = std::iter::once(command.get_program())
         .chain(command.get_args())
         .map(|arg| arg.to_string_lossy().into_owned())
@@ -250,7 +261,7 @@ fn execute(
         .with_context(|| format!("launch {}", observation.id))
 }
 
-fn registered(id: &str, output: &Utf8Path) -> Result<Command> {
+pub(super) fn registered(id: &str, output: &Utf8Path) -> Result<Command> {
     let argv: &[&str] = match id {
         "style" => &["just", "fmt-check"],
         "lint" => &["just", "lint"],

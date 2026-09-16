@@ -21,9 +21,13 @@ def main():
     if sys.platform != "linux":
         print("infrastructure unavailable: resource controls require Linux", file=sys.stderr)
         return 3
-    spec = importlib.util.spec_from_file_location("assurance_bounded_command", root / "verification/proof/command.py")
-    producer = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(producer)
+    try:
+        spec = importlib.util.spec_from_file_location("assurance_bounded_command", root / "verification/proof/command.py")
+        producer = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(producer)
+    except (ImportError, OSError, SyntaxError) as error:
+        print(f"infrastructure unavailable: bounded producer: {error}", file=sys.stderr)
+        return 3
     cargo = shutil.which("cargo")
     if cargo is None:
         print("infrastructure unavailable: cargo absent", file=sys.stderr)
@@ -45,7 +49,7 @@ def main():
     except (producer.CommandFailure, OSError, ValueError) as error:
         print(f"infrastructure unavailable: {error}", file=sys.stderr)
         return 3
-    if record["exit_code"] != 0 or record["signal"] is not None:
+    if record["exit_code"] != 0 or record["signal"] is not None or record["service"]["Result"] != "success":
         print(f"resource control failed; inspect {args.output}", file=sys.stderr)
         return 1
     print(f"bounded resource control passed; qualification: not-established; {args.output}")

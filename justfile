@@ -25,6 +25,9 @@ assurance-run profile output:
 assurance-report receipt:
     cargo run -p liminal-xtask -- assurance report {{ quote(receipt) }}
 
+assurance-workflows:
+    cargo run -p liminal-xtask -- assurance generate-workflows
+
 fmt:
     cargo fmt --all
     taplo fmt
@@ -179,19 +182,14 @@ mutants *ARGS:
 haq-lane run="run-1":
     scripts/haqp_campaign_clock.sh {{ run }} conformance/haqp/evidence/campaign.json -- ./scripts/haqp_qualify.sh
 
-# Everything CI runs, locally, in CI order
-ci: fmt-check lint
-    just formal-bootstrap-self-test
-    just formal-proof-self-test
-    cargo nextest run --workspace --all-features --profile ci
-    just test-threaded
-    cargo test --workspace --doc
-    just doc
-    just deny
-    # M17.5 F-14: these two gates were outside CI, so the packet digest sat
-    # broken for three commits without anything going red. Both are seconds.
-    just haq-inventory
-    just haq-canaries
+# Full Linux merge profile; durable receipts outside the candidate checkout.
+ci:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    assurance_state="${XDG_STATE_HOME:-$HOME/.local/state}/liminal/assurance"
+    mkdir -p "$assurance_state"
+    assurance_run="$(mktemp -d "$assurance_state/run.XXXXXXXX")"
+    cargo run -p liminal-xtask -- assurance run merge --output "$assurance_run/merge"
 
 bump-toolchain version:
     sed -i 's/^channel = ".*"/channel = "{{ version }}"/' rust-toolchain.toml

@@ -6,10 +6,10 @@ AM-17.14. Baseline: `54b6450c15f161978ad63cc0f999d5090bc577f4`.
 ## Ordered delivery
 
 - [x] S1: Record contract and maintenance links; independently review commit.
-- [ ] S2: Family catalog and `assurance check`: reject missing mandatory gates,
+- [x] S2: Family catalog and `assurance check`: reject missing mandatory gates,
   unknown/duplicate IDs, uncovered targets, stale references and workflow drift.
   Disposable fixtures never open locked corpora.
-- [ ] S3: `assurance run <profile>` and `assurance report`: fixed command registry,
+- [x] S3: `assurance run <profile>` and `assurance report`: fixed command registry,
   durable incomplete/failure receipts, environment/cost observations and advisory
   impact. Selection never bypasses merge requirements.
 - [ ] S4: Generated workflow wiring; Linux parity, portability/job names,
@@ -76,3 +76,59 @@ targets; discovery now includes all Cargo targets, including existing example
 and benchmark targets. Registration does not claim those are qualification tests.
 Full profile execution, hosted parity and signed amendment implementation remain
 pending; independent S3 review must close before this slice is marked done.
+
+S3 review of `bc44b04dddf4fb2c163fb5e4d69bc46e8d73d71d`: primary PASS WITH NITS;
+critic output again truncated. Verified that existing output reuse is refused,
+so stale pending-file cleanup is neither needed nor permitted. Unknown resource
+measurements stay null; unknown impact conservatively selects all families.
+Producer import failures now report infrastructure unavailable. The executable
+replacement note became a confirmed defect during full verification: Cargo
+unlinked the running tool, and late `current_exe` returned a deleted path. The
+`assurance-red-10` disposable-binary control reproduces this; commands now bind
+before any child build. `assurance-green-10` passes all 16 CLI controls.
+
+S4 generated wiring preserves job names/platforms and restores mandatory Linux
+commands including advisories and bounded resource controls. Actionlint and YAML
+syntax checks pass locally; hosted execution remains unobserved. New public
+mechanical seam: `assurance generate-workflows` (explicit generation required by
+the approved plan), with read-only drift checking through `assurance check`.
+
+Full verification attempts remain separately recorded under the evidence root:
+
+- `assurance-full-ci-1`: failed. Global target override broke existing crash and
+  sanitizer binary lookup. New generic `run` names also entered the frozen
+  name-based oracle closure through an unrelated local variable. Scoped
+  maintenance names fix that collision without editing the checker or oracle;
+  `assurance-oracle-scope-green` records the unchanged inventory command passing.
+- `assurance-full-ci-2`: stopped at Clippy on the first environment guard.
+- `assurance-full-ci-3`: all payload commands passed, including 645 nextest tests
+  / 47 skipped, threaded tests, docs, advisories, inventory, canaries and resource
+  controls. Final self-check could not launch the replaced executable, so overall
+  verdict is infrastructure-unavailable, not pass.
+- `assurance-full-ci-4`: complete merge PASS, exit 0. 646 nextest tests passed /
+  47 skipped (+16 active, no ignore flips), threaded tests, both proof-support
+  self-test suites, doctests/rustdoc, dependency/advisory checks, inventory,
+  canaries, resource run/lint and final maintenance check all passed. Bounded
+  outer service observed 2m07.126s, peak 3.6 GiB and zero swap. This is one
+  development rerun with reused build artifacts; receipt cache classification
+  remains unknown. It is not a budget or qualification claim. Full receipt:
+  `/home/brianklam/.local/state/liminal/assurance/run.Dostemqr/merge/receipt.json`.
+
+The infrastructure failure's minimized empty-operation proptest seed replayed
+successfully after environment correction. It is retained outside the source
+tree as `assurance-infrastructure-proptest-regressions` under the evidence root,
+not promoted as a production defect or silently discarded. No assertions,
+goldens, frozen HAQP logic, crash harness code, accepted SAS or v4 bytes changed.
+S4 local implementation is verified; its checkbox remains open for hosted
+execution evidence. S6 remains open for the unimplemented S5 controls and final
+whole-system independent review. Nothing here closes M17 or authorizes Phase 1.
+
+## Pending T1 boundary for S5
+
+Do not implement acceptance of independent-review claims until Brian selects how
+they are authenticated. Candidate-supplied `reviewed` metadata is insufficient.
+Recommendation sent: the externally pinned trusted maintenance tool obtains
+LAMU review itself and binds the receipt to the exact proposal; unavailable or
+inconclusive review refuses apply. Alternative: separate human-signed review
+attestation per proposal. Human standing-policy signing and external enrollment
+remain required under either choice. Ordinary tests do not depend on this choice.

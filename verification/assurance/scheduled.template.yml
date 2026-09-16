@@ -19,7 +19,7 @@ jobs:
         with:
           tool: cargo-deny
       - run: |
-          'cargo' 'deny' 'check' 'advisories'
+@@ADVISORIES@@
 
   beta-canary:
     name: beta toolchain canary
@@ -30,4 +30,4 @@ jobs:
       - run: rustup toolchain install beta --profile minimal
       - uses: Swatinem/rust-cache@v2
       - run: |
-          'cargo' '+beta' 'check' '--workspace' '--all-targets'
+@@BETA@@

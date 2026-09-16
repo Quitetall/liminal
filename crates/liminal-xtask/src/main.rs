@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Assurance { command } => command.run()?,
+        Command::Assurance { command } => command.dispatch_assurance()?,
         Command::Haq { command } => match command {
             HaqCommand::Verify => {
                 liminal_xtask::haq::verify_qualified_repo(&liminal_xtask::repo_root()?)?;
@@ -152,6 +152,8 @@ enum Command {
 
 #[derive(Debug, Subcommand)]
 enum AssuranceCommand {
+    /// Explicitly regenerate hosted workflow wiring; does not execute CI.
+    GenerateWorkflows,
     /// Check catalog completeness (not a test or qualification run).
     Check,
     /// Execute every command in a profile; never establishes qualification.
@@ -173,14 +175,17 @@ enum AssuranceCommand {
 }
 
 impl AssuranceCommand {
-    fn run(self) -> Result<()> {
+    fn dispatch_assurance(self) -> Result<()> {
         match self {
+            Self::GenerateWorkflows => {
+                liminal_xtask::assurance::generate_workflows(&liminal_xtask::repo_root()?)
+            }
             Self::Check => liminal_xtask::assurance::check(&liminal_xtask::repo_root()?),
             Self::Run {
                 profile,
                 output,
                 cache_state,
-            } => liminal_xtask::assurance::run(
+            } => liminal_xtask::assurance::run_profile(
                 &liminal_xtask::repo_root()?,
                 &profile,
                 &output,

@@ -7,7 +7,9 @@ use camino::{Utf8Path, Utf8PathBuf};
 use serde::Deserialize;
 
 mod runner;
-pub use runner::{report, run};
+mod workflows;
+pub use runner::{report, run_profile};
+pub use workflows::generate as generate_workflows;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -104,6 +106,7 @@ pub fn check(root: &Utf8Path) -> Result<()> {
         .context("canonical repository root")?;
     let catalog = load_catalog(&root)?;
     check_catalog(&root, &catalog)?;
+    workflows::check(&root, &catalog)?;
     println!("assurance catalog: pass; qualification: not-established");
     Ok(())
 }

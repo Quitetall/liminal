@@ -33,6 +33,16 @@ fn fixture() -> std::path::PathBuf {
             "platforms": ["linux", "macos", "windows"]
         }]
     })).unwrap()).unwrap();
+    let generated = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"))
+        .current_dir(&root)
+        .args(["assurance", "generate-workflows"])
+        .output()
+        .unwrap();
+    assert!(
+        generated.status.success(),
+        "{}",
+        String::from_utf8_lossy(&generated.stderr)
+    );
     root
 }
 
@@ -298,4 +308,70 @@ fn disabling_cargo_test_does_not_hide_unclassified_code() {
     );
     assert!(String::from_utf8_lossy(&output.stderr).contains("unclassified target"));
     std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn workflow_drift_is_detected_without_repair() {
+    let root = fixture();
+    let workflow = root.join(".github/workflows/ci.yml");
+    let changed = std::fs::read_to_string(&workflow)
+        .unwrap()
+        .replace("'haq-canaries'", "'haq-inventory'");
+    std::fs::write(&workflow, &changed).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"))
+        .current_dir(&root)
+        .args(["assurance", "check"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "omitted CI canaries accepted");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("workflow drift"));
+    assert_eq!(std::fs::read_to_string(workflow).unwrap(), changed);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn merge_requires_independent_checkout_targets_before_execution() {
+    let root = fixture();
+    let output_dir = root.with_extension("receipt");
+    let output = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"))
+        .current_dir(&root)
+        .env("CARGO_TARGET_DIR", root.join("target"))
+        .args(["assurance", "run", "merge", "--output"])
+        .arg(&output_dir)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("unset CARGO_TARGET_DIR"));
+    assert!(
+        !output_dir.exists(),
+        "execution started with incompatible global target override"
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn profile_survives_atomic_replacement_of_running_tool() {
+    let root = fixture();
+    std::fs::create_dir(root.join("tools")).unwrap();
+    let executable = root.join("tools/xtask");
+    std::fs::copy(env!("CARGO_BIN_EXE_liminal-xtask"), &executable).unwrap();
+    std::fs::write(root.join("justfile"), "fmt-check:\n    @cp tools/xtask tools/replacement\n    @mv -f tools/replacement tools/xtask\n").unwrap();
+    let output_dir = root.with_extension("receipt");
+    let output = Command::new(executable)
+        .current_dir(&root)
+        .args(["assurance", "run", "development", "--output"])
+        .arg(&output_dir)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let receipt: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(output_dir.join("receipt.json")).unwrap()).unwrap();
+    assert_eq!(receipt["commands"][1]["state"], "passed");
+    std::fs::remove_dir_all(root).unwrap();
+    std::fs::remove_dir_all(output_dir).unwrap();
 }

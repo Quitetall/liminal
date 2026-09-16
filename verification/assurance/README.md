@@ -8,9 +8,12 @@ a coverage proof, test execution receipt or qualification authority.
 
 `just assurance-check` checks catalog shape, mandatory profile command sequences,
 unique ownership, live Cargo/Python target discovery, source areas and authority
-reference tokens. It does not execute profiles, validate generated CI wiring,
-establish reference semantics or grant amendment authority. Those later delivery
-steps remain unchecked in the plan.
+reference tokens and exact generated CI wiring. It does not execute profiles,
+establish reference semantics or grant amendment authority.
+`just assurance-workflows` explicitly regenerates workflows; checking never
+repairs them. Existing job names and platform coverage remain intact. Hosted
+Linux partitions the same mandatory command set across jobs; wall-clock order
+differs from the sequential local merge profile.
 
 `just assurance-run PROFILE /absolute/new/output` executes the full registered
 profile, retaining per-command logs and `receipt.json`. Output must be new and
@@ -28,7 +31,11 @@ service limits and peak measurement. Impact is advisory and never skips checks.
 Run expensive profiles under explicit host resource limits. Resource controls
 enforce their own existing 2-CPU/4-GiB/no-swap/256-task/600-second service bounds.
 
-Merge execution and hosted parity still require S4/S6 verification. Calling the
+`just ci` executes the complete Linux merge profile and retains receipts below
+`$XDG_STATE_HOME/liminal/assurance` (default `~/.local/state/liminal/assurance`).
+Unset `CARGO_TARGET_DIR` for merge: existing crash and sanitizer replay harnesses
+require separate checkout-local target directories. Incompatible overrides refuse
+before test execution. Hosted parity still needs actual hosted evidence. Calling the
 qualification profile invokes the existing HAQP producer, but this runner never
 infers qualification from a subprocess exit. Frozen HAQP gates remain authority.
 
