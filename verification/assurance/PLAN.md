@@ -219,3 +219,35 @@ Remaining S5: closed-registry and patch binding, authenticated human batch and
 external tool/policy admission, direct independently bound review, disposable-key
 negative/positive controls, and isolated apply with producer refresh. No human
 signing, key reads, enrollment, main merge, push, or qualification occurred.
+
+### Committed source, producer refresh, and full local verification
+
+Source commit `16661be5eb3ef856136487d7f67e7935f118c76c` received actual LAMU
+`review_commit`: PASS WITH NITS (`assurance-16661be5-review.stdout`). Verified
+that the alleged unused `spec` binding is consumed by `cat-file` at
+`amendment.rs:153`; no removal is appropriate. The CLI's `usize` parser does not
+itself reject zero; the existing function guard does. Nested subexpressions have
+their own narrower spans, so their mere presence does not imply multiple exact
+matches. Diagnostic wording, fixture branch name and substring checks are
+nonblocking nits; none calls for changed behavior or weaker tests.
+
+`assurance-s5-crash-refresh1` ran the existing crash producer from the clean source
+commit above with an external output destination, exit 0. The preserved output
+`assurance-s5-crash-16661be5.json` was promoted byte-for-byte (`cmp` exit 0).
+Only producer-derived source commit, source tree and lockfile hash changed;
+all boundary and scenario rows are identical. Historical bytes remain in Git
+history. No qualifier algorithm, assertion, golden expectation, or provenance
+field was hand-edited to obtain a pass.
+
+`assurance-s5-ci3`: full local merge PASS, exit 0. Nextest: 649 passed / 47
+skipped. Threaded tests, bootstrap/proof support, doctests/rustdoc, dependency and
+advisory checks, inventory, canaries, resource run/lint, and final assurance check
+all passed. `assurance-s5-gates1` exited 0, confirming +3 active and no ignore
+flips. Service runtime was 4m02.288s, peak 4 GiB under the 4-GiB cap, zero swap;
+this single cache-unknown observation is not a performance budget or guarantee.
+Receipt:
+`/home/brianklam/.local/state/liminal/assurance/run.a8pswrrm/merge/receipt.json`.
+It correctly binds source commit `16661be5` with a dirty flag for the refreshed
+evidence file; it is local development evidence, not qualification. This final
+documentation update follows that run. S5's remaining implementation and hosted
+execution remain open.
