@@ -18,6 +18,13 @@ check:
 assurance-check:
     cargo run -p liminal-xtask -- assurance check
 
+# Complete registered profile, with a new external evidence directory.
+assurance-run profile output:
+    cargo run -p liminal-xtask -- assurance run {{ quote(profile) }} --output {{ quote(output) }}
+
+assurance-report receipt:
+    cargo run -p liminal-xtask -- assurance report {{ quote(receipt) }}
+
 fmt:
     cargo fmt --all
     taplo fmt

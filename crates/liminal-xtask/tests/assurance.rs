@@ -175,3 +175,127 @@ fn duplicate_profile_keys_refused_even_with_identical_values() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("duplicate"));
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn profile_failure_leaves_remaining_commands_unexecuted() {
+    let root = fixture();
+    // No justfile: the real style subprocess must fail, not be retried or
+    // interpreted as evidence that later classification ran.
+    let output_dir = root.with_extension("receipt");
+    let output = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"))
+        .current_dir(&root)
+        .args(["assurance", "run", "development", "--output"])
+        .arg(&output_dir)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let receipt: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(output_dir.join("receipt.json")).expect("failure receipt retained"),
+    )
+    .unwrap();
+    assert_eq!(receipt["state"], "failed");
+    assert_eq!(receipt["commands"][1]["state"], "unexecuted");
+    assert_eq!(receipt["qualification_established"], false);
+    std::fs::remove_dir_all(root).unwrap();
+    std::fs::remove_dir_all(output_dir).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn python_discovery_refuses_symlinked_directories() {
+    let root = fixture();
+    std::fs::create_dir_all(root.join("verification/proof")).unwrap();
+    std::os::unix::fs::symlink(root.join("src"), root.join("verification/proof/linked")).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"))
+        .current_dir(&root)
+        .args(["assurance", "check"])
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "symlink directory silently omitted"
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("symlink"));
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn completed_profile_is_reportable_but_incomplete_receipt_cannot_claim_pass() {
+    let root = fixture();
+    std::fs::write(
+        root.join("justfile"),
+        "fmt-check:\n    @echo fixture-style-control\n",
+    )
+    .unwrap();
+    let output_dir = root.with_extension("receipt");
+    let output = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"))
+        .current_dir(&root)
+        .args(["assurance", "run", "development", "--output"])
+        .arg(&output_dir)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let path = output_dir.join("receipt.json");
+    let output = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"))
+        .args(["assurance", "report"])
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let mut receipt: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(receipt["state"], "passed");
+    assert_eq!(receipt["qualification_established"], false);
+    receipt["commands"][1]["state"] = "unexecuted".into();
+    std::fs::write(&path, serde_json::to_vec(&receipt).unwrap()).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"))
+        .args(["assurance", "report"])
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("incomplete receipt claims pass"));
+    let prior = std::fs::read(&path).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"))
+        .current_dir(&root)
+        .args(["assurance", "run", "development", "--output"])
+        .arg(&output_dir)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert_eq!(
+        std::fs::read(path).unwrap(),
+        prior,
+        "existing output overwritten"
+    );
+    std::fs::remove_dir_all(root).unwrap();
+    std::fs::remove_dir_all(output_dir).unwrap();
+}
+
+#[test]
+fn disabling_cargo_test_does_not_hide_unclassified_code() {
+    let root = fixture();
+    std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
+    let manifest = root.join("Cargo.toml");
+    let mut text = std::fs::read_to_string(&manifest).unwrap();
+    text.push_str("\n[[bin]]\nname = \"untested\"\npath = \"src/main.rs\"\ntest = false\n");
+    std::fs::write(manifest, text).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"))
+        .current_dir(&root)
+        .args(["assurance", "check"])
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "test=false hid an unclassified target"
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("unclassified target"));
+    std::fs::remove_dir_all(root).unwrap();
+}

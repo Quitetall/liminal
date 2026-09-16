@@ -154,12 +154,39 @@ enum Command {
 enum AssuranceCommand {
     /// Check catalog completeness (not a test or qualification run).
     Check,
+    /// Execute every command in a profile; never establishes qualification.
+    Run {
+        /// Registered profile name.
+        profile: String,
+        /// New absolute receipt directory outside the repository.
+        #[arg(long)]
+        output: camino::Utf8PathBuf,
+        /// Caller-reported cache state: cold, warm or unknown.
+        #[arg(long, default_value = "unknown")]
+        cache_state: String,
+    },
+    /// Inspect an existing execution receipt without executing tests.
+    Report {
+        /// Path to receipt.json.
+        receipt: camino::Utf8PathBuf,
+    },
 }
 
 impl AssuranceCommand {
     fn run(self) -> Result<()> {
         match self {
             Self::Check => liminal_xtask::assurance::check(&liminal_xtask::repo_root()?),
+            Self::Run {
+                profile,
+                output,
+                cache_state,
+            } => liminal_xtask::assurance::run(
+                &liminal_xtask::repo_root()?,
+                &profile,
+                &output,
+                &cache_state,
+            ),
+            Self::Report { receipt } => liminal_xtask::assurance::report(&receipt),
         }
     }
 }

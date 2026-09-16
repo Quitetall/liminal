@@ -55,3 +55,24 @@ Each has `.stdout` and `.stderr`; bounded systemd runs retained actual exits.
 `assurance-red-1` and `assurance-green-1` were infrastructure launch failures,
 not red/green test evidence. Workflow drift checking remains S4 work; S2 stays
 open until that dependent validation exists.
+
+S2 review of `260bcde007601dd4a1810e440cb225cff9277197`: primary PASS WITH NITS;
+critic response was truncated, so no critic clearance is claimed. Symlink omission
+verified at `discover_python`, reproduced in `assurance-red-6`, then fixed with
+explicit refusal rather than following links. Source-file versus manifest-area
+check is intentional; no manifest containment rule was promised. Failed scratch
+fixtures are retained for diagnosis; passing fixtures clean up. Critic's edition
+concern does not reproduce with the pinned Rust toolchain. Exact review receipt:
+`/mnt/4tb/liminal-formal-evidence/reviews/assurance-260bcde0-review.stdout`.
+
+S3 runner slice adds fixed command dispatch, external exclusive receipt paths,
+incomplete/unexecuted states, fail-fast mandatory commands, advisory impact and
+cost observations. Resource adapter reuses the existing bounded producer. Real
+resource run and lint both exited zero (`assurance-resource-run-1` and
+`assurance-resource-lint-1` under the evidence root above); no qualification is
+claimed. Named test delta now +13 active / zero ignore flips; targeted controls
+pass in `assurance-green-8`. `assurance-red-7` reproduced hidden `test=false`
+targets; discovery now includes all Cargo targets, including existing example
+and benchmark targets. Registration does not claim those are qualification tests.
+Full profile execution, hosted parity and signed amendment implementation remain
+pending; independent S3 review must close before this slice is marked done.

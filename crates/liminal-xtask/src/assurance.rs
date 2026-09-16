@@ -6,6 +6,9 @@ use anyhow::{Context, Result, ensure};
 use camino::{Utf8Path, Utf8PathBuf};
 use serde::Deserialize;
 
+mod runner;
+pub use runner::{report, run};
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Catalog {
@@ -191,13 +194,13 @@ fn check_catalog(root: &Utf8Path, catalog: &Catalog) -> Result<()> {
             );
         }
     }
-    discover_rust(root, "Cargo.toml", false, &mut targets)?;
+    discover_rust(root, "Cargo.toml", &mut targets)?;
     for manifest in [
         "fuzz/Cargo.toml",
         "verification/resource-controls/Cargo.toml",
     ] {
         if root.join(manifest).exists() {
-            discover_rust(root, manifest, true, &mut targets)?;
+            discover_rust(root, manifest, &mut targets)?;
         }
     }
     for directory in ["verification/bootstrap", "verification/proof"] {
@@ -225,7 +228,12 @@ fn discover_python(
             .into_string()
             .map_err(|_| anyhow::anyhow!("non-UTF8 test path"))?;
         let relative = format!("{directory}/{name}");
-        if entry.file_type()?.is_dir() && name != "__pycache__" {
+        let kind = entry.file_type()?;
+        ensure!(
+            !kind.is_symlink(),
+            "symlink in Python discovery: {relative}"
+        );
+        if kind.is_dir() && name != "__pycache__" {
             discover_python(root, &relative, targets)?;
         } else if name.starts_with("test_") && Utf8Path::new(&name).extension() == Some("py") {
             inside(root, &relative)?;
@@ -260,7 +268,6 @@ fn consume_target(
 fn discover_rust(
     root: &Utf8Path,
     selected_manifest: &str,
-    all: bool,
     targets: &mut BTreeMap<String, &Family>,
 ) -> Result<()> {
     inside(root, selected_manifest)?;
@@ -290,11 +297,7 @@ fn discover_rust(
             "package outside repository"
         );
         let manifest = package.manifest_path.strip_prefix(root)?;
-        for target in package
-            .targets
-            .into_iter()
-            .filter(|target| target.test || all)
-        {
+        for target in package.targets {
             let id = format!("{manifest}::{}::{}", target.kind.join(","), target.name);
             let source = target
                 .src_path
@@ -343,5 +346,4 @@ struct Target {
     name: String,
     kind: Vec<String>,
     src_path: Utf8PathBuf,
-    test: bool,
 }

@@ -4,13 +4,33 @@ Authority: [ADR-0022](../../docs/adr/0022-maintain-assurance-without-requalifyin
 Delivery status: [PLAN.md](PLAN.md). This catalog is classification metadata, not
 a coverage proof, test execution receipt or qualification authority.
 
-## Current command
+## Current commands
 
 `just assurance-check` checks catalog shape, mandatory profile command sequences,
 unique ownership, live Cargo/Python target discovery, source areas and authority
 reference tokens. It does not execute profiles, validate generated CI wiring,
 establish reference semantics or grant amendment authority. Those later delivery
 steps remain unchecked in the plan.
+
+`just assurance-run PROFILE /absolute/new/output` executes the full registered
+profile, retaining per-command logs and `receipt.json`. Output must be new and
+outside the repository. It stops on the first mandatory failure, records missing
+infrastructure separately, and leaves subsequent commands unexecuted. Interrupted
+receipts remain incomplete. Beta is informational; its failure is still recorded.
+`just assurance-report /absolute/output/receipt.json` checks receipt consistency
+and displays it without rerunning anything. Receipts are not signed attestations.
+
+Cache state defaults to unknown; direct CLI `--cache-state cold|warm|unknown`
+records caller classification, not an inferred measurement. Each receipt is one
+invocation/sample. Runtime, exits and signals are observed; unavailable peak
+memory is null. Resource invocations retain the existing producer's detailed
+service limits and peak measurement. Impact is advisory and never skips checks.
+Run expensive profiles under explicit host resource limits. Resource controls
+enforce their own existing 2-CPU/4-GiB/no-swap/256-task/600-second service bounds.
+
+Merge execution and hosted parity still require S4/S6 verification. Calling the
+qualification profile invokes the existing HAQP producer, but this runner never
+infers qualification from a subprocess exit. Frozen HAQP gates remain authority.
 
 The catalog names targets, not individual assertions. Tests added inside a target
 inherit its family. A new target needs explicit classification. Empty/reserved

@@ -130,7 +130,7 @@ liminal/
 Test classification and maintenance:
 [`verification/assurance/README.md`](verification/assurance/README.md).
 `just assurance-check` validates classification only; full tests and qualification
-remain separate. Runner and CI-parity delivery are tracked in that guide's plan.
+remain separate. Profile receipts and CI-parity delivery are tracked in that guide.
 
 The toolchain is pinned by `rust-toolchain.toml`; with
 [rustup](https://rustup.rs) installed, the first `cargo` invocation fetches it

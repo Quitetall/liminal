@@ -59,7 +59,7 @@
     {
       "id": "authority-recovery", "owner": "jurisdiction owner",
       "source_areas": ["crates/liminal-jurisdiction", "crates/liminal-safety"],
-      "targets": ["crates/liminal-jurisdiction/Cargo.toml::lib::liminal_jurisdiction", "crates/liminal-jurisdiction/Cargo.toml::test::admission", "crates/liminal-jurisdiction/Cargo.toml::test::ilrp_driver", "crates/liminal-jurisdiction/Cargo.toml::test::order_proof", "crates/liminal-safety/Cargo.toml::lib::liminal_safety", "crates/liminal-safety/Cargo.toml::test::acknowledgement", "crates/liminal-safety/Cargo.toml::test::ordering"],
+      "targets": ["crates/liminal-jurisdiction/Cargo.toml::lib::liminal_jurisdiction", "crates/liminal-jurisdiction/Cargo.toml::test::admission", "crates/liminal-jurisdiction/Cargo.toml::test::ilrp_driver", "crates/liminal-jurisdiction/Cargo.toml::test::order_proof", "crates/liminal-safety/Cargo.toml::lib::liminal_safety", "crates/liminal-safety/Cargo.toml::test::acknowledgement", "crates/liminal-safety/Cargo.toml::test::ordering", "crates/liminal-safety/Cargo.toml::example::acknowledgement_witness"],
       "references": [{"path": "verification/obligations.json", "anchor": "authority"}],
       "review_triggers": ["phase-gate", "authority-interface", "recovery-boundary"],
       "profiles": ["merge", "portability"], "platforms": ["linux", "macos", "windows"]
@@ -90,7 +90,7 @@
     },
     {
       "id": "assurance-tooling", "owner": "release owner",
-      "source_areas": ["crates/liminal-xtask"],
+      "source_areas": ["crates/liminal-xtask", "verification/assurance"],
       "targets": ["crates/liminal-xtask/Cargo.toml::lib::liminal_xtask", "crates/liminal-xtask/Cargo.toml::bin::liminal-xtask", "crates/liminal-xtask/Cargo.toml::test::formal", "crates/liminal-xtask/Cargo.toml::test::assurance"],
       "references": [{"path": "docs/security/threat-model.md", "anchor": "TM-16"}],
       "review_triggers": ["phase-gate", "gate-change", "dependency-change"],
@@ -107,7 +107,7 @@
     {
       "id": "spikes-benchmarks", "owner": "release owner",
       "source_areas": ["conformance/spikes", "benches"],
-      "targets": ["conformance/spikes/spike-annotation/Cargo.toml::lib::spike_annotation", "conformance/spikes/spike-richedit/Cargo.toml::lib::spike_richedit", "conformance/spikes/real-cst/Cargo.toml::lib::spike_real_cst", "conformance/spikes/real-cst/Cargo.toml::bin::report", "benches/Cargo.toml::lib::liminal_benches"],
+      "targets": ["conformance/spikes/spike-annotation/Cargo.toml::lib::spike_annotation", "conformance/spikes/spike-richedit/Cargo.toml::lib::spike_richedit", "conformance/spikes/real-cst/Cargo.toml::lib::spike_real_cst", "conformance/spikes/real-cst/Cargo.toml::bin::report", "benches/Cargo.toml::lib::liminal_benches", "benches/Cargo.toml::bench::liminal"],
       "references": [{"path": "docs/security/threat-model.md", "anchor": "TM-16"}],
       "review_triggers": ["phase-gate", "measurement-change"],
       "profiles": ["merge", "portability"], "platforms": ["linux", "macos", "windows"]
