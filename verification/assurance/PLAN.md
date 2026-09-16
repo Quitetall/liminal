@@ -125,6 +125,30 @@ whole-system independent review. Nothing here closes M17 or authorizes Phase 1.
 
 ## Pending T1 boundary for S5
 
+Latest local code commit: `2845197317d11e15d8258f8299d676f487549277`.
+LAMU primary review returned PASS WITH NITS; critic output was incomplete and
+does not supply separate clearance. Exact receipt under the evidence root:
+`assurance-28451973-review.stdout`. Verified dispositions:
+
+- Missing-profile panic claim: false. `load_catalog` checks the profile set and
+  each required key before rendering. Disposable CLI probe
+  `assurance-missing-profile-probe` exited 1 with `profile set drift`, not panic.
+- Concurrent directory creation: a fail-closed error under the standing
+  single-writer rule, not missing coverage. Retain component confinement checks;
+  do not replace them with traversal through unchecked symlink parents.
+- Stale UUID temporary-name collision and absent-destination rename claims:
+  unsupported by the implementation. Each attempt has a fresh UUID; rename does
+  not require a pre-existing destination. Existing outputs are not resumed.
+- Literal fixed-argument quoting, the unused resource-output sentinel in the
+  non-resource render path, missing-file diagnostic context, retained receipts
+  and template comments are nonblocking maintenance nits. No automatic receipt
+  deletion is authorized. Closed unknown-command refusal is intentional, not a
+  missing future-profile feature. Import refusal prints an error and fails closed.
+
+`assurance-gates-1` exited zero: 646 active / 47 deferred, including the unchanged
+two deferred M17 gates. No main-branch merge, push, hosted result, signing or
+Phase 1 authorization is implied by these local development results.
+
 Do not implement acceptance of independent-review claims until Brian selects how
 they are authenticated. Candidate-supplied `reviewed` metadata is insufficient.
 Recommendation sent: the externally pinned trusted maintenance tool obtains
