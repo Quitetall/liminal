@@ -47,13 +47,41 @@ impl OrderProofInput {
         schedule: &[RepairStepId],
         applied: &[RepairStepId],
     ) -> Result<Self, ResourceExhaustion> {
+        Self::try_with_applied(plan, schedule, applied.len(), applied.iter().copied())
+    }
+
+    /// Prepare the execution partition without an additional infallible buffer.
+    /// This is still input construction: callers must check the complete leaf.
+    pub(crate) fn try_for_order(
+        plan: &RepairPlan,
+        schedule: &[RepairStepId],
+    ) -> Result<Self, ResourceExhaustion> {
+        let is_graph = |id: &&RepairStepId| {
+            plan.steps
+                .get(*id)
+                .is_some_and(|step| matches!(step.operation, RepairOperation::Graph(_)))
+        };
+        let applied = schedule
+            .iter()
+            .filter(|id| !is_graph(id))
+            .chain(schedule.iter().filter(is_graph))
+            .copied();
+        Self::try_with_applied(plan, schedule, schedule.len(), applied)
+    }
+
+    fn try_with_applied(
+        plan: &RepairPlan,
+        schedule: &[RepairStepId],
+        applied_len: usize,
+        applied: impl Iterator<Item = RepairStepId>,
+    ) -> Result<Self, ResourceExhaustion> {
         // Validate every layout and their aggregate before the first allocation.
         // Layout checks multiplication, alignment and the isize object-size bound.
         let sizes = [
             Layout::array::<(u128, u128, bool)>(plan.steps.len()),
             Layout::array::<(u128, u128)>(plan.dependencies.len()),
             Layout::array::<u128>(schedule.len()),
-            Layout::array::<u128>(applied.len()),
+            Layout::array::<u128>(applied_len),
         ];
         sizes.into_iter().try_fold(0usize, |total, layout| {
             total
@@ -81,7 +109,7 @@ impl OrderProofInput {
             .map_err(|_| ResourceExhaustion)?;
         result
             .applied
-            .try_reserve_exact(applied.len())
+            .try_reserve_exact(applied_len)
             .map_err(|_| ResourceExhaustion)?;
 
         // Each immutable input yields exactly the reserved number of elements.
@@ -103,6 +131,11 @@ impl OrderProofInput {
             result.schedule.push(id.as_uuid().as_u128());
         }
         for id in applied {
+            // Enforce the reservation bound even if an internal caller's iterator
+            // ever disagrees with its declared length. Never grow implicitly.
+            if result.applied.len() == applied_len {
+                return Err(ResourceExhaustion);
+            }
             result.applied.push(id.as_uuid().as_u128());
         }
         Ok(result)

@@ -31,6 +31,16 @@ remain unimplemented. See `safety-ack-slice.md`, `haqp-29f9f159-result.md`,
 `bootstrap/README.md` for reproducible tool-control commands and
 `checked-repair-verification-2026-09-14.md` for the runtime evidence boundary.
 
+The DG17.6 ordering slice adds a proved allocation-free ordering predicate and
+fallible host preparation at admission, Prepare and pre-progress recovery.
+Finalization reuses the checked schedule. The graph-only resource controls cover
+all four nonterminal recovery states; completed-history proof binding,
+mixed-effect/all-reservation controls and qualified replay remain unfinished.
+See `ordering-leaf-development.md` and `ordering-host-development.md` for the
+precise development evidence. This does not establish `ilrp-order` or any other
+whole-core obligation; historical source pins and qualification receipts are not
+silently rebound to this new host code.
+
 The runner slice under `proof/` validates selected source pins and complete
 extracted Verus distribution bytes, and constructs a checksum-closed dependency
 tree from an explicit archive set at a new external destination. It also supplies

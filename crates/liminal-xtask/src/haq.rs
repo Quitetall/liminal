@@ -10368,7 +10368,7 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
             178,
             "match self {",
         ),
-        ("crates/liminal-jurisdiction/src/ilrp.rs", 575, "Ok(())"),
+        ("crates/liminal-jurisdiction/src/ilrp.rs", 578, "Ok(())"),
         (
             "crates/liminal-jurisdiction/src/checker.rs",
             288,
@@ -10381,22 +10381,22 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            589,
+            592,
             "self.commit_intent(id, intent, &format!(\"ack:{step_id}\"), origin)?;",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            588,
+            591,
             "self.crash.crash_if_armed(CrashPoint::BeforeAcknowledge);",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            611,
+            617,
             "let graph_steps: std::collections::BTreeSet<RepairStepId> = plan",
         ),
         (
             "crates/liminal-jurisdiction/src/ilrp.rs",
-            619,
+            625,
             "if graph_steps.contains(&dep.before) && after_is_external {",
         ),
         (

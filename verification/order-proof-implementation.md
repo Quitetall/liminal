@@ -107,3 +107,35 @@ these are integration constraints, not completed integration evidence.
 
 The successful `OrderProofInput` constructor alone proves none of these
 call-site properties. Public admission/driver fault controls remain required.
+
+## Integration audit after the ordering leaf
+
+At source commit `6331ef7be0a300e9d7ddce54ca8167caf9876e80`, the public leaf
+exists and has development proof/runtime controls; production host integration
+is still pending. The following constraints refine the integration sequence,
+without changing the approved exhaustion contract:
+
+- `ilrp.rs:459-461`: `run_checked` calls `verify_history` after `run` has
+  performed effects. Adding fresh fallible proof-buffer construction directly
+  to every history check would therefore introduce a new exhaustion refusal
+  after effects. The execution path must carry or reuse pre-effect validated
+  immutable ordering facts through receipt reconstruction. Standalone history
+  validation is read-only, but that does not make its post-run caller pre-effect.
+- `ilrp.rs:500-524`: history reconstruction separately derives graph operations
+  and the receipt's applied order. Both actual projections must remain bound to
+  the checked plan and schedule; checking an unused freshly derived partition
+  would not establish this relationship.
+- `ilrp.rs:802`: finalization follows external application and acknowledgment.
+  Its graph projection must consume or compare against the prechecked facts,
+  not allocate another proof input at that point. Existing state, persisted
+  intent, graph prestate/poststate and head checks remain mandatory.
+- `ilrp.rs:936`: `validate_intent` is used by history and finalization as well
+  as initial recovery. It cannot become an unconditional allocating proof
+  hook without violating the preceding timing constraints. Keep legacy
+  validation precedence explicit at each effect boundary.
+
+These are verified call-path constraints, not claims that integration is done.
+The direct allocation harness remains external development evidence: the
+workspace forbids unsafe code, while a real `GlobalAlloc` fault injector
+requires an unsafe implementation. Do not silently relax that workspace lint
+or add a production fault-injection switch to make integration tests convenient.

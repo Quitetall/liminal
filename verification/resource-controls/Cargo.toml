@@ -1,0 +1,14 @@
+[package]
+name = "liminal-resource-controls"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+liminal-jurisdiction = { path = "../../crates/liminal-jurisdiction" }
+liminal-graph = { path = "../../crates/liminal-graph" }
+liminal-id = { path = "../../crates/liminal-id" }
+liminal-revision = { path = "../../crates/liminal-revision" }
+liminal-scratch = { path = "../../crates/liminal-scratch" }

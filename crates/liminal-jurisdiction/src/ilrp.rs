@@ -376,6 +376,7 @@ impl FinalizationPermit {
         store: &GraphStore,
         repair: RepairId,
         intent: &RepairIntent,
+        checked_order: &[RepairStepId],
     ) -> Result<Self, IlrpError> {
         validate_intent(repair, intent)?;
         if intent.state != IntentState::Finalizing {
@@ -393,8 +394,10 @@ impl FinalizationPermit {
         }
         let mut operations = Vec::new();
         let mut view = store.state_at(head)?;
-        for id in crate::repair::topo_order(&intent.plan)? {
-            let step = &intent.plan.steps[&id];
+        // Reuse the schedule checked before any progress/effects in advance.
+        // No new proof buffer is allocated at this post-effect boundary.
+        for id in checked_order {
+            let step = &intent.plan.steps[id];
             if let RepairOperation::Graph(operation) = &step.operation {
                 if !graph_predicate(&view, &step.expected_prestate) {
                     return Err(liminal_graph::StoreError::Conflict(
@@ -601,7 +604,10 @@ impl<'s, X: ExternalExecutor, C: CrashInjector> IlrpDriver<'s, X, C> {
         let head = authorized.basis().revision();
         let (plan, evidence) = authorized
             .consume(self.store)
-            .map_err(|error| IlrpError::Executor(error.to_string()))?;
+            .map_err(|error| match error {
+                crate::admission::AdmissionError::ResourceExhaustion(error) => error.into(),
+                other => IlrpError::Executor(other.to_string()),
+            })?;
         // Validate DAG up front.
         let order = crate::repair::topo_order(&plan)?;
 
@@ -622,8 +628,6 @@ impl<'s, X: ExternalExecutor, C: CrashInjector> IlrpDriver<'s, X, C> {
                 ));
             }
         }
-        let _ = order;
-
         let id = plan.id;
         let key = id.to_string();
 
@@ -632,6 +636,21 @@ impl<'s, X: ExternalExecutor, C: CrashInjector> IlrpDriver<'s, X, C> {
             return Err(IlrpError::Store(liminal_graph::StoreError::Conflict(
                 format!("intent exists: {key}"),
             )));
+        }
+
+        // Preserve every legacy refusal above, then reserve proof storage before
+        // the accepted intent transaction. Exhaustion stays typed and nonallocating.
+        let input = crate::order_proof::OrderProofInput::try_for_order(&plan, &order)?;
+        let view = input.view();
+        if !liminal_safety::ordering_matches(
+            view.steps,
+            view.dependencies,
+            view.schedule,
+            view.applied,
+        ) {
+            return Err(IlrpError::Executor(
+                "repair ordering failed its safety check".into(),
+            ));
         }
 
         let intent = RepairIntent {
@@ -710,6 +729,33 @@ impl<'s, X: ExternalExecutor, C: CrashInjector> IlrpDriver<'s, X, C> {
         intent: &mut RepairIntent,
         origin: Origin,
     ) -> Result<IntentState, IlrpError> {
+        // Illegal-transition refusal retains precedence over new proof resources.
+        if !matches!(
+            intent.state,
+            IntentState::Prepared
+                | IntentState::Applying
+                | IntentState::ExternalApplied
+                | IntentState::Finalizing
+        ) {
+            return Err(IlrpError::IllegalTransition {
+                from: intent.state,
+                to: intent.state,
+            });
+        }
+        let order = crate::repair::topo_order(&intent.plan)?;
+        let input = crate::order_proof::OrderProofInput::try_for_order(&intent.plan, &order)?;
+        let view = input.view();
+        if !liminal_safety::ordering_matches(
+            view.steps,
+            view.dependencies,
+            view.schedule,
+            view.applied,
+        ) {
+            return Err(IlrpError::Executor(
+                "repair ordering failed its safety check".into(),
+            ));
+        }
+
         match intent.state {
             IntentState::Prepared => {
                 // Transition to Applying.
@@ -735,8 +781,6 @@ impl<'s, X: ExternalExecutor, C: CrashInjector> IlrpDriver<'s, X, C> {
         // Only runs when in Applying state (ExternalApplied skips this via the
         // match above transitioning to Finalizing).
         if intent.state == IntentState::Applying {
-            let order = crate::repair::topo_order(&intent.plan)?;
-
             for step_id in &order {
                 // Already acked → skip.
                 if intent.acks.contains_key(step_id) {
@@ -799,7 +843,7 @@ impl<'s, X: ExternalExecutor, C: CrashInjector> IlrpDriver<'s, X, C> {
             self.crash.crash_if_armed(CrashPoint::BeforeFinalize);
 
             // Build ONE txn: graph ops + state=committed.
-            let permit = match FinalizationPermit::validate(self.store, id, intent) {
+            let permit = match FinalizationPermit::validate(self.store, id, intent, &order) {
                 Ok(permit) => permit,
                 Err(IlrpError::Store(
                     liminal_graph::StoreError::Conflict(_) | liminal_graph::StoreError::NotFound(_),
@@ -850,6 +894,9 @@ impl<'s, X: ExternalExecutor, C: CrashInjector> IlrpDriver<'s, X, C> {
 /// ILRP failure.
 #[derive(Debug, thiserror::Error)]
 pub enum IlrpError {
+    /// Temporary ordering proof storage was unavailable before progress (DG17.6).
+    #[error(transparent)]
+    ResourceExhaustion(#[from] crate::order_proof::ResourceExhaustion),
     /// The store rejected a coordinator transaction.
     #[error(transparent)]
     Store(#[from] liminal_graph::StoreError),

@@ -24,7 +24,7 @@ Proof-support discovery: 142 tests passed, exit 0, 6.382 seconds. Receipts:
 `/mnt/4tb/liminal-formal-evidence/reviews/proof-unittest-20260916T061524/`.
 This tests support code, not the ordering theorem or whole-core obligations.
 
-Remaining: exact-source staged replay, source-rebind commit review,
+Remaining: cold proof execution on reconstructed inputs,
 host integration and qualified evidence aggregation. Old cold replay
 and HAQP outputs remain bound to their original source; no result is relabeled.
 
@@ -59,3 +59,33 @@ Systemd reported `Result=success`, `ExecMainStatus=0`, runtime 3 minutes
 two CPU equivalents, 4 GiB memory and no swap. The generated canary receipt
 left no tracked diff; historical outputs were not hand-edited or relabeled.
 Production source and candidate input metadata remained unchanged during CI.
+
+## Source-rebind review and reconstruction controls
+
+Actual LAMU `review_commit` for
+`6331ef7be0a300e9d7ddce54ca8167caf9876e80` returned **PASS WITH NITS**, with
+critic **PASS**, client exit 0. Receipt:
+`/mnt/4tb/liminal-formal-evidence/reviews/order-rebind-6331ef7b-review.stdout`.
+The duplicated origin literals were verified at `test_run.py:53` and
+`test_stage.py:18`; they intentionally remain independent fixture values rather
+than deriving the expected identity from the parser under test. The runtime test
+is intentionally included in the full source inventory, not in the selected
+acknowledgement proof fragment. Neither nit requires a correctness change.
+
+Fresh source and runner staging at that exact commit independently matched 171
+source/manifest files and eight runner files against Git blob bytes and modes:
+179 comparisons, exit 0. A missing source file, executable-mode change and
+one-byte manifest change were each rejected for the expected distinct reason.
+After each restoration all 179 comparisons passed again; controls exited 0.
+Receipts in `/mnt/4tb/liminal-formal-evidence/reviews/`:
+
+- `order-source-rebind-6331ef7b.stdout` and `.stderr`;
+- `order-rebind-controls-6331ef7b.stdout` and `.stderr`.
+
+The new scratch helpers were inspected before execution. Their SHA-256 values:
+`6010a6052ce7c29851eb6f298aa8de56d47b1822b46a9f32bfb79063d2a22e7a`
+(source rebind) and
+`cf72c3f17c9b12883f55f7195e3f93b81e866a60274ffffa24228b19a0d31be5`
+(controls). Old probes and evidence were preserved. These checks establish
+bounded reconstruction and comparator sensitivity, not toolchain reconstruction,
+proof execution, independent verifier correctness or qualification.

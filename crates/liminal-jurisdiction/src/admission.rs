@@ -3,7 +3,8 @@
 
 use liminal_graph::{GraphStore, Operation, ns};
 use liminal_id::{
-    ActorId, ContentHash, GraphRevisionId, JurisdictionKey, JurisdictionSubject, Timestamp,
+    ActorId, ContentHash, GraphRevisionId, JurisdictionKey, JurisdictionSubject, RepairStepId,
+    Timestamp,
 };
 use liminal_revision::{BasisComponent, BasisPerspective, WorkspaceBasis};
 
@@ -96,6 +97,9 @@ pub enum AdmissionError {
     /// A governing profile or checker operation failed (v4 §7.3).
     #[error(transparent)]
     Checker(#[from] CheckerError),
+    /// Temporary ordering proof storage was unavailable before acceptance (DG17.6).
+    #[error(transparent)]
+    ResourceExhaustion(#[from] crate::order_proof::ResourceExhaustion),
 }
 
 fn refusal(reason: impl Into<String>) -> AdmissionError {
@@ -108,7 +112,7 @@ impl<'s> Checker<'s> {
         &self,
         plan: RepairPlan,
     ) -> Result<AuthorizedRepair<'s>, AdmissionError> {
-        let basis = self.validate_admission_inputs(&plan)?;
+        let (basis, order) = self.validate_admission_inputs(&plan)?;
         let evidence = match self.evaluate_repair(&plan)? {
             RepairDecision::AutoApply { evidence } => evidence,
             RepairDecision::NeedsReview { reasons } => return Err(AdmissionError::Review(reasons)),
@@ -116,6 +120,7 @@ impl<'s> Checker<'s> {
         if self.store.head()? != basis.revision {
             return Err(refusal("store changed while checking repair"));
         }
+        validate_order(&plan, &order)?;
         Ok(AuthorizedRepair {
             basis,
             plan,
@@ -132,7 +137,8 @@ impl<'s> Checker<'s> {
         plan: RepairPlan,
         actor: ActorId,
     ) -> Result<AuthorizedRepair<'s>, AdmissionError> {
-        let basis = self.validate_admission_inputs(&plan)?;
+        let (basis, order) = self.validate_admission_inputs(&plan)?;
+        validate_order(&plan, &order)?;
         Ok(AuthorizedRepair {
             basis,
             plan,
@@ -146,9 +152,9 @@ impl<'s> Checker<'s> {
     fn validate_admission_inputs(
         &self,
         plan: &RepairPlan,
-    ) -> Result<ValidatedBasis<'s>, AdmissionError> {
+    ) -> Result<(ValidatedBasis<'s>, Vec<RepairStepId>), AdmissionError> {
         let revision = self.store.head()?;
-        crate::repair::topo_order(plan).map_err(|e| refusal(e.to_string()))?;
+        let order = crate::repair::topo_order(plan).map_err(|e| refusal(e.to_string()))?;
         if plan.steps.is_empty() {
             return Err(refusal("repair has no mutations"));
         }
@@ -224,12 +230,25 @@ impl<'s> Checker<'s> {
         if self.store.head()? != revision {
             return Err(refusal("store changed while validating inputs"));
         }
-        Ok(ValidatedBasis {
-            store: self.store,
-            revision,
-            basis: plan.basis.clone(),
-        })
+        Ok((
+            ValidatedBasis {
+                store: self.store,
+                revision,
+                basis: plan.basis.clone(),
+            },
+            order,
+        ))
     }
+}
+
+fn validate_order(plan: &RepairPlan, order: &[RepairStepId]) -> Result<(), AdmissionError> {
+    let input = crate::order_proof::OrderProofInput::try_for_order(plan, order)?;
+    let view = input.view();
+    if !liminal_safety::ordering_matches(view.steps, view.dependencies, view.schedule, view.applied)
+    {
+        return Err(refusal("repair ordering failed its safety check"));
+    }
+    Ok(())
 }
 
 fn check_file_route(
