@@ -30,7 +30,8 @@ AM-17.14. Baseline: `54b6450c15f161978ad63cc0f999d5090bc577f4`.
 
 Checklist interpretation: S5 remains open because external trust enrollment is
 pending. Its local implementation and tests are complete in machine-local
-receipt run `5FLLnQEb` (SHA-256
+receipt file `$XDG_STATE_HOME/liminal/assurance/run.5FLLnQEb/merge/receipt.json`
+(default root `~/.local/state/liminal/assurance`; SHA-256 of that file:
 `92db157e03f97db9797ef9488b405591f4e26f0e255a8daca603cf090f25f642`). External
 trust enrollment is deliberately not part of local closure. S4 remains open for
 observed hosted parity. S6 remains open for its final whole-system review and
