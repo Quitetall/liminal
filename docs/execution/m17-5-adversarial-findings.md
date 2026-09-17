@@ -4157,3 +4157,27 @@ closed. Brian may want to narrow the rule so that oracle coverage counts as
 suite rather than instrument; that is his to decide.
 
 **Two consecutive lanes now satisfy AM-17.11's termination rule.**
+
+## F-74 — full fixed-base campaign: execution green, qualification fail-closed
+
+**Found.** 2026-09-17, full lane `haqp-full-088ddeec-m17-5-1` at fixed base
+`088ddeec17bc37ba69fd53bcb900330e3e02b7de`. Pass 1 used Codex
+`gpt-5.6-sol`; pass 2 used direct MiMo `v2.5-pro`. All execution stages passed:
+baseline checks, replay, canaries (33/33), generated evidence (100,000 accepted
+per family), crash boundaries (8/8), concurrency evidence, mutation inventory,
+and seven ASan fuzz targets with no sanitizer findings. The run ended exit 2
+only because the qualification flip correctly refused five unresolved pass-1
+findings. Artifacts and corrected checksums are archived under
+`/mnt/4tb/liminal-formal-evidence/reviews/haqp-full-088ddeec-m17-5-1-failed-2026-09-17/`.
+
+| attempt | coordinate | disposition |
+|---|---|---|
+| A01 | `crates/liminal-xtask/src/haq.rs:1645` | verified qualifier gap: coarse scan does not require blocks to cover every non-blank source region; frozen instrument; remains RISK-006 and needs Brian's AM-17.11 boundary ruling |
+| A03 | `crates/liminal-xtask/src/haq.rs:345` | verified qualifier gap: `use ...::{self as alias}` can rename a production module while `use_aliases` records `self`; frozen instrument; requires scoped qualifier change and rerun |
+| A05 | `conformance/haqp/packet.json:1055` | verified packet drift: anchor is `position_free`'s author-key guard, not compact-literal emission; packet metadata corrected to P1-R040 with derived killers P1-T03/P1-T13 |
+| A11 | `conformance/haqp/packet.json:2208` | verified packet/registry drift: declared `independent_oracle_source_graph` does not exist; implementation is `independent_oracle_interchange`; packet cannot be corrected alone while frozen `generated_oracle_source` still names the stale coordinate |
+| A12 | `crates/liminal-xtask/src/haq.rs:3284` | verified qualifier provenance gap: raw review response is hashed separately from structured claims, with no parsed-claim equality check; frozen instrument; requires T1 scope decision and rerun |
+
+P1-M001's metadata correction is mechanical and does not claim a kill. Any
+packet change invalidates prior qualification evidence; a full rerun is required.
+Pass 2 found zero unresolved defects. Qualification remains **not established**.
