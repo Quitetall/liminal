@@ -392,21 +392,25 @@ mod tests {
         use std::os::unix::fs::symlink;
 
         let scratch = liminal_scratch::ScratchDir::new("debt-symlink-dir").expect("scratch");
+        let outside = liminal_scratch::ScratchDir::new("debt-symlink-target").expect("scratch");
         let root: &Utf8Path = &scratch;
         fs::create_dir(root.join("real")).expect("mkdir");
         fs::write(root.join("real/one.rs"), "#[test]\nfn active() {}\n").expect("write");
-        fs::create_dir(root.join("outside")).expect("mkdir");
         fs::write(
-            root.join("outside/two.rs"),
+            outside.join("two.rs"),
             "#[test]\nfn reachable_only_via_link() {}\n",
         )
         .expect("write");
-        symlink("../outside", root.join("real/linked")).expect("symlink");
+        symlink(
+            outside.as_std_path(),
+            root.join("real/linked").as_std_path(),
+        )
+        .expect("symlink");
 
         let report = scan_workspace_debt(root).expect("scan symlinked workspace");
         assert_eq!(
-            report.active_tests, 2,
-            "real directories are scanned; linked directory must not be scanned twice"
+            report.active_tests, 1,
+            "symlinked directory must not be traversed"
         );
     }
 
