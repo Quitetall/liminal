@@ -29,18 +29,9 @@ impl SignedBatchFixture {
         std::fs::write(&source_path, format!("{}\n", source_lines.join("\n"))).unwrap();
         let packet_path = root.join("conformance/haqp/packet.json");
         std::fs::create_dir_all(packet_path.parent().unwrap()).unwrap();
-        std::fs::write(
-            packet_path,
-            serde_json::to_vec_pretty(&serde_json::json!({
-                "mutants": [{
-                    "id": "P1-M008",
-                    "source": "crates/liminal-source/src/view.rs:59",
-                    "zzz": "fixture"
-                }]
-            }))
-            .unwrap(),
-        )
-        .unwrap();
+        let packet_template = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../conformance/haqp/packet.json");
+        std::fs::copy(packet_template, &packet_path).unwrap();
         fixture_git(&root, &["init", "--quiet"]);
         fixture_git(&root, &["add", "."]);
         fixture_git(&root, &["commit", "--quiet", "-m", "authorization fixture"]);
@@ -164,6 +155,49 @@ impl SignedBatchFixture {
     fn candidate_command_with_review(&self, candidate: &str, receipt: &std::path::Path) -> Command {
         let mut command = self.candidate_command(candidate);
         command.args(["--review-receipt"]).arg(receipt);
+        command
+    }
+
+    fn apply_command(
+        &self,
+        candidate: &str,
+        receipt: Option<&std::path::Path>,
+        output: &std::path::Path,
+    ) -> Command {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"));
+        command
+            .current_dir(&self.root)
+            .args([
+                "assurance",
+                "amend",
+                "apply",
+                "--authorization-only",
+                "--trust-root",
+            ])
+            .arg(&self.trust)
+            .args(["--policy"])
+            .arg(self.trust.join("policy.json"))
+            .args(["--policy-signature"])
+            .arg(self.trust.join("policy.json.sig"))
+            .args(["--batch"])
+            .arg(self.trust.join("batch.json"))
+            .args(["--batch-signature"])
+            .arg(self.trust.join("batch.json.sig"))
+            .args([
+                "--base",
+                &self.base,
+                "--target",
+                &self.target,
+                "--candidate",
+                candidate,
+            ])
+            .args(["--source"])
+            .arg(&self.source)
+            .args(["--line", "59", "--anchor", "    &self.basis"]);
+        if let Some(receipt) = receipt {
+            command.args(["--review-receipt"]).arg(receipt);
+        }
+        command.args(["--output"]).arg(output);
         command
     }
 
@@ -389,6 +423,85 @@ fn signed_batch_binds_independent_review_receipt_to_exact_patch() {
     assert_eq!(value["independent_review"], "receipt-verified");
     assert_eq!(value["apply_authorized"], false);
     assert_eq!(value["review_receipt_sha256"].as_str().unwrap().len(), 64);
+    fixture.finish();
+}
+
+#[test]
+fn signed_batch_apply_uses_fresh_worktree_and_leaves_source_checkout_untouched() {
+    let fixture = SignedBatchFixture::create();
+    let candidate = fixture.make_coordinate_candidate();
+    let receipt = fixture.write_review(&candidate);
+    let output =
+        std::env::temp_dir().join(format!("liminal-assurance-apply-{}", uuid::Uuid::now_v7()));
+    let result = fixture
+        .apply_command(&candidate, Some(&receipt), &output)
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let value: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(value["batch_authenticated"], true);
+    assert_eq!(value["apply_authorized"], true);
+    assert_eq!(value["independent_review"], "receipt-verified");
+    assert_eq!(value["committed"], false);
+    assert_eq!(value["pushed"], false);
+    assert_eq!(value["signed"], false);
+    assert_eq!(value["isolated_worktree"], output.to_str().unwrap());
+    assert_eq!(value["packet_digest"].as_str().unwrap().len(), 64);
+    assert_eq!(
+        fixture_git(&fixture.root, &["rev-parse", "HEAD"]),
+        candidate
+    );
+    assert_eq!(fixture_git(&fixture.root, &["status", "--porcelain"]), "");
+    let candidate_diff = Command::new("git")
+        .current_dir(&output)
+        .args([
+            "diff",
+            "--no-ext-diff",
+            "--binary",
+            "--full-index",
+            "--cached",
+            &candidate,
+            "--",
+        ])
+        .output()
+        .unwrap();
+    assert!(candidate_diff.status.success());
+    assert!(candidate_diff.stdout.is_empty());
+    fixture_git(
+        &fixture.root,
+        &["worktree", "remove", "--force", output.to_str().unwrap()],
+    );
+    fixture.finish();
+}
+
+#[test]
+fn signed_batch_apply_requires_review_and_fresh_destination() {
+    let fixture = SignedBatchFixture::create();
+    let candidate = fixture.make_coordinate_candidate();
+    let missing_review_output = std::env::temp_dir().join(format!(
+        "liminal-assurance-apply-missing-{}",
+        uuid::Uuid::now_v7()
+    ));
+    assert_auth_refusal(
+        fixture.apply_command(&candidate, None, &missing_review_output),
+        "isolated apply requires a verified review receipt",
+    );
+    assert!(!missing_review_output.exists());
+    let receipt = fixture.write_review(&candidate);
+    let existing = std::env::temp_dir().join(format!(
+        "liminal-assurance-apply-existing-{}",
+        uuid::Uuid::now_v7()
+    ));
+    std::fs::create_dir(&existing).unwrap();
+    assert_auth_refusal(
+        fixture.apply_command(&candidate, Some(&receipt), &existing),
+        "isolated apply output already exists",
+    );
+    std::fs::remove_dir_all(existing).unwrap();
     fixture.finish();
 }
 

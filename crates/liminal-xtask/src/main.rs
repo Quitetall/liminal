@@ -206,6 +206,14 @@ impl AssuranceCommand {
 enum AssuranceAmendCommand {
     /// Authenticate batch scope only; does not authorize applying a patch.
     Check(liminal_xtask::assurance::authorization::AuthorizationRequest),
+    /// Apply a verified coordinate patch only in a fresh external worktree.
+    Apply {
+        #[command(flatten)]
+        request: liminal_xtask::assurance::authorization::AuthorizationRequest,
+        /// New absolute destination outside every repository worktree.
+        #[arg(long)]
+        output: camino::Utf8PathBuf,
+    },
     /// Read-only proposal for a unique, unchanged top-level expression target.
     Propose {
         #[arg(long)]
@@ -228,6 +236,15 @@ impl AssuranceAmendCommand {
                 let summary = liminal_xtask::assurance::authorization::check_authorization(
                     &liminal_xtask::repo_root()?,
                     &request,
+                )?;
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+                Ok(())
+            }
+            Self::Apply { request, output } => {
+                let summary = liminal_xtask::assurance::authorization::apply_isolated(
+                    &liminal_xtask::repo_root()?,
+                    &request,
+                    &output,
                 )?;
                 println!("{}", serde_json::to_string_pretty(&summary)?);
                 Ok(())

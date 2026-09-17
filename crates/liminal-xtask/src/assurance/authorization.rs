@@ -15,7 +15,7 @@ use sha2::{Digest, Sha256};
 /// Explicit CLI inputs for the authorization-only check. No signing operation.
 #[derive(Debug, clap::Args)]
 pub struct AuthorizationRequest {
-    /// Required until full patch/review admission is implemented.
+    /// Required for authorization-only checking and isolated apply.
     #[arg(long)]
     authorization_only: bool,
     /// Human-managed absolute directory outside every repository worktree.
@@ -234,6 +234,178 @@ pub fn check_authorization(
         "policy_sha256": trust.policy_sha256, "batch_sha256": trust.batch_sha256,
         "tool_revision": trust.tool_revision, "tool_sha256": trust.tool_sha256
     }))
+}
+
+/// Apply an already authenticated coordinate patch in a fresh external
+/// worktree. The source checkout is never modified and no commit, push or
+/// signature operation is performed.
+pub fn apply_isolated(
+    root: &Utf8Path,
+    request: &AuthorizationRequest,
+    output: &Utf8Path,
+) -> Result<serde_json::Value> {
+    ensure!(
+        request.review_receipt.is_some(),
+        "isolated apply requires a verified review receipt"
+    );
+    let summary = check_authorization(root, request)?;
+    let candidate = request
+        .candidate
+        .as_deref()
+        .context("isolated apply requires candidate binding")?;
+    let source = request
+        .source
+        .as_ref()
+        .context("isolated apply requires source binding")?;
+    let repository = auth_repository_paths(root)?;
+    auth_prepare_apply_destination(output, &repository)?;
+    let patch = auth_git(
+        root,
+        &[
+            "diff",
+            "--no-ext-diff",
+            "--binary",
+            "--full-index",
+            &request.base,
+            candidate,
+            "--",
+            source.as_str(),
+            "conformance/haqp/packet.json",
+        ],
+    )?;
+    auth_git_add_worktree(root, output, &request.base)?;
+    let mut guard = ApplyWorktreeGuard::new(root, output);
+    auth_git_apply(output, &patch)?;
+    let remaining = auth_git(
+        output,
+        &[
+            "diff",
+            "--no-ext-diff",
+            "--binary",
+            "--full-index",
+            "--cached",
+            candidate,
+            "--",
+        ],
+    )?;
+    ensure!(
+        remaining.is_empty(),
+        "isolated apply tree differs from candidate commit"
+    );
+    ensure!(
+        auth_git(output, &["ls-files", "--others", "--exclude-standard"])?.is_empty(),
+        "isolated apply produced untracked files"
+    );
+    let packet_digest = crate::haq::packet_digest_repo(output)
+        .context("derive packet digest in isolated worktree")?;
+    guard.keep();
+    let mut applied = summary;
+    applied["apply_authorized"] = serde_json::json!(true);
+    applied["isolated_worktree"] = serde_json::json!(output);
+    applied["candidate_commit"] = serde_json::json!(candidate);
+    applied["packet_digest"] = serde_json::json!(packet_digest);
+    applied["committed"] = serde_json::json!(false);
+    applied["pushed"] = serde_json::json!(false);
+    applied["signed"] = serde_json::json!(false);
+    Ok(applied)
+}
+
+fn auth_prepare_apply_destination(output: &Utf8Path, repository: &[Utf8PathBuf]) -> Result<()> {
+    ensure!(
+        output.is_absolute(),
+        "absolute isolated apply output required"
+    );
+    ensure!(
+        fs::symlink_metadata(output).is_err(),
+        "isolated apply output already exists"
+    );
+    let parent = output
+        .parent()
+        .context("isolated apply output has no parent")?
+        .canonicalize_utf8()
+        .context("isolated apply output parent unavailable")?;
+    ensure!(
+        parent.is_dir(),
+        "isolated apply output parent is not a directory"
+    );
+    auth_require_external(&parent, repository)
+}
+
+fn auth_git_add_worktree(root: &Utf8Path, output: &Utf8Path, base: &str) -> Result<()> {
+    auth_git(
+        root,
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            "--quiet",
+            output.as_str(),
+            base,
+        ],
+    )?;
+    Ok(())
+}
+
+fn auth_git_apply(root: &Utf8Path, patch: &[u8]) -> Result<()> {
+    let mut command = Command::new("git");
+    for (key, _) in std::env::vars_os() {
+        if key.to_string_lossy().starts_with("GIT_") {
+            command.env_remove(key);
+        }
+    }
+    let mut child = command
+        .current_dir(root)
+        .env("GIT_NO_REPLACE_OBJECTS", "1")
+        .env("GIT_LITERAL_PATHSPECS", "1")
+        .args(["apply", "--index", "--whitespace=nowarn"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .context("git apply unavailable")?;
+    let mut stdin = child.stdin.take().context("git apply stdin missing")?;
+    let payload = patch.to_owned();
+    let writer = std::thread::spawn(move || stdin.write_all(&payload));
+    let status = child.wait().context("wait for git apply")?;
+    let write = writer
+        .join()
+        .map_err(|_| anyhow::anyhow!("git apply writer panicked"))?;
+    ensure!(
+        write.is_ok() && status.success(),
+        "isolated apply rejected candidate patch"
+    );
+    Ok(())
+}
+
+struct ApplyWorktreeGuard<'a> {
+    root: &'a Utf8Path,
+    output: &'a Utf8Path,
+    active: bool,
+}
+
+impl<'a> ApplyWorktreeGuard<'a> {
+    fn new(root: &'a Utf8Path, output: &'a Utf8Path) -> Self {
+        Self {
+            root,
+            output,
+            active: true,
+        }
+    }
+
+    fn keep(&mut self) {
+        self.active = false;
+    }
+}
+
+impl Drop for ApplyWorktreeGuard<'_> {
+    fn drop(&mut self) {
+        if self.active {
+            let _ = auth_git(
+                self.root,
+                &["worktree", "remove", "--force", self.output.as_str()],
+            );
+        }
+    }
 }
 
 fn auth_check_optional_review(
