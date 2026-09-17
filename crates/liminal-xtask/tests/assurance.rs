@@ -644,6 +644,26 @@ fn signed_batch_rejects_review_receipt_outside_trust_root() {
 }
 
 #[test]
+fn signed_batch_rejects_review_receipt_under_trust_root_prefix_sibling() {
+    let fixture = SignedBatchFixture::create();
+    let candidate = fixture.make_coordinate_candidate();
+    let receipt = fixture.write_review(&candidate);
+    let sibling = std::path::PathBuf::from(format!(
+        "{}-sibling",
+        fixture.trust.to_string_lossy()
+    ));
+    std::fs::create_dir(&sibling).unwrap();
+    let outside = sibling.join("review.json");
+    std::fs::copy(&receipt, &outside).unwrap();
+    assert_auth_refusal(
+        fixture.candidate_command_with_review(&candidate, &outside),
+        "review receipt must be under external trust root",
+    );
+    std::fs::remove_dir_all(sibling).unwrap();
+    fixture.finish();
+}
+
+#[test]
 fn signed_batch_rejects_extra_packet_or_tree_changes() {
     for extra in ["packet", "tree"] {
         let fixture = SignedBatchFixture::create();
