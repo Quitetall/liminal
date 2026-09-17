@@ -6938,8 +6938,7 @@ fn scope_trace_line_accesses(line: &str) -> Vec<(String, bool)> {
 fn scope_trace_line_failed(line: &str) -> bool {
     line.rfind(") = ")
         .and_then(|index| line[index + 4..].split_whitespace().next())
-        .map(|value| value == "-1")
-        .unwrap_or(false)
+        .is_some_and(|value| value == "-1")
 }
 
 /// The same, plus the directory fd each path was resolved against: the nearest
@@ -7187,6 +7186,10 @@ fn fd_write_target(
     open_fds.get(&(pid, fd)).cloned()
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "streaming trace scanner keeps fd, cwd, syscall and digest state in one pass"
+)]
 fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan> {
     let mut scan = ScopeTraceScan::default();
     let mut hasher = blake3::Hasher::new();
