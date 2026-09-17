@@ -641,10 +641,12 @@ The bounded `just gates` rerun exited 0 with 675 active and 47 deferred.
 ### M17.5 packet correction and clean-head verification
 
 At `3aa74f07160283057d87f83122e570fabb559791`, the M17.5 packet metadata
-for P1-M001 was corrected to its actual M19 requirement and confirmed killer
-tests. The full fixed-base HAQP campaign remains documented in
-`docs/execution/m17-5-adversarial-findings.md` as F-74; its final exit was
-fail-closed on five pass-1 findings, so it does not establish qualification.
+for P1-M001 was corrected to its actual M19 requirement; `haq derive-killers`
+then confirmed its declared killer-test set (`P1-T03`, `P1-T13`). The full
+fixed-base HAQP campaign remains documented as F-74 in
+`docs/execution/m17-5-adversarial-findings.md` at that commit; its final exit
+was fail-closed on five pass-1 findings, so it does not establish
+qualification.
 Canary evidence was regenerated against packet digest
 `10d5fe46f196fc368c277aaf3a8c85de594bfff8666cd8513a447e0850ecbb15` and
 committed at `7e5bb881433b14840e7267a49cd6b147b567d2c3`; all 33 canaries
@@ -654,8 +656,10 @@ The first clean detached merge attempt failed only in `threaded` (exit 101)
 while nextest passed. A direct `just test-threaded` rerun at the same commit
 passed all workspace targets, including 246 xtask tests and 45 assurance tests.
 A subsequent clean `just ci` completed successfully with all 14 registered
-commands passed, 675 passed and 47 skipped, zero failures. Receipt:
+commands passed, 675 passed (active) and 47 skipped (deferred), zero failures.
+Receipt:
 `/home/brianklam/.local/state/liminal/assurance/run.5FLLnQEb/merge/receipt.json`.
+Receipt SHA-256: `92db157e03f97db9797ef9488b405591f4e26f0e255a8daca603cf090f25f642`.
 It records `source_dirty: false`, `qualification_established: false`, and
 resource peaks of 622,149,632 bytes for `resource-run` and 155,758,592 bytes
 for `resource-lint`. This is local development evidence only; hosted parity,
