@@ -520,3 +520,31 @@ stderr SHA-256 is
 This is the final local development observation for the current implementation;
 hosted parity, mutation equivalence, HAQP qualification, Phase 0 closure and
 Phase 1 authority remain unestablished.
+
+### Post-control full rerun and environment correction
+
+`liminal-assurance-final-r5` is retained as an infrastructure-unavailable
+attempt at source commit `3db6b39f80b7d055b95249e92217418908779d77`: style,
+lint, bootstrap and proof-support passed, then nextest stopped with four Pandoc
+tests reporting exit 127 because the systemd-launched test environment did not
+resolve the installed pinned binary. Its receipt is
+`/home/brianklam/.local/state/liminal/assurance/run.NCL1apeH/merge/receipt.json`
+(SHA-256 `1e416b2ec21bf0bd41e9f593abf072e532cee0d80c49024ab83c3f0a253e13b2`).
+The same Pandoc test passed in a direct probe and `/usr/bin/pandoc` reported
+`pandoc 3.10.2`; no source, golden or assertion change followed.
+
+`liminal-assurance-final-r7` repeated the complete merge profile at the same
+clean source commit with the inherited process `PATH` explicitly passed into
+the bounded systemd unit. Unit exit was 0; runtime was 2m29.650s, CPU time
+3m44.248s, memory peak 2.1 GiB and swap 0 B under the 2-CPU/4-GiB/zero-swap/
+256-task envelope. All 14 registered commands passed. Receipt:
+`/home/brianklam/.local/state/liminal/assurance/run.RA2TPR6T/merge/receipt.json`
+(SHA-256 `4db6b5bc251f5cce1e24b1e55eba89b3c3443a637e004a27679f01442be35f6f`);
+it records `source_dirty: false` and `qualification_established: false`.
+Nextest JUnit reports 673 passed, zero failures and 47 skipped. The bounded
+`just gates` rerun exited 0 with 673 active and 47 deferred; stdout SHA-256 is
+`fa12b0c533e4b10fdf60336672fe15bcba4419badbfaa929f840aca57e38e96b` and
+stderr SHA-256 is
+`433c0fc81706bd1d34fc864dcb4795bb91870fe1ec3a95a502e7175b86ab43c9`.
+This remains local development evidence only; no hosted, mutation, HAQP,
+Phase 0 or Phase 1 qualification follows.
