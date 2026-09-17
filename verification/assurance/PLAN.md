@@ -447,7 +447,8 @@ zero failures and 47 skipped. Receipt is
 `/home/brianklam/.local/state/liminal/assurance/run.YA8zDD5R/merge/receipt.json`
 (SHA-256 `c71f8c23230ba2ee6272118e82cf77a34c5a2496d0f628dabe64c5c5c6950646`);
 it binds clean source commit `8b08c22e` and `qualification_established: false`.
-Durable service logs:
+Durable service logs (the merge unit intentionally emits status on stderr, so
+stdout is empty):
 `assurance-s5-apply-final-r2.stdout` (SHA-256
 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`) and
 `assurance-s5-apply-final-r2.stderr` (SHA-256
