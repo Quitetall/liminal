@@ -1706,6 +1706,7 @@ fn verify_oracle_source_coordinate(root: &Utf8Path, source: &str, family: &str) 
 /// The coarse scan judged against the source directly, never against the fine
 /// parse: presence, ranges, classification and the hash relation. Returns the
 /// classifications and hashes so the case witness binds them.
+#[allow(clippy::too_many_lines)]
 fn verify_coarse_scan(
     source: &str,
     coarse: &liminal_cst::CstDocument,
@@ -12048,6 +12049,7 @@ const CONCURRENCY_SCAN_ALLOWED_DEPENDENCIES: [&str; 15] = [
 /// The external crates `manifest` depends on at run time, workspace members
 /// excluded. Dev-dependencies are excluded too: the scan reads `src/` only,
 /// which a dev-dependency cannot reach.
+#[allow(clippy::items_after_statements)]
 fn runtime_external_dependencies(manifest: &Utf8Path) -> Result<BTreeSet<String>> {
     let text = fs::read_to_string(manifest).with_context(|| format!("read {manifest}"))?;
     let mut out = BTreeSet::new();
@@ -13526,9 +13528,7 @@ struct GeneratedIlrpCrash {
 
 impl liminal_jurisdiction::CrashInjector for GeneratedIlrpCrash {
     fn crash_if_armed(&self, at: liminal_jurisdiction::CrashPoint) {
-        if self.armed == Some(at) {
-            panic!("generated ILRP boundary {at:?}");
-        }
+        assert!(self.armed != Some(at), "generated ILRP boundary {at:?}");
     }
 }
 
@@ -13554,6 +13554,7 @@ impl liminal_jurisdiction::ExternalExecutor for GeneratedIlrpContestedExecutor {
 /// the contested terminal path once. The old single committed probe proved
 /// only that one happy path; this matrix makes fault omissions in Applying,
 /// Finalizing, and NeedsReview visible to the generated family (A05).
+#[allow(clippy::too_many_lines)]
 fn generated_ilrp_recovery_matrix() -> Result<Vec<u8>> {
     use liminal_jurisdiction::CrashPoint;
 
@@ -13687,7 +13688,7 @@ fn generated_ilrp_recovery_matrix() -> Result<Vec<u8>> {
             );
             witness.extend_from_slice(format!("{label}:{states:?};").as_bytes());
         } else {
-            witness.extend_from_slice(format!("{label}:{:?};", run).as_bytes());
+            witness.extend_from_slice(format!("{label}:{run:?};").as_bytes());
         }
     }
     Ok(witness)
