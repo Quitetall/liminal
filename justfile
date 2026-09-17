@@ -24,7 +24,9 @@ fmt-check:
     cargo fmt --all --check
     if test -n "$(git ls-files -- '*.toml')"; then git ls-files -z -- '*.toml' | xargs -0 taplo fmt --check; fi
     # Explicit paths bypass typos excludes unless --force-exclude is present.
-    git ls-files -z | xargs -0 typos --force-exclude
+    # Heldout corpus is intentionally absent from sparse qualification
+    # worktrees; never pass those locked files to a checker.
+    git ls-files -z -- ':!conformance/corpora/heldout/**' | xargs -0 typos --force-exclude
 
 lint:
     cargo clippy --workspace --all-targets --all-features -- -Dwarnings
