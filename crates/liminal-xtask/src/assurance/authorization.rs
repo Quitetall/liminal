@@ -315,10 +315,11 @@ fn auth_prepare_apply_destination(output: &Utf8Path, repository: &[Utf8PathBuf])
         output.is_absolute(),
         "absolute isolated apply output required"
     );
-    ensure!(
-        fs::symlink_metadata(output).is_err(),
-        "isolated apply output already exists"
-    );
+    match fs::symlink_metadata(output) {
+        Ok(_) => anyhow::bail!("isolated apply output already exists"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error).context("inspect isolated apply output"),
+    }
     let parent = output
         .parent()
         .context("isolated apply output has no parent")?
@@ -348,6 +349,8 @@ fn auth_git_add_worktree(root: &Utf8Path, output: &Utf8Path, base: &str) -> Resu
 
 fn auth_git_apply(root: &Utf8Path, patch: &[u8]) -> Result<()> {
     let mut command = Command::new("git");
+    // Strip caller-controlled Git overrides, then set only the hermetic flags
+    // this operation needs.
     for (key, _) in std::env::vars_os() {
         if key.to_string_lossy().starts_with("GIT_") {
             command.env_remove(key);
@@ -360,19 +363,37 @@ fn auth_git_apply(root: &Utf8Path, patch: &[u8]) -> Result<()> {
         .args(["apply", "--index", "--whitespace=nowarn"])
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .context("git apply unavailable")?;
     let mut stdin = child.stdin.take().context("git apply stdin missing")?;
+    let mut stderr = child.stderr.take().context("git apply stderr missing")?;
     let payload = patch.to_owned();
     let writer = std::thread::spawn(move || stdin.write_all(&payload));
+    let reader = std::thread::spawn(move || {
+        let mut captured = Vec::new();
+        let mut buffer = [0u8; 1024];
+        loop {
+            let count = stderr.read(&mut buffer)?;
+            if count == 0 {
+                break;
+            }
+            let remaining = 4096usize.saturating_sub(captured.len());
+            captured.extend_from_slice(&buffer[..count.min(remaining)]);
+        }
+        Ok::<_, std::io::Error>(captured)
+    });
     let status = child.wait().context("wait for git apply")?;
     let write = writer
         .join()
         .map_err(|_| anyhow::anyhow!("git apply writer panicked"))?;
+    let stderr = reader
+        .join()
+        .map_err(|_| anyhow::anyhow!("git apply stderr reader panicked"))??;
     ensure!(
         write.is_ok() && status.success(),
-        "isolated apply rejected candidate patch"
+        "isolated apply rejected candidate patch: {}",
+        String::from_utf8_lossy(&stderr).trim()
     );
     Ok(())
 }

@@ -17,6 +17,10 @@ struct SignedBatchFixture {
 
 impl SignedBatchFixture {
     fn create() -> Self {
+        Self::create_with_packet(false)
+    }
+
+    fn create_with_packet(use_real_packet: bool) -> Self {
         let root = fixture();
         let source = "crates/liminal-source/src/view.rs".to_owned();
         let source_path = root.join(&source);
@@ -29,9 +33,23 @@ impl SignedBatchFixture {
         std::fs::write(&source_path, format!("{}\n", source_lines.join("\n"))).unwrap();
         let packet_path = root.join("conformance/haqp/packet.json");
         std::fs::create_dir_all(packet_path.parent().unwrap()).unwrap();
-        let packet_template = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../conformance/haqp/packet.json");
-        std::fs::copy(packet_template, &packet_path).unwrap();
+        if use_real_packet {
+            let packet_template = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../conformance/haqp/packet.json");
+            std::fs::copy(packet_template, &packet_path).unwrap();
+        } else {
+            std::fs::write(
+                &packet_path,
+                serde_json::to_vec_pretty(&serde_json::json!({
+                    "mutants": [{
+                        "id": "P1-M008",
+                        "source": "crates/liminal-source/src/view.rs:59"
+                    }]
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+        }
         fixture_git(&root, &["init", "--quiet"]);
         fixture_git(&root, &["add", "."]);
         fixture_git(&root, &["commit", "--quiet", "-m", "authorization fixture"]);
@@ -283,6 +301,23 @@ impl SignedBatchFixture {
     }
 }
 
+struct FixtureWorktreeCleanup {
+    root: std::path::PathBuf,
+    output: std::path::PathBuf,
+}
+
+impl Drop for FixtureWorktreeCleanup {
+    fn drop(&mut self) {
+        if self.output.exists() {
+            let _ = Command::new("git")
+                .current_dir(&self.root)
+                .args(["worktree", "remove", "--force"])
+                .arg(&self.output)
+                .output();
+        }
+    }
+}
+
 #[test]
 fn signed_batch_authenticates_scope_without_authorizing_apply() {
     let fixture = SignedBatchFixture::create();
@@ -428,11 +463,15 @@ fn signed_batch_binds_independent_review_receipt_to_exact_patch() {
 
 #[test]
 fn signed_batch_apply_uses_fresh_worktree_and_leaves_source_checkout_untouched() {
-    let fixture = SignedBatchFixture::create();
+    let fixture = SignedBatchFixture::create_with_packet(true);
     let candidate = fixture.make_coordinate_candidate();
     let receipt = fixture.write_review(&candidate);
     let output =
         std::env::temp_dir().join(format!("liminal-assurance-apply-{}", uuid::Uuid::now_v7()));
+    let cleanup = FixtureWorktreeCleanup {
+        root: fixture.root.clone(),
+        output: output.clone(),
+    };
     let result = fixture
         .apply_command(&candidate, Some(&receipt), &output)
         .output()
@@ -471,10 +510,7 @@ fn signed_batch_apply_uses_fresh_worktree_and_leaves_source_checkout_untouched()
         .unwrap();
     assert!(candidate_diff.status.success());
     assert!(candidate_diff.stdout.is_empty());
-    fixture_git(
-        &fixture.root,
-        &["worktree", "remove", "--force", output.to_str().unwrap()],
-    );
+    drop(cleanup);
     fixture.finish();
 }
 
