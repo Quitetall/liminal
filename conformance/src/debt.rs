@@ -67,12 +67,7 @@ pub fn scan_workspace_debt(root: &Utf8Path) -> anyhow::Result<DebtReport> {
 }
 
 fn is_git_repository(root: &Utf8Path) -> bool {
-    let mut command = Command::new("git");
-    for (key, _) in std::env::vars_os() {
-        if key.to_string_lossy().starts_with("GIT_") {
-            command.env_remove(key);
-        }
-    }
+    let mut command = sanitized_git();
     command
         .current_dir(root)
         .args(["rev-parse", "--is-inside-work-tree"])
@@ -85,13 +80,7 @@ fn is_git_repository(root: &Utf8Path) -> bool {
 /// declared test surface, so an untracked checkout, fixture, or nested project
 /// must not change its denominator or active count.
 fn scan_tracked_workspace_debt(root: &Utf8Path) -> anyhow::Result<DebtReport> {
-    let mut command = Command::new("git");
-    for (key, _) in std::env::vars_os() {
-        if key.to_string_lossy().starts_with("GIT_") {
-            command.env_remove(key);
-        }
-    }
-    let output = command
+    let output = sanitized_git()
         .current_dir(root)
         .args(["ls-files", "-z", "--", "*.rs"])
         .output()?;
@@ -106,18 +95,34 @@ fn scan_tracked_workspace_debt(root: &Utf8Path) -> anyhow::Result<DebtReport> {
         .split(|byte| *byte == 0)
         .filter(|raw| !raw.is_empty())
     {
-        let relative = std::str::from_utf8(raw)?;
-        let relative = Utf8Path::new(relative);
-        anyhow::ensure!(
-            !relative.is_absolute()
-                && relative
-                    .components()
-                    .all(|component| matches!(component, camino::Utf8Component::Normal(_))),
-            "git returned an unsafe Rust path"
-        );
+        let relative = validate_git_path(raw)?;
         scan_file(&root.join(relative), &mut report);
     }
     Ok(report)
+}
+
+fn sanitized_git() -> Command {
+    let mut command = Command::new("git");
+    for (key, _) in std::env::vars_os() {
+        if key.to_string_lossy().starts_with("GIT_") {
+            command.env_remove(key);
+        }
+    }
+    command
+}
+
+fn validate_git_path(raw: &[u8]) -> anyhow::Result<&Utf8Path> {
+    let relative = std::str::from_utf8(raw)
+        .map_err(|_| anyhow::anyhow!("git returned a non-UTF-8 Rust path"))?;
+    let relative = Utf8Path::new(relative);
+    anyhow::ensure!(
+        !relative.is_absolute()
+            && relative
+                .components()
+                .all(|component| matches!(component, camino::Utf8Component::Normal(_))),
+        "git returned an unsafe Rust path"
+    );
+    Ok(relative)
 }
 
 /// Recursive fallback used by in-memory/scratch test roots that are not Git
@@ -145,6 +150,12 @@ fn scan_filesystem_debt(root: &Utf8Path, report: &mut DebtReport) {
 }
 
 fn scan_file(path: &Utf8Path, report: &mut DebtReport) {
+    let Ok(metadata) = fs::symlink_metadata(path) else {
+        return;
+    };
+    if !metadata.file_type().is_file() {
+        return;
+    }
     let Ok(text) = fs::read_to_string(path) else {
         return;
     };
@@ -354,6 +365,30 @@ mod tests {
             report.active_tests, 2,
             "the root's active test AND the nested one, so exclusion did not widen"
         );
+    }
+
+    #[test]
+    fn a_non_repository_meter_uses_the_filesystem_fallback() {
+        let scratch = liminal_scratch::ScratchDir::new("debt-fallback").expect("scratch");
+        let root: &Utf8Path = &scratch;
+        fs::write(
+            root.join("fallback.rs"),
+            "#[test]\n#[ignore = \"Phase 9: fallback\"]\nfn deferred() {}\n#[test]\nfn active() {}\n",
+        )
+        .expect("write");
+
+        let report = scan_workspace_debt(root).expect("scan non-repository workspace");
+        assert_eq!(report.active_tests, 1);
+        assert_eq!(report.total_ignored(), 1);
+    }
+
+    #[test]
+    fn tracked_path_validation_rejects_escape_and_non_utf8_bytes() {
+        assert!(validate_git_path(b"src/lib.rs").is_ok());
+        for raw in [b"/escape.rs" as &[u8], b"../escape.rs", b"src/../escape.rs"] {
+            assert!(validate_git_path(raw).is_err(), "path should be refused");
+        }
+        assert!(validate_git_path(&[0xff, b'.', b'r', b's']).is_err());
     }
 
     #[test]
