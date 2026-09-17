@@ -8,6 +8,7 @@
 
 use std::collections::BTreeMap;
 use std::fs;
+use std::process::Command;
 
 use camino::{Utf8Path, Utf8PathBuf};
 
@@ -56,7 +57,72 @@ impl DebtReport {
 /// reason starts with `Phase` is bucketed by its phase tag (the text before
 /// the first `:`); every other `#[test]` is active.
 pub fn scan_workspace_debt(root: &Utf8Path) -> anyhow::Result<DebtReport> {
+    if is_git_repository(root) {
+        return scan_tracked_workspace_debt(root);
+    }
+
     let mut report = DebtReport::default();
+    scan_filesystem_debt(root, &mut report);
+    Ok(report)
+}
+
+fn is_git_repository(root: &Utf8Path) -> bool {
+    let mut command = Command::new("git");
+    for (key, _) in std::env::vars_os() {
+        if key.to_string_lossy().starts_with("GIT_") {
+            command.env_remove(key);
+        }
+    }
+    command
+        .current_dir(root)
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .output()
+        .map(|output| output.status.success() && output.stdout == b"true\n")
+        .unwrap_or(false)
+}
+
+/// Scan only repository-tracked Rust files. The meter is a statement about the
+/// declared test surface, so an untracked checkout, fixture, or nested project
+/// must not change its denominator or active count.
+fn scan_tracked_workspace_debt(root: &Utf8Path) -> anyhow::Result<DebtReport> {
+    let mut command = Command::new("git");
+    for (key, _) in std::env::vars_os() {
+        if key.to_string_lossy().starts_with("GIT_") {
+            command.env_remove(key);
+        }
+    }
+    let output = command
+        .current_dir(root)
+        .args(["ls-files", "-z", "--", "*.rs"])
+        .output()?;
+    anyhow::ensure!(
+        output.status.success(),
+        "tracked debt scan could not list repository files"
+    );
+
+    let mut report = DebtReport::default();
+    for raw in output
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|raw| !raw.is_empty())
+    {
+        let relative = std::str::from_utf8(raw)?;
+        let relative = Utf8Path::new(relative);
+        anyhow::ensure!(
+            !relative.is_absolute()
+                && relative
+                    .components()
+                    .all(|component| matches!(component, camino::Utf8Component::Normal(_))),
+            "git returned an unsafe Rust path"
+        );
+        scan_file(&root.join(relative), &mut report);
+    }
+    Ok(report)
+}
+
+/// Recursive fallback used by in-memory/scratch test roots that are not Git
+/// repositories. Real repository meters always take the tracked path above.
+fn scan_filesystem_debt(root: &Utf8Path, report: &mut DebtReport) {
     let mut stack = vec![root.to_owned()];
     while let Some(dir) = stack.pop() {
         let Ok(entries) = fs::read_dir(&dir) else {
@@ -72,11 +138,10 @@ pub fn scan_workspace_debt(root: &Utf8Path) -> anyhow::Result<DebtReport> {
                     stack.push(path);
                 }
             } else if path.extension() == Some("rs") {
-                scan_file(&path, &mut report);
+                scan_file(&path, report);
             }
         }
     }
-    Ok(report)
 }
 
 fn scan_file(path: &Utf8Path, report: &mut DebtReport) {
@@ -288,6 +353,41 @@ mod tests {
         assert_eq!(
             report.active_tests, 2,
             "the root's active test AND the nested one, so exclusion did not widen"
+        );
+    }
+
+    #[test]
+    fn a_repository_meter_ignores_untracked_rust_trees() {
+        let scratch = liminal_scratch::ScratchDir::new("debt-tracked").expect("scratch");
+        let root: &Utf8Path = &scratch;
+        let init = Command::new("git")
+            .current_dir(root)
+            .args(["init", "--quiet"])
+            .output()
+            .expect("git init");
+        assert!(init.status.success(), "git init failed");
+
+        fs::write(root.join("tracked.rs"), "#[test]\nfn active() {}\n").expect("write");
+        let add = Command::new("git")
+            .current_dir(root)
+            .args(["add", "tracked.rs"])
+            .output()
+            .expect("git add");
+        assert!(add.status.success(), "git add failed");
+
+        fs::create_dir_all(root.join("untracked-project/src")).expect("mkdir");
+        fs::write(
+            root.join("untracked-project/src/lib.rs"),
+            "#[test]\n#[ignore = \"Phase 9: untracked\"]\nfn hidden() {}\n",
+        )
+        .expect("write");
+
+        let report = scan_workspace_debt(root).expect("scan tracked workspace");
+        assert_eq!(report.active_tests, 1, "only tracked tests count as active");
+        assert_eq!(
+            report.total_ignored(),
+            0,
+            "untracked deferred tests must not enter the declared backlog"
         );
     }
 
