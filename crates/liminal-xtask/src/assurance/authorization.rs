@@ -244,6 +244,8 @@ fn auth_check_optional_review(
     let Some(receipt) = &request.review_receipt else {
         return Ok(None);
     };
+    // Review is deliberately coupled to the complete coordinate binding. The
+    // registry check runs first and establishes candidate/source validity.
     let (Some(candidate), Some(source), Some(_line), Some(_anchor)) = (
         &request.candidate,
         &request.source,

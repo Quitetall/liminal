@@ -174,6 +174,7 @@ impl SignedBatchFixture {
             .lines()
             .map(str::to_owned)
             .collect();
+        // Packet coordinate mirrors this two-line relocation: 59 becomes 61.
         source_lines.insert(0, String::new());
         source_lines.insert(0, String::new());
         std::fs::write(&source_path, format!("{}\n", source_lines.join("\n"))).unwrap();
@@ -538,6 +539,20 @@ fn signed_batch_rejects_partial_registry_binding_group() {
     assert_auth_refusal(
         command,
         "candidate, source, line and anchor must be supplied together",
+    );
+    fixture.finish();
+}
+
+#[test]
+fn signed_batch_rejects_review_receipt_without_registry_binding() {
+    let fixture = SignedBatchFixture::create();
+    let mut command = fixture.command();
+    command
+        .args(["--review-receipt"])
+        .arg(fixture.trust.join("missing-review.json"));
+    assert_auth_refusal(
+        command,
+        "review receipt requires complete registry binding inputs",
     );
     fixture.finish();
 }
