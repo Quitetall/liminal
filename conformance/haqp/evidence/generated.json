@@ -1,6 +1,6 @@
 {
   "schema_version": "haqp-generated-v3-negative-categories",
-  "artifact_blake3": "ee1ad2e2bf7d031764f9c14fdf79fee9055b7a285743208d2697ef38e7624750",
+  "artifact_blake3": "fb3b194e6a8c85dc0b0851141cc3ecbea7a691fc3d71b5817a69f501b04c9743",
   "rows": [
     {
       "family": "source/CST/formatting",
@@ -91,7 +91,7 @@
       ],
       "oracle": {
         "id": "oracle:graph_interchange_codecs",
-        "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_graph",
+        "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_interchange",
         "independent": true,
         "relation_matrix_blake3": "8d33d5a8cc2e638dd03bef2e82e254fab351ffada5a30978c082708ab8b8e7b5"
       }

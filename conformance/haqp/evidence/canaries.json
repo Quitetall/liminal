@@ -247,9 +247,9 @@
     "gate": "oracle independence",
     "violation": "reuse production oracle for expected result",
     "expected_failure": "generated oracle is not independent",
-    "observed_failure": "generated oracle is not independent: source/CST/formatting: generated oracle is not marked independent",
+    "observed_failure": "generated oracle is not independent: crates/liminal-xtask/src/haq.rs: oracle independent_oracle_source_cst reaches the production path it judges (liminal_cst::parse); ADR-0020 §5 requires an independent oracle",
     "caught": true,
-    "mutation_semantics": "generated oracle.independent := false"
+    "mutation_semantics": "inject liminal_cst::parse into independent_oracle_source_cst"
   },
   {
     "id": "C29",

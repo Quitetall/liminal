@@ -165,14 +165,48 @@ const INDEPENDENT_ORACLES: [(&str, &str, &[&str]); 6] = [
     ),
 ];
 
-/// The body of `name` in `text`: from its `fn` line to the first line that is a
-/// bare `}` at column zero — under rustfmt only a top-level item closes there,
-/// so nested blocks cannot end the scan early.
+/// Extract item beginning at line byte `start`, counting only structural
+/// braces. Strings/comments can contain bare `}` and must not terminate the
+/// body (HAQP blind pass A02).
+fn item_body_from_start(text: &str, start: usize) -> Option<&str> {
+    let mut scanner = SourceScanner::default();
+    let mut depth = 0i32;
+    let mut opened = false;
+    let mut end = start;
+    for line in text[start..].split_inclusive('\n') {
+        let structural = scanner.structural(line);
+        let opens = i32::try_from(structural.matches('{').count()).ok()?;
+        let closes = i32::try_from(structural.matches('}').count()).ok()?;
+        if !opened && opens > 0 {
+            opened = true;
+        }
+        if opened {
+            depth += opens - closes;
+            if depth < 0 {
+                return None;
+            }
+        }
+        end += line.len();
+        if opened && depth == 0 {
+            return Some(&text[start..end]);
+        }
+    }
+    None
+}
+
+/// The body of `name` in `text`, using the lexical scanner to locate the
+/// definition and to find its matching structural closing brace.
 fn item_body<'a>(text: &'a str, name: &str) -> Option<&'a str> {
-    let start = text.find(&format!("fn {name}("))?;
-    let rest = &text[start..];
-    let end = rest.find("\n}\n").map_or(rest.len(), |index| index + 2);
-    Some(&rest[..end])
+    let needle = format!("fn {name}(");
+    let mut scanner = SourceScanner::default();
+    let mut offset = 0;
+    for line in text.split_inclusive('\n') {
+        if scanner.structural(line).contains(&needle) {
+            return item_body_from_start(text, offset);
+        }
+        offset += line.len();
+    }
+    None
 }
 
 /// Every definition of `name` in `text`. All of them, not the first: a crate's
@@ -182,18 +216,20 @@ fn item_bodies<'a>(text: &'a str, name: &str) -> Vec<&'a str> {
     // reach, and its body is where the production call would sit — following
     // functions alone left `production!()` outside the scanned body.
     let needles = [format!("fn {name}("), format!("macro_rules! {name}")];
-    let mut out = Vec::new();
-    for needle in &needles {
-        let mut from = 0;
-        while let Some(offset) = text[from..].find(needle.as_str()) {
-            let start = from + offset;
-            let rest = &text[start..];
-            let end = rest.find("\n}\n").map_or(rest.len(), |index| index + 2);
-            out.push(&rest[..end]);
-            from = start + needle.len();
+    let mut scanner = SourceScanner::default();
+    let mut starts = BTreeSet::new();
+    let mut offset = 0;
+    for line in text.split_inclusive('\n') {
+        let structural = scanner.structural(line);
+        if needles.iter().any(|needle| structural.contains(needle)) {
+            starts.insert(offset);
         }
+        offset += line.len();
     }
-    out
+    starts
+        .into_iter()
+        .filter_map(|start| item_body_from_start(text, start))
+        .collect()
 }
 
 /// The crate's own sources, concatenated, for the crate owning `file`. Blind
@@ -518,6 +554,42 @@ fn cell_claims_nothing(cell: &str) -> bool {
         || cell.chars().all(|ch| ch == '-' || ch == ':')
 }
 
+/// Strip markdown emphasis/code wrappers before comparing a cell to the
+/// closed verdict vocabulary. Formatting must not provide an escape hatch.
+fn normalized_markdown_cell(cell: &str) -> String {
+    let mut value = cell.trim();
+    loop {
+        let next = value
+            .strip_prefix('`')
+            .and_then(|inner| inner.strip_suffix('`'))
+            .or_else(|| {
+                value
+                    .strip_prefix("**")
+                    .and_then(|inner| inner.strip_suffix("**"))
+            })
+            .or_else(|| {
+                value
+                    .strip_prefix("__")
+                    .and_then(|inner| inner.strip_suffix("__"))
+            })
+            .or_else(|| {
+                value
+                    .strip_prefix('*')
+                    .and_then(|inner| inner.strip_suffix('*'))
+            })
+            .or_else(|| {
+                value
+                    .strip_prefix('_')
+                    .and_then(|inner| inner.strip_suffix('_'))
+            });
+        match next {
+            Some(inner) => value = inner.trim(),
+            None => break,
+        }
+    }
+    value.to_ascii_lowercase()
+}
+
 /// The rows of the table whose header starts with `header`, each split into
 /// trimmed cells. The separator row is dropped.
 /// Every table under `header`, with the width its own header line declares.
@@ -633,7 +705,7 @@ fn verify_markdown_tables(root: &Utf8Path, packet: &Packet) -> Result<()> {
             continue;
         }
         for cell in trimmed.trim_matches('|').split('|') {
-            let value = cell.trim().trim_matches('`').trim().to_ascii_lowercase();
+            let value = normalized_markdown_cell(cell);
             // A cell IS a verdict, or annotates a marker with one: both
             // `| pass |` and `| NOT_RUN — passed |` claim a result the lane
             // has not recorded (review of `a5c27fc`).
@@ -1589,7 +1661,7 @@ fn generated_oracle_source(family: &str) -> &'static str {
     match family {
         "source/CST/formatting" => "crates/liminal-xtask/src/haq.rs:independent_oracle_source_cst",
         "graph/interchange codecs" => {
-            "crates/liminal-xtask/src/haq.rs:independent_oracle_source_graph"
+            "crates/liminal-xtask/src/haq.rs:independent_oracle_interchange"
         }
         "transforms/projections" => {
             "crates/liminal-xtask/src/haq.rs:independent_oracle_source_transform"
@@ -1622,6 +1694,10 @@ fn verify_oracle_source_coordinate(root: &Utf8Path, source: &str, family: &str) 
         has_exact_coordinate_anchor(&text, anchor),
         "{family}: oracle source anchor {anchor:?} is absent from {path}"
     );
+    anyhow::ensure!(
+        item_body(&text, anchor).is_some(),
+        "{family}: oracle source anchor {anchor:?} is not a function definition in {path}"
+    );
     Ok(())
 }
 
@@ -1649,6 +1725,23 @@ fn verify_coarse_scan(
         coarse.blocks.len(),
         if has_content { "has" } else { "has no" }
     );
+    // A01: every non-blank source line must be covered by one reported range;
+    // merely reporting one valid block must not permit later content omission.
+    let mut line_start = 0usize;
+    for line in source.split_inclusive('\n') {
+        let line_end = line_start + line.len();
+        if !line.trim().is_empty() {
+            anyhow::ensure!(
+                coarse.blocks.iter().any(|block| {
+                    let start = usize::try_from(block.range.start).unwrap_or(usize::MAX);
+                    let end = usize::try_from(block.range.end).unwrap_or(usize::MAX);
+                    start <= line_start && end >= line_end
+                }),
+                "coarse scan omitted nonblank source region {line_start}..{line_end}"
+            );
+        }
+        line_start = line_end;
+    }
     let mut previous_end = 0usize;
     let mut kinds = Vec::new();
     let mut hashes = Vec::new();
@@ -9339,12 +9432,17 @@ fn use_aliases(line: &str) -> Vec<(String, String)> {
                 return None;
             }
             // `rsplit` always yields at least one element.
-            let symbol = path
-                .rsplit("::")
-                .next()
-                .unwrap_or_default()
-                .trim()
-                .to_owned();
+            let symbol_path = path.strip_suffix("::self").unwrap_or(path);
+            let symbol = if path.ends_with("::self") {
+                symbol_path.trim().to_owned()
+            } else {
+                symbol_path
+                    .rsplit("::")
+                    .next()
+                    .unwrap_or_default()
+                    .trim()
+                    .to_owned()
+            };
             let alias = alias.trim().to_owned();
             (alias != "_").then_some((symbol, alias))
         })
@@ -12728,29 +12826,26 @@ fn run_qualification_canary(root: &Utf8Path, packet: &Packet, id: &str) -> Resul
             anyhow::bail!("{error}");
         }
         "C28" => {
-            let path = root.join("conformance/haqp/evidence/generated.json");
-            let artifact: GeneratedEvidenceArtifact = serde_json::from_slice(
-                &fs::read(&path)
-                    .with_context(|| "C28 canary requires committed generated evidence")?,
-            )?;
-            let family = packet
-                .generated
-                .iter()
-                .find(|family| family.family == "source/CST/formatting")
-                .context("C28 canary requires source/CST/formatting family")?;
-            let row = artifact
-                .rows
-                .iter()
-                .find(|row| row.family == family.family)
-                .context("oracle canary requires generated evidence")?;
-            let mut row = row.clone();
-            let oracle = row
-                .oracle
-                .as_mut()
-                .context("oracle canary requires generated oracle evidence")?;
-            oracle.independent = false;
-            let error = verify_generated_contract(root, family, &row)
-                .expect_err("oracle canary must exercise independent-oracle verifier");
+            let scratch = liminal_scratch::ScratchDir::new("haq-c28").context("C28 scratch")?;
+            let scratch_root = scratch.path();
+            let haq = root.join("crates/liminal-xtask/src/haq.rs");
+            let query = root.join("crates/liminal-query/src/lib.rs");
+            let haq_dst = scratch_root.join("crates/liminal-xtask/src/haq.rs");
+            let query_dst = scratch_root.join("crates/liminal-query/src/lib.rs");
+            fs::create_dir_all(haq_dst.parent().expect("C28 haq parent"))?;
+            fs::create_dir_all(query_dst.parent().expect("C28 query parent"))?;
+            let original = fs::read_to_string(&haq).context("C28 read haq source")?;
+            let needle = "    anyhow::ensure!(emitted == source,";
+            let injected = original.replacen(
+                needle,
+                "    let _ = liminal_cst::parse(\"\");\n    anyhow::ensure!(emitted == source,",
+                1,
+            );
+            anyhow::ensure!(injected != original, "C28 injection anchor is absent");
+            fs::write(&haq_dst, injected)?;
+            fs::copy(&query, &query_dst).context("C28 copy query source")?;
+            let error = verify_oracle_independence(scratch_root)
+                .expect_err("oracle canary must exercise source independence verifier");
             anyhow::bail!("generated oracle is not independent: {error}");
         }
         "C29" => {
@@ -13169,7 +13264,7 @@ fn canary_mutation_semantics(id: &str) -> Result<&'static str> {
         "C25" => Ok("reviews[1].reviewer := reviews[0].reviewer"),
         "C26" => Ok("qualification.provenance := None"),
         "C27" => Ok("replace retained sanitizer binary marker and invoke runtime proof verifier"),
-        "C28" => Ok("generated oracle.independent := false"),
+        "C28" => Ok("inject liminal_cst::parse into independent_oracle_source_cst"),
         "C29" => Ok("campaign elapsed_s := 8h+1s"),
         "C30" => Ok("residual_risk.evidence := empty"),
         "C31" => Ok("scope trace command := scope-probe only"),
@@ -13745,10 +13840,14 @@ fn independent_oracle_interchange(
     twice: &[u8],
     shape: InterchangeShape,
 ) -> Result<Vec<u8>> {
-    anyhow::ensure!(
-        txn == decoded,
-        "interchange round trip changed the transaction"
-    );
+    let expected = serde_json::to_value(txn)?;
+    let observed = serde_json::to_value(decoded)?;
+    for key in ["id", "parent", "meta", "ops"] {
+        anyhow::ensure!(
+            expected.get(key) == observed.get(key),
+            "interchange field {key} changed during round trip"
+        );
+    }
     anyhow::ensure!(once == twice, "interchange encoding is not byte-stable");
     let value: serde_json::Value = serde_json::from_slice(once)?;
     let ops = value["ops"]
@@ -18881,6 +18980,11 @@ mod tests {
                 "a status verdict",
             ),
             (
+                "| qualification state | NOT_RUN |",
+                "| qualification state | **pass** |",
+                "a bold status verdict",
+            ),
+            (
                 "| locked acceptance corpora touched | NOT_RUN — prohibited |",
                 "| locked acceptance corpora touched | NOT_RUN — passed |",
                 "a verdict smuggled behind the marker",
@@ -18921,7 +19025,7 @@ mod tests {
     #[test]
     fn the_oracle_closure_follows_helpers_whatever_their_visibility() {
         let text = concat!(
-            "fn oracle(x: u8) -> u8 {\n    helper(x)\n}\n\n",
+            "fn oracle(x: u8) -> u8 {\n    let marker = r#\"\n}\n\"#;\n    let _ = marker;\n    helper(x)\n}\n\n",
             "pub(crate) fn helper(x: u8) -> u8 {\n    deeper(x)\n}\n\n",
             "pub(crate) async fn deeper(x: u8) -> u8 {\n    later(x)\n}\n\n",
             "pub(super) const fn later(x: u8) -> u8 {\n    innermost(x)\n}\n\n",
@@ -19836,6 +19940,10 @@ mod tests {
             "the two carry the same text"
         );
         verify_coarse_scan(source, &coarse).expect("equal text hashing alike is accepted");
+        let mut omitted = coarse.clone();
+        omitted.blocks.pop();
+        verify_coarse_scan(source, &omitted)
+            .expect_err("a later nonblank source region cannot be omitted");
     }
 
     /// Blind pass 1 at `ec045588` (A06): `chmod` names a path and was listed;
@@ -20250,6 +20358,10 @@ mod tests {
             ]
         );
         assert_eq!(
+            use_aliases("use liminal_source::paragraph::{self as prod};"),
+            vec![("liminal_source::paragraph".to_owned(), "prod".to_owned())]
+        );
+        assert_eq!(
             use_aliases("use a::{b::{rename as mv}};"),
             vec![("rename".to_owned(), "mv".to_owned())],
             "a nested group reads the same as a flat one"
@@ -20358,6 +20470,16 @@ mod tests {
         }
         let (_, big) = interchange_transaction("large-payload", &mut rng, "seed", false);
         assert!(big.payload_bytes_at_least >= 65_536);
+
+        let (txn, shape) = interchange_transaction("single-edge", &mut rng, "field", false);
+        let once = serde_json::to_vec(&txn).expect("encodes");
+        let decoded: liminal_graph::Transaction = serde_json::from_slice(&once).expect("decodes");
+        let twice = serde_json::to_vec(&decoded).expect("encodes");
+        let mut altered = decoded.clone();
+        altered.parent = liminal_id::GraphRevisionId(999_999);
+        let err = independent_oracle_interchange(&txn, &altered, &once, &twice, shape)
+            .expect_err("every serialized transaction field must be independently compared");
+        assert!(err.to_string().contains("field parent"), "{err}");
     }
 
     /// Blind pass 1 at 612cbcc (A10): sixteen seeds of one class no longer

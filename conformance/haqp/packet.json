@@ -2205,7 +2205,7 @@
    ],
    "oracle": {
     "id": "oracle:graph_interchange_codecs",
-    "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_graph"
+    "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_interchange"
    }
   },
   {
