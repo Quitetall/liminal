@@ -611,7 +611,13 @@ def parse_json(text: str) -> dict[str, Any]:
             prose = str(attempt[field]).strip()
             if len(prose) < 24 or len(prose.split()) < 4:
                 raise ValueError(f"attempt {identifier} {field} is not substantive")
-            if not re.search(rf"(?<![A-Za-z0-9_:]){re.escape(target)}(?![A-Za-z0-9_:])", prose):
+            # Permit normal punctuation immediately after a coordinate (for
+            # example, ``haq.rs:1: verifier``), while still refusing numeric
+            # prefix collisions such as ``haq.rs:10`` for target ``haq.rs:1``.
+            if not re.search(
+                rf"(?<![A-Za-z0-9_]){re.escape(target)}(?![A-Za-z0-9_]|:\d)",
+                prose,
+            ):
                 raise ValueError(f"attempt {identifier} {field} must quote exact target")
         if not isinstance(attempt["independently_reproduced"], bool):
             raise ValueError(f"attempt {identifier} independently_reproduced must be boolean")
@@ -718,6 +724,7 @@ def run_pass_with_retries(
         try:
             return run_pass(name, model, context, fixed_base, pass_two=pass_two, schema_retry=attempt)
         except ReviewSchemaFailure as exc:
+            OUT.mkdir(parents=True, exist_ok=True)
             (OUT / f"{name}-schema-failure-{attempt}.txt").write_text(
                 f"{exc}\n\n{redact(exc.raw)}\n"
             )
@@ -1055,6 +1062,35 @@ def self_test() -> int:
         json.dumps({
             **good,
             "attempts": [{**good["attempts"][0], "target": "haq.rs:verify_packet_shape"}, *good["attempts"][1:]],
+        }),
+    )
+    punctuated = {
+        **good,
+        "attempts": [
+            {
+                **good["attempts"][0],
+                "attempt": "attempted concrete falsification against haq.rs:1: source coordinate",
+                "observed_result": "observed verifier rejection at haq.rs:1: mutation refused",
+            },
+            *good["attempts"][1:],
+        ],
+    }
+    try:
+        parse_json(json.dumps(punctuated))
+    except ValueError as exc:
+        failures.append(f"punctuation after an exact coordinate was rejected: {exc}")
+    rejects(
+        "parse_json accepted a numeric coordinate prefix collision",
+        parse_json,
+        json.dumps({
+            **good,
+            "attempts": [
+                {
+                    **good["attempts"][0],
+                    "observed_result": "observed verifier rejection at haq.rs:10 for mutation",
+                },
+                *good["attempts"][1:],
+            ],
         }),
     )
     rejects(
