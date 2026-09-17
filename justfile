@@ -79,6 +79,7 @@ haq-crash:
     cargo run -p liminal-conformance --bin crash-evidence
 
 haq-blind-review:
+    mkdir -p target/haqp/blind-review
     python3 scripts/haqp_blind_review.py --self-test
     python3 scripts/haqp_blind_review.py --run
 
