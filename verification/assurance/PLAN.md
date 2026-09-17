@@ -621,3 +621,13 @@ The visible findings are nonblocking style notes; no security or correctness
 defect was identified in the primary result. The critic response ended before
 completion, so separate critic clearance is not claimed. No source change
 followed this review.
+
+The bounded full merge profile was then rerun at clean source commit
+`fa39e2e7fc98887aea06297f388ffcbe72101842`. All 14 registered commands passed;
+nextest reported 675 passed, zero failures and 47 skipped. The 2-CPU, 4-GiB,
+zero-swap, 256-task systemd envelope observed 3m35.833s runtime, 4m23.899s
+CPU time and 1.8 GiB peak memory. Receipt:
+`/home/brianklam/.local/state/liminal/assurance/run.o32WJ94n/merge/receipt.json`
+(SHA-256 `1f18e6764797b34cf6565c6d0346b83a00e121e5b9dfd983e54eab5dd569f9e0`).
+It records `source_dirty: false` and `qualification_established: false`.
+The bounded `just gates` rerun exited 0 with 675 active and 47 deferred.
