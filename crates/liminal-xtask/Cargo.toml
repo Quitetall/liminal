@@ -25,6 +25,7 @@ liminal-scratch.workspace = true
 zstd.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+toml.workspace = true
 sha2.workspace = true
 uuid.workspace = true                 # deterministic (v5) ids for the generated-evidence lane
 

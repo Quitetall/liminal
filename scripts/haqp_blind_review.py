@@ -334,6 +334,9 @@ def mimo_direct_call(model: str, prompt: str, *, liveness: bool = False) -> str:
         "provider_model": str(response.get("model", "")),
         "created": int(response.get("created", 0) or 0),
         "usage": response.get("usage", {}) or {},
+        # Bind retained answer bytes to provider-returned content. Metadata
+        # alone permits a genuine receipt to be paired with another answer.
+        "content_sha256": digest(content.encode()),
     }
     if not isinstance(content, str) or not content.strip():
         raise RuntimeError(f"{model}: direct Token Plan returned no review content")
@@ -775,13 +778,15 @@ def record_integrity_hash(*, record: dict[str, Any]) -> str:
     return digest(
         "\0".join(
             [
-                "haqp-review-integrity-v3",
+                "haqp-review-integrity-v4",
                 str(record["pass"]),
                 str(record["reviewer"]["model_family"]),
                 str(record["fixed_base"]["commit"]),
                 str(record["fixed_base"]["tree"]),
                 str(record["prompt_binding_sha256"]),
                 str(record["raw_response_sha256"]),
+                str(record["sanitized_prompt_hash"]),
+                str(record["isolated_session_hash"]),
                 # F-48 (A11): the structured claims as persisted, in the same
                 # canonical JSON the gate re-derives from the record file.
                 claims_sha256(record),

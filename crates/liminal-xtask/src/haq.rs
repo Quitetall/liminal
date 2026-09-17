@@ -1725,22 +1725,40 @@ fn verify_coarse_scan(
         coarse.blocks.len(),
         if has_content { "has" } else { "has no" }
     );
-    // A01: every non-blank source line must be covered by one reported range;
-    // merely reporting one valid block must not permit later content omission.
+    // A01: independently reconstruct the blank-line block boundaries. Coverage
+    // alone would let one block span several logical blocks and still pass.
+    let mut expected_ranges = Vec::new();
+    let mut expected_start = None;
     let mut line_start = 0usize;
     for line in source.split_inclusive('\n') {
         let line_end = line_start + line.len();
-        if !line.trim().is_empty() {
-            anyhow::ensure!(
-                coarse.blocks.iter().any(|block| {
-                    let start = usize::try_from(block.range.start).unwrap_or(usize::MAX);
-                    let end = usize::try_from(block.range.end).unwrap_or(usize::MAX);
-                    start <= line_start && end >= line_end
-                }),
-                "coarse scan omitted nonblank source region {line_start}..{line_end}"
-            );
+        if line.trim().is_empty() {
+            if let Some(start) = expected_start.take() {
+                expected_ranges.push((start, line_start));
+            }
+        } else if expected_start.is_none() {
+            expected_start = Some(line_start);
         }
         line_start = line_end;
+    }
+    if let Some(start) = expected_start {
+        expected_ranges.push((start, source.len()));
+    }
+    anyhow::ensure!(
+        coarse.blocks.len() == expected_ranges.len(),
+        "coarse scan reported {} blocks, expected {} blank-line blocks",
+        coarse.blocks.len(),
+        expected_ranges.len()
+    );
+    for (index, (block, (expected_start, expected_end))) in
+        coarse.blocks.iter().zip(expected_ranges).enumerate()
+    {
+        let actual_start = usize::try_from(block.range.start).unwrap_or(usize::MAX);
+        let actual_end = usize::try_from(block.range.end).unwrap_or(usize::MAX);
+        anyhow::ensure!(
+            (actual_start, actual_end) == (expected_start, expected_end),
+            "coarse block {index} has range {actual_start}..{actual_end}, expected {expected_start}..{expected_end}"
+        );
     }
     let mut previous_end = 0usize;
     let mut kinds = Vec::new();
@@ -1992,6 +2010,7 @@ fn independent_oracle_source_cst(
 fn independent_oracle_source_transform(
     base: &str,
     ours: &str,
+    theirs: &str,
     identity: &liminal_source::merge::MergeOutcome,
     forward: &liminal_source::merge::MergeOutcome,
     swapped: &liminal_source::merge::MergeOutcome,
@@ -2053,6 +2072,40 @@ fn independent_oracle_source_transform(
             ordered_block_contents(merged) == ordered_block_contents(ours),
             "identity merge reordered ordinary content: {ours:?} -> {merged:?}"
         );
+    }
+    // A12: outcome-class symmetry alone lets a merge drop one side's edit while
+    // both forward and swapped results remain `Disjoint`. For every token a
+    // side added beyond the base, require the corresponding disjoint result to
+    // retain that multiplicity. This checks content without reusing merge code.
+    let require_additions = |side: &str, merged: &str, label: &str| -> Result<()> {
+        let counts = |text: &str| {
+            text.split_whitespace()
+                .fold(BTreeMap::new(), |mut counts, token| {
+                    *counts.entry(token.to_owned()).or_insert(0usize) += 1;
+                    counts
+                })
+        };
+        let base_counts = counts(base);
+        let side_counts = counts(side);
+        let merged_counts = counts(merged);
+        for (token, side_count) in side_counts {
+            let base_count = base_counts.get(&token).copied().unwrap_or(0);
+            if side_count > base_count {
+                anyhow::ensure!(
+                    merged_counts.get(&token).copied().unwrap_or(0) >= side_count,
+                    "disjoint {label} merge dropped added token {token:?}: {side:?} -> {merged:?}"
+                );
+            }
+        }
+        Ok(())
+    };
+    if let liminal_source::merge::MergeOutcome::Disjoint { merged } = &forward {
+        require_additions(ours, merged, "forward/ours")?;
+        require_additions(theirs, merged, "forward/theirs")?;
+    }
+    if let liminal_source::merge::MergeOutcome::Disjoint { merged } = &swapped {
+        require_additions(ours, merged, "swapped/ours")?;
+        require_additions(theirs, merged, "swapped/theirs")?;
     }
     let disjoint = |outcome: &liminal_source::merge::MergeOutcome| {
         matches!(
@@ -2596,7 +2649,7 @@ fn verify_review_evidence(root: &Utf8Path, packet: &Packet) -> Result<()> {
         records.push((review.reviewer.clone(), record));
     }
     verify_reviewer_independence(&records)?;
-    verify_cross_pass_reproduction(&records)
+    verify_cross_pass_reproduction(root, &records)
 }
 
 /// A reviewer cannot make its own "independent reproduction" true by setting
@@ -2619,6 +2672,7 @@ fn reports_the_same_defect(
     left: &ReviewRecordAttempt,
     right: &ReviewRecordAttempt,
     corpus: &[&ReviewRecordAttempt],
+    source_vocabulary: Option<&BTreeSet<String>>,
 ) -> bool {
     // Blind pass 1 at `ec045588` (A02): both reports name the coordinate, so
     // `crates`, `liminal`, `xtask` and `haq` were four shared words before
@@ -2666,6 +2720,13 @@ fn reports_the_same_defect(
     let distinctive = shared
         .iter()
         .filter(|word| {
+            // Shared prose is only a concurrence signal when it also names
+            // vocabulary present in the cited source. This blocks unrelated
+            // reports manufactured from four private nonce words while still
+            // allowing independently worded descriptions of real code.
+            source_vocabulary.is_none_or(|source| source.contains(word.as_str()))
+        })
+        .filter(|word| {
             corpus
                 .iter()
                 .filter(|attempt| {
@@ -2681,7 +2742,22 @@ fn reports_the_same_defect(
     distinctive >= 2
 }
 
-fn verify_cross_pass_reproduction(records: &[(String, ReviewRecord)]) -> Result<()> {
+fn source_vocabulary(root: &Utf8Path, target: &str) -> Option<BTreeSet<String>> {
+    let file = target.split(':').next()?;
+    let text = fs::read_to_string(root.join(file)).ok()?;
+    Some(
+        text.to_ascii_lowercase()
+            .split(|ch: char| !ch.is_alphanumeric() && ch != '_')
+            .filter(|word| word.len() >= 4)
+            .map(str::to_owned)
+            .collect(),
+    )
+}
+
+fn verify_cross_pass_reproduction(
+    root: &Utf8Path,
+    records: &[(String, ReviewRecord)],
+) -> Result<()> {
     if records.is_empty() {
         return Ok(());
     }
@@ -2707,6 +2783,7 @@ fn verify_cross_pass_reproduction(records: &[(String, ReviewRecord)]) -> Result<
                 .iter()
                 .find(|attempt| attempt.id == *attempt_id)
                 .expect("finding linkage validated");
+            let source_words = source_vocabulary(root, &attempt.target);
             let matches = other
                 .attempts
                 .iter()
@@ -2715,7 +2792,12 @@ fn verify_cross_pass_reproduction(records: &[(String, ReviewRecord)]) -> Result<
                         && candidate.independently_reproduced
                         && candidate.attack_class == attempt.attack_class
                         && candidate.target == attempt.target
-                        && reports_the_same_defect(candidate, attempt, &corpus)
+                        && reports_the_same_defect(
+                            candidate,
+                            attempt,
+                            &corpus,
+                            source_words.as_ref(),
+                        )
                 })
                 .count();
             anyhow::ensure!(
@@ -3128,6 +3210,15 @@ fn verify_review_provider_receipt(record: &ReviewRecord, record_path: &Utf8Path)
                 "a mimo receipt must carry billed usage; {:?} bills nothing",
                 receipt.usage
             );
+            require_hex_digest("mimo provider content_sha256", &receipt.content_sha256)?;
+            let raw_path = record_path.with_extension("raw.txt");
+            let raw = fs::read(&raw_path)
+                .with_context(|| format!("{raw_path}: the MiMo answer must be retained"))?;
+            require_eq(
+                "mimo provider content_sha256 (of the retained answer)",
+                &format!("{:x}", Sha256::digest(&raw)),
+                &receipt.content_sha256,
+            )?;
             Ok(())
         }
         other => anyhow::bail!(
@@ -3378,13 +3469,15 @@ fn verify_review_record(
         "review integrity_binding_sha256",
         &record.integrity_binding_sha256,
         &sha256_text(&format!(
-            "haqp-review-integrity-v3\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}",
+            "haqp-review-integrity-v4\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}",
             record.pass,
             record.reviewer.model_family,
             record.fixed_base.commit,
             record.fixed_base.tree,
             record.prompt_binding_sha256,
             record.raw_response_sha256,
+            record.sanitized_prompt_hash,
+            record.isolated_session_hash,
             review_claims_sha256(record_path)?,
             review_receipt_sha256(record_path)?,
             record.result,
@@ -5684,7 +5777,16 @@ fn verify_seed_classes(root: &Utf8Path, target: &str, seed_dir: &Utf8Path) -> Re
         if SEED_VALID_TOKENS.iter().any(|token| file.contains(token)) {
             // `file` is already lowercased above, so this is the case-folded
             // comparison clippy asks for.
-            let well_formed = if Path::new(&file)
+            let well_formed = if target == "graph_interchange_codec"
+                && Path::new(&file)
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+            {
+                // Graph fuzz input is a Transaction, not arbitrary JSON. A
+                // scalar such as `null` is syntactically valid JSON but cannot
+                // reach the target's decoder (A03).
+                serde_json::from_slice::<liminal_graph::Transaction>(&bytes).is_ok()
+            } else if Path::new(&file)
                 .extension()
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
             {
@@ -11946,30 +12048,38 @@ const CONCURRENCY_SCAN_ALLOWED_DEPENDENCIES: [&str; 15] = [
 /// which a dev-dependency cannot reach.
 fn runtime_external_dependencies(manifest: &Utf8Path) -> Result<BTreeSet<String>> {
     let text = fs::read_to_string(manifest).with_context(|| format!("read {manifest}"))?;
-    let mut section = String::new();
     let mut out = BTreeSet::new();
-    for line in text.lines() {
-        let trimmed = line.trim();
-        if let Some(name) = trimmed.strip_prefix('[').and_then(|r| r.strip_suffix(']')) {
-            section.clear();
-            section.push_str(name);
-            continue;
-        }
-        let last = section.rsplit('.').next().unwrap_or_default();
-        if last != "dependencies" || section.contains("dev-") || section.contains("build-") {
-            continue;
-        }
-        let Some((key, _)) = trimmed.split_once('=') else {
-            continue;
+    let value: toml::Value = toml::from_str(&text).with_context(|| format!("parse {manifest}"))?;
+    fn collect(value: &toml::Value, path: &mut Vec<String>, out: &mut BTreeSet<String>) {
+        let toml::Value::Table(table) = value else {
+            return;
         };
-        let key = key.trim().trim_matches('"');
-        // `serde.workspace = true` names the crate before the dot.
-        let key = key.split('.').next().unwrap_or(key);
-        if key.is_empty() || key.starts_with('#') || key.starts_with("liminal") {
-            continue;
+        let is_runtime = path.last().is_some_and(|part| part == "dependencies")
+            && !path
+                .iter()
+                .any(|part| part == "dev-dependencies" || part == "build-dependencies");
+        if is_runtime {
+            for (key, spec) in table {
+                // Cargo's `package = "real-name"` is authoritative when the
+                // dependency key is an alias. Checking only the key lets a
+                // spawn-capable crate hide behind an allowed alias (A06).
+                let package = spec
+                    .as_table()
+                    .and_then(|spec| spec.get("package"))
+                    .and_then(toml::Value::as_str)
+                    .unwrap_or(key);
+                if !package.is_empty() && !package.starts_with("liminal") {
+                    out.insert(package.to_owned());
+                }
+            }
         }
-        out.insert(key.to_owned());
+        for (key, child) in table {
+            path.push(key.clone());
+            collect(child, path, out);
+            path.pop();
+        }
     }
+    collect(&value, &mut Vec::new(), &mut out);
     Ok(out)
 }
 
@@ -12472,6 +12582,8 @@ struct ReviewProviderReceipt {
     created: i64,
     #[serde(default)]
     usage: BTreeMap<String, serde_json::Value>,
+    #[serde(default)]
+    content_sha256: String,
 }
 
 /// Findings carry model-chosen key names, so they stay untyped; ATTEMPTS are
@@ -13402,6 +13514,183 @@ impl liminal_jurisdiction::ExternalExecutor for GeneratedIlrpExecutor {
     }
 }
 
+/// Crash hook used by the bounded generated recovery matrix. Unlike the
+/// process-death lane, this catches the panic in-process so one probe can cover
+/// every durable boundary without opening a process per generated case.
+#[derive(Clone, Copy)]
+struct GeneratedIlrpCrash {
+    armed: Option<liminal_jurisdiction::CrashPoint>,
+}
+
+impl liminal_jurisdiction::CrashInjector for GeneratedIlrpCrash {
+    fn crash_if_armed(&self, at: liminal_jurisdiction::CrashPoint) {
+        if self.armed == Some(at) {
+            panic!("generated ILRP boundary {at:?}");
+        }
+    }
+}
+
+struct GeneratedIlrpContestedExecutor;
+
+impl liminal_jurisdiction::ExternalExecutor for GeneratedIlrpContestedExecutor {
+    fn verify(
+        &self,
+        _mutation: &liminal_jurisdiction::ProposedMutation,
+    ) -> Result<liminal_jurisdiction::PrestateMatch, liminal_jurisdiction::IlrpError> {
+        Ok(liminal_jurisdiction::PrestateMatch::Neither)
+    }
+
+    fn apply(
+        &self,
+        _mutation: &liminal_jurisdiction::ProposedMutation,
+    ) -> Result<liminal_jurisdiction::StepAck, liminal_jurisdiction::IlrpError> {
+        unreachable!("contested executor must never apply an external step")
+    }
+}
+
+/// Exercise production prepare, every in-process crash boundary, recovery, and
+/// the contested terminal path once. The old single committed probe proved
+/// only that one happy path; this matrix makes fault omissions in Applying,
+/// Finalizing, and NeedsReview visible to the generated family (A05).
+fn generated_ilrp_recovery_matrix() -> Result<Vec<u8>> {
+    use liminal_jurisdiction::CrashPoint;
+
+    let mut witness = Vec::new();
+    for (label, armed) in [
+        ("before-apply", Some(CrashPoint::BeforeExternalApply)),
+        ("after-apply", Some(CrashPoint::AfterExternalApply)),
+        ("before-ack", Some(CrashPoint::BeforeAcknowledge)),
+        ("after-ack", Some(CrashPoint::AfterAcknowledge)),
+        ("before-finalize", Some(CrashPoint::BeforeFinalize)),
+        (
+            "after-finalize",
+            Some(CrashPoint::AfterFinalizeBeforeNotify),
+        ),
+        ("contested", None),
+    ] {
+        let dir = liminal_scratch::ScratchDir::new("haqp-generated-ilrp-matrix")?;
+        let owner = liminal_graph::StoreOwner::open(&dir)?;
+        let path = liminal_id::PathId("generated-ilrp-matrix.md".into());
+        let empty_hash = liminal_id::ContentHash::of(b"");
+        let fixed = uuid::Uuid::from_u128(2);
+        let mut setup = owner.begin()?;
+        setup.apply(liminal_graph::Operation::CreateNode {
+            node: liminal_graph::Node {
+                id: liminal_id::NodeId::from_uuid(fixed),
+                kind: liminal_graph::kind::FILE,
+                payload: liminal_graph::PayloadRef::Text(String::new()),
+                revision: liminal_id::RevisionId(0),
+                flags: liminal_graph::NodeFlags::default(),
+            },
+        })?;
+        setup.put_aux(
+            liminal_graph::ns::SYS_BLOB,
+            "file/generated-ilrp-matrix.md",
+            serde_json::json!(""),
+        )?;
+        setup.put_aux(
+            liminal_graph::ns::SYS_BLOB,
+            &empty_hash.to_hex(),
+            serde_json::json!(""),
+        )?;
+        setup.commit(liminal_graph::TxnMeta {
+            actor: None,
+            origin: liminal_graph::Origin::Human,
+            at: liminal_id::Timestamp::now(),
+            provenance: Some("haqp-generated-ilrp-matrix:fixture".into()),
+            inverse: None,
+        })?;
+        let step_id = liminal_id::RepairStepId::from_uuid(fixed);
+        let mutation = liminal_jurisdiction::ProposedMutation {
+            id: step_id,
+            subject: liminal_id::JurisdictionSubject::Node(liminal_id::NodeId::from_uuid(fixed)),
+            operation: liminal_jurisdiction::RepairOperation::WriteFile {
+                path: path.clone(),
+                contents: b"generated-ilrp-matrix".to_vec(),
+            },
+            expected_prestate: liminal_jurisdiction::StatePredicate::FileContent {
+                path: path.clone(),
+                hash: empty_hash,
+            },
+            expected_poststate: liminal_jurisdiction::StatePredicate::FileContent {
+                path: path.clone(),
+                hash: liminal_id::ContentHash::of(b"generated-ilrp-matrix"),
+            },
+            idempotency_key: liminal_id::IdempotencyKey::from_uuid(fixed),
+        };
+        let plan = liminal_jurisdiction::RepairPlan {
+            id: liminal_id::RepairId::from_uuid(fixed),
+            basis: liminal_revision::WorkspaceBasis {
+                transaction: liminal_id::TransactionId::from_uuid(fixed),
+                perspective: liminal_revision::BasisPerspective::DurableOnly,
+                components: BTreeMap::from([(
+                    liminal_id::JurisdictionKey::Path(path.clone()),
+                    liminal_revision::BasisComponent::FileContent {
+                        path,
+                        hash: empty_hash,
+                    },
+                )]),
+            },
+            steps: BTreeMap::from([(step_id, mutation)]),
+            dependencies: Vec::new(),
+            inverse: None,
+        };
+        let profiles = liminal_jurisdiction::ProfileSet::phase_minus_1();
+        let checker = liminal_jurisdiction::Checker {
+            store: owner.store(),
+            profiles: &profiles,
+        };
+        let authorized = checker.authorize_repair(plan)?;
+        let contested = label == "contested";
+        let crash = GeneratedIlrpCrash { armed };
+        let id = if contested {
+            let driver = liminal_jurisdiction::IlrpDriver::new(
+                owner.coordinator_writer(),
+                GeneratedIlrpContestedExecutor,
+                crash,
+            );
+            let id = driver.prepare(authorized)?;
+            let state = driver.run(id)?;
+            anyhow::ensure!(
+                state == liminal_jurisdiction::IntentState::NeedsReview,
+                "contested generated ILRP probe reached {state:?}"
+            );
+            witness.extend_from_slice(format!("{label}:{state:?};").as_bytes());
+            continue;
+        } else {
+            let driver = liminal_jurisdiction::IlrpDriver::new(
+                owner.coordinator_writer(),
+                GeneratedIlrpExecutor,
+                crash,
+            );
+            driver.prepare(authorized)?
+        };
+        let driver = liminal_jurisdiction::IlrpDriver::new(
+            owner.coordinator_writer(),
+            GeneratedIlrpExecutor,
+            crash,
+        );
+        let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| driver.run(id)));
+        if armed.is_some() {
+            anyhow::ensure!(run.is_err(), "{label} boundary did not fire");
+            let recovery = liminal_jurisdiction::IlrpDriver::new(
+                owner.coordinator_writer(),
+                GeneratedIlrpExecutor,
+                liminal_jurisdiction::NoCrash,
+            );
+            let states = recovery.recover_all()?;
+            anyhow::ensure!(
+                states.iter().all(|(_, state)| state.is_terminal()),
+                "{label} recovery left a nonterminal state: {states:?}"
+            );
+            witness.extend_from_slice(format!("{label}:{states:?};").as_bytes());
+        } else {
+            witness.extend_from_slice(format!("{label}:{:?};", run).as_bytes());
+        }
+    }
+    Ok(witness)
+}
+
 // DG17.3 retains the existing assertions and output; explicit trusted setup
 // makes this bounded probe longer without relocating its fixture machinery.
 #[allow(clippy::too_many_lines)]
@@ -13500,11 +13789,13 @@ fn generated_ilrp_probe() -> Result<&'static [u8]> {
                 recovered.is_empty(),
                 "committed ILRP probe must recover no intents"
             );
-            Ok(format!(
+            let mut witness = format!(
                 "{state:?}:{}",
                 liminal_jurisdiction::CrashPoint::all().len()
             )
-            .into_bytes())
+            .into_bytes();
+            witness.extend_from_slice(&generated_ilrp_recovery_matrix()?);
+            Ok(witness)
         })();
         outcome.map_err(|error| error.to_string())
     });
@@ -13840,12 +14131,34 @@ fn independent_oracle_interchange(
     twice: &[u8],
     shape: InterchangeShape,
 ) -> Result<Vec<u8>> {
-    let expected = serde_json::to_value(txn)?;
-    let observed = serde_json::to_value(decoded)?;
-    for key in ["id", "parent", "meta", "ops"] {
+    // Do not serialize both sides with the product codec and compare those
+    // values. A serde field mutation would normalize expected and observed in
+    // the same way and make its own defect invisible (A02). Compare the
+    // decoded value through its public fields instead.
+    anyhow::ensure!(
+        txn.id == decoded.id,
+        "interchange field id changed during round trip"
+    );
+    anyhow::ensure!(
+        txn.parent == decoded.parent,
+        "interchange field parent changed during round trip"
+    );
+    anyhow::ensure!(
+        txn.meta.actor == decoded.meta.actor
+            && txn.meta.origin == decoded.meta.origin
+            && txn.meta.at == decoded.meta.at
+            && txn.meta.provenance == decoded.meta.provenance
+            && txn.meta.inverse == decoded.meta.inverse,
+        "interchange field meta changed during round trip"
+    );
+    anyhow::ensure!(
+        txn.ops.len() == decoded.ops.len(),
+        "interchange field ops length changed"
+    );
+    for (index, (expected, observed)) in txn.ops.iter().zip(&decoded.ops).enumerate() {
         anyhow::ensure!(
-            expected.get(key) == observed.get(key),
-            "interchange field {key} changed during round trip"
+            expected == observed,
+            "interchange operation {index} changed during round trip"
         );
     }
     anyhow::ensure!(once == twice, "interchange encoding is not byte-stable");
@@ -14026,7 +14339,8 @@ fn case_transform(rng: &mut Rng) -> Result<Case> {
     let identity = three_way(&base, &ours, &base);
     let forward = three_way(&base, &ours, &theirs);
     let swapped = three_way(&base, &theirs, &ours);
-    let witness = independent_oracle_source_transform(&base, &ours, &identity, &forward, &swapped)?;
+    let witness =
+        independent_oracle_source_transform(&base, &ours, &theirs, &identity, &forward, &swapped)?;
     Ok(Case::Accepted { category, witness })
 }
 
@@ -15516,13 +15830,15 @@ mod tests {
             },
         };
         record.integrity_binding_sha256 = sha256_text(&format!(
-            "haqp-review-integrity-v3\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}",
+            "haqp-review-integrity-v4\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}",
             record.pass,
             record.reviewer.model_family,
             record.fixed_base.commit,
             record.fixed_base.tree,
             record.prompt_binding_sha256,
             record.raw_response_sha256,
+            record.sanitized_prompt_hash,
+            record.isolated_session_hash,
             // fixture_record_path writes only the receipt: claim keys read null.
             sha256_text(r#"{"attempts":null,"findings":null,"independently_reproduced":null}"#),
             sha256_text(&fixture_receipt_json()),
@@ -15579,8 +15895,11 @@ mod tests {
         second.findings = vec![serde_json::json!({"id": "A-F1", "attempt_id": "A0"})];
         second.independently_reproduced = vec!["A-F1".to_owned()];
 
-        verify_cross_pass_reproduction(&[("p1".to_owned(), first), ("p2".to_owned(), second)])
-            .expect("identical falsification claims must concur");
+        verify_cross_pass_reproduction(
+            &repo_root(),
+            &[("p1".to_owned(), first), ("p2".to_owned(), second)],
+        )
+        .expect("identical falsification claims must concur");
     }
 
     /// P1-A05: array padding is not a set of attempts.
@@ -16993,7 +17312,7 @@ mod tests {
             ),
             (
                 "repair/ILRP/recovery",
-                "c2ff73e22df13d34ca85c40c357ace4655c0d4a3cf796c873c20933019096ddf",
+                "2f32424dc1dae74f1eeb5b66ee15f76ff221df2dcf1453f11c9f90326a13222c",
             ),
             (
                 "Basis/revision/query invalidation",
@@ -17881,7 +18200,7 @@ mod tests {
             vec![("pass1".to_owned(), one), ("pass2".to_owned(), two)]
         }
 
-        verify_cross_pass_reproduction(&paired(true))
+        verify_cross_pass_reproduction(&repo_root(), &paired(true))
             .expect("a finding matched one-for-one across passes is reproduced");
 
         // The other pass no longer carries the matching defect.
@@ -17893,7 +18212,7 @@ mod tests {
         );
         orphaned[1].1.attempts[0].attack_class = "nondeterminism".to_owned();
         orphaned[1].1.attempts[1].attack_class = "vacuity".to_owned();
-        let error = verify_cross_pass_reproduction(&orphaned)
+        let error = verify_cross_pass_reproduction(&repo_root(), &orphaned)
             .expect_err("a reproduced finding needs a match in the other pass");
         assert!(
             error.to_string().contains("exactly one"),
@@ -17902,7 +18221,7 @@ mod tests {
 
         // One record alone cannot establish cross-pass reproduction.
         let single = vec![paired(true).remove(0)];
-        verify_cross_pass_reproduction(&single)
+        verify_cross_pass_reproduction(&repo_root(), &single)
             .expect_err("cross-pass reproduction requires two records");
     }
 
@@ -18919,11 +19238,30 @@ mod tests {
         let swapped = MergeOutcome::Disjoint {
             merged: "alpha {#y}\n\nbeta {#x}".to_owned(),
         };
-        independent_oracle_source_transform(base, ours, &faithful, &faithful, &faithful)
+        independent_oracle_source_transform(base, ours, base, &faithful, &faithful, &faithful)
             .expect("a faithful move keeps every marker's content");
-        let err = independent_oracle_source_transform(base, ours, &swapped, &swapped, &swapped)
-            .expect_err("swapped contents under moved markers");
+        let err =
+            independent_oracle_source_transform(base, ours, base, &swapped, &swapped, &swapped)
+                .expect_err("swapped contents under moved markers");
         assert!(err.to_string().contains("re-associated"), "{err}");
+    }
+
+    #[test]
+    fn a_disjoint_merge_must_keep_both_sides_added_content() {
+        use liminal_source::merge::MergeOutcome;
+        let base = "alpha {#a}\n\nbeta {#b}";
+        let ours = "ours alpha {#a}\n\nbeta {#b}";
+        let theirs = "alpha {#a}\n\ntheirs beta {#b}";
+        let identity = MergeOutcome::Disjoint {
+            merged: ours.to_owned(),
+        };
+        let dropped = MergeOutcome::Disjoint {
+            merged: base.to_owned(),
+        };
+        let err =
+            independent_oracle_source_transform(base, ours, theirs, &identity, &dropped, &dropped)
+                .expect_err("a disjoint result that drops edits is not safe");
+        assert!(err.to_string().contains("dropped added token"), "{err}");
     }
 
     /// Blind pass 1 at 612cbcc (A03): each negative category constructs the
@@ -19782,7 +20120,7 @@ mod tests {
             "the survival check compares alphanumeric runs only; dropped punctuation content is unseen",
         );
         assert!(
-            reports_the_same_defect(&codex, &mimo, &[&codex, &mimo]),
+            reports_the_same_defect(&codex, &mimo, &[&codex, &mimo], None),
             "different words, same defect"
         );
 
@@ -19791,7 +20129,7 @@ mod tests {
             "the recorded window is self-consistent and binds no external timestamp",
         );
         assert!(
-            !reports_the_same_defect(&codex, &unrelated, &[&codex, &unrelated]),
+            !reports_the_same_defect(&codex, &unrelated, &[&codex, &unrelated], None),
             "the same coordinate is not the same defect"
         );
 
@@ -19810,9 +20148,29 @@ mod tests {
             !reports_the_same_defect(
                 &path_words,
                 &other_path_words,
-                &[&path_words, &other_path_words]
+                &[&path_words, &other_path_words],
+                None,
             ),
             "path tokens and campaign boilerplate are not a shared report"
+        );
+
+        let nonce_left = attempt(
+            "noncealpha noncebeta noncegamma noncedelta",
+            "noncealpha noncebeta noncegamma noncedelta",
+        );
+        let nonce_right = attempt(
+            "noncealpha noncebeta noncegamma noncedelta unrelated",
+            "noncealpha noncebeta noncegamma noncedelta unrelated",
+        );
+        let source = BTreeSet::from(["verifier".to_owned(), "coarse".to_owned()]);
+        assert!(
+            !reports_the_same_defect(
+                &nonce_left,
+                &nonce_right,
+                &[&nonce_left, &nonce_right],
+                Some(&source),
+            ),
+            "private nonce vocabulary is not source-grounded concurrence"
         );
     }
 
@@ -19944,6 +20302,20 @@ mod tests {
         omitted.blocks.pop();
         verify_coarse_scan(source, &omitted)
             .expect_err("a later nonblank source region cannot be omitted");
+    }
+
+    /// A length-only content hash is not a content hash. Distinct blocks with
+    /// equal byte length must still carry distinct digests (A04).
+    #[test]
+    fn coarse_hash_relation_reaches_distinct_equal_length_blocks() {
+        let source = "alpha\n\nbravo\n";
+        let coarse = liminal_cst::coarse_parse(source);
+        assert_eq!(coarse.blocks.len(), 2);
+        assert_ne!(
+            coarse.blocks[0].hash, coarse.blocks[1].hash,
+            "equal-length distinct block text must not hash alike"
+        );
+        verify_coarse_scan(source, &coarse).expect("independent hash relation accepts real hashes");
     }
 
     /// Blind pass 1 at `ec045588` (A06): `chmod` names a path and was listed;
@@ -20572,6 +20944,31 @@ mod tests {
         fs::write(dir.join("02-single-node.json"), br#"{"ops":[]}"#).expect("seed");
         commit_all("a valid-class seed that parses");
         verify_seed_classes(&root, "t", &dir).expect("well-formed in its own format");
+
+        // Graph fuzz input has a stricter unit than JSON syntax: a scalar JSON
+        // value must not satisfy the valid transaction class (A03).
+        let graph_dir = root.join("fuzz/corpus/graph_interchange_codec");
+        fs::create_dir_all(&graph_dir).expect("graph seed dir");
+        fs::write(
+            graph_dir.join("00-single-node.json"),
+            br#"{"id":"00000000-0000-0000-0000-000000000001","parent":0,"meta":{"actor":null,"origin":"human","at":0,"provenance":null,"inverse":null},"ops":[]}"#,
+        )
+        .expect("graph valid seed");
+        for (name, bytes) in [
+            ("01-boundary.bin", b"boundary".as_slice()),
+            ("02-truncated.bin", b"truncated".as_slice()),
+            ("03-invalid.bin", b"invalid".as_slice()),
+            ("04-hostile.bin", b"hostile".as_slice()),
+        ] {
+            fs::write(graph_dir.join(name), bytes).expect("graph negative seed");
+        }
+        commit_all("graph classed seeds");
+        verify_seed_classes(&root, "graph_interchange_codec", &graph_dir)
+            .expect("transaction-shaped valid graph seed");
+        fs::write(graph_dir.join("00-single-node.json"), b"null").expect("scalar seed");
+        commit_all("scalar is not a transaction");
+        verify_seed_classes(&root, "graph_interchange_codec", &graph_dir)
+            .expect_err("a scalar must not satisfy graph valid class");
     }
 
     /// Blind pass 1 at f360e90 (A03): equal length let a duplicated step
@@ -20839,7 +21236,8 @@ mod tests {
         let mimo = |usage: &str, created: i64| -> ReviewRecord {
             let mut row = review_record(2, "mimo", "mimo-direct");
             row.provider_receipt = serde_json::from_str(&format!(
-                r#"{{"backend":"mimo-direct","created":{created},"provider_model":"mimo-v2.5-pro","response_id":"chatcmpl-x","usage":{usage}}}"#
+                r#"{{"backend":"mimo-direct","content_sha256":"{:x}","created":{created},"provider_model":"mimo-v2.5-pro","response_id":"chatcmpl-x","usage":{usage}}}"#,
+                Sha256::digest(b"fixture raw answer")
             ))
             .expect("receipt parses");
             row
@@ -20852,6 +21250,14 @@ mod tests {
             &path,
         )
         .expect("a complete mimo receipt");
+        let mut mismatched = mimo(
+            r#"{"prompt_tokens":3,"completion_tokens":9,"total_tokens":12}"#,
+            1,
+        );
+        mismatched.provider_receipt.content_sha256 = "a".repeat(64);
+        let err = verify_review_provider_receipt(&mismatched, &path)
+            .expect_err("a MiMo receipt for a different retained answer");
+        assert!(err.to_string().contains("content_sha256"), "{err}");
         let err = verify_review_provider_receipt(
             &mimo(
                 r#"{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}"#,
@@ -21872,7 +22278,7 @@ mod tests {
 
 #[cfg(test)]
 mod vstd_scan_controls {
-    use super::scan_concurrency_primitives;
+    use super::{runtime_external_dependencies, scan_concurrency_primitives};
     use std::{fs, process::Command};
 
     #[test]
@@ -21936,5 +22342,19 @@ mod vstd_scan_controls {
             format!("{error:#}").contains("resolved vstd features must be empty"),
             "{error:#}"
         );
+    }
+
+    #[test]
+    fn runtime_dependency_scan_resolves_package_aliases() {
+        let scratch = liminal_scratch::ScratchDir::new("haq-dependency-alias").expect("scratch");
+        let manifest = scratch.path().join("Cargo.toml");
+        fs::write(
+            &manifest,
+            "[package]\nname = \"alias\"\nversion = \"0.0.0\"\n[dependencies]\nserde = { package = \"rayon\", version = \"1\" }\n",
+        )
+        .expect("manifest");
+        let dependencies = runtime_external_dependencies(&manifest).expect("parse dependencies");
+        assert!(dependencies.contains("rayon"));
+        assert!(!dependencies.contains("serde"));
     }
 }
