@@ -648,10 +648,7 @@ fn signed_batch_rejects_review_receipt_under_trust_root_prefix_sibling() {
     let fixture = SignedBatchFixture::create();
     let candidate = fixture.make_coordinate_candidate();
     let receipt = fixture.write_review(&candidate);
-    let sibling = std::path::PathBuf::from(format!(
-        "{}-sibling",
-        fixture.trust.to_string_lossy()
-    ));
+    let sibling = std::path::PathBuf::from(format!("{}-sibling", fixture.trust.to_string_lossy()));
     std::fs::create_dir(&sibling).unwrap();
     let outside = sibling.join("review.json");
     std::fs::copy(&receipt, &outside).unwrap();
