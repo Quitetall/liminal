@@ -16,12 +16,15 @@ check:
 
 fmt:
     cargo fmt --all
-    taplo fmt
+    # Scope TOML formatting to repository inputs; nested untracked projects are
+    # outside this workspace's contract.
+    if test -n "$(git ls-files -- '*.toml')"; then git ls-files -z -- '*.toml' | xargs -0 taplo fmt; fi
 
 fmt-check:
     cargo fmt --all --check
-    taplo fmt --check
-    typos
+    if test -n "$(git ls-files -- '*.toml')"; then git ls-files -z -- '*.toml' | xargs -0 taplo fmt --check; fi
+    # Explicit paths bypass typos excludes unless --force-exclude is present.
+    git ls-files -z | xargs -0 typos --force-exclude
 
 lint:
     cargo clippy --workspace --all-targets --all-features -- -Dwarnings
