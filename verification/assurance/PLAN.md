@@ -433,3 +433,32 @@ named test passes on isolated rerun. Full bounded merge verification and final
 producer-derived refresh remain next. These slices still do not establish
 mutation equivalence, HAQP qualification, hosted parity, Phase 0 closure or
 Phase 1 authority.
+
+### Full verification after isolated apply
+
+`assurance-s5-apply-final-r2` ran the complete Linux merge profile under an
+explicit systemd user unit with 2 CPU, 4-GiB memory, zero swap and 256-task
+limits. Unit exit was 0; service runtime 2m56.484s, CPU time 4m02.622s, memory
+peak 4 GiB and swap 0. All 14 registered commands passed, including style,
+lint, bootstrap, proof-support, nextest, threaded tests, doctest/rustdoc,
+documentation, dependency policy, inventory, canaries, bounded resource run,
+resource lint and the final assurance check. Nextest JUnit reports 672 passed,
+zero failures and 47 skipped. Receipt is
+`/home/brianklam/.local/state/liminal/assurance/run.YA8zDD5R/merge/receipt.json`
+(SHA-256 `c71f8c23230ba2ee6272118e82cf77a34c5a2496d0f628dabe64c5c5c6950646`);
+it binds clean source commit `8b08c22e` and `qualification_established: false`.
+Durable service logs:
+`assurance-s5-apply-final-r2.stdout` (SHA-256
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`) and
+`assurance-s5-apply-final-r2.stderr` (SHA-256
+`da3e98a24a03ae06863459112da0b90aed2732e1404431c4aecfc8005909de43`).
+
+`assurance-s5-apply-final-gates` exited 0 with 672 active and 47 deferred;
+stdout SHA-256 is
+`4491b660fdbe1390b7acd7ce1ba8950100fc6ab0b8150122243c730c24f52a11` and
+stderr SHA-256 is
+`0a3290d4e86c01c9764b0551f6af86740c2d81aacd582f5bfb3268a6ce75ef73`.
+The one earlier parallel fixture race was isolated and passed on rerun; no
+source change or assertion weakening followed it. This is local development
+evidence only: no hosted parity, mutation equivalence, HAQP qualification,
+Phase 0 closeout or Phase 1 authority follows.
