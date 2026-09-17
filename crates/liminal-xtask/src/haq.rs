@@ -6937,7 +6937,8 @@ fn scope_trace_line_accesses(line: &str) -> Vec<(String, bool)> {
 /// the text ` = -1 ` cannot masquerade as an `ENOENT` result.
 fn scope_trace_line_failed(line: &str) -> bool {
     line.rfind(") = ")
-        .map(|index| line[index + 4..].starts_with("-1 "))
+        .and_then(|index| line[index + 4..].split_whitespace().next())
+        .map(|value| value == "-1")
         .unwrap_or(false)
 }
 
@@ -18598,6 +18599,12 @@ mod tests {
             scan.locked_write_candidates,
             vec!["/x/fuzz/corpus/val = -1/data"],
             "failed writes remain candidates for locked-corpus refusal"
+        );
+
+        let bare_failure = "7 openat(AT_FDCWD, \"/x/fuzz/corpus/missing\", O_RDONLY) = -1\n";
+        assert!(
+            scope_trace_line_failed(bare_failure),
+            "bare -1 return must still classify as failed"
         );
     }
 
