@@ -140,11 +140,15 @@ fn scan_filesystem_debt(root: &Utf8Path, report: &mut DebtReport) {
                 continue;
             };
             let name = path.file_name().unwrap_or_default();
-            if path.is_dir() {
+            // Recurse only through real directories. Following a symlinked
+            // directory can escape the workspace or loop back into its parent.
+            if entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false) {
                 if name != "target" && name != ".git" && name != "spec" {
                     stack.push(path);
                 }
             } else if path.extension() == Some("rs") {
+                // Preserve existing behavior for a symlinked Rust file; the
+                // path itself was selected by the caller's filesystem scan.
                 scan_file(&path, report);
             }
         }
@@ -380,6 +384,21 @@ mod tests {
         let report = scan_workspace_debt(root).expect("scan non-repository workspace");
         assert_eq!(report.active_tests, 1);
         assert_eq!(report.total_ignored(), 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn filesystem_fallback_does_not_follow_symlinked_directories() {
+        use std::os::unix::fs::symlink;
+
+        let scratch = liminal_scratch::ScratchDir::new("debt-symlink-dir").expect("scratch");
+        let root: &Utf8Path = &scratch;
+        fs::create_dir(root.join("real")).expect("mkdir");
+        fs::write(root.join("real/one.rs"), "#[test]\nfn active() {}\n").expect("write");
+        symlink("..", root.join("real/parent")).expect("symlink");
+
+        let report = scan_workspace_debt(root).expect("scan symlinked workspace");
+        assert_eq!(report.active_tests, 1, "symlinked parent must not recurse");
     }
 
     #[test]
