@@ -251,3 +251,79 @@ It correctly binds source commit `16661be5` with a dirty flag for the refreshed
 evidence file; it is local development evidence, not qualification. This final
 documentation update follows that run. S5's remaining implementation and hosted
 execution remain open.
+
+## Resolved gap: cryptographic batch lifecycle (protocol §3)
+
+The approved human/tool boundary defines who authorizes a batch and what scope
+it binds. It does not yet specify whether that authorization is part of the
+standing policy's exact signed bytes or a separately signed batch manifest.
+These are different activation/revocation contracts, not interchangeable JSON
+encodings. Implementation paused for Brian's choice; he subsequently approved
+option 1 explicitly ("approved 1."). Separate batch signatures and external
+active-batch pins are now authorized for implementation, not activated.
+
+Options:
+
+1. Separate human-signed batch manifest (selected and approved). Keep standing policy's
+   approved `liminal.assurance.policy.v1` namespace. Batch namespace:
+   `liminal.assurance.batch.v1`. Manifest binds standing-policy digest, base
+   revision, exact permitted targets/change class, and trusted tool revision and
+   executable digest. External human trust configuration selects the active
+   batch digest; missing, mismatched, or revoked activation refuses admission.
+   Adding a batch does not change or re-sign the standing policy. This namespace
+   and activation contract are approved for implementation, not enrolled.
+2. Unselected alternative: include batches in the standing policy's signed bytes. Every batch addition
+   changes the policy digest, requiring human re-signing and external re-pinning
+   of that entire policy. No separate batch-signature namespace is introduced.
+
+No signed-batch acceptance code or tests were added while this choice was open.
+A bounded MiMo fixture draft was requested with a provisional embedded-batch
+shape; that external draft is not a contract or implementation and must not be
+adopted until reconciled with the decision. Existing proposal code and its
+verification remain unchanged. No real keys, signing or trust activation occurred.
+
+Next slice uses the already approved `amend check` seam with an explicit
+`--authorization-only` mode. It authenticates exact policy and separate batch
+bytes, signer, repository scope, active digests, tool pins, base and target.
+Success reports batch authentication only, `apply_authorized: false` and review
+not established. Full check/apply must remain unavailable until registry/patch
+and independent-review checks exist. CLI fixtures use disposable SSH keys only.
+
+### Authorization-only implementation evidence
+
+Implemented the approved separate-signature contract. No real enrollment,
+signing, activation, full admission or apply capability was created. There are
+30 CLI controls, including 11 new active controls on Unix; no ignore flips.
+
+Durable logs are under `/mnt/4tb/liminal-formal-evidence/reviews/`.
+`assurance-auth-red1` exited 101 before the CLI existed; green1 through green3
+passed the growing control set. Lint1 failed on function size and a stack buffer;
+private helper extraction and an 8-KiB streaming buffer resolved both, without
+waivers (lint2 exit 0). Full ci1 passed 659 tests with 47 skipped.
+
+A real separate-Git-directory probe then exposed pathname whitespace loss.
+`assurance-auth-red2` reproduced it; Git output framing now removes only its
+newline, preserving the path's trailing space. `assurance-auth-green4` passed
+30 controls. Full ci2 failed on two missing test-closure semicolons; these were
+fixed without changing assertions. Failed-run logs remain preserved.
+
+Final `assurance-auth-ci3` full merge profile exited 0: 660 passed / 47 skipped,
+all 14 commands passed, 3m34.732s runtime, 3.5-GiB peak, zero swap. Receipt:
+`/home/brianklam/.local/state/liminal/assurance/run.Bj7IUnWQ/merge/receipt.json`.
+It records dirty source atop `98210d76` and qualification not established.
+`assurance-auth-gates` exited 0: 660 active / 47 deferred. This documentation
+update follows verification. Timing is one cache-unknown observation, not a
+performance guarantee.
+
+LAMU diff review returned primary PASS WITH NITS; critic output was truncated,
+so no critic clearance is claimed. Source verification rejected claims about
+cwd-based scratch (uses OS temp), PID-only collisions (counter and time also
+participate), the intentional one-byte overflow probe, incomplete GIT_ prefix
+removal, sibling-directory containment, and standalone-repository rejection.
+The real positive fixture demonstrates standalone acceptance. Diagnostic style
+nits are nonblocking. Final commit still requires its own review.
+
+S5 remains open: closed registry and candidate/patch binding, independent review
+receipt verification, isolated apply and producer refresh are not implemented
+by this slice. Hosted S4 evidence and S6 remain open. No Phase 1 authorization,
+M17 closure, or HAQP qualification follows from these local checks.

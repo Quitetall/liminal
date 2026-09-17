@@ -204,6 +204,8 @@ impl AssuranceCommand {
 
 #[derive(Debug, Subcommand)]
 enum AssuranceAmendCommand {
+    /// Authenticate batch scope only; does not authorize applying a patch.
+    Check(liminal_xtask::assurance::authorization::AuthorizationRequest),
     /// Read-only proposal for a unique, unchanged top-level expression target.
     Propose {
         #[arg(long)]
@@ -222,6 +224,14 @@ enum AssuranceAmendCommand {
 impl AssuranceAmendCommand {
     fn dispatch_amendment(self) -> Result<()> {
         match self {
+            Self::Check(request) => {
+                let summary = liminal_xtask::assurance::authorization::check_authorization(
+                    &liminal_xtask::repo_root()?,
+                    &request,
+                )?;
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+                Ok(())
+            }
             Self::Propose {
                 base,
                 candidate,

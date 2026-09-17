@@ -79,6 +79,16 @@ Routine changes inside a human-authorized batch do not require a separate human
 review signature for every proposal. This decision defines authority, not proof
 that the acceptance checks have been implemented or exercised.
 
+Brian approved separate batch manifests in conversation ("approved 1."). Each
+batch is human-signed over its exact bytes using OpenSSH namespace
+`liminal.assurance.batch.v1`, distinct from the standing-policy namespace above.
+It binds the standing-policy digest, base revision, exact permitted targets and
+change class, and trusted tool revision and executable digest. External human
+trust configuration selects the active batch digest. Missing, mismatched or
+revoked activation refuses admission. A new batch does not require changing or
+re-signing the standing policy. Agents do not sign or activate real policies or
+batches; disposable test keys remain authorized for development controls.
+
 Only exact registry coordinates, matching packet sources, producer-derived digest
 mirrors and audit records are eligible. Apply uses a trusted tool revision in a
 fresh isolated worktree, rechecks bindings, and never overwrites user work or

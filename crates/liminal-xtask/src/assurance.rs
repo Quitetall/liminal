@@ -7,6 +7,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use serde::Deserialize;
 
 pub mod amendment;
+pub mod authorization;
 mod runner;
 mod workflows;
 pub use runner::{report, run_profile};

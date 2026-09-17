@@ -80,4 +80,9 @@ anything. File and enclosing-context hashes are evidence bindings, not behaviora
 equivalence. Blank lines elsewhere can affect literal data; unchanged functions
 can depend on changed external code. Output explicitly says `proposal-only`,
 `authority: none`, and `independent_review: not-established`. Never treat CLI
-success as automatic-maintenance eligibility. `amend check|apply` remain pending.
+success as automatic-maintenance eligibility. Full `amend check|apply` remain pending.
+
+`amend check --authorization-only` now authenticates separately signed batch scope
+against external active policy/batch and tool pins. It explicitly does not authorize
+application. See [AUTHORIZATION.md](AUTHORIZATION.md) for the exact-byte formats,
+OpenSSH namespaces, external activation rules, and remaining trust limits.

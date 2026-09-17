@@ -2,9 +2,430 @@
 
 use std::process::Command;
 
+fn auth_fixture_hash(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+struct SignedBatchFixture {
+    root: std::path::PathBuf,
+    trust: std::path::PathBuf,
+    base: String,
+    target: String,
+}
+
+impl SignedBatchFixture {
+    fn create() -> Self {
+        let root = fixture();
+        fixture_git(&root, &["init", "--quiet"]);
+        fixture_git(&root, &["add", "."]);
+        fixture_git(&root, &["commit", "--quiet", "-m", "authorization fixture"]);
+        let base = fixture_git(&root, &["rev-parse", "HEAD"]);
+        let trust =
+            std::env::temp_dir().join(format!("liminal-test-trust-{}", uuid::Uuid::now_v7()));
+        std::fs::create_dir(&trust).unwrap();
+        let generated = Command::new("ssh-keygen")
+            .args([
+                "-q",
+                "-t",
+                "ed25519",
+                "-N",
+                "",
+                "-C",
+                "disposable-assurance-test",
+                "-f",
+            ])
+            .arg(trust.join("test-key"))
+            .output()
+            .unwrap();
+        assert!(
+            generated.status.success(),
+            "disposable key generation failed"
+        );
+        let public = std::fs::read_to_string(trust.join("test-key.pub")).unwrap();
+        let signers = format!("fixture {public}");
+        std::fs::write(trust.join("allowed_signers"), &signers).unwrap();
+        let executable = std::fs::read(env!("CARGO_BIN_EXE_liminal-xtask")).unwrap();
+        let tool_hash = auth_fixture_hash(&executable);
+        let tool_revision = "1".repeat(40); // External fixture attestation, not this binary's Git HEAD.
+        let git_dir = root.join(".git").canonicalize().unwrap();
+        let policy = serde_json::to_vec(&serde_json::json!({
+            "schema_version": 1, "repository_git_dir": git_dir,
+            "change_class": "coordinate-only", "tool_revision": tool_revision,
+            "tool_sha256": tool_hash
+        }))
+        .unwrap();
+        let policy_hash = auth_fixture_hash(&policy);
+        std::fs::write(trust.join("policy.json"), &policy).unwrap();
+        let batch = serde_json::to_vec(&serde_json::json!({
+            "schema_version": 1, "id": "fixture-batch", "policy_sha256": policy_hash,
+            "base_commit": base, "change_class": "coordinate-only",
+            "tool_revision": tool_revision, "tool_sha256": tool_hash,
+            "targets": ["P1-M001"]
+        }))
+        .unwrap();
+        std::fs::write(trust.join("batch.json"), &batch).unwrap();
+        std::fs::write(trust.join("trust.json"), serde_json::to_vec(&serde_json::json!({
+            "schema_version": 1, "enabled": true, "principal": "fixture",
+            "repository_git_dir": git_dir, "policy_sha256": policy_hash,
+            "batch_sha256": auth_fixture_hash(&batch), "tool_revision": tool_revision,
+            "tool_sha256": tool_hash, "allowed_signers_sha256": auth_fixture_hash(signers.as_bytes())
+        })).unwrap()).unwrap();
+        let fixture = Self {
+            root,
+            trust,
+            base,
+            target: "P1-M001".to_owned(),
+        };
+        fixture.sign("policy.json", "liminal.assurance.policy.v1");
+        fixture.sign("batch.json", "liminal.assurance.batch.v1");
+        fixture
+    }
+
+    fn sign(&self, filename: &str, namespace: &str) {
+        let signature = self.trust.join(format!("{filename}.sig"));
+        if signature.exists() {
+            std::fs::remove_file(&signature).unwrap();
+        }
+        let output = Command::new("ssh-keygen")
+            .args(["-Y", "sign", "-n", namespace, "-f"])
+            .arg(self.trust.join("test-key"))
+            .arg(self.trust.join(filename))
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "disposable signature generation failed"
+        );
+    }
+
+    fn command(&self) -> Command {
+        self.command_with_trust(&self.trust)
+    }
+
+    fn command_with_trust(&self, trust: &std::path::Path) -> Command {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"));
+        command
+            .current_dir(&self.root)
+            .args([
+                "assurance",
+                "amend",
+                "check",
+                "--authorization-only",
+                "--trust-root",
+            ])
+            .arg(trust)
+            .arg("--policy")
+            .arg(self.trust.join("policy.json"))
+            .arg("--policy-signature")
+            .arg(self.trust.join("policy.json.sig"))
+            .arg("--batch")
+            .arg(self.trust.join("batch.json"))
+            .arg("--batch-signature")
+            .arg(self.trust.join("batch.json.sig"))
+            .args(["--base", &self.base, "--target", &self.target]);
+        command
+    }
+
+    fn rewrite(&self, name: &str, change: impl FnOnce(&mut serde_json::Value)) {
+        let path = self.trust.join(name);
+        let mut value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        change(&mut value);
+        std::fs::write(path, serde_json::to_vec(&value).unwrap()).unwrap();
+    }
+
+    fn repin(&self, filename: &str, field: &str) {
+        let hash = auth_fixture_hash(&std::fs::read(self.trust.join(filename)).unwrap());
+        self.rewrite("trust.json", |value| value[field] = hash.into());
+    }
+
+    fn finish(self) {
+        std::fs::remove_dir_all(self.root).unwrap();
+        std::fs::remove_dir_all(self.trust).unwrap();
+    }
+}
+
+#[test]
+fn signed_batch_authenticates_scope_without_authorizing_apply() {
+    let fixture = SignedBatchFixture::create();
+    let output = fixture.command().output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["batch_authenticated"], true);
+    assert_eq!(value["apply_authorized"], false);
+    assert_eq!(value["independent_review"], "not-established");
+    assert_eq!(value["batch_id"], "fixture-batch");
+    assert_eq!(fixture_git(&fixture.root, &["status", "--porcelain"]), "");
+    fixture.finish();
+}
+
+fn assert_auth_refusal(mut command: Command, expected: &str) {
+    let output = command.output().unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !output.status.success() && stderr.contains(expected),
+        "expected {expected}: {stderr}"
+    );
+    assert!(
+        output.stdout.is_empty(),
+        "refusal must not emit authentication success"
+    );
+}
+
+#[test]
+fn signed_batch_rejects_wrong_signature_namespaces() {
+    for (file, wrong, expected) in [
+        (
+            "policy.json",
+            "liminal.assurance.batch.v1",
+            "liminal.assurance.policy.v1",
+        ),
+        (
+            "batch.json",
+            "liminal.assurance.policy.v1",
+            "liminal.assurance.batch.v1",
+        ),
+    ] {
+        let fixture = SignedBatchFixture::create();
+        fixture.sign(file, wrong);
+        assert_auth_refusal(
+            fixture.command(),
+            &format!("signature verification failed for {expected}"),
+        );
+        fixture.finish();
+    }
+}
+
+#[test]
+fn signed_batch_verifies_exact_bytes_even_after_external_digest_repin() {
+    let fixture = SignedBatchFixture::create();
+    let path = fixture.trust.join("batch.json");
+    let mut bytes = std::fs::read(&path).unwrap();
+    bytes.push(b'\n');
+    std::fs::write(path, bytes).unwrap();
+    fixture.repin("batch.json", "batch_sha256");
+    assert_auth_refusal(
+        fixture.command(),
+        "signature verification failed for liminal.assurance.batch.v1",
+    );
+    fixture.finish();
+}
+
+#[test]
+fn signed_batch_refuses_revoked_pins_wrong_tool_and_wrong_scope() {
+    for (field, value, expected) in [
+        ("enabled", serde_json::json!(false), "trust disabled"),
+        (
+            "batch_sha256",
+            serde_json::json!("0".repeat(64)),
+            "inactive batch digest",
+        ),
+        (
+            "policy_sha256",
+            serde_json::json!("0".repeat(64)),
+            "inactive policy digest",
+        ),
+        (
+            "tool_sha256",
+            serde_json::json!("0".repeat(64)),
+            "maintenance executable pin mismatch",
+        ),
+        (
+            "tool_revision",
+            serde_json::json!("2".repeat(40)),
+            "signed tool pin mismatch",
+        ),
+        (
+            "repository_git_dir",
+            serde_json::json!("unrelated-repository"),
+            "repository scope mismatch",
+        ),
+        (
+            "allowed_signers_sha256",
+            serde_json::json!("0".repeat(64)),
+            "signer pin mismatch",
+        ),
+    ] {
+        let fixture = SignedBatchFixture::create();
+        fixture.rewrite("trust.json", |v| v[field] = value);
+        assert_auth_refusal(fixture.command(), expected);
+        fixture.finish();
+    }
+}
+
+#[test]
+fn signed_batch_refuses_out_of_scope_base_and_target() {
+    let mut fixture = SignedBatchFixture::create();
+    let base = fixture.base.clone();
+    fixture.base = "0".repeat(40);
+    assert_auth_refusal(fixture.command(), "batch base mismatch");
+    fixture.base = base;
+    fixture.target = "P1-M002".to_owned();
+    assert_auth_refusal(fixture.command(), "target outside authorized batch");
+    fixture.finish();
+}
+
+#[test]
+fn signed_batch_refuses_semantic_scope_unknown_fields_and_duplicate_targets() {
+    for (field, value, expected) in [
+        (
+            "change_class",
+            serde_json::json!("semantic"),
+            "non-coordinate authority refused",
+        ),
+        (
+            "targets",
+            serde_json::json!(["P1-M001", "P1-M001"]),
+            "invalid or duplicate batch targets",
+        ),
+        (
+            "targets",
+            serde_json::json!(["*"]),
+            "invalid or duplicate batch targets",
+        ),
+        ("reviewed", serde_json::json!(true), "invalid signed batch"),
+    ] {
+        let fixture = SignedBatchFixture::create();
+        fixture.rewrite("batch.json", |v| v[field] = value);
+        fixture.repin("batch.json", "batch_sha256");
+        fixture.sign("batch.json", "liminal.assurance.batch.v1");
+        assert_auth_refusal(fixture.command(), expected);
+        fixture.finish();
+    }
+}
+
+#[test]
+fn signed_batch_refuses_trust_inside_any_worktree() {
+    let fixture = SignedBatchFixture::create();
+    let inside = fixture.root.join("candidate-trust");
+    std::fs::create_dir(&inside).unwrap();
+    assert_auth_refusal(
+        fixture.command_with_trust(&inside),
+        "inside repository scope",
+    );
+    let linked =
+        std::env::temp_dir().join(format!("liminal-linked-trust-{}", uuid::Uuid::now_v7()));
+    fixture_git(
+        &fixture.root,
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            linked.to_str().unwrap(),
+            &fixture.base,
+        ],
+    );
+    assert_auth_refusal(
+        fixture.command_with_trust(&linked),
+        "inside repository scope",
+    );
+    fixture_git(
+        &fixture.root,
+        &["worktree", "remove", "--force", linked.to_str().unwrap()],
+    );
+    fixture.finish();
+}
+
+#[test]
+fn signed_batch_refuses_a_signature_from_an_unenrolled_key() {
+    let fixture = SignedBatchFixture::create();
+    let foreign = fixture.trust.join("unenrolled-test-key");
+    let generated = Command::new("ssh-keygen")
+        .args(["-q", "-t", "ed25519", "-N", "", "-f"])
+        .arg(&foreign)
+        .output()
+        .unwrap();
+    assert!(generated.status.success());
+    std::fs::remove_file(fixture.trust.join("batch.json.sig")).unwrap();
+    let signed = Command::new("ssh-keygen")
+        .args(["-Y", "sign", "-n", "liminal.assurance.batch.v1", "-f"])
+        .arg(foreign)
+        .arg(fixture.trust.join("batch.json"))
+        .output()
+        .unwrap();
+    assert!(signed.status.success());
+    assert_auth_refusal(
+        fixture.command(),
+        "signature verification failed for liminal.assurance.batch.v1",
+    );
+    fixture.finish();
+}
+
+#[test]
+fn signed_batch_refuses_an_unenrolled_principal_and_duplicate_trust_fields() {
+    let fixture = SignedBatchFixture::create();
+    fixture.rewrite("trust.json", |v| v["principal"] = "unenrolled".into());
+    assert_auth_refusal(
+        fixture.command(),
+        "signature verification failed for liminal.assurance.policy.v1",
+    );
+    let path = fixture.trust.join("trust.json");
+    let original = std::fs::read_to_string(&path).unwrap();
+    let duplicate = original.replacen('{', "{\"enabled\":true,", 1);
+    std::fs::write(path, duplicate).unwrap();
+    assert_auth_refusal(fixture.command(), "duplicate field");
+    fixture.finish();
+}
+
+#[test]
+fn signed_batch_check_without_partial_mode_cannot_claim_full_admission() {
+    let fixture = SignedBatchFixture::create();
+    let partial = fixture.command();
+    let mut full = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"));
+    full.current_dir(&fixture.root)
+        .args(partial.get_args().filter(|a| *a != "--authorization-only"));
+    assert_auth_refusal(full, "full amendment admission unavailable");
+    fixture.finish();
+}
+
+#[cfg(unix)]
+#[test]
+fn signed_batch_preserves_trailing_space_in_repository_identity() {
+    let fixture = SignedBatchFixture::create();
+    let metadata = fixture.root.join("metadata ");
+    fixture_git(
+        &fixture.root,
+        &["init", "--separate-git-dir", metadata.to_str().unwrap()],
+    );
+    assert_eq!(
+        fixture_git(&fixture.root, &["cat-file", "-t", &fixture.base]),
+        "commit"
+    );
+    let canonical = metadata.canonicalize().unwrap();
+    fixture.rewrite("policy.json", |v| {
+        v["repository_git_dir"] = serde_json::json!(canonical);
+    });
+    fixture.repin("policy.json", "policy_sha256");
+    let policy_hash = auth_fixture_hash(&std::fs::read(fixture.trust.join("policy.json")).unwrap());
+    fixture.rewrite("batch.json", |v| v["policy_sha256"] = policy_hash.into());
+    fixture.repin("batch.json", "batch_sha256");
+    fixture.rewrite("trust.json", |v| {
+        v["repository_git_dir"] = serde_json::json!(canonical);
+    });
+    fixture.sign("policy.json", "liminal.assurance.policy.v1");
+    fixture.sign("batch.json", "liminal.assurance.batch.v1");
+    let output = fixture.command().output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    fixture.finish();
+}
+
 fn fixture_git(root: &std::path::Path, args: &[&str]) -> String {
     let output = Command::new("git")
         .current_dir(root)
+        .args(["-c", "init.templateDir="])
+        .arg("-c")
+        .arg(format!(
+            "core.hooksPath={}",
+            root.join("disabled-fixture-hooks").display()
+        ))
         .args([
             "-c",
             "user.name=Assurance Fixture",
