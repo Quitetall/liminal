@@ -463,3 +463,23 @@ The one earlier parallel fixture race was isolated and passed on rerun; no
 source change or assertion weakening followed it. This is local development
 evidence only: no hosted parity, mutation equivalence, HAQP qualification,
 Phase 0 closeout or Phase 1 authority follows.
+
+### Current-HEAD bounded rerun
+
+After the log-capture clarification, `liminal-assurance-s5-current-r3` reran
+the same complete merge profile at clean source commit
+`359f0f7f4600a89809b048c281ac232a47eb7938`. Unit exit was 0; runtime was
+3m06.485s, CPU time 3m46.072s, memory peak 3.4 GiB and swap 0 B under the
+same 2-CPU/4-GiB/zero-swap/256-task limits. All 14 registered commands passed.
+Receipt:
+`/home/brianklam/.local/state/liminal/assurance/run.7kF7CxdR/merge/receipt.json`
+(SHA-256 `6a77c2ea2c4620208c76216cecd0d8dc3900db5e0c8275964c74e70b7cbf9ce5`);
+it records `source_dirty: false` and `qualification_established: false`.
+Nextest JUnit reports 672 passed, zero failures and 47 skipped. The bounded
+`just gates` rerun exited 0 with 672 active and 47 deferred; stdout SHA-256 is
+`4491b660fdbe1390b7acd7ce1ba8950100fc6ab0b8150122243c730c24f52a11` and
+stderr SHA-256 is
+`d660316325a055dbaabca1abb2246b644c120e48694abcaa0c39f034751a52d1`.
+This closes current-HEAD development verification only; hosted parity,
+mutation equivalence, HAQP qualification, Phase 0 closure and Phase 1
+authority remain unestablished.
