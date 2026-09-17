@@ -595,3 +595,29 @@ checkout target directory with the bounded merge unit and produced one
 674 tests passed. The failure is the expected executable-replacement race from
 concurrent Cargo jobs, not a source result; no source or assertion change
 followed it. Do not run overlapping jobs against one target directory.
+
+### Final current-HEAD verification after parser-stability hardening
+
+At clean source commit `6bc9ce1350554f6fed5c1a4de7fcca1846f6e76e`, the bounded
+Linux merge profile completed successfully. All 14 registered commands passed;
+nextest reported 675 passed and 47 skipped, with no failures. The outer
+systemd service used the standing 2-CPU, 4-GiB, zero-swap and 256-task envelope;
+runtime was 3m31.055s, CPU time 4m19.774s, and memory peak 1.8 GiB. This is a
+single cache-unknown local development observation, not a performance budget
+or qualification claim. Receipt:
+`/home/brianklam/.local/state/liminal/assurance/run.Z3WKD1Pr/merge/receipt.json`
+(SHA-256 `12031aeb568993e1f7737a1d2e32659148e31518882502f07eec4c223e6942e0`).
+It records `source_dirty: false` and `qualification_established: false`.
+The bounded `just gates` rerun exited 0 with 675 active and 47 deferred.
+
+The accumulated delta through this commit received a durable MiMo V2.5 Pro
+LAMU `review_diff` result: `PASS WITH NITS`. Artifact
+`/mnt/4tb/liminal-formal-evidence/reviews/assurance-accumulated-review-final.stdout`
+has SHA-256
+`c6b1c86674b046e458e5e2f08053da72dfe9a0c9a154febbcbf6d1df7a818ea5`; transport
+stderr has SHA-256
+`69fd061eaeb34aa3cb186761e4c017b71c55621214da30613ffcfbb8af4bb10f`.
+The visible findings are nonblocking style notes; no security or correctness
+defect was identified in the primary result. The critic response ended before
+completion, so separate critic clearance is not claimed. No source change
+followed this review.
