@@ -30,7 +30,8 @@ uuid.workspace = true                 # deterministic (v5) ids for the generated
 # ADR-0022: tooling-only parser, exact versions already present in Cargo.lock.
 syn = { version = "=2.0.119", features = ["full", "visit"] }
 proc-macro2 = { version = "=1.0.106", features = ["span-locations"] }
-quote = "=1.0.46" # token-stream semantic identity; pinned with syn/proc-macro2
+# Token-stream semantic identity; pinned with syn/proc-macro2.
+quote = "=1.0.46"
 
 [lints]
 workspace = true
