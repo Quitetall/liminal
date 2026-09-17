@@ -72,8 +72,7 @@ fn is_git_repository(root: &Utf8Path) -> bool {
         .current_dir(root)
         .args(["rev-parse", "--is-inside-work-tree"])
         .output()
-        .map(|output| output.status.success() && output.stdout == b"true\n")
-        .unwrap_or(false)
+        .is_ok_and(|output| output.status.success() && output.stdout == b"true\n")
 }
 
 /// Scan only repository-tracked Rust files. The meter is a statement about the
@@ -142,7 +141,7 @@ fn scan_filesystem_debt(root: &Utf8Path, report: &mut DebtReport) {
             let name = path.file_name().unwrap_or_default();
             // Recurse only through real directories. Following a symlinked
             // directory can escape the workspace or loop back into its parent.
-            if entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false) {
+            if entry.file_type().is_ok_and(|kind| kind.is_dir()) {
                 if name != "target" && name != ".git" && name != "spec" {
                     stack.push(path);
                 }
