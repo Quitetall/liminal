@@ -16,7 +16,7 @@ AM-17.14. Baseline: `54b6450c15f161978ad63cc0f999d5090bc577f4`.
   nextest/threaded diversity, weekly advisories, informational beta. Integrate
   bounded resource harness run/lint, refusing missing limits. Hosted execution
   evidence is separate from local generation checks.
-- [ ] S5: `assurance amend propose|check|apply`: parser-backed unchanged exact
+- [x] S5: `assurance amend propose|check|apply`: parser-backed unchanged exact
   targets, independent review, externally pinned SSH policy/tool trust, isolated
   apply and producer-derived refresh. Disposable-key controls cover signatures,
   namespace, scope, revision, source/patch drift, ambiguity, protected fields and
@@ -24,6 +24,12 @@ AM-17.14. Baseline: `54b6450c15f161978ad63cc0f999d5090bc577f4`.
 - [ ] S6: Complete merge checks, inventory, canaries and resource controls; named
   test deltas and independent diff/commit findings verified at cited lines. Human
   enrollment and hosted execution remain explicit external boundaries.
+
+Checklist interpretation: S5 is complete as local implementation and test
+evidence. External trust enrollment is deliberately not part of that local
+closure. S4 remains open for observed hosted parity. S6 remains open for its
+final whole-system review and any hosted/external evidence; its registered local
+merge checks are green in the receipts below.
 
 ## Public test seams
 
