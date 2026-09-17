@@ -548,3 +548,14 @@ stderr SHA-256 is
 `433c0fc81706bd1d34fc864dcb4795bb91870fe1ec3a95a502e7175b86ab43c9`.
 This remains local development evidence only; no hosted, mutation, HAQP,
 Phase 0 or Phase 1 qualification follows.
+
+### Hosted parity attempt
+
+Draft PR `#7` on `assurance-maintenance` triggered CI run `35176289912` for
+head `80073e1e825aff245eff7bb0a4e8599d1a3a89c7`. All seven declared jobs
+completed as failures within seven seconds, with zero runner steps and no
+runner assigned. GitHub's check annotation records that the job was not
+started because recent account payments failed or the spending limit needs to
+be increased. This is unavailable hosted infrastructure, not a source or test
+failure; no hosted command executed. Hosted parity remains unobserved and the
+external billing/account action is outside this worktree's authority.
