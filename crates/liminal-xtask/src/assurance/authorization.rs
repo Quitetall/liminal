@@ -350,12 +350,16 @@ fn auth_verify_signature(
         .stderr(Stdio::null())
         .spawn()
         .context("OpenSSH signature verifier unavailable")?;
-    let write = child
+    let mut stdin = child
         .stdin
         .take()
-        .context("signature verifier stdin missing")?
-        .write_all(payload);
+        .context("signature verifier stdin missing")?;
+    let payload = payload.to_owned();
+    let writer = std::thread::spawn(move || stdin.write_all(&payload));
     let status = child.wait().context("wait for signature verification")?;
+    let write = writer
+        .join()
+        .map_err(|_| anyhow::anyhow!("signature verifier writer panicked"))?;
     ensure!(
         write.is_ok() && status.success(),
         "signature verification failed for {namespace}"

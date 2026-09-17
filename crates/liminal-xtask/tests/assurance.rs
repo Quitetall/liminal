@@ -176,6 +176,28 @@ fn assert_auth_refusal(mut command: Command, expected: &str) {
     );
 }
 
+#[cfg(unix)]
+fn assert_auth_success_with_timeout(mut command: Command) {
+    use std::time::{Duration, Instant};
+
+    command.stdout(std::process::Stdio::null());
+    command.stderr(std::process::Stdio::null());
+    let mut child = command.spawn().unwrap();
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            assert!(status.success(), "large signed batch failed: {status}");
+            return;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("large signed batch verification timed out");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
 #[test]
 fn signed_batch_rejects_wrong_signature_namespaces() {
     for (file, wrong, expected) in [
@@ -212,6 +234,19 @@ fn signed_batch_verifies_exact_bytes_even_after_external_digest_repin() {
         fixture.command(),
         "signature verification failed for liminal.assurance.batch.v1",
     );
+    fixture.finish();
+}
+
+#[cfg(unix)]
+#[test]
+fn signed_batch_verifies_payload_larger_than_pipe_buffer() {
+    let fixture = SignedBatchFixture::create();
+    fixture.rewrite("batch.json", |value| {
+        value["id"] = "x".repeat(131_072).into();
+    });
+    fixture.repin("batch.json", "batch_sha256");
+    fixture.sign("batch.json", "liminal.assurance.batch.v1");
+    assert_auth_success_with_timeout(fixture.command());
     fixture.finish();
 }
 
