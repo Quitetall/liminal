@@ -14,6 +14,10 @@ liminal-xtask assurance amend check --authorization-only \
   --base FULL_COMMIT_ID --target EXACT_MUTANT_ID \
   [--candidate CANDIDATE_COMMIT --source RELATIVE.rs --line OLD_LINE --anchor EXACT_LINE \
    --review-receipt ABSOLUTE_EXTERNAL_REVIEW_JSON]
+
+liminal-xtask assurance amend apply --authorization-only \
+  [same authorization and candidate/review arguments] \
+  --output ABSOLUTE_NEW_EXTERNAL_WORKTREE
 ```
 
 Exit zero authenticates only the selected batch scope. Output explicitly says
@@ -51,11 +55,11 @@ or candidate-provided review metadata remains insufficient.
 The optional registry check establishes only coordinate and packet-diff binding;
 the optional receipt check establishes only exact-patch review-record binding. It
 does not establish mutation behavior or provider authenticity. Remaining checks
-include exact mutation patch binding, unchanged target/mutation behavior and
-isolated application. These are not established by authenticated scope or a
-historical receipt. Admission and revocation must be rechecked before effects;
-a historical check does not authorize a later action. No automatic apply command
-exists.
+include exact mutation patch binding and unchanged target/mutation behavior.
+Authenticated scope or a historical receipt does not establish either. The
+explicit `amend apply` command is isolated and refuses in-place destinations;
+admission and revocation are rechecked before effects. No automatic in-place
+apply exists.
 
 ## Exact-byte formats
 
@@ -107,6 +111,8 @@ Human enrollment must establish the pair. The host OS, Git, OpenSSH, executable
 search path and external trust administration remain trusted platform inputs.
 This check is not a defense against malicious processes running as the same user.
 
-Future apply must obtain independent review directly through its trusted adapter;
+The isolated apply path requires a verified receipt from the trusted adapter;
 candidate-provided `reviewed` metadata or copied authentication output is never
-authority. This document adds no qualification, Phase GO, or signing authority.
+authority. It stages the exact candidate tree in a new external worktree and
+reports the producer-derived packet digest, but never commits, pushes or signs.
+This document adds no qualification, Phase GO, or signing authority.

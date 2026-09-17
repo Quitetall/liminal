@@ -374,3 +374,62 @@ bounded systemd service. Receipt:
 `assurance-s5-reg2-gates` exited 0 with 665 active and 47 deferred. These are
 development checks on the maintenance branch, not hosted, HAQP or Phase 1
 qualification evidence.
+
+### Independent review receipt and isolated apply slices
+
+Receipt binding is now implemented in `edef62c3`. `amend check` accepts an
+optional external review receipt only with the complete candidate/source/line/
+anchor group. It parses a strict schema, constrains reviewer/backend labels,
+binds exact base/candidate/target scope, recomputes the fixed two-path raw Git
+patch digest, requires a pass with zero unresolved verified findings, and checks
+finding identity/classification/resolution. Output changes to
+`independent_review: receipt-verified` only after these checks; it remains
+`apply_authorized: false`. The positive control and substituted, unresolved,
+unreproduced, outside-root and incomplete-group refusals all pass.
+
+LAMU reviewed `edef62c3` with MiMo V2.5 Pro and returned PASS WITH NITS. The
+review's three style notes were addressed or recorded: coordinate/review
+coupling is intentional and documented; the fixed two-path scope is deliberate;
+the candidate is already validated by the registry proposal before receipt
+diffing; enum boxing is private CLI layout; broad printable identity labels are
+safe in this evidence-only output and remain a nonblocking style note. Receipt
+review artifact:
+`/mnt/4tb/liminal-formal-evidence/reviews/assurance-edef62c3-review-r2.stdout`
+(SHA-256 `42bf6ec0bb478d27c1c9de11e37e8cd297e4d640576f197cf5e7ff8905bf1377`).
+Follow-up `92383b17` added the missing incomplete-group control; LAMU returned
+PASS with no findings (`assurance-92383b17-review.stdout`, SHA-256
+`a9e61e5da98f3ca9c2510cb76e5340c6dfef8917110a2d40178c4d1368f0c311`).
+
+Isolated apply is implemented in `0eda47b8`. It requires the signed batch and a
+verified review receipt, creates a fresh external detached worktree at the
+authorized base, applies only the exact source/packet patch, compares the
+staged tree byte-for-byte with the candidate commit, rejects untracked output,
+and derives packet digest through the existing producer. It leaves the source
+checkout untouched and explicitly reports no commit, push or signature. Output
+paths must be new, absolute and outside every repository worktree. `4b68a342`
+hardens non-NotFound destination errors, drains bounded stderr without pipe
+deadlock, scopes the real packet fixture to the apply test, and adds panic-safe
+test cleanup. `f13a1c4f` documents wait-before-join ordering and covers output
+inside repository scope. LAMU returned PASS WITH NITS for `0eda47b8`
+(`assurance-0eda47b8-review.stdout`, SHA-256
+`ce36652c9392750d06d0205f4b3ff6e79dd092b4edc7d7d140627800517f2d75`), PASS WITH
+NITS for `4b68a342` (`assurance-4b68a342-review.stdout`, SHA-256
+`3ede2eb0e290b3f344b788e27790d1676c066ded055b7b6896ee24b623b6be26`), and PASS
+with no findings for `f13a1c4f` (`assurance-f13a1c4f-review.stdout`, SHA-256
+`d4acc5d72a60131008cc859914a3e925f1a40a27bd2822c682f5846d445fe82f`).
+
+The critic's `0eda47b8` concern that `git apply` might use the source checkout's
+index was checked against the actual call (`output` is passed as the apply root)
+and the positive control's clean source index; it is a false positive. The
+`4b68a342` concern that the 4-KiB stderr cap could deadlock was checked against
+the reader loop, which continues draining after truncating captured bytes; it is
+also a false positive. Both dispositions are retained in follow-up commit
+messages. The `--authorization-only` flag remains explicit on apply as a
+fail-closed caller acknowledgment required by the existing authorization seam.
+
+Current assurance integration controls: 42 pass in the complete targeted binary;
+the known parallel fixture race can emit `ExecutableFileBusy` once, and its
+named test passes on isolated rerun. Full bounded merge verification and final
+producer-derived refresh remain next. These slices still do not establish
+mutation equivalence, HAQP qualification, hosted parity, Phase 0 closure or
+Phase 1 authority.

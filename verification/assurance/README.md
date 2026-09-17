@@ -62,7 +62,8 @@ functionality. Family owners are responsibilities, not human authority enrollmen
 Coordinate maintenance remains governed by AM-17.13. Planned automatic apply
 requires exact unchanged enclosing code, a unique target, independent review and
 human-signed policy with external trust pins. Agents never sign or enroll policy.
-No automatic apply is implemented or activated by this catalog slice.
+No automatic in-place apply is implemented or activated by this catalog slice;
+the explicit isolated apply command never commits, pushes or signs.
 
 ## Read-only coordinate proposals (partial S5)
 
@@ -80,7 +81,9 @@ anything. File and enclosing-context hashes are evidence bindings, not behaviora
 equivalence. Blank lines elsewhere can affect literal data; unchanged functions
 can depend on changed external code. Output explicitly says `proposal-only`,
 `authority: none`, and `independent_review: not-established`. Never treat CLI
-success as automatic-maintenance eligibility. Full `amend check|apply` remain pending.
+success as automatic-maintenance eligibility. `amend check` remains read-only;
+`amend apply` is available only for explicit isolated staging with a verified
+review receipt and never mutates this checkout.
 
 `amend check --authorization-only` now authenticates separately signed batch scope
 against external active policy/batch and tool pins. It can additionally bind an
