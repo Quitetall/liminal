@@ -10300,8 +10300,8 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
     const SOURCE: [(&str, usize, &str); 13] = [
         (
             "crates/liminal-format/src/lib.rs",
-            122,
-            "if !author_keyed {",
+            341,
+            "if !is_compact_literal(value) {",
         ),
         (
             "crates/liminal-cst/src/parser.rs",

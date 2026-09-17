@@ -53,31 +53,31 @@
    "planned_phase": "M24",
    "mitigation": "four narrowings hold it as far as text allows \u2014 class and target must match, a named coordinate binds, excluded phrases veto, and one ruling clears at most one finding per record, which turns an over-broad phrase into a refusal. AM-17.11 records it rather than narrowing a fifth time: the matcher is the qualifier's own code, frozen",
    "authority": "AM-17.11",
-   "state": "disclosed"
+   "state": "accepted"
   },
   {
    "id": "RISK-005",
    "owner": "Brian",
    "severity": "disclosed",
-   "trigger": "the oracle-independence scan reads Rust lexically: an alias watch that sees `self` rather than the imported symbol, and a body extraction that ends at the first bare `}` and so stops inside a multi-line raw string, can each leave a production path unwatched",
+   "trigger": "a future Rust syntax form outside SourceScanner's handled lexical states could leave a production path unwatched",
    "requirement": "P1-R001",
    "evidence": "docs/execution/m17-5-adversarial-findings.md:F-72",
    "planned_phase": "M24",
-   "mitigation": "the scan follows calls, values, aliases across the crate, macro definitions and every visibility form, and over-inclusion is its bias; what remains is that it is not a parser. Recorded under AM-17.11 rather than narrowed again: it is the qualifier's own code, frozen",
+   "mitigation": "SourceScanner tracks strings, comments, raw strings and structural braces; alias/value closure across every registered oracle rejects known escapes. The remaining parser-versus-lexer gap is accepted under AM-17.11 and the qualifier is frozen",
    "authority": "AM-17.11",
-   "state": "disclosed"
+   "state": "accepted"
   },
   {
    "id": "RISK-006",
    "owner": "Brian",
    "severity": "disclosed",
-   "trigger": "the coarse-scan oracle judges each block's range, kind and hash but never requires the blocks to COVER the source, so a scan that omits a non-blank region satisfies it",
+   "trigger": "a regression removing per-line coverage enforcement could let coarse scan omit a nonblank source region",
    "requirement": "P1-R002",
    "evidence": "docs/execution/m17-5-adversarial-findings.md:F-73",
    "planned_phase": "M24",
-   "mitigation": "ranges are in bounds, non-overlapping, non-blank, classified against a re-derived rule and related by content hash; what is missing is coverage. Recorded under AM-17.11: the oracle is the qualifier's own code, written during this campaign and frozen",
+   "mitigation": "verify_coarse_scan requires every nonblank source line to be covered, plus in-bounds non-overlap, nonblank, classification and content-hash checks. AM-17.11 records the residual regression risk; this qualifier code is frozen",
    "authority": "AM-17.11",
-   "state": "disclosed"
+   "state": "accepted"
   }
  ],
  "requirements": [
@@ -1052,7 +1052,7 @@
    "id": "P1-M001",
    "family": "source/CST/formatting",
    "operator": "predicate-deletion",
-   "source": "crates/liminal-format/src/lib.rs:122",
+   "source": "crates/liminal-format/src/lib.rs:341",
    "requirement": "P1-R004",
    "defect": "emit a literal the compact parser would normalize",
    "killing_tests": [
