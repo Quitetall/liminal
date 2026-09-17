@@ -102,6 +102,8 @@ fn scan_tracked_workspace_debt(root: &Utf8Path) -> anyhow::Result<DebtReport> {
 }
 
 fn sanitized_git() -> Command {
+    // Remove repository/index redirection supplied by the caller. Git config
+    // remains host policy; this helper only protects repository selection.
     let mut command = Command::new("git");
     for (key, _) in std::env::vars_os() {
         if key.to_string_lossy().starts_with("GIT_") {
@@ -150,12 +152,6 @@ fn scan_filesystem_debt(root: &Utf8Path, report: &mut DebtReport) {
 }
 
 fn scan_file(path: &Utf8Path, report: &mut DebtReport) {
-    let Ok(metadata) = fs::symlink_metadata(path) else {
-        return;
-    };
-    if !metadata.file_type().is_file() {
-        return;
-    }
     let Ok(text) = fs::read_to_string(path) else {
         return;
     };
@@ -371,6 +367,10 @@ mod tests {
     fn a_non_repository_meter_uses_the_filesystem_fallback() {
         let scratch = liminal_scratch::ScratchDir::new("debt-fallback").expect("scratch");
         let root: &Utf8Path = &scratch;
+        assert!(
+            !is_git_repository(root),
+            "fallback fixture must not be a repository"
+        );
         fs::write(
             root.join("fallback.rs"),
             "#[test]\n#[ignore = \"Phase 9: fallback\"]\nfn deferred() {}\n#[test]\nfn active() {}\n",
@@ -385,7 +385,12 @@ mod tests {
     #[test]
     fn tracked_path_validation_rejects_escape_and_non_utf8_bytes() {
         assert!(validate_git_path(b"src/lib.rs").is_ok());
-        for raw in [b"/escape.rs" as &[u8], b"../escape.rs", b"src/../escape.rs"] {
+        for raw in [
+            b"/escape.rs" as &[u8],
+            b"../escape.rs",
+            b"src/../escape.rs",
+            b"./src/lib.rs",
+        ] {
             assert!(validate_git_path(raw).is_err(), "path should be refused");
         }
         assert!(validate_git_path(&[0xff, b'.', b'r', b's']).is_err());
