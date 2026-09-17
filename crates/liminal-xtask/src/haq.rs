@@ -2742,16 +2742,23 @@ fn reports_the_same_defect(
     distinctive >= 2
 }
 
-fn source_vocabulary(root: &Utf8Path, target: &str) -> Option<BTreeSet<String>> {
-    let file = target.split(':').next()?;
-    let text = fs::read_to_string(root.join(file)).ok()?;
-    Some(
-        text.to_ascii_lowercase()
-            .split(|ch: char| !ch.is_alphanumeric() && ch != '_')
-            .filter(|word| word.len() >= 4)
-            .map(str::to_owned)
-            .collect(),
-    )
+fn source_vocabulary(root: &Utf8Path, target: &str) -> Result<BTreeSet<String>> {
+    let file = target
+        .split(':')
+        .next()
+        .filter(|file| !file.trim().is_empty())
+        .context("review target has no source file")?;
+    // Resolve through the same repository-bound path guard used by every other
+    // review artifact. A missing or escaping target must fail closed; treating
+    // it as `None` would silently disable source-grounded concurrence.
+    let path = safe_repo_path(root, file, "review target")?;
+    let text = fs::read_to_string(&path).with_context(|| format!("read review target {path}"))?;
+    Ok(text
+        .to_ascii_lowercase()
+        .split(|ch: char| !ch.is_alphanumeric() && ch != '_')
+        .filter(|word| word.len() >= 4)
+        .map(str::to_owned)
+        .collect())
 }
 
 fn verify_cross_pass_reproduction(
@@ -2783,7 +2790,7 @@ fn verify_cross_pass_reproduction(
                 .iter()
                 .find(|attempt| attempt.id == *attempt_id)
                 .expect("finding linkage validated");
-            let source_words = source_vocabulary(root, &attempt.target);
+            let source_words = source_vocabulary(root, &attempt.target)?;
             let matches = other
                 .attempts
                 .iter()
@@ -2792,12 +2799,7 @@ fn verify_cross_pass_reproduction(
                         && candidate.independently_reproduced
                         && candidate.attack_class == attempt.attack_class
                         && candidate.target == attempt.target
-                        && reports_the_same_defect(
-                            candidate,
-                            attempt,
-                            &corpus,
-                            source_words.as_ref(),
-                        )
+                        && reports_the_same_defect(candidate, attempt, &corpus, Some(&source_words))
                 })
                 .count();
             anyhow::ensure!(
