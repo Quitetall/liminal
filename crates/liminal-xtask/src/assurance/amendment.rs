@@ -114,9 +114,10 @@ pub fn propose_coordinate(
 }
 
 /// Compare parsed Rust tokens after allowing formatting-only whitespace and
-/// ordinary comments. Raw-string contents, literals, attributes and macro
-/// tokens remain part of the stream, so blank-line edits inside source data
-/// cannot masquerade as coordinate moves.
+/// ordinary comments (which `syn` intentionally discards). Raw-string
+/// contents, literals, attributes and macro tokens remain part of the stream,
+/// so blank-line edits inside source data cannot masquerade as coordinate
+/// moves. Pinned `syn`, `quote` and `proc-macro2` versions define this contract.
 fn token_stream(text: &str) -> Result<String> {
     let syntax = syn::parse_file(text).context("unsupported Rust syntax")?;
     let mut tokens = proc_macro2::TokenStream::new();

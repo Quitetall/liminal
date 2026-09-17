@@ -1242,6 +1242,58 @@ fn coordinate_proposal_refuses_blank_change_inside_raw_string_outside_target() {
 }
 
 #[test]
+fn coordinate_proposal_accepts_inner_attributes_and_cfg_items() {
+    let root = fixture();
+    fixture_git(&root, &["init", "--quiet"]);
+    let old = concat!(
+        "#![allow(dead_code)]\n",
+        "#[cfg(any())]\n",
+        "fn gated() {}\n\n",
+        "pub fn example() -> bool {\n    false\n}\n",
+    );
+    std::fs::write(root.join("src/lib.rs"), old).unwrap();
+    fixture_git(&root, &["add", "."]);
+    fixture_git(&root, &["commit", "--quiet", "-m", "base"]);
+    let base = fixture_git(&root, &["rev-parse", "HEAD"]);
+    let new = format!("\n\n{old}");
+    std::fs::write(root.join("src/lib.rs"), new).unwrap();
+    fixture_git(&root, &["add", "src/lib.rs"]);
+    fixture_git(
+        &root,
+        &["commit", "--quiet", "-m", "attribute-coordinate-move"],
+    );
+    let candidate = fixture_git(&root, &["rev-parse", "HEAD"]);
+    let output = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"))
+        .current_dir(&root)
+        .args([
+            "assurance",
+            "amend",
+            "propose",
+            "--base",
+            &base,
+            "--candidate",
+            &candidate,
+            "--source",
+            "src/lib.rs",
+            "--line",
+            "6",
+            "--anchor",
+            "    false",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "inner-attribute token comparison refused valid move: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let proposal: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(proposal["old_line"], 6);
+    assert_eq!(proposal["new_line"], 8);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn catalog_check_accepts_registered_target_without_claiming_qualification() {
     let root = fixture();
     let output = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"))
