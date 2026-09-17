@@ -665,3 +665,23 @@ resource peaks of 622,149,632 bytes for `resource-run` and 155,758,592 bytes
 for `resource-lint`. This is local development evidence only; hosted parity,
 external trust activation, M17.6/M17.8 governance, and HAQP qualification
 remain open.
+
+### Closure boundary
+
+As of assurance-maintenance `9299768a`, all authorized local maintenance
+implementation and bounded verification work is complete. The clean-head
+receipt above proves the registered local merge profile only; it does not alter
+the frozen HAQP instrument or establish qualification. The assurance branch
+still preserves failed-campaign artifacts in its working tree, while the clean
+detached run proved source-clean behavior.
+
+Further progress requires decisions or external state, not more local retries:
+
+- Frozen HAQP findings A01, A03, A11 and A12 need explicit scope rulings before
+  any qualifier or authoritative registry edits.
+- M17.6 Phase 0 GO/NO-GO, M17.8 meter reconciliation, and M17.9 suite review
+  remain human gates.
+- Hosted parity is unavailable until the GitHub billing/runner block is cleared.
+- Automatic coordinate maintenance remains inactive until a human enrolls the
+  external trust root, policy, batch and pinned tool. No private keys were read
+  or created by this work.
