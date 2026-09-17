@@ -1,6 +1,6 @@
 {
   "schema_version": "haqp-generated-v3-negative-categories",
-  "artifact_blake3": "fb3b194e6a8c85dc0b0851141cc3ecbea7a691fc3d71b5817a69f501b04c9743",
+  "artifact_blake3": "f751642b0c52882fffb2553817868a22c044de68bc94e139cebc961299b69d22",
   "rows": [
     {
       "family": "source/CST/formatting",
@@ -150,7 +150,7 @@
       "discards": 248,
       "negatives": 21500,
       "seed": 11400715918834825484,
-      "evidence_hash": "33b66802ead05e0c58d6c0b3ea6db0e9d43bded1a47f28846f97ffba8d89a904",
+      "evidence_hash": "24609b1b08f9fb379a326d1cef6336aa2f46f90eb3615e02f681338aa9bdaaf6",
       "category_counts": {
         "applying": 7041,
         "boundary": 7231,
@@ -175,26 +175,26 @@
           "relation": "dependency_order",
           "oracle_id": "oracle:repair_ILRP_recovery",
           "result": "pass",
-          "artifact_blake3": "e010d4673450ad9c1c4561e9d13ec36d2107cb8eeefbd968b64345958b6d319a"
+          "artifact_blake3": "3e448c264bb2d3b3e39cd440fcd490136e06bc51a357362945d6189da5f2f9a1"
         },
         {
           "relation": "permutation_invariance",
           "oracle_id": "oracle:repair_ILRP_recovery",
           "result": "pass",
-          "artifact_blake3": "173ad334b3989879c5927389e8131c252ad9150c2c6638ebaf4421ee72e41807"
+          "artifact_blake3": "79c64cb9c86df6b3dc686b2ab1a028ad93777fafaa2cb3801e3ae11bfa936d0f"
         },
         {
           "relation": "independent_edge_check",
           "oracle_id": "oracle:repair_ILRP_recovery",
           "result": "pass",
-          "artifact_blake3": "0daeeaf5e7a863dbea55f2624b7ea368e9abfad8349c179b96824b84b2ce792d"
+          "artifact_blake3": "412290f41d68424f2a792580af2b949c6cb99acf9c870c504b3e76fe20a4d1d4"
         }
       ],
       "oracle": {
         "id": "oracle:repair_ILRP_recovery",
         "source": "crates/liminal-xtask/src/haq.rs:independent_oracle_source_repair",
         "independent": true,
-        "relation_matrix_blake3": "f06ef5a01132827a6cb991b0cee6a166508d974e9993cdca0f02e4950ff1074c"
+        "relation_matrix_blake3": "d0c5904e01787e851dab81d2d61c153e8515d3ecb2267038af81a52b829fe774"
       }
     },
     {
