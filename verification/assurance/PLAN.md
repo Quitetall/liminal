@@ -500,3 +500,23 @@ checked at source: path containment uses component-aware `Utf8Path::starts_with`
 non-newline line, and the trusted-host worktree model is documented rather than
 an omitted same-user isolation guarantee. No security or correctness finding
 was confirmed; no source change followed this review.
+
+### Final current-HEAD merge receipt
+
+After the accumulated review record, `liminal-assurance-final-r4` reran the
+complete merge profile at clean source commit
+`799706c918a5aa203fa1f2fa5540da12e5fe194c`. Unit exit was 0; runtime was
+2m52.281s, CPU time 3m45.132s, memory peak 3.1 GiB and swap 0 B under the
+2-CPU/4-GiB/zero-swap/256-task envelope. All 14 registered commands passed.
+Receipt:
+`/home/brianklam/.local/state/liminal/assurance/run.0qTR4ANK/merge/receipt.json`
+(SHA-256 `d4b15886904866fff4130ac15bfd99c908b02d506864407d23443d05f264db2c`);
+it records `source_dirty: false` and `qualification_established: false`.
+Nextest JUnit reports 672 passed, zero failures and 47 skipped. The bounded
+`just gates` rerun exited 0 with 672 active and 47 deferred; stdout SHA-256 is
+`4491b660fdbe1390b7acd7ce1ba8950100fc6ab0b8150122243c730c24f52a11` and
+stderr SHA-256 is
+`aa6c5cb269f8e3dfe3eec74e42545d0c7c5e07daa8fee20836a540eba91f4e91`.
+This is the final local development observation for the current implementation;
+hosted parity, mutation equivalence, HAQP qualification, Phase 0 closure and
+Phase 1 authority remain unestablished.
