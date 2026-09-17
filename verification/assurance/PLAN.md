@@ -668,12 +668,13 @@ remain open.
 
 ### Closure boundary
 
-As of assurance-maintenance `9299768a`, all authorized local maintenance
-implementation and bounded verification work is complete. The clean-head
-receipt above proves the registered local merge profile only; it does not alter
-the frozen HAQP instrument or establish qualification. The assurance branch
-still preserves failed-campaign artifacts in its working tree, while the clean
-detached run proved source-clean behavior.
+As of assurance-maintenance `9299768a` (`docs: clarify M17.5 verification
+evidence`), all implemented local maintenance slices authorized under
+ADR-0022/AM-17.14 and covered by the clean receipt above are complete. The
+clean-head receipt proves the registered local merge profile only; it does not
+alter the frozen HAQP instrument or establish qualification. The assurance
+branch still preserves failed-campaign artifacts in its working tree, while the
+clean detached run proved source-clean behavior.
 
 Further progress requires decisions or external state, not more local retries:
 
@@ -683,5 +684,6 @@ Further progress requires decisions or external state, not more local retries:
   remain human gates.
 - Hosted parity is unavailable until the GitHub billing/runner block is cleared.
 - Automatic coordinate maintenance remains inactive until a human enrolls the
-  external trust root, policy, batch and pinned tool. No private keys were read
-  or created by this work.
+  external trust root, policy, batch and pinned tool. This branch adds no
+  private-key material and maintenance runs do not read user key stores;
+  disposable signing keys are confined to test fixtures.
