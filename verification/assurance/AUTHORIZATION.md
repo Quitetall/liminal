@@ -12,7 +12,8 @@ liminal-xtask assurance amend check --authorization-only \
   --policy POLICY_JSON --policy-signature POLICY_JSON.sig \
   --batch BATCH_JSON --batch-signature BATCH_JSON.sig \
   --base FULL_COMMIT_ID --target EXACT_MUTANT_ID \
-  [--candidate CANDIDATE_COMMIT --source RELATIVE.rs --line OLD_LINE --anchor EXACT_LINE]
+  [--candidate CANDIDATE_COMMIT --source RELATIVE.rs --line OLD_LINE --anchor EXACT_LINE \
+   --review-receipt ABSOLUTE_EXTERNAL_REVIEW_JSON]
 ```
 
 Exit zero authenticates only the selected batch scope. Output explicitly says
@@ -32,12 +33,29 @@ Supplying only part of this optional group refuses. Omitting the group reports
 registry snapshot is part of the pinned executable; changing it requires a new
 tool enrollment, not a mutable runtime registry edit.
 
+`--review-receipt` is accepted only with a complete candidate group. Its regular
+external file must lie below the canonical trust root and contain strict
+`schema_version: 1` JSON with `reviewer`, `backend`, exact `base_commit`,
+`candidate_commit`, `target`, lowercase `patch_sha256`, `verdict`,
+`unresolved_verified_findings`, and `findings`. The check recomputes the exact
+raw Git patch over the requested source and packet paths, compares its SHA-256,
+requires `verdict: "pass"` and zero unresolved verified findings, and requires
+each finding to have a unique identifier, known classification and resolved
+status. A `verified_defect` also needs `independently_reproduced: true`. Success
+reports `independent_review: receipt-verified` and the receipt digest; omission
+reports `not-established`. This is a read-only binding check, not provider
+authentication or apply authority. Future apply must obtain review directly from
+its trusted adapter and recheck every binding immediately before effects; copied
+or candidate-provided review metadata remains insufficient.
+
 The optional registry check establishes only coordinate and packet-diff binding;
-it does not establish mutation behavior. Remaining checks include exact mutation
-patch binding, unchanged target/mutation behavior, independent review, and
-isolated application. These are not established by authenticated scope. Admission
-and revocation must be rechecked before effects; a historical check does not
-authorize a later action. No automatic apply command exists.
+the optional receipt check establishes only exact-patch review-record binding. It
+does not establish mutation behavior or provider authenticity. Remaining checks
+include exact mutation patch binding, unchanged target/mutation behavior and
+isolated application. These are not established by authenticated scope or a
+historical receipt. Admission and revocation must be rechecked before effects;
+a historical check does not authorize a later action. No automatic apply command
+exists.
 
 ## Exact-byte formats
 
@@ -59,6 +77,7 @@ legitimate linked worktrees without confusing them with separate repositories.
 | External `trust.json` | `enabled` (boolean), `principal`, `repository_git_dir`, `policy_sha256`, `batch_sha256`, `tool_revision`, `tool_sha256`, `allowed_signers_sha256` |
 | Signed policy | `repository_git_dir`, `change_class`, `tool_revision`, `tool_sha256` |
 | Signed batch | `id`, `policy_sha256`, `base_commit`, `change_class`, `tool_revision`, `tool_sha256`, `targets` (nonempty array of unique exact identifiers) |
+| External review receipt | `reviewer`, `backend`, `base_commit`, `candidate_commit`, `target`, `patch_sha256`, `verdict`, `unresolved_verified_findings`, `findings` |
 
 Both signed documents must say `change_class: "coordinate-only"`. Their tool pins
 must match external trust. The batch binds the active policy digest, and its base

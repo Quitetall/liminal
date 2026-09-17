@@ -131,7 +131,7 @@ enum Command {
     /// Maintain test classification without granting qualification.
     Assurance {
         #[command(subcommand)]
-        command: AssuranceCommand,
+        command: Box<AssuranceCommand>,
     },
     /// HAQP-1 qualification helpers.
     Haq {
@@ -155,7 +155,7 @@ enum AssuranceCommand {
     /// Prepare reference-maintenance evidence; never grants authority.
     Amend {
         #[command(subcommand)]
-        command: AssuranceAmendCommand,
+        command: Box<AssuranceAmendCommand>,
     },
     /// Explicitly regenerate hosted workflow wiring; does not execute CI.
     GenerateWorkflows,

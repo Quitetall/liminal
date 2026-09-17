@@ -161,6 +161,75 @@ impl SignedBatchFixture {
         command
     }
 
+    fn candidate_command_with_review(&self, candidate: &str, receipt: &std::path::Path) -> Command {
+        let mut command = self.candidate_command(candidate);
+        command.args(["--review-receipt"]).arg(receipt);
+        command
+    }
+
+    fn make_coordinate_candidate(&self) -> String {
+        let source_path = self.root.join(&self.source);
+        let mut source_lines: Vec<_> = std::fs::read_to_string(&source_path)
+            .unwrap()
+            .lines()
+            .map(str::to_owned)
+            .collect();
+        source_lines.insert(0, String::new());
+        source_lines.insert(0, String::new());
+        std::fs::write(&source_path, format!("{}\n", source_lines.join("\n"))).unwrap();
+        let packet_path = self.root.join("conformance/haqp/packet.json");
+        let packet = std::fs::read_to_string(&packet_path).unwrap().replace(
+            "crates/liminal-source/src/view.rs:59",
+            "crates/liminal-source/src/view.rs:61",
+        );
+        std::fs::write(packet_path, packet).unwrap();
+        fixture_git(&self.root, &["add", "."]);
+        fixture_git(&self.root, &["commit", "--quiet", "-m", "coordinate move"]);
+        fixture_git(&self.root, &["rev-parse", "HEAD"])
+    }
+
+    fn write_review(&self, candidate: &str) -> std::path::PathBuf {
+        let output = Command::new("git")
+            .current_dir(&self.root)
+            .args([
+                "diff",
+                "--no-ext-diff",
+                "--binary",
+                "--full-index",
+                &self.base,
+                candidate,
+                "--",
+                &self.source,
+                "conformance/haqp/packet.json",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "fixture patch lookup failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let path = self.trust.join("review.json");
+        std::fs::write(
+            &path,
+            serde_json::to_vec(&serde_json::json!({
+                "schema_version": 1,
+                "reviewer": "fixture-reviewer",
+                "backend": "lamu",
+                "base_commit": self.base,
+                "candidate_commit": candidate,
+                "target": self.target,
+                "patch_sha256": auth_fixture_hash(&output.stdout),
+                "verdict": "pass",
+                "unresolved_verified_findings": 0,
+                "findings": []
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        path
+    }
+
     fn rewrite(&self, name: &str, change: impl FnOnce(&mut serde_json::Value)) {
         let path = self.trust.join(name);
         let mut value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
@@ -287,27 +356,7 @@ fn signed_batch_verifies_payload_larger_than_pipe_buffer() {
 #[test]
 fn signed_batch_binds_exact_closed_registry_and_packet_move() {
     let fixture = SignedBatchFixture::create();
-    let source_path = fixture.root.join(&fixture.source);
-    let mut source_lines: Vec<_> = std::fs::read_to_string(&source_path)
-        .unwrap()
-        .lines()
-        .map(str::to_owned)
-        .collect();
-    source_lines.insert(0, String::new());
-    source_lines.insert(0, String::new());
-    std::fs::write(&source_path, format!("{}\n", source_lines.join("\n"))).unwrap();
-    let packet_path = fixture.root.join("conformance/haqp/packet.json");
-    let packet = std::fs::read_to_string(&packet_path).unwrap().replace(
-        "crates/liminal-source/src/view.rs:59",
-        "crates/liminal-source/src/view.rs:61",
-    );
-    std::fs::write(packet_path, packet).unwrap();
-    fixture_git(&fixture.root, &["add", "."]);
-    fixture_git(
-        &fixture.root,
-        &["commit", "--quiet", "-m", "coordinate move"],
-    );
-    let candidate = fixture_git(&fixture.root, &["rev-parse", "HEAD"]);
+    let candidate = fixture.make_coordinate_candidate();
     let output = fixture.candidate_command(&candidate).output().unwrap();
     assert!(
         output.status.success(),
@@ -317,6 +366,124 @@ fn signed_batch_binds_exact_closed_registry_and_packet_move() {
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(value["registry_binding"], "verified");
     assert_eq!(value["apply_authorized"], false);
+    fixture.finish();
+}
+
+#[test]
+fn signed_batch_binds_independent_review_receipt_to_exact_patch() {
+    let fixture = SignedBatchFixture::create();
+    let candidate = fixture.make_coordinate_candidate();
+    let receipt = fixture.write_review(&candidate);
+    let output = fixture
+        .candidate_command_with_review(&candidate, &receipt)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["registry_binding"], "verified");
+    assert_eq!(value["independent_review"], "receipt-verified");
+    assert_eq!(value["apply_authorized"], false);
+    assert_eq!(value["review_receipt_sha256"].as_str().unwrap().len(), 64);
+    fixture.finish();
+}
+
+#[test]
+fn signed_batch_rejects_substituted_review_receipts() {
+    for (field, value, expected) in [
+        (
+            "patch_sha256",
+            serde_json::json!("0".repeat(64)),
+            "review receipt patch digest mismatch",
+        ),
+        (
+            "candidate_commit",
+            serde_json::json!("0".repeat(40)),
+            "review receipt scope mismatch",
+        ),
+        (
+            "verdict",
+            serde_json::json!("fail"),
+            "review receipt is not a pass",
+        ),
+        (
+            "unresolved_verified_findings",
+            serde_json::json!(1),
+            "review receipt has unresolved verified findings",
+        ),
+        (
+            "extra",
+            serde_json::json!(true),
+            "invalid external review receipt",
+        ),
+    ] {
+        let fixture = SignedBatchFixture::create();
+        let candidate = fixture.make_coordinate_candidate();
+        let receipt = fixture.write_review(&candidate);
+        fixture.rewrite("review.json", |review| review[field] = value);
+        assert_auth_refusal(
+            fixture.candidate_command_with_review(&candidate, &receipt),
+            expected,
+        );
+        fixture.finish();
+    }
+}
+
+#[test]
+fn signed_batch_rejects_unresolved_or_unreproduced_review_findings() {
+    for (finding, expected) in [
+        (
+            serde_json::json!({
+                "id": "R-1",
+                "classification": "caught_violation",
+                "independently_reproduced": false,
+                "resolved": false
+            }),
+            "review receipt has unresolved finding",
+        ),
+        (
+            serde_json::json!({
+                "id": "R-1",
+                "classification": "verified_defect",
+                "independently_reproduced": false,
+                "resolved": true
+            }),
+            "verified review finding lacks independent reproduction",
+        ),
+    ] {
+        let fixture = SignedBatchFixture::create();
+        let candidate = fixture.make_coordinate_candidate();
+        let receipt = fixture.write_review(&candidate);
+        fixture.rewrite("review.json", |review| {
+            review["findings"] = vec![finding].into();
+        });
+        assert_auth_refusal(
+            fixture.candidate_command_with_review(&candidate, &receipt),
+            expected,
+        );
+        fixture.finish();
+    }
+}
+
+#[test]
+fn signed_batch_rejects_review_receipt_outside_trust_root() {
+    let fixture = SignedBatchFixture::create();
+    let candidate = fixture.make_coordinate_candidate();
+    let receipt = fixture.write_review(&candidate);
+    let outside = fixture
+        .trust
+        .parent()
+        .unwrap()
+        .join(format!("liminal-review-outside-{}", uuid::Uuid::now_v7()));
+    std::fs::copy(&receipt, &outside).unwrap();
+    assert_auth_refusal(
+        fixture.candidate_command_with_review(&candidate, &outside),
+        "review receipt must be under external trust root",
+    );
+    std::fs::remove_file(outside).unwrap();
     fixture.finish();
 }
 

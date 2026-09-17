@@ -51,6 +51,9 @@ pub struct AuthorizationRequest {
     /// Exact existing source line anchor for optional coordinate binding.
     #[arg(long)]
     anchor: Option<String>,
+    /// External trusted-adapter review receipt for optional review binding.
+    #[arg(long)]
+    review_receipt: Option<Utf8PathBuf>,
 }
 
 // Strict shapes: omitted, duplicated and unknown fields are not authority.
@@ -100,6 +103,34 @@ struct RegistryPacket {
 struct RegistryMutant {
     id: String,
     source: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReviewReceipt {
+    schema_version: u32,
+    reviewer: String,
+    backend: String,
+    base_commit: String,
+    candidate_commit: String,
+    target: String,
+    patch_sha256: String,
+    verdict: String,
+    unresolved_verified_findings: u32,
+    findings: Vec<ReviewFinding>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReviewFinding {
+    id: String,
+    classification: String,
+    independently_reproduced: bool,
+    resolved: bool,
+}
+
+struct ReviewVerification {
+    receipt_sha256: String,
 }
 
 /// Authenticate the selected human-authorized scope, without inspecting or
@@ -168,6 +199,7 @@ pub fn check_authorization(
     let batch: Batch = serde_json::from_slice(&batch_bytes).context("invalid signed batch")?;
     auth_check_scope(root, request, &trust, &policy, &batch)?;
     let registry = auth_check_optional_registry(root, request)?;
+    let review = auth_check_optional_review(root, request, &trust_root)?;
     // Snapshot the public verification inputs so the process verifies the exact
     // bytes whose digests were checked, not a second read of mutable paths.
     let temp = Utf8PathBuf::from_path_buf(std::env::temp_dir())
@@ -195,11 +227,109 @@ pub fn check_authorization(
     )?;
     Ok(serde_json::json!({
         "schema_version": 1, "batch_authenticated": true, "apply_authorized": false,
-        "independent_review": "not-established", "batch_id": batch.id,
+        "independent_review": if review.is_some() { "receipt-verified" } else { "not-established" }, "batch_id": batch.id,
         "base_commit": batch.base_commit, "target": request.target,
         "registry_binding": registry.unwrap_or("not-requested"),
+        "review_receipt_sha256": review.as_ref().map(|item| item.receipt_sha256.as_str()),
         "policy_sha256": trust.policy_sha256, "batch_sha256": trust.batch_sha256,
         "tool_revision": trust.tool_revision, "tool_sha256": trust.tool_sha256
+    }))
+}
+
+fn auth_check_optional_review(
+    root: &Utf8Path,
+    request: &AuthorizationRequest,
+    trust_root: &Utf8Path,
+) -> Result<Option<ReviewVerification>> {
+    let Some(receipt) = &request.review_receipt else {
+        return Ok(None);
+    };
+    let (Some(candidate), Some(source), Some(_line), Some(_anchor)) = (
+        &request.candidate,
+        &request.source,
+        request.line,
+        &request.anchor,
+    ) else {
+        anyhow::bail!("review receipt requires complete registry binding inputs");
+    };
+    ensure!(
+        receipt.is_absolute(),
+        "absolute external review receipt required"
+    );
+    let canonical = receipt
+        .canonicalize_utf8()
+        .context("external review receipt unavailable")?;
+    ensure!(
+        canonical.starts_with(trust_root),
+        "review receipt must be under external trust root"
+    );
+    let bytes = auth_read(receipt)?;
+    let review: ReviewReceipt =
+        serde_json::from_slice(&bytes).context("invalid external review receipt")?;
+    ensure!(
+        review.schema_version == 1,
+        "unsupported review receipt schema"
+    );
+    ensure!(
+        auth_label(&review.reviewer) && auth_label(&review.backend),
+        "invalid review identity"
+    );
+    ensure!(
+        review.base_commit == request.base
+            && review.candidate_commit == *candidate
+            && review.target == request.target,
+        "review receipt scope mismatch"
+    );
+    ensure!(
+        auth_hex(&review.patch_sha256, 64),
+        "invalid review patch digest"
+    );
+    let patch = auth_git(
+        root,
+        &[
+            "diff",
+            "--no-ext-diff",
+            "--binary",
+            "--full-index",
+            &request.base,
+            candidate,
+            "--",
+            source.as_str(),
+            "conformance/haqp/packet.json",
+        ],
+    )?;
+    ensure!(
+        auth_digest(&patch) == review.patch_sha256,
+        "review receipt patch digest mismatch"
+    );
+    ensure!(review.verdict == "pass", "review receipt is not a pass");
+    ensure!(
+        review.unresolved_verified_findings == 0,
+        "review receipt has unresolved verified findings"
+    );
+    let mut finding_ids = BTreeSet::new();
+    for finding in &review.findings {
+        ensure!(
+            auth_identifier(&finding.id) && finding_ids.insert(&finding.id),
+            "review receipt has invalid or duplicate finding"
+        );
+        ensure!(
+            matches!(
+                finding.classification.as_str(),
+                "false_positive" | "caught_violation" | "verified_defect"
+            ),
+            "review receipt has unknown finding classification"
+        );
+        ensure!(finding.resolved, "review receipt has unresolved finding");
+        if finding.classification == "verified_defect" {
+            ensure!(
+                finding.independently_reproduced,
+                "verified review finding lacks independent reproduction"
+            );
+        }
+    }
+    Ok(Some(ReviewVerification {
+        receipt_sha256: auth_digest(&bytes),
     }))
 }
 
@@ -525,6 +655,12 @@ fn auth_identifier(value: &str) -> bool {
         && value
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
+}
+
+fn auth_label(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 256
+        && value.bytes().all(|b| b.is_ascii_graphic() || b == b' ')
 }
 
 fn auth_read(path: &Utf8Path) -> Result<Vec<u8>> {

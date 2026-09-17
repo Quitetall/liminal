@@ -83,7 +83,10 @@ can depend on changed external code. Output explicitly says `proposal-only`,
 success as automatic-maintenance eligibility. Full `amend check|apply` remain pending.
 
 `amend check --authorization-only` now authenticates separately signed batch scope
-against external active policy/batch and tool pins. It explicitly does not authorize
-application. See [AUTHORIZATION.md](AUTHORIZATION.md) for the exact-byte formats,
-OpenSSH namespaces, optional closed-registry/candidate binding, external activation
-rules, and remaining trust limits. Registry binding is still not review or apply.
+against external active policy/batch and tool pins. It can additionally bind an
+external trusted-adapter review receipt to the exact candidate patch, while
+remaining read-only. It explicitly does not authorize application. See
+[AUTHORIZATION.md](AUTHORIZATION.md) for exact-byte formats, OpenSSH namespaces,
+optional closed-registry/candidate binding, review-receipt checks, external
+activation rules, and remaining trust limits. Registry and receipt binding are
+still not apply authority.
