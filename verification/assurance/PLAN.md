@@ -22,18 +22,20 @@ AM-17.14. Baseline: `54b6450c15f161978ad63cc0f999d5090bc577f4`.
   namespace, scope, revision, source/patch drift, ambiguity, protected fields and
   interruption. Local implementation and tests are complete; external trust
   enrollment remains pending. No human key or trust activation is needed for
-  tests.
+  tests; disposable-key setup is exercised by
+  `crates/liminal-xtask/tests/assurance.rs:57-133`.
 - [ ] S6: Complete merge checks, inventory, canaries and resource controls; named
   test deltas and independent diff/commit findings verified at cited lines. Human
   enrollment and hosted execution remain explicit external boundaries.
 
-Checklist interpretation: S5 remains open because its item includes external
-trust enrollment, while its local implementation and tests are complete in
-receipt `/home/brianklam/.local/state/liminal/assurance/run.5FLLnQEb/merge/receipt.json`.
-External trust enrollment is deliberately not part of local closure. S4 remains
-open for observed hosted parity. S6 remains open for its final whole-system
-review and any hosted/external evidence; its registered local merge checks are
-green in the receipts below.
+Checklist interpretation: S5 remains open because external trust enrollment is
+pending. Its local implementation and tests are complete in machine-local
+receipt run `5FLLnQEb` (SHA-256
+`92db157e03f97db9797ef9488b405591f4e26f0e255a8daca603cf090f25f642`). External
+trust enrollment is deliberately not part of local closure. S4 remains open for
+observed hosted parity. S6 remains open for its final whole-system review and
+any hosted/external evidence; its registered local merge checks are green in the
+receipts below.
 
 ## Public test seams
 
