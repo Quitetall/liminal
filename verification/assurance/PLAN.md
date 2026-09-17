@@ -559,3 +559,18 @@ started because recent account payments failed or the spending limit needs to
 be increased. This is unavailable hosted infrastructure, not a source or test
 failure; no hosted command executed. Hosted parity remains unobserved and the
 external billing/account action is outside this worktree's authority.
+
+### Final accumulated review after boundary control
+
+The accumulated delta through `49808acca2a172e7106beab9fcabc53b91e8a8a2`
+received a second durable MiMo V2.5 Pro LAMU `review_diff` result:
+`PASS WITH NITS`. Artifact
+`/mnt/4tb/liminal-formal-evidence/reviews/assurance-accumulated-review-r3.stdout`
+has SHA-256
+`9f394658d3ca7fc8d809ae9cd715180f04b1dbef89acbcb895dd0260c62e6f9e`;
+transport stderr has SHA-256
+`67fd26d7c2cd5c8a0877825a758c2d191665f2b9c2e94ed9b3f76ee902282e95`.
+Primary notes are nonblocking style/documentation observations. Critic review
+confirmed no security defect: path containment is component-aware, Git diff
+framing is line-safe, and the trusted-host model's same-user limits are
+documented. No source change followed this review.
