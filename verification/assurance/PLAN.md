@@ -364,3 +364,13 @@ the proposal already rejects changed nonblank source and changed enclosing code;
 full mutation-patch behavior remains a later S5 seam. Other notes concern JSON
 output readability, the fixed coordinate-line comma convention, and a fixture
 line constant. None changes security or correctness; no finding was applied.
+
+Final committed verification at `29c5480794bc39e44b517d93b8ff13df8b4c1534`:
+`assurance-s5-reg2` merge profile passed all 14 commands. Nextest reported
+665 passed / 47 skipped; source was clean (`source_dirty: false`), qualification
+remained false. Runtime was 4m09.192s with a 4-GiB peak and zero swap under the
+bounded systemd service. Receipt:
+`/home/brianklam/.local/state/liminal/assurance/run.KVPBqtRg/merge/receipt.json`.
+`assurance-s5-reg2-gates` exited 0 with 665 active and 47 deferred. These are
+development checks on the maintenance branch, not hosted, HAQP or Phase 1
+qualification evidence.
