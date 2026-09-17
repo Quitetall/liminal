@@ -2,6 +2,7 @@
 
 use anyhow::{Context, Result, ensure};
 use camino::Utf8Path;
+use quote::ToTokens;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::process::Command;
@@ -90,6 +91,10 @@ pub fn propose_coordinate(
             .eq(new_lines.iter().filter(|l| !l.trim().is_empty())),
         "unsupported nonblank source change"
     );
+    ensure!(
+        token_stream(&old)? == token_stream(&new)?,
+        "source token stream changed"
+    );
     Ok(CoordinateProposal {
         schema_version: 1,
         status: "proposal-only",
@@ -106,6 +111,17 @@ pub fn propose_coordinate(
         old_source_sha256: digest(old.as_bytes()),
         new_source_sha256: digest(new.as_bytes()),
     })
+}
+
+/// Compare parsed Rust tokens after allowing formatting-only whitespace and
+/// ordinary comments. Raw-string contents, literals, attributes and macro
+/// tokens remain part of the stream, so blank-line edits inside source data
+/// cannot masquerade as coordinate moves.
+fn token_stream(text: &str) -> Result<String> {
+    let syntax = syn::parse_file(text).context("unsupported Rust syntax")?;
+    let mut tokens = proc_macro2::TokenStream::new();
+    syntax.to_tokens(&mut tokens);
+    Ok(tokens.to_string())
 }
 
 fn digest(bytes: &[u8]) -> String {

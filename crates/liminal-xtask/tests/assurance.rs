@@ -1189,6 +1189,59 @@ fn coordinate_proposal_refuses_changed_ambiguous_and_nonexpression_targets() {
 }
 
 #[test]
+fn coordinate_proposal_refuses_blank_change_inside_raw_string_outside_target() {
+    let root = fixture();
+    fixture_git(&root, &["init", "--quiet"]);
+    let old = concat!(
+        "const DATA: &str = r#\"first\n",
+        "\n",
+        "last\"#;\n\n",
+        "pub fn example() -> bool {\n    false\n}\n",
+    );
+    std::fs::write(root.join("src/lib.rs"), old).unwrap();
+    fixture_git(&root, &["add", "."]);
+    fixture_git(&root, &["commit", "--quiet", "-m", "base"]);
+    let base = fixture_git(&root, &["rev-parse", "HEAD"]);
+    let new = concat!(
+        "const DATA: &str = r#\"first\n",
+        "\n",
+        "\n",
+        "last\"#;\n\n",
+        "pub fn example() -> bool {\n    false\n}\n",
+    );
+    std::fs::write(root.join("src/lib.rs"), new).unwrap();
+    fixture_git(&root, &["add", "src/lib.rs"]);
+    fixture_git(&root, &["commit", "--quiet", "-m", "raw-data-change"]);
+    let candidate = fixture_git(&root, &["rev-parse", "HEAD"]);
+    let output = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"))
+        .current_dir(&root)
+        .args([
+            "assurance",
+            "amend",
+            "propose",
+            "--base",
+            &base,
+            "--candidate",
+            &candidate,
+            "--source",
+            "src/lib.rs",
+            "--line",
+            "6",
+            "--anchor",
+            "    false",
+        ])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !output.status.success() && stderr.contains("source token stream changed"),
+        "raw-string data change must refuse: {stderr}"
+    );
+    assert!(output.stdout.is_empty());
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn catalog_check_accepts_registered_target_without_claiming_qualification() {
     let root = fixture();
     let output = Command::new(env!("CARGO_BIN_EXE_liminal-xtask"))

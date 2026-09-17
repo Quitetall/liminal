@@ -828,6 +828,7 @@ dependencies = [
  "liminal-scratch",
  "liminal-source",
  "proc-macro2",
+ "quote",
  "serde",
  "serde_json",
  "sha2",
