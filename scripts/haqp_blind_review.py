@@ -614,6 +614,8 @@ def parse_json(text: str) -> dict[str, Any]:
             # Permit normal punctuation immediately after a coordinate (for
             # example, ``haq.rs:1: verifier``), while still refusing numeric
             # prefix collisions such as ``haq.rs:10`` for target ``haq.rs:1``.
+            # Keep ``:`` on the left boundary: ``namespace:haq.rs:1`` must not
+            # satisfy a target for the suffix ``haq.rs:1``.
             if not re.search(
                 rf"(?<![A-Za-z0-9_:]){re.escape(target)}(?![A-Za-z0-9_]|:\d)",
                 prose,
@@ -1088,6 +1090,21 @@ def self_test() -> int:
                 {
                     **good["attempts"][0],
                     "observed_result": "observed verifier rejection at haq.rs:10 for mutation",
+                },
+                *good["attempts"][1:],
+            ],
+        }),
+    )
+    rejects(
+        "parse_json accepted a namespaced coordinate suffix",
+        parse_json,
+        json.dumps({
+            **good,
+            "attempts": [
+                {
+                    **good["attempts"][0],
+                    "attempt": "attempted concrete falsification against namespace:haq.rs:1 source coordinate",
+                    "observed_result": "observed verifier rejection at namespace:haq.rs:1 for mutation",
                 },
                 *good["attempts"][1:],
             ],
