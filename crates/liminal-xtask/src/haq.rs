@@ -6932,6 +6932,15 @@ fn scope_trace_line_accesses(line: &str) -> Vec<(String, bool)> {
         .collect()
 }
 
+/// Whether strace reported a failed syscall. Inspect only the return-value
+/// delimiter after the final syscall close, so a valid filename containing
+/// the text ` = -1 ` cannot masquerade as an `ENOENT` result.
+fn scope_trace_line_failed(line: &str) -> bool {
+    line.rfind(") = ")
+        .map(|index| line[index + 4..].starts_with("-1 "))
+        .unwrap_or(false)
+}
+
 /// The same, plus the directory fd each path was resolved against: the nearest
 /// preceding bare integer argument, `None` for `AT_FDCWD` and for calls that
 /// take no dirfd. Blind pass 1 at 5fb1b57 (A10, A11): only `openat`'s FIRST
@@ -6985,7 +6994,7 @@ fn scope_trace_open_paths(bytes: &[u8]) -> BTreeSet<String> {
             // opened. Keep failed WRITE candidates below for the locked-corpus
             // refusal, but do not ask path resolution to reconstruct a
             // historical target that the kernel never resolved.
-            if line.contains(" = -1 ") {
+            if scope_trace_line_failed(line) {
                 Vec::new()
             } else {
                 scope_trace_line_accesses(line)
@@ -7317,7 +7326,7 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
             // open-path and resolution digests: no kernel object was opened,
             // and canonicalization cannot authenticate a path that never
             // existed (ENOENT probes are common in tool discovery).
-            if !line.contains(" = -1 ") {
+            if !scope_trace_line_failed(&line) {
                 scan.open_paths.insert(path);
             }
         }
@@ -18567,6 +18576,28 @@ mod tests {
         assert!(
             scope_trace_open_paths(trace.as_bytes()).is_empty(),
             "whole-buffer path extraction must match streamed scan"
+        );
+
+        let filename_contains_return_text =
+            "7 openat(AT_FDCWD, \"/x/fuzz/corpus/val = -1/data\", O_RDONLY) = 3\n";
+        let scan = scan_scope_trace(filename_contains_return_text.as_bytes()).expect("scan");
+        assert!(
+            scan.open_paths.contains("/x/fuzz/corpus/val = -1/data"),
+            "a successful path containing return text must remain observable"
+        );
+
+        let failed_write =
+            "7 unlink(\"/x/fuzz/corpus/val = -1/data\") = -1 ENOENT (No such file or directory)\n";
+        let scan = scan_scope_trace(failed_write.as_bytes()).expect("scan");
+        assert!(
+            scan.open_paths.is_empty(),
+            "failed unlink did not open a path: {:?}",
+            scan.open_paths
+        );
+        assert_eq!(
+            scan.locked_write_candidates,
+            vec!["/x/fuzz/corpus/val = -1/data"],
+            "failed writes remain candidates for locked-corpus refusal"
         );
     }
 
