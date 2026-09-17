@@ -323,7 +323,37 @@ removal, sibling-directory containment, and standalone-repository rejection.
 The real positive fixture demonstrates standalone acceptance. Diagnostic style
 nits are nonblocking. Final commit still requires its own review.
 
-S5 remains open: closed registry and candidate/patch binding, independent review
-receipt verification, isolated apply and producer refresh are not implemented
-by this slice. Hosted S4 evidence and S6 remain open. No Phase 1 authorization,
-M17 closure, or HAQP qualification follows from these local checks.
+S5 remains open: registry/candidate binding is only a read-only partial seam;
+independent review receipt verification, unchanged mutation behavior, isolated
+apply and producer refresh are not implemented by this slice. Hosted S4 evidence
+and S6 remain open. No Phase 1 authorization, M17 closure, or HAQP qualification
+follows from these local checks.
+
+### Post-review concurrency correction
+
+LAMU's review of `5a12a636` identified a real pipe deadlock in synchronous
+OpenSSH verification: a payload over the child stdin pipe could block the writer
+before `wait` allowed the child to drain it. `5dc7e374` moves the exact payload
+write to a joined writer thread and adds a bounded disposable-key regression with
+a 131-KiB signed batch. The targeted test and all 31 assurance integration tests
+pass. LAMU reviewed `5dc7e374` and returned PASS WITH NITS; the only remaining
+notes are non-actionable allocation/polling style suggestions. The prior review's
+serde indexing concern was verified as safe and recorded as a skipped false
+positive. No authority or apply behavior changed.
+
+### Registry and exact candidate binding slice
+
+The authorization-only check now accepts an optional complete candidate group:
+candidate commit, source path, old line and exact anchor. Partial groups refuse.
+The executable carries the 65-entry packet-derived closed registry snapshot,
+bound by its externally pinned binary bytes. A bound request verifies the base
+source coordinate, the proposal's unchanged enclosing function and nonblank
+source, candidate packet target movement, exact packet one-line source replacement,
+and a two-file modification set. File metadata changes, extra packet edits and
+unrelated tree edits refuse. Output remains `apply_authorized: false`.
+
+Disposable fixture controls cover one valid coordinate move, extra packet content,
+and unrelated tree content. The positive fixture uses a whole-line expression
+anchor (`P1-M008`) and a packet source line with a trailing comma, exercising the
+real JSON formatting shape. No production packet, source, frozen qualifier,
+held-out corpus, or accepted SAS bytes were touched.

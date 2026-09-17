@@ -39,6 +39,18 @@ pub struct AuthorizationRequest {
     /// Exact requested mutant identifier; wildcards are not supported.
     #[arg(long)]
     target: String,
+    /// Candidate commit for optional registry/patch binding.
+    #[arg(long)]
+    candidate: Option<String>,
+    /// Relative Rust source path for optional coordinate binding.
+    #[arg(long)]
+    source: Option<Utf8PathBuf>,
+    /// Existing source line for optional coordinate binding.
+    #[arg(long)]
+    line: Option<usize>,
+    /// Exact existing source line anchor for optional coordinate binding.
+    #[arg(long)]
+    anchor: Option<String>,
 }
 
 // Strict shapes: omitted, duplicated and unknown fields are not authority.
@@ -77,6 +89,17 @@ struct Batch {
     tool_revision: String,
     tool_sha256: String,
     targets: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct RegistryPacket {
+    mutants: Vec<RegistryMutant>,
+}
+
+#[derive(Deserialize)]
+struct RegistryMutant {
+    id: String,
+    source: String,
 }
 
 /// Authenticate the selected human-authorized scope, without inspecting or
@@ -144,6 +167,7 @@ pub fn check_authorization(
     let policy: Policy = serde_json::from_slice(&policy_bytes).context("invalid signed policy")?;
     let batch: Batch = serde_json::from_slice(&batch_bytes).context("invalid signed batch")?;
     auth_check_scope(root, request, &trust, &policy, &batch)?;
+    let registry = auth_check_optional_registry(root, request)?;
     // Snapshot the public verification inputs so the process verifies the exact
     // bytes whose digests were checked, not a second read of mutable paths.
     let temp = Utf8PathBuf::from_path_buf(std::env::temp_dir())
@@ -173,9 +197,244 @@ pub fn check_authorization(
         "schema_version": 1, "batch_authenticated": true, "apply_authorized": false,
         "independent_review": "not-established", "batch_id": batch.id,
         "base_commit": batch.base_commit, "target": request.target,
+        "registry_binding": registry.unwrap_or("not-requested"),
         "policy_sha256": trust.policy_sha256, "batch_sha256": trust.batch_sha256,
         "tool_revision": trust.tool_revision, "tool_sha256": trust.tool_sha256
     }))
+}
+
+fn auth_check_optional_registry(
+    root: &Utf8Path,
+    request: &AuthorizationRequest,
+) -> Result<Option<&'static str>> {
+    match (
+        &request.candidate,
+        &request.source,
+        request.line,
+        &request.anchor,
+    ) {
+        (Some(candidate), Some(source), Some(line), Some(anchor)) => Ok(Some(
+            auth_check_registry_binding(root, request, candidate, source, line, anchor)?,
+        )),
+        (None, None, None, None) => Ok(None),
+        _ => anyhow::bail!(
+            "candidate, source, line and anchor must be supplied together for registry binding"
+        ),
+    }
+}
+
+fn auth_check_registry_binding(
+    root: &Utf8Path,
+    request: &AuthorizationRequest,
+    candidate: &str,
+    source: &Utf8Path,
+    line: usize,
+    anchor: &str,
+) -> Result<&'static str> {
+    ensure!(auth_hex(candidate, 40), "invalid candidate commit pin");
+    ensure!(
+        auth_identifier(&request.target),
+        "invalid target identifier"
+    );
+    ensure!(
+        source.extension() == Some("rs")
+            && !source.is_absolute()
+            && source
+                .components()
+                .all(|part| matches!(part, camino::Utf8Component::Normal(_)))
+            && !source.as_str().contains("conformance/corpora/heldout"),
+        "unsafe registry source path"
+    );
+    ensure!(line > 0, "invalid registry source line");
+    let expected = auth_closed_registry_entry(&request.target)?;
+    ensure!(
+        source.as_str() == expected.0,
+        "source path does not match closed registry"
+    );
+    let proposal = crate::assurance::amendment::propose_coordinate(
+        root,
+        &request.base,
+        candidate,
+        source,
+        line,
+        anchor,
+    )?;
+    ensure!(
+        proposal.source == expected.0 && proposal.old_line == expected.1,
+        "base coordinate does not match closed registry"
+    );
+    let candidate_source = format!("{}:{}", expected.0, proposal.new_line);
+    ensure!(
+        auth_packet_source(root, &request.base, &request.target)? == expected.2,
+        "base packet source does not match closed registry"
+    );
+    ensure!(
+        auth_packet_source(root, candidate, &request.target)? == candidate_source,
+        "candidate packet source does not match moved coordinate"
+    );
+    auth_check_candidate_diff(
+        root,
+        &request.base,
+        candidate,
+        source,
+        &expected.2,
+        &candidate_source,
+    )?;
+    Ok("verified")
+}
+
+fn auth_closed_registry_entry(target: &str) -> Result<(String, usize, String)> {
+    let packet: RegistryPacket =
+        serde_json::from_slice(include_bytes!("../../../../conformance/haqp/packet.json"))
+            .context("compiled closed registry is malformed")?;
+    ensure!(
+        packet.mutants.len() == 65,
+        "compiled closed registry count drift"
+    );
+    let mut ids = BTreeSet::new();
+    for mutant in &packet.mutants {
+        ensure!(
+            ids.insert(&mutant.id),
+            "compiled closed registry has duplicate target"
+        );
+        auth_registry_coordinate(&mutant.source)?;
+    }
+    let mut matches = packet.mutants.iter().filter(|mutant| mutant.id == target);
+    let mutant = matches
+        .next()
+        .context("target absent from closed registry")?;
+    ensure!(
+        matches.next().is_none(),
+        "target duplicated in closed registry"
+    );
+    let (file, line) = auth_registry_coordinate(&mutant.source)?;
+    Ok((file.to_owned(), line, mutant.source.clone()))
+}
+
+fn auth_registry_coordinate(source: &str) -> Result<(&str, usize)> {
+    let (file, line) = source
+        .rsplit_once(':')
+        .context("closed registry source is not file:line")?;
+    let line: usize = line
+        .parse()
+        .context("closed registry line is not numeric")?;
+    ensure!(
+        line > 0
+            && !file.is_empty()
+            && !file.starts_with('/')
+            && file
+                .split('/')
+                .all(|part| !part.is_empty() && part != "." && part != "..")
+            && Utf8Path::new(file).extension() == Some("rs"),
+        "unsafe closed registry coordinate"
+    );
+    Ok((file, line))
+}
+
+fn auth_packet_source(root: &Utf8Path, revision: &str, target: &str) -> Result<String> {
+    ensure!(auth_hex(revision, 40), "invalid packet revision");
+    let spec = format!("{revision}:conformance/haqp/packet.json");
+    let bytes = auth_git(root, &["cat-file", "blob", &spec])?;
+    let packet: RegistryPacket = serde_json::from_slice(&bytes).context("invalid packet JSON")?;
+    let mut matches = packet.mutants.iter().filter(|mutant| mutant.id == target);
+    let mutant = matches.next().context("target absent from packet")?;
+    ensure!(matches.next().is_none(), "target duplicated in packet");
+    Ok(mutant.source.clone())
+}
+
+fn auth_check_candidate_diff(
+    root: &Utf8Path,
+    base: &str,
+    candidate: &str,
+    source: &Utf8Path,
+    old_packet_source: &str,
+    new_packet_source: &str,
+) -> Result<()> {
+    let names = String::from_utf8(auth_git(
+        root,
+        &[
+            "diff",
+            "--no-ext-diff",
+            "--name-status",
+            base,
+            candidate,
+            "--",
+        ],
+    )?)?;
+    let mut paths = Vec::new();
+    for row in names.lines() {
+        let (status, path) = row
+            .split_once('\t')
+            .context("candidate diff has malformed name-status row")?;
+        ensure!(
+            status == "M",
+            "candidate diff contains non-modification status"
+        );
+        paths.push(path);
+    }
+    let packet_path = "conformance/haqp/packet.json";
+    let mut expected_paths = vec![source.as_str(), packet_path];
+    expected_paths.sort_unstable();
+    paths.sort_unstable();
+    ensure!(
+        paths == expected_paths,
+        "candidate changes files outside coordinate scope"
+    );
+    ensure!(
+        auth_git(
+            root,
+            &["diff", "--no-ext-diff", "--summary", base, candidate, "--"]
+        )?
+        .is_empty(),
+        "candidate changes file metadata"
+    );
+
+    let diff = String::from_utf8(auth_git(
+        root,
+        &[
+            "diff",
+            "--no-ext-diff",
+            "--unified=0",
+            base,
+            candidate,
+            "--",
+            packet_path,
+        ],
+    )?)?;
+    let mut removed = Vec::new();
+    let mut added = Vec::new();
+    for row in diff.lines() {
+        if row.starts_with("---") || row.starts_with("+++") {
+            continue;
+        }
+        if let Some(value) = row.strip_prefix('-') {
+            removed.push(value);
+        } else if let Some(value) = row.strip_prefix('+') {
+            added.push(value);
+        }
+    }
+    let packet_line = |line: &str, expected: &str| {
+        let line = line.strip_suffix(',').unwrap_or(line);
+        let leading = line.len() - line.trim_start().len();
+        let content = line.trim_start();
+        (leading, content == format!("\"source\": \"{expected}\""))
+    };
+    let removed_shape = removed
+        .first()
+        .map(|line| packet_line(line, old_packet_source));
+    let added_shape = added
+        .first()
+        .map(|line| packet_line(line, new_packet_source));
+    let valid_change = matches!(
+        (removed_shape, added_shape),
+        (Some((removed_indent, true)), Some((added_indent, true)))
+            if removed_indent == added_indent
+    );
+    ensure!(
+        removed.len() == 1 && added.len() == 1 && valid_change,
+        "candidate packet diff is not one exact source-coordinate replacement"
+    );
+    Ok(())
 }
 
 fn auth_check_executable(expected: &str) -> Result<()> {

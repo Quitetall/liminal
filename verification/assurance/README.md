@@ -85,4 +85,5 @@ success as automatic-maintenance eligibility. Full `amend check|apply` remain pe
 `amend check --authorization-only` now authenticates separately signed batch scope
 against external active policy/batch and tool pins. It explicitly does not authorize
 application. See [AUTHORIZATION.md](AUTHORIZATION.md) for the exact-byte formats,
-OpenSSH namespaces, external activation rules, and remaining trust limits.
+OpenSSH namespaces, optional closed-registry/candidate binding, external activation
+rules, and remaining trust limits. Registry binding is still not review or apply.

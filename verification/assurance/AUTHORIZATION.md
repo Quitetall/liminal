@@ -11,7 +11,8 @@ liminal-xtask assurance amend check --authorization-only \
   --trust-root ABSOLUTE_EXTERNAL_DIRECTORY \
   --policy POLICY_JSON --policy-signature POLICY_JSON.sig \
   --batch BATCH_JSON --batch-signature BATCH_JSON.sig \
-  --base FULL_COMMIT_ID --target EXACT_MUTANT_ID
+  --base FULL_COMMIT_ID --target EXACT_MUTANT_ID \
+  [--candidate CANDIDATE_COMMIT --source RELATIVE.rs --line OLD_LINE --anchor EXACT_LINE]
 ```
 
 Exit zero authenticates only the selected batch scope. Output explicitly says
@@ -20,8 +21,20 @@ Exit zero authenticates only the selected batch scope. Output explicitly says
 capability, and must never be accepted as proof by a future apply implementation.
 Without `--authorization-only`, this partial implementation refuses full admission.
 
-The remaining checks include actual closed-registry membership, exact candidate
-and patch binding, unchanged target/mutation behavior, independent review, and
+When all four optional candidate flags are present, the check additionally emits
+`registry_binding: verified`. It binds the exact target to the compiled 65-entry
+closed mutant registry, verifies the base packet coordinate, runs the read-only
+coordinate proposal against base/candidate commits, and permits only two modified
+files: the Rust source (blank-line relocation with unchanged enclosing code) and
+`conformance/haqp/packet.json` (one exact source-coordinate line replacement).
+Supplying only part of this optional group refuses. Omitting the group reports
+`registry_binding: not-requested` and remains authentication-only. The compiled
+registry snapshot is part of the pinned executable; changing it requires a new
+tool enrollment, not a mutable runtime registry edit.
+
+The optional registry check establishes only coordinate and packet-diff binding;
+it does not establish mutation behavior. Remaining checks include exact mutation
+patch binding, unchanged target/mutation behavior, independent review, and
 isolated application. These are not established by authenticated scope. Admission
 and revocation must be rechecked before effects; a historical check does not
 authorize a later action. No automatic apply command exists.

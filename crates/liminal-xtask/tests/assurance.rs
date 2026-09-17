@@ -12,11 +12,35 @@ struct SignedBatchFixture {
     trust: std::path::PathBuf,
     base: String,
     target: String,
+    source: String,
 }
 
 impl SignedBatchFixture {
     fn create() -> Self {
         let root = fixture();
+        let source = "crates/liminal-source/src/view.rs".to_owned();
+        let source_path = root.join(&source);
+        std::fs::create_dir_all(source_path.parent().unwrap()).unwrap();
+        let mut source_lines = vec!["pub fn fixture_logic() {".to_owned()];
+        while source_lines.len() < 58 {
+            source_lines.push(String::new());
+        }
+        source_lines.extend(["    &self.basis".to_owned(), "}".to_owned()]);
+        std::fs::write(&source_path, format!("{}\n", source_lines.join("\n"))).unwrap();
+        let packet_path = root.join("conformance/haqp/packet.json");
+        std::fs::create_dir_all(packet_path.parent().unwrap()).unwrap();
+        std::fs::write(
+            packet_path,
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "mutants": [{
+                    "id": "P1-M008",
+                    "source": "crates/liminal-source/src/view.rs:59",
+                    "zzz": "fixture"
+                }]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
         fixture_git(&root, &["init", "--quiet"]);
         fixture_git(&root, &["add", "."]);
         fixture_git(&root, &["commit", "--quiet", "-m", "authorization fixture"]);
@@ -61,7 +85,7 @@ impl SignedBatchFixture {
             "schema_version": 1, "id": "fixture-batch", "policy_sha256": policy_hash,
             "base_commit": base, "change_class": "coordinate-only",
             "tool_revision": tool_revision, "tool_sha256": tool_hash,
-            "targets": ["P1-M001"]
+            "targets": ["P1-M008"]
         }))
         .unwrap();
         std::fs::write(trust.join("batch.json"), &batch).unwrap();
@@ -75,7 +99,8 @@ impl SignedBatchFixture {
             root,
             trust,
             base,
-            target: "P1-M001".to_owned(),
+            target: "P1-M008".to_owned(),
+            source,
         };
         fixture.sign("policy.json", "liminal.assurance.policy.v1");
         fixture.sign("batch.json", "liminal.assurance.batch.v1");
@@ -124,6 +149,15 @@ impl SignedBatchFixture {
             .arg("--batch-signature")
             .arg(self.trust.join("batch.json.sig"))
             .args(["--base", &self.base, "--target", &self.target]);
+        command
+    }
+
+    fn candidate_command(&self, candidate: &str) -> Command {
+        let mut command = self.command();
+        command
+            .args(["--candidate", candidate, "--source"])
+            .arg(&self.source)
+            .args(["--line", "59", "--anchor", "    &self.basis"]);
         command
     }
 
@@ -251,6 +285,109 @@ fn signed_batch_verifies_payload_larger_than_pipe_buffer() {
 }
 
 #[test]
+fn signed_batch_binds_exact_closed_registry_and_packet_move() {
+    let fixture = SignedBatchFixture::create();
+    let source_path = fixture.root.join(&fixture.source);
+    let mut source_lines: Vec<_> = std::fs::read_to_string(&source_path)
+        .unwrap()
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    source_lines.insert(0, String::new());
+    source_lines.insert(0, String::new());
+    std::fs::write(&source_path, format!("{}\n", source_lines.join("\n"))).unwrap();
+    let packet_path = fixture.root.join("conformance/haqp/packet.json");
+    let packet = std::fs::read_to_string(&packet_path).unwrap().replace(
+        "crates/liminal-source/src/view.rs:59",
+        "crates/liminal-source/src/view.rs:61",
+    );
+    std::fs::write(packet_path, packet).unwrap();
+    fixture_git(&fixture.root, &["add", "."]);
+    fixture_git(
+        &fixture.root,
+        &["commit", "--quiet", "-m", "coordinate move"],
+    );
+    let candidate = fixture_git(&fixture.root, &["rev-parse", "HEAD"]);
+    let output = fixture.candidate_command(&candidate).output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["registry_binding"], "verified");
+    assert_eq!(value["apply_authorized"], false);
+    fixture.finish();
+}
+
+#[test]
+fn signed_batch_rejects_extra_packet_or_tree_changes() {
+    for extra in ["packet", "tree"] {
+        let fixture = SignedBatchFixture::create();
+        let source_path = fixture.root.join(&fixture.source);
+        let mut source_lines: Vec<_> = std::fs::read_to_string(&source_path)
+            .unwrap()
+            .lines()
+            .map(str::to_owned)
+            .collect();
+        source_lines.insert(0, String::new());
+        source_lines.insert(0, String::new());
+        std::fs::write(&source_path, format!("{}\n", source_lines.join("\n"))).unwrap();
+        let packet_path = fixture.root.join("conformance/haqp/packet.json");
+        let mut packet = std::fs::read_to_string(&packet_path).unwrap().replace(
+            "crates/liminal-source/src/view.rs:59",
+            "crates/liminal-source/src/view.rs:61",
+        );
+        if extra == "packet" {
+            packet = packet.replacen("{\n", "{\n  \"extra\": true,\n", 1);
+            std::fs::write(&packet_path, packet).unwrap();
+        } else {
+            std::fs::write(&packet_path, packet).unwrap();
+            std::fs::write(fixture.root.join("unrelated.txt"), "unrelated\n").unwrap();
+        }
+        fixture_git(&fixture.root, &["add", "."]);
+        fixture_git(
+            &fixture.root,
+            &["commit", "--quiet", "-m", "invalid coordinate move"],
+        );
+        let candidate = fixture_git(&fixture.root, &["rev-parse", "HEAD"]);
+        assert_auth_refusal(
+            fixture.candidate_command(&candidate),
+            if extra == "packet" {
+                "candidate packet diff is not one exact source-coordinate replacement"
+            } else {
+                "candidate diff contains non-modification status"
+            },
+        );
+        fixture.finish();
+    }
+}
+
+#[test]
+fn signed_batch_rejects_partial_registry_binding_group() {
+    let fixture = SignedBatchFixture::create();
+    let mut command = fixture.command();
+    command.args(["--candidate", &fixture.base]);
+    assert_auth_refusal(
+        command,
+        "candidate, source, line and anchor must be supplied together",
+    );
+    fixture.finish();
+}
+
+#[test]
+fn signed_batch_rejects_source_outside_closed_registry() {
+    let fixture = SignedBatchFixture::create();
+    let mut command = fixture.command();
+    command
+        .args(["--candidate", &fixture.base, "--source"])
+        .arg("src/lib.rs")
+        .args(["--line", "1", "--anchor", "pub fn example() {}"]);
+    assert_auth_refusal(command, "source path does not match closed registry");
+    fixture.finish();
+}
+
+#[test]
 fn signed_batch_refuses_revoked_pins_wrong_tool_and_wrong_scope() {
     for (field, value, expected) in [
         ("enabled", serde_json::json!(false), "trust disabled"),
@@ -314,7 +451,7 @@ fn signed_batch_refuses_semantic_scope_unknown_fields_and_duplicate_targets() {
         ),
         (
             "targets",
-            serde_json::json!(["P1-M001", "P1-M001"]),
+            serde_json::json!(["P1-M008", "P1-M008"]),
             "invalid or duplicate batch targets",
         ),
         (
