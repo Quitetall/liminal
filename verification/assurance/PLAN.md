@@ -610,6 +610,12 @@ or qualification claim. Receipt:
 It records `source_dirty: false` and `qualification_established: false`.
 The bounded `just gates` rerun exited 0 with 675 active and 47 deferred.
 
+At commit `c56c0e6b846c0f4fa7ef1e96519fc40e66cf4fde`,
+`just assurance-workflows` exited 0 and regenerated no changes; the generated
+workflow tree remained byte-identical. A same-commit `just gates` rerun exited 0
+with 675 active and 47 deferred. These checks add local reproducibility
+evidence only; hosted execution and external trust activation remain open.
+
 The accumulated delta through this commit received a durable MiMo V2.5 Pro
 LAMU `review_diff` result: `PASS WITH NITS`. Artifact
 `/mnt/4tb/liminal-formal-evidence/reviews/assurance-accumulated-review-final.stdout`
