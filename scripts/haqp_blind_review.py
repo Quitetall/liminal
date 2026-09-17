@@ -615,7 +615,7 @@ def parse_json(text: str) -> dict[str, Any]:
             # example, ``haq.rs:1: verifier``), while still refusing numeric
             # prefix collisions such as ``haq.rs:10`` for target ``haq.rs:1``.
             if not re.search(
-                rf"(?<![A-Za-z0-9_]){re.escape(target)}(?![A-Za-z0-9_]|:\d)",
+                rf"(?<![A-Za-z0-9_:]){re.escape(target)}(?![A-Za-z0-9_]|:\d)",
                 prose,
             ):
                 raise ValueError(f"attempt {identifier} {field} must quote exact target")
