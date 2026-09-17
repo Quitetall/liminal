@@ -538,6 +538,12 @@ fn signed_batch_apply_requires_review_and_fresh_destination() {
         "isolated apply output already exists",
     );
     std::fs::remove_dir_all(existing).unwrap();
+    let inside = fixture.root.join("isolated-apply");
+    assert_auth_refusal(
+        fixture.apply_command(&candidate, Some(&receipt), &inside),
+        "trust or verification scratch is inside repository scope",
+    );
+    assert!(!inside.exists());
     fixture.finish();
 }
 

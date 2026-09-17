@@ -383,6 +383,8 @@ fn auth_git_apply(root: &Utf8Path, patch: &[u8]) -> Result<()> {
         }
         Ok::<_, std::io::Error>(captured)
     });
+    // Wait first: child exit closes its stdin, so a writer blocked on a full
+    // patch pipe can finish before its join below.
     let status = child.wait().context("wait for git apply")?;
     let write = writer
         .join()
