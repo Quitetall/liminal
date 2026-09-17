@@ -6980,9 +6980,19 @@ fn scope_trace_open_paths(bytes: &[u8]) -> BTreeSet<String> {
     String::from_utf8_lossy(bytes)
         .lines()
         .flat_map(|line| {
-            scope_trace_line_accesses(line)
-                .into_iter()
-                .map(|(path, _)| path)
+            // A failed lookup (for example, typos probing optional config
+            // files under fuzz/corpus) did not name an object the process
+            // opened. Keep failed WRITE candidates below for the locked-corpus
+            // refusal, but do not ask path resolution to reconstruct a
+            // historical target that the kernel never resolved.
+            if line.contains(" = -1 ") {
+                Vec::new()
+            } else {
+                scope_trace_line_accesses(line)
+                    .into_iter()
+                    .map(|(path, _)| path)
+                    .collect()
+            }
         })
         .collect()
 }
@@ -7302,7 +7312,14 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
             if write {
                 scan.locked_write_candidates.push(path.clone());
             }
-            scan.open_paths.insert(path);
+            // Failed lookups remain write candidates above, so an attempted
+            // mutation of locked data still refuses. They are excluded from
+            // open-path and resolution digests: no kernel object was opened,
+            // and canonicalization cannot authenticate a path that never
+            // existed (ENOENT probes are common in tool discovery).
+            if !line.contains(" = -1 ") {
+                scan.open_paths.insert(path);
+            }
         }
     }
     scan.raw_blake3 = hasher.finalize().to_hex().to_string();
@@ -18535,6 +18552,22 @@ mod tests {
         fs::write(&corrupt, b"not zstd").expect("write");
         let err = scan_scope_trace_file(&corrupt, "fixture").expect_err("corrupt zstd");
         assert!(err.to_string().contains("fixture"), "{err}");
+    }
+
+    #[test]
+    fn failed_file_probe_is_not_resolved_as_deleted_corpus_entry() {
+        let trace = "7 openat(AT_FDCWD, \"/x/fuzz/corpus/.typos.toml\", O_RDONLY) = -1 ENOENT (No such file or directory)\n\
+                     7 +++ exited with 0 +++\n";
+        let scan = scan_scope_trace(trace.as_bytes()).expect("scan");
+        assert!(
+            scan.open_paths.is_empty(),
+            "an unsuccessful lookup did not open a path: {:?}",
+            scan.open_paths
+        );
+        assert!(
+            scope_trace_open_paths(trace.as_bytes()).is_empty(),
+            "whole-buffer path extraction must match streamed scan"
+        );
     }
 
     /// F-43: the stage tracer holds the one ptrace slot, so each fuzz binary's
