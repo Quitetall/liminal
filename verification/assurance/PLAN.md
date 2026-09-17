@@ -574,3 +574,24 @@ Primary notes are nonblocking style/documentation observations. Critic review
 confirmed no security defect: path containment is component-aware, Git diff
 framing is line-safe, and the trusted-host model's same-user limits are
 documented. No source change followed this review.
+
+### Current-head verification after token binding
+
+At clean source commit `3c363482223b296f358c52ce7f03c810bb49903a`, the bounded
+Linux merge profile completed successfully. All 14 registered commands passed;
+nextest reported 675 passed and 47 skipped, with no failures. The outer
+systemd service used the standing 2-CPU, 4-GiB, zero-swap and 256-task envelope;
+runtime was 14m43.139s under host contention, CPU time 14m46.528s, and the
+service-reported memory peak reached the 4-GiB cap. This is one cache-unknown
+development observation, not a budget or performance guarantee. Receipt:
+`/home/brianklam/.local/state/liminal/assurance/run.vDvK9IdD/merge/receipt.json`
+(SHA-256 `b3b769fae7636b06f8f2ea2f052a0c96a6b676bd25b6bef9f1201568212c8883`).
+The receipt records `source_dirty: false` and
+`qualification_established: false`.
+
+An overlapping manually launched nextest probe was not evidence: it shared the
+checkout target directory with the bounded merge unit and produced one
+`maintenance executable pin mismatch` in an assurance fixture while its other
+674 tests passed. The failure is the expected executable-replacement race from
+concurrent Cargo jobs, not a source result; no source or assertion change
+followed it. Do not run overlapping jobs against one target directory.
