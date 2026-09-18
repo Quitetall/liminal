@@ -4157,3 +4157,68 @@ closed. Brian may want to narrow the rule so that oracle coverage counts as
 suite rather than instrument; that is his to decide.
 
 **Two consecutive lanes now satisfy AM-17.11's termination rule.**
+
+## F-74 — the first §6 qualification review: two findings, one a proven hole in the gate
+
+The campaign at fixed base `d8006c16` ran every lane to completion — CI 638
+passed / 47 skipped, 33/33 canaries caught, all seven fuzz targets clean at
+1800s each with zero artifacts — and then refused the flip:
+
+```
+refusing to flip: pass1-codex-gpt-5.6-sol.json reports 2 unresolved verified
+findings, 2 after signed rulings; ADR-0020 §6 requires zero
+```
+
+Pass 1 (`codex:gpt-5.6-sol`) recorded 12 attempts, ten caught violations, one
+false positive it classified itself, and two findings it independently
+reproduced. Pass 2 (`mimo-direct:mimo-v2.5-pro`) recorded 12 attempts and
+passed with none — the asymmetry F-33 already established one pass may carry
+alone.
+
+**A01 is a real defect and is fixed here.** `RENDERED_TABLES` named twelve
+tables; the canary table was the thirteenth and was not among them. So neither
+the width rule F-54 added — against precisely "a row with surplus cells beneath
+a narrower header" — nor the undeclared-value rule ever ran on it. The table's
+33 committed rows carried **nine** cells under a **seven**-cell header, the
+exact drift that rule exists to catch, left when a pre-flight edit removed three
+stale columns from the header and not from the rows. The one check that did
+cover the table compares ID sets, and reads only each row's first cell, so
+surplus cells did not disturb it.
+
+Two things made it invisible. The document-wide verdict scan does cover every
+table, but short-circuits on `qualified`, so it would have stopped covering this
+one at the moment the flip made results writable. And `RESULT_BEARING_TABLES`
+did not name the canary table either, so a flip that fills it from
+`canaries.json` — gate, violation, observed failure, `caught` — was writing
+values no registry authorized and no rule inspected.
+
+The fix registers the table in both lists, adds the packet's canary IDs to the
+declared set so the ID column is checked against the packet rather than assumed,
+and trims the 33 rows to their header's width. A width audit over every table in
+the markdown found no other drift. The regression test is proven by mutation:
+removing the header from the registries makes it fail on the surplus-cell case.
+
+This is the species the campaign was built to find, and it was found by the
+qualification review rather than by a hardening lane — the first finding to
+arrive that way.
+
+**A02 is accurate about the code and wrong about the packet.** The coordinates
+hold: `ilrp.rs:591` is `crash_if_armed(CrashPoint::BeforeAcknowledge)`, and
+P1-M049's declared killers are P1-T22 and P1-T07, neither of which is a crash
+test. But that column is derived, not authored (AM-17.10): P1-T22 is the first
+candidate on P1-R015 observed the way `disabled-crash-point` shows itself
+(`recovery`), P1-T07 the first remaining of a different kind. The rule produced
+exactly this pair, and `verify_mutant_killing_tests` re-derives it.
+
+The reviewer is nonetheless pointing at something true underneath. A disabled
+crash point is killed only by an oracle that asserts the injection *fired*;
+disable it and an idempotent-rerun test stops crashing, stays idempotent, and
+passes. Evidence kind `recovery` does not imply the oracle checks arming. That
+is the same shape as F-73's A01 and RISK-006 — a rule that is faithfully applied
+and still admits a mutant the suite would not kill.
+
+It is not fixable inside stage 1a. The 38 tests do not exist (AM-17.4), so
+whether P1-T22 asserts arming is not a fact about the tree; it is a constraint on
+tests M20 has yet to write. Recorded as **RISK-007**, scoped to HAQP-1b at M24,
+where the mutants are actually executed and a surviving P1-M049 is observable
+rather than argued.

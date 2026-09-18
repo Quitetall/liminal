@@ -517,12 +517,22 @@ const ACTIVATION_VOCABULARY: [&str; 2] = ["Phase 1", "Conditional: first persist
 /// still far too much — ten of the twelve are derived from the packet and read
 /// the same before and after, so only these two may hold a value the packet
 /// does not declare.
-const RESULT_BEARING_TABLES: [&str; 2] = [
+const RESULT_BEARING_TABLES: [&str; 3] = [
     "| Family | Planned | Executed |",
     "| Family | Relations and results |",
+    // The flip fills this one from `canaries.json` — the gate each canary
+    // violated, the observed failure text and `caught` — none of which the
+    // packet declares. Blind pass 1 at d8006c16 (A01).
+    "| Canary ID | Gate/conjunct |",
 ];
 
-const RENDERED_TABLES: [&str; 12] = [
+/// Blind pass 1 at `d8006c16` (A01): the canary table was absent from this
+/// list, so the width rule below never ran on it — and its 33 committed rows
+/// carried nine cells under a seven-cell header, exactly the drift F-54 added
+/// that rule to catch. Only the ID set was ever checked
+/// (`verify_markdown_review_blocks`), which a surplus cell does not disturb.
+const RENDERED_TABLES: [&str; 13] = [
+    "| Canary ID | Gate/conjunct |",
     "| Requirement ID | Kind |",
     "| Test ID | Exact test |",
     "| Requirement ID | Positive tests |",
@@ -682,6 +692,11 @@ fn verify_markdown_tables(root: &Utf8Path, packet: &Packet) -> Result<()> {
     for test in &packet.tests {
         declared.insert(test.id.clone());
         declared.insert(test.name.clone());
+    }
+    // The canary table's ID column, now that the table is checked cell by
+    // cell. Every other column is NOT_RUN until the flip writes the run.
+    for canary in &packet.canaries {
+        declared.insert(canary.id.clone());
     }
     // No cell in ANY table may be a verdict while the packet is unqualified.
     let lines = text.lines().collect::<Vec<_>>();
@@ -19355,6 +19370,68 @@ mod tests {
             .expect_err("a row wider than its header")
             .to_string();
         assert!(err.contains("cell") && err.contains("header"), "{err}");
+
+        // The untouched copy still verifies, so the refusals above are earned.
+        fs::write(scratch_root.join(rel), &original).expect("write");
+        verify_markdown_tables(&scratch_root, &packet).expect("an unmodified copy verifies");
+    }
+
+    /// Blind pass 1 at `d8006c16` (A01): the canary table was the one rendered
+    /// table `RENDERED_TABLES` did not name, so neither the width rule nor the
+    /// cell rule ever ran on it — and its 33 committed rows carried nine cells
+    /// under a seven-cell header. The ID-set check that did cover it
+    /// (`verify_markdown_review_blocks`) reads only the first cell, so surplus
+    /// cells and an undeclared value both passed.
+    #[test]
+    fn the_canary_table_is_checked_like_every_other_rendered_table() {
+        let root = repo_root();
+        let packet = read_packet(&root).expect("packet");
+        verify_markdown_tables(&root, &packet).expect("the committed canary table is derivable");
+
+        let scratch = liminal_scratch::ScratchDir::new("haq-canary-table").expect("scratch");
+        let scratch_root = scratch.path().to_owned();
+        let rel = "docs/execution/phase1-suite-review.md";
+        fs::create_dir_all(scratch_root.join("docs/execution")).expect("mkdir");
+        let original = fs::read_to_string(root.join(rel)).expect("markdown");
+        let row = "| C01 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |";
+        assert!(original.contains(row), "the canary row fixture must exist");
+
+        // The exact drift that stood in the tree: surplus cells beneath a
+        // narrower header, which the ID-set check cannot see.
+        let wide = original.replacen(row, &format!("{row} NOT_RUN |"), 1);
+        assert_ne!(wide, original);
+        fs::write(scratch_root.join(rel), &wide).expect("write");
+        let err = verify_markdown_tables(&scratch_root, &packet)
+            .expect_err("a canary row wider than its header")
+            .to_string();
+        assert!(
+            err.contains("Canary ID") && err.contains("cell") && err.contains("header"),
+            "{err}"
+        );
+
+        // A canary cell may not claim a result the unqualified packet does not
+        // declare, and the ID column may not name a canary it does not carry.
+        for (to, why) in [
+            (
+                "| C01 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | caught |",
+                "a canary result",
+            ),
+            (
+                "| C99 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |",
+                "a canary the packet does not declare",
+            ),
+        ] {
+            let doctored = original.replacen(row, to, 1);
+            assert_ne!(doctored, original, "the fixture must change: {why}");
+            fs::write(scratch_root.join(rel), &doctored).expect("write");
+            let err = verify_markdown_tables(&scratch_root, &packet)
+                .expect_err(why)
+                .to_string();
+            assert!(
+                err.contains("does not declare") || err.contains("while the packet is unqualified"),
+                "{why}: {err}"
+            );
+        }
 
         // The untouched copy still verifies, so the refusals above are earned.
         fs::write(scratch_root.join(rel), &original).expect("write");

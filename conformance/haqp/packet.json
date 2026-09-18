@@ -78,6 +78,18 @@
    "mitigation": "verify_coarse_scan requires every nonblank source line to be covered, plus in-bounds non-overlap, nonblank, classification and content-hash checks. AM-17.11 records the residual regression risk; this qualifier code is frozen",
    "authority": "AM-17.11",
    "state": "accepted"
+  },
+  {
+   "id": "RISK-007",
+   "owner": "Brian",
+   "severity": "disclosed",
+   "trigger": "a disabled-crash-point mutant survives when its derived killers assert recovery outcomes without asserting the injection fired",
+   "requirement": "P1-R015",
+   "evidence": "docs/execution/m17-5-adversarial-findings.md:F-74",
+   "planned_phase": "M24",
+   "mitigation": "AM-17.10 derives the killer column from the operator's observation kind, which constrains evidence kind but not oracle strength. Stage 1a predeclares mutants without executing them (AM-17.4: the 38 tests are unwritten), so a surviving P1-M049 is observable only at HAQP-1b, where haq mutants executes the plan and a survivor is recorded rather than argued",
+   "authority": "ADR-0021 stage 1b",
+   "state": "accepted"
   }
  ],
  "requirements": [
