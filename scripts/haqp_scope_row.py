@@ -38,6 +38,42 @@ def blake3_text(text: str) -> str:
         Path(name).unlink()
 
 
+# 90 MiB, under GitHub's 100 MB refusal.
+TRACE_STORE_CEILING_BYTES = 94_371_840
+
+
+def store_trace(raw: Path, stored: Path) -> None:
+    """Compress a raw trace losslessly, small enough to push, and prove it fits.
+
+    ``--long=27`` sets a 128 MiB match window, the largest a default zstd
+    decoder accepts; ``read_evidence_bytes`` uses that default, and a 2 GiB
+    window is refused with "Window size larger than maximum". Measured on the
+    2026-09-18 campaign: 5.43 GB raw stored at 795 MiB with ``-3`` and 26.3 MiB
+    here, decompressing to identical bytes, so ``trace_blake3`` -- taken over
+    the raw bytes -- does not change with the storage format.
+
+    Reducing the trace to distinct lines would be far smaller and is NOT safe:
+    ``scan_scope_trace`` maps ``(pid, fd)`` to a path as it streams, so a
+    repeated ``openat(7, "x", O_WRONLY)`` after fd 7 is reopened elsewhere is a
+    different access wearing identical text (blind pass 1 at f360e90, A07).
+
+    The ceiling is checked, not assumed: ``-3`` quietly stopped clearing
+    GitHub's limit as campaigns grew, and nothing failed until a push was
+    refused, by which point the blob was already in history.
+    """
+    subprocess.check_call(
+        ["zstd", "-q", "-15", "--long=27", "--rm", "-f", str(raw), "-o", str(stored)]
+    )
+    size = stored.stat().st_size
+    if size > TRACE_STORE_CEILING_BYTES:
+        raise SystemExit(
+            f"stored trace {stored} is {size} bytes, over the "
+            f"{TRACE_STORE_CEILING_BYTES}-byte ceiling. A larger window is not "
+            "available: 128 MiB is the default decoder limit. Reduce what is "
+            "traced; do not reduce the trace -- the fd map needs every line."
+        )
+
+
 def main() -> int:
     scope, declared, raw, exit_code = sys.argv[1], sys.argv[2], Path(sys.argv[3]), int(sys.argv[4])
     command = f"strace -f -q -e trace=%file -o target/haqp/scope-{scope}.trace {declared}"
@@ -75,7 +111,7 @@ def main() -> int:
 
     (ACCESS / "scopes").mkdir(parents=True, exist_ok=True)
     stored = ACCESS / "scopes" / f"{scope}.trace.zst"
-    subprocess.check_call(["zstd", "-q", "-3", "--rm", "-f", str(raw), "-o", str(stored)])
+    store_trace(raw, stored)
 
     receipt = ACCESS / "strace.version"
     row = {

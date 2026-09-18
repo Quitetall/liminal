@@ -59,6 +59,35 @@ hash_file() {
 # lines are carved from the stage trace once its exit line is present. strace
 # writes each line as it completes and the exit line last, but reports the exit
 # after the parent has reaped the child, so the wait is bounded, not assumed.
+# Store a raw trace compressed, losslessly, small enough to push.
+#
+# `--long=27` sets a 128 MiB match window -- the largest a default zstd
+# decoder accepts. `zstd::decode_all` in read_evidence_bytes uses that default,
+# and `--long=31` (2 GiB window, 3.5 MiB output here) is refused outright:
+# "Window size larger than maximum : 2147483648 > 134217728". Measured on the
+# 2026-09-18 graph_interchange_codec trace: 5.43 GB raw, 795 MiB at `-3`,
+# 26.3 MiB here, decompressing to the same bytes (sha256 verified), so
+# trace_blake3 is unchanged by the storage format.
+#
+# The ceiling is checked rather than assumed. `-3` silently stopped clearing
+# GitHub's limit as campaigns grew, and nothing failed until a push was
+# refused -- by which point the blob was already in history.
+TRACE_STORE_CEILING_BYTES=94371840 # 90 MiB, under GitHub's 100 MB refusal
+store_trace() {
+  local raw="$1" stored="$2" size
+  if ! zstd -q -15 --long=27 --rm -f "$raw" -o "$stored"; then
+    echo "ERROR: compressing trace failed: $raw" >&2
+    exit 1
+  fi
+  size=$(stat -c '%s' "$stored")
+  if [ "$size" -gt "$TRACE_STORE_CEILING_BYTES" ]; then
+    echo "ERROR: stored trace $stored is $size bytes, over the ${TRACE_STORE_CEILING_BYTES}-byte ceiling." >&2
+    echo "A larger window is not available: 128 MiB is the default decoder limit." >&2
+    echo "Reduce what is traced; do not reduce the trace -- the fd map needs every line." >&2
+    exit 1
+  fi
+}
+
 carve_stage_trace() {
   # 60 s: libFuzzer has already exited (we waited on it); this only covers the
   # tracer reporting that exit after the parent reaped the child, which is
@@ -367,6 +396,17 @@ for t in "${TARGETS[@]}"; do
   # 100 MB ceiling. zstd takes that to ~55 MB. The DIGEST stays over the raw
   # bytes so trace_blake3 keeps meaning "the trace this campaign produced",
   # unchanged by the storage format (read_evidence_bytes decompresses to check).
+  #
+  # F-76: `-3` stopped clearing that ceiling. The 2026-09-18 campaign traced
+  # 5.43 GB for this target and stored 795 MiB, and the push was refused. The
+  # content is extremely repetitive -- 5.43 GB holds 15.6 MiB of distinct lines
+  # -- so a larger match window, not a lossy reduction, is the fix. See
+  # store_trace below. Reducing the trace to distinct lines would shrink it
+  # further and is NOT safe: scan_scope_trace is stateful, mapping (pid, fd) to
+  # a path, so a repeated `openat(7, "x", O_WRONLY)` line after fd 7 is reopened
+  # on another directory is a different access wearing identical text. Dropping
+  # it as a duplicate would hide exactly the locked-corpus write that blind
+  # pass 1 at f360e90 (A07) added the fd map to catch.
   trace_hash=$(hash_file "$audit_raw")
   arts=$(ls "fuzz/artifacts/$t" 2>/dev/null | wc -l)
   execs=$(grep -oP 'stat::number_of_executed_units:\s*\K[0-9]+' "$log" | tail -1)
@@ -402,7 +442,7 @@ for t in "${TARGETS[@]}"; do
     echo "ERROR: zstd is required to store corpus-access traces" >&2
     exit 1
   fi
-  zstd -q -3 --rm -f "$audit_raw" -o "$audit_raw.zst"
+  store_trace "$audit_raw" "$audit_raw.zst"
   seed_manifest="target/haqp/seed-manifest-$t.bin"
   : > "$seed_manifest"
   seed_count=0

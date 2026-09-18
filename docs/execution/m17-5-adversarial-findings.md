@@ -4271,3 +4271,73 @@ left as written and corrected here, as F-70 was: an amended message would erase
 the fact that a result was claimed before it was measured. The claim was wrong
 in the same way this campaign keeps finding things wrong, which is the reason
 for writing it down rather than tidying it away.
+
+## F-76 — the evidence outgrew the hosting limit, and the fix that fit was unsafe
+
+`git push` was refused:
+
+```
+File conformance/haqp/evidence/access/cst_parse.trace.zst is 197.98 MB; this exceeds GitHub's file size limit of 100.00 MB
+File conformance/haqp/evidence/access/graph_interchange_codec.trace.zst is 795.37 MB
+```
+
+The campaign script already knew about this ceiling. Its comment reads: a
+30-minute ASan run emits gigabytes, "1.56 GB for graph_interchange_codec on
+2026-09-02, which GitHub refuses outright at its 100 MB ceiling. zstd takes that
+to ~55 MB." That held when it was written. The 2026-09-18 campaign traced
+**5.43 GB** for the same target and stored 795 MiB. The mitigation was a
+constant chosen against one measurement, with nothing checking it still worked,
+so it degraded silently until a push failed — by which point the blob was in
+history and could only be removed by rewriting it.
+
+**The reduction that fit was the wrong one.** The traces are extraordinarily
+repetitive: 5.43 GB of `graph_interchange_codec` holds 30,768,601 lines and only
+**96,286 distinct** ones. Collapsing to distinct lines gives 1.68 MiB, a 473x
+reduction, and every check reachable from `corpus-access.json` still passes —
+the forbidden-fragment scans, the corpus and binary markers, the one-child-PID
+computation, and `resolved_paths_blake3`, which is a digest over a `BTreeSet`
+and so is invariant under duplication.
+
+It is still unsafe, and the reason is the whole point of the scanner.
+`scan_scope_trace` is stateful: it carries `open_fds: (pid, fd) -> path` and
+resolves writes and relative opens against directory descriptors. Descriptor
+numbers are reused. `openat(7, "x", O_WRONLY) = 8` after fd 7 is reopened on a
+different directory is a different access wearing identical text, and dropping
+it as a duplicate deletes the second one. That is exactly the evasion blind pass
+1 at `f360e90` (A07) added the fd map to catch: a locked-corpus write reached
+through a directory descriptor, where no line carries the forbidden fragment.
+A reduction that passes every check while blinding the one mechanism built to
+catch the attack is the campaign's own failure mode pointed at its evidence.
+
+**The fix is lossless.** `zstd -3` was leaving nearly all of that redundancy on
+the table because its match window cannot reach the repeats. `--long=27` sets a
+128 MiB window and takes the same 5.43 GB to **26.3 MiB**, decompressing to
+byte-identical output (sha256 verified), so `trace_blake3` — taken over the raw
+bytes — does not change with the storage format.
+
+The window is 27 and not larger for a checked reason. `--long=31` gives 3.54 MiB
+but exceeds what a default decoder will allocate. The gate's own decoder,
+`zstd::decode_all` at zstd 0.13.3, was run against both:
+
+```
+OK   long27 -> 5830329744 bytes
+FAIL long31 -> Frame requires too much memory for decoding
+```
+
+128 MiB is the default `ZSTD_d_windowLogMax`, so 27 is the largest window the
+gate can still read, and it is verified against the real decoder rather than
+assumed from the CLI.
+
+Both writers are changed — `haqp_fuzz_campaign.sh` and `haqp_scope_row.py`,
+which stored the stage traces the same way — and both now **check** the stored
+size against a 90 MiB ceiling and fail loudly. The previous mitigation's defect
+was not the level it chose; it was that nothing measured whether the level still
+worked. A campaign that outgrows this ceiling again stops at the lane rather
+than at a push.
+
+This does not unblock the current push. The oversized blobs are in `cb27d569`,
+not only in the working tree, and GitHub refuses any oversized object anywhere
+in the pushed range, so clearing it needs the unpushed history rewritten. Brian
+declined that: the generator is bounded now, and the evidence will be small from
+the start when requalification runs at the new fixed base. The remote stays
+behind until then.
