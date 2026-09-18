@@ -186,7 +186,12 @@ for t in "${TARGETS[@]}"; do
   build_log="target/haqp/build-$t.log"
   build_log_evidence="conformance/haqp/evidence/build-logs/$t.log"
   build_command="cargo +nightly fuzz build -s $SANITIZER $t"
-  (cd "$BUILD_ROOT" && RUSTFLAGS="$BUILD_RUSTFLAGS" $build_command) >"$build_log" 2>&1
+  # Pin the target directory to the one the binary lookup below reads.
+  # `build.target-dir` in $CARGO_HOME/config.toml is outside this repository
+  # and redirected the build out of $BUILD_ROOT on 2026-09-18. The value is
+  # cargo-fuzz's own default, so the binaries and their digests are unchanged.
+  (cd "$BUILD_ROOT" && CARGO_TARGET_DIR="$BUILD_ROOT/fuzz/target" \
+    RUSTFLAGS="$BUILD_RUSTFLAGS" $build_command) >"$build_log" 2>&1
   build_code=$?
   cp "$build_log" "$build_log_evidence"
   binary_candidate=$(find "$BUILD_ROOT/fuzz/target" -type f -perm -111 -name "$t" -print -quit)

@@ -4222,3 +4222,52 @@ whether P1-T22 asserts arming is not a fact about the tree; it is a constraint o
 tests M20 has yet to write. Recorded as **RISK-007**, scoped to HAQP-1b at M24,
 where the mutants are actually executed and a surviving P1-M049 is observable
 rather than argued.
+
+## F-75 — the sanitizer replay read a path its own build no longer wrote
+
+Committing F-74 moved HEAD, and `just ci` went red on
+`sanitizer_replay_reproduces_the_canonical_build_and_refuses_the_rest`:
+"replayed sanitizer build produced no cst_parse binary". The cause is not the
+F-74 change.
+
+`sanitizer_build_canon` pins the build root to
+`/var/tmp/liminal-haqp-build/<fixed_commit>`, and
+`verify_sanitizer_build_replay` looks for the binary under that root's
+`fuzz/target`. Cargo takes `build.target-dir` from `$CARGO_HOME/config.toml`,
+which is outside this repository and is not pinned by anything the gate
+controls. That key was added on 2026-09-18 at 19:01 — the file's own comment
+records why, root was at 97% — and from then on `cargo fuzz build` wrote to the
+shared tree instead. The timestamps settle it: the campaign's binary was
+written into its build root at 15:52, the config changed at 19:01, and the
+first build after that landed in `/mnt/2tb/cargo-target` at 19:15.
+
+Every earlier run passed in about 1.5 seconds because the build root for
+`d8006c16` already held a binary — the one the campaign script had put there
+before the config changed. **That is the failure worth naming.** The check calls
+itself a replay, but it hashes whatever executable is sitting at that path, and
+nothing binds that file to the build the replay just ran. A stale artifact, or
+one from another target-dir layout entirely, verifies exactly as well as a fresh
+one. The empty directory turned a silent false pass into a loud failure, which
+is the only reason it was seen at all. It is the campaign's recurring pattern —
+self-consistency standing in for evidence — this time in the sanitizer lane.
+
+The fix pins `CARGO_TARGET_DIR` to the build root's own `fuzz/target` in both
+the verifier and `haqp_fuzz_campaign.sh`, whose binary lookup reads the same
+path and would have found nothing on the next campaign. The value is cargo-fuzz's
+own default, so it restores the location every recorded digest was produced at
+rather than changing it; a clean rebuild at a pruned build root then passes.
+
+This one was found by CI, not by a reviewer, and it is a defect in the frozen
+qualifier. It is fixed rather than recorded because a gate that cannot build is
+not a measuring instrument with a known imperfection — it is a gate that does
+not run, and the next campaign could not have started. AM-17.11 is about not
+re-tuning a working instrument.
+
+**A correction to the record.** The two F-74 commits state `just ci: 639 passed,
+47 skipped, CI_EXIT=0`. That figure was measured on the working tree before the
+packet and digest edits landed, not at either commit. CI at `d33cca32` was
+actually 638 passed, 1 failed, `CI_EXIT=100` — this defect. The messages are
+left as written and corrected here, as F-70 was: an amended message would erase
+the fact that a result was claimed before it was measured. The claim was wrong
+in the same way this campaign keeps finding things wrong, which is the reason
+for writing it down rather than tidying it away.

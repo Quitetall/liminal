@@ -6540,6 +6540,15 @@ fn verify_sanitizer_build_replay(
     let output = Command::new("cargo")
         .current_dir(&worktree)
         .env("RUSTFLAGS", &build_rustflags)
+        // Pin the target directory to the one the lookup below reads. Cargo
+        // takes `build.target-dir` from `$CARGO_HOME/config.toml`, which is
+        // outside this repository: when that key was added on 2026-09-18 the
+        // build started landing in a shared tree and `find_named_files` saw an
+        // empty `fuzz/target`. Worse than the failure is the success it can
+        // fake — a binary another build left at this path would be hashed as
+        // if this replay had produced it. The value restores cargo-fuzz's own
+        // default, so recorded digests are unaffected.
+        .env("CARGO_TARGET_DIR", worktree.join("fuzz/target"))
         .args([
             "+nightly",
             "fuzz",
