@@ -1,7 +1,7 @@
 {
   "schema_version": "haqp-mutants-v1",
-  "source_commit": "d6e59ce5535ab3c93490bf60007e4ceb4346dc76",
-  "lockfile_blake3": "a73bf11d046474c99a99d3d2583b9e48b3d0a5b7cb7b8312c3dd8ef8d1f150dc",
+  "source_commit": "cb27d5697c735a02d25f7a93fb9aafe901358b90",
+  "lockfile_blake3": "e42fa29ac256d354530aa3aba403617bc6ea17848d17e6d53fac877424de43c3",
   "runner": "liminal-xtask haq mutants",
   "rows": [
     {
