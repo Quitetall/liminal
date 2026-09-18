@@ -100,7 +100,7 @@ fuzz-smoke:
     cargo +nightly fuzz run ilrp_recovery --sanitizer address -- -runs=1000
 
 phase1-tests:
-    cargo nextest run -p liminal-conformance --test laws --test classes --run-ignored ignored-only -E 'test(/(formatter_idempotence_law_holds|canonical_round_trip_law_holds|incremental_equals_full_compile_law_holds|malformed_source_never_panics_and_round_trips|fuzz_regressions_stay_fixed|full_document_html_matches_golden|incremental_patch_equals_full_render)/)'
+    cargo nextest run -p liminal-conformance --test laws --test classes --run-ignored all -E 'test(/(formatter_idempotence_law_holds|canonical_round_trip_law_holds|incremental_equals_full_compile_law_holds|malformed_source_never_panics_and_round_trips|fuzz_regressions_stay_fixed|full_document_html_matches_golden|incremental_patch_equals_full_render)/)'
 
 bench-sample count="30":
     cargo run -p liminal-xtask -- bench sample {{ count }}
