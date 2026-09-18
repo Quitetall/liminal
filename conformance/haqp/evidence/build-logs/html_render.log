@@ -1,1 +1,2 @@
-    Finished `release` profile [optimized + debuginfo] target(s) in 0.02s
+   Compiling liminal-fuzz v0.0.0 (/var/tmp/liminal-haqp-build/f33e5025f533878444bff1c65eca9c30243685b3/fuzz)
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.45s

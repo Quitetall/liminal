@@ -1,1 +1,86 @@
-    Finished `release` profile [optimized + debuginfo] target(s) in 0.02s
+    Updating crates.io index
+     Locking 14 packages to latest Rust 1.98.0-nightly compatible versions
+      Adding convert_case v0.4.0
+      Adding equivalent v1.0.2
+      Adding hashbrown v0.17.1
+      Adding indexmap v2.14.2
+      Adding liminal-safety v0.0.0 (/var/tmp/liminal-haqp-build/f33e5025f533878444bff1c65eca9c30243685b3/crates/liminal-safety)
+      Adding same-file v1.0.6
+      Adding synstructure v0.13.2
+      Adding verus_builtin v0.0.0-2026-08-30-0159 (available: v0.0.0-2026-09-16-0054)
+      Adding verus_builtin_macros v0.0.0-2026-08-30-0159 (available: v0.0.0-2026-09-06-0133)
+      Adding verus_prettyplease v0.0.0-2026-08-09-0044 (available: v0.0.0-2026-09-06-0133)
+      Adding verus_state_machines_macros v0.0.0-2026-08-02-0125 (available: v0.0.0-2026-09-06-0133)
+      Adding verus_syn v0.0.0-2026-08-02-0125 (available: v0.0.0-2026-09-06-0133)
+      Adding vstd v0.0.0-2026-08-30-0159 (available: v0.0.0-2026-09-16-0054)
+      Adding winapi-util v0.1.11
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.47
+   Compiling libc v0.2.189
+   Compiling serde_core v1.0.229
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v2.0.1
+   Compiling cfg-if v1.0.4
+   Compiling syn v3.0.3
+   Compiling jobserver v0.1.35
+   Compiling camino v1.2.4
+   Compiling cc v1.3.0
+   Compiling getrandom v0.4.3
+   Compiling blake3 v1.8.5
+   Compiling thiserror v2.0.19
+   Compiling serde v1.0.229
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.19
+   Compiling arrayvec v0.7.8
+   Compiling sha1_smol v1.0.1
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayref v0.3.9
+   Compiling cpufeatures v0.3.0
+   Compiling uuid v1.24.0
+   Compiling liminal-scratch v0.0.0 (/var/tmp/liminal-haqp-build/f33e5025f533878444bff1c65eca9c30243685b3/crates/liminal-scratch)
+   Compiling zmij v1.0.23
+   Compiling smallvec v1.15.2
+   Compiling str_indices v0.4.4
+   Compiling rustix v1.1.4
+   Compiling serde_json v1.0.151
+   Compiling ropey v1.6.1
+   Compiling verus_syn v0.0.0-2026-08-02-0125
+   Compiling memchr v2.8.3
+   Compiling crc32fast v1.5.0
+   Compiling liminal-id v0.0.0 (/var/tmp/liminal-haqp-build/f33e5025f533878444bff1c65eca9c30243685b3/crates/liminal-id)
+   Compiling linux-raw-sys v0.12.1
+   Compiling itoa v1.0.18
+   Compiling bitflags v2.13.1
+   Compiling verus_prettyplease v0.0.0-2026-08-09-0044
+   Compiling syn v2.0.119
+   Compiling hashbrown v0.14.5
+   Compiling equivalent v1.0.2
+   Compiling hashbrown v0.17.1
+   Compiling rustc-hash v1.1.0
+   Compiling text-size v1.1.1
+   Compiling countme v3.0.1
+   Compiling rowan v0.16.1
+   Compiling liminal-source v0.0.0 (/var/tmp/liminal-haqp-build/f33e5025f533878444bff1c65eca9c30243685b3/crates/liminal-source)
+   Compiling indexmap v2.14.2
+   Compiling fs4 v0.13.1
+   Compiling synstructure v0.13.2
+   Compiling liminal-revision v0.0.0 (/var/tmp/liminal-haqp-build/f33e5025f533878444bff1c65eca9c30243685b3/crates/liminal-revision)
+   Compiling same-file v1.0.6
+   Compiling convert_case v0.4.0
+   Compiling vstd v0.0.0-2026-08-30-0159
+   Compiling verus_builtin_macros v0.0.0-2026-08-30-0159
+   Compiling liminal-graph v0.0.0 (/var/tmp/liminal-haqp-build/f33e5025f533878444bff1c65eca9c30243685b3/crates/liminal-graph)
+   Compiling verus_state_machines_macros v0.0.0-2026-08-02-0125
+   Compiling liminal-cst v0.0.0 (/var/tmp/liminal-haqp-build/f33e5025f533878444bff1c65eca9c30243685b3/crates/liminal-cst)
+   Compiling verus_builtin v0.0.0-2026-08-30-0159
+   Compiling liminal-hir v0.0.0 (/var/tmp/liminal-haqp-build/f33e5025f533878444bff1c65eca9c30243685b3/crates/liminal-hir)
+   Compiling libfuzzer-sys v0.4.13
+   Compiling arbitrary v1.4.2
+   Compiling liminal-query v0.0.0 (/var/tmp/liminal-haqp-build/f33e5025f533878444bff1c65eca9c30243685b3/crates/liminal-query)
+   Compiling liminal-safety v0.0.0 (/var/tmp/liminal-haqp-build/f33e5025f533878444bff1c65eca9c30243685b3/crates/liminal-safety)
+   Compiling liminal-cir v0.0.0 (/var/tmp/liminal-haqp-build/f33e5025f533878444bff1c65eca9c30243685b3/crates/liminal-cir)
+   Compiling liminal-jurisdiction v0.0.0 (/var/tmp/liminal-haqp-build/f33e5025f533878444bff1c65eca9c30243685b3/crates/liminal-jurisdiction)
+   Compiling liminal-format v0.0.0 (/var/tmp/liminal-haqp-build/f33e5025f533878444bff1c65eca9c30243685b3/crates/liminal-format)
+   Compiling liminal-fuzz v0.0.0 (/var/tmp/liminal-haqp-build/f33e5025f533878444bff1c65eca9c30243685b3/fuzz)
+    Finished `release` profile [optimized + debuginfo] target(s) in 31.36s
