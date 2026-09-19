@@ -175,6 +175,9 @@ haq-lane run="run-1":
 
 # Everything CI runs, locally, in CI order
 ci: fmt-check lint
+    # M17.5 F-76: an oversized tracked file is refused by the remote only at
+    # push time, when the blob is already in history. Seconds, and first.
+    ./scripts/check_tracked_file_sizes.sh
     just formal-bootstrap-self-test
     just formal-proof-self-test
     cargo nextest run --workspace --all-features --profile ci
@@ -186,6 +189,11 @@ ci: fmt-check lint
     # broken for three commits without anything going red. Both are seconds.
     just haq-inventory
     just haq-canaries
+
+# Install the repository's hooks (pre-push tracked-file size guard).
+install-hooks:
+    git config core.hooksPath .githooks
+    @echo "core.hooksPath = .githooks"
 
 bump-toolchain version:
     sed -i 's/^channel = ".*"/channel = "{{ version }}"/' rust-toolchain.toml

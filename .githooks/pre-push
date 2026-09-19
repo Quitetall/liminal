@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# M17.5 F-76: a push refused for an oversized blob is expensive, because by then
+# the blob is in history and only a rewrite removes it. Refuse before the push.
+exec "$(git rev-parse --show-toplevel)/scripts/check_tracked_file_sizes.sh"
