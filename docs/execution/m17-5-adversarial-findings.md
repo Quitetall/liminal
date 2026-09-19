@@ -4402,3 +4402,39 @@ reproducibility-critical machinery and is not changed on a performance argument.
 What remains true: the throttle, which is free to remove, and host scheduling.
 Today's two `SIGTERM`s came from running against a PTQ job at 54 of 62 GB, which
 costs more than any of this and can lose a two-hour campaign outright.
+
+## F-78 — the test harness assumed where cargo writes, and a stale binary hid it
+
+Thirty-six conformance tests failed at once — `crash`, `gate_final`,
+`milestones`, `phase_minus_1`, `phase0` — all on one line:
+
+```
+lim-toy binary not found and `cargo build -p liminal-conformance --bin lim-toy` did not produce it
+```
+
+`resolve_target_bin` looked only under `<workspace>/target/{debug,release}`.
+`build.target-dir` in `$CARGO_HOME/config.toml` is outside this repository, and
+the key added on 2026-09-18 sends every build to `/mnt/2tb/cargo-target`. The
+binary was built correctly and looked for in a directory nothing writes to any
+more. This is the third instance of that one environment change in a day, after
+F-75 and F-76.
+
+**The failure is not the interesting part.** Earlier CI runs the same day passed
+639/639, and they passed because a leftover `target/debug/lim-toy` was still
+sitting there from before the config change. The function's own comment already
+names this: "when a leftover `target/debug/lim` DID exist, these tests silently
+exercised whatever binary was last built, which need not match the source under
+test." That is exactly what happened. For several runs the conformance suite was
+testing a stale binary and reporting green, and the only reason it ever surfaced
+is that the stale copy finally went away. A green run proved less than it
+appeared to, which is the failure mode this campaign exists to find — this time
+in the harness that runs the tests rather than in the gate that judges them.
+
+The location is now asked of cargo — `CARGO_TARGET_DIR`, else `cargo metadata
+--format-version 1 --no-deps` and its `target_directory` — resolved once, with
+the old paths kept as a fallback, and the panic names the directory it searched
+so the next instance reads as a path problem rather than a missing binary.
+
+The pattern across F-75, F-76 and F-78 is one thing: **a path or a constant
+chosen against the environment of the day, with nothing measuring whether it
+still holds.** Each was silent until something else broke.

@@ -56,10 +56,49 @@ fn owning_package(name: &str) -> &'static str {
 /// lim` DID exist, these tests silently exercised whatever binary was last
 /// built, which need not match the source under test. Building on demand fixes
 /// both — cargo is a no-op when the binary is already current.
+/// Where cargo actually writes build output.
+///
+/// NOT `<workspace>/target`. `build.target-dir` in `$CARGO_HOME/config.toml`
+/// is outside this repository and redirects every build; when one was added on
+/// 2026-09-18 the binaries moved to a shared tree and this lookup found
+/// nothing, failing 36 tests with "lim-toy binary not found". Earlier runs had
+/// passed only because a stale `target/debug/lim-toy` was still lying there --
+/// the staler hazard this function's comment already warns about, which is why
+/// the location is asked of cargo rather than assumed.
+fn cargo_target_dir(workspace: &Utf8Path) -> Option<Utf8PathBuf> {
+    static TARGET_DIR: std::sync::OnceLock<Option<Utf8PathBuf>> = std::sync::OnceLock::new();
+    TARGET_DIR
+        .get_or_init(|| {
+            if let Ok(dir) = std::env::var("CARGO_TARGET_DIR")
+                && !dir.is_empty()
+            {
+                return Some(Utf8PathBuf::from(dir));
+            }
+            let output =
+                std::process::Command::new(std::env::var("CARGO").as_deref().unwrap_or("cargo"))
+                    .args(["metadata", "--format-version", "1", "--no-deps"])
+                    .current_dir(workspace)
+                    .output()
+                    .ok()?;
+            if !output.status.success() {
+                return None;
+            }
+            let metadata: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
+            metadata
+                .get("target_directory")?
+                .as_str()
+                .map(Utf8PathBuf::from)
+        })
+        .clone()
+}
+
 fn resolve_target_bin(name: &str) -> Utf8PathBuf {
     let manifest = Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap_or(&manifest);
+    let target_dir = cargo_target_dir(workspace).unwrap_or_else(|| workspace.join("target"));
     let candidates = [
+        target_dir.join(format!("debug/{name}")),
+        target_dir.join(format!("release/{name}")),
         workspace.join(format!("target/debug/{name}")),
         workspace.join(format!("target/release/{name}")),
     ];
@@ -89,7 +128,8 @@ fn resolve_target_bin(name: &str) -> Utf8PathBuf {
         }
     }
     panic!(
-        "{name} binary not found and `cargo build -p {} --bin {name}` did not produce it",
+        "{name} binary not found in {target_dir} and `cargo build -p {} --bin {name}` did not \
+         produce it",
         owning_package(name)
     )
 }
