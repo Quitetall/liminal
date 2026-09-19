@@ -4438,3 +4438,59 @@ so the next instance reads as a path problem rather than a missing binary.
 The pattern across F-75, F-76 and F-78 is one thing: **a path or a constant
 chosen against the environment of the day, with nothing measuring whether it
 still holds.** Each was silent until something else broke.
+
+## F-79 — GitHub CI on main has been red for eight days, and nothing read it
+
+Pushing the rewritten history produced a red run on `cab1427a`. It is not a
+regression. `fb172797` — the commit that sat on `origin/main` before the push —
+failed its own push run on 2026-09-11 with the same set:
+
+```
+conversion_loss::pandoc_roundtrip_loss_matches_golden
+haq::tests::canary_evidence_must_match_a_replay_from_the_fixed_commit
+haq::tests::canary_runner_rejects_prose_that_misdescribes_its_own_mutation
+haq::tests::concurrency_evidence_is_read_from_disk_not_assumed
+haq::tests::corpus_access_audit_rejects_forbidden_paths_and_accepts_unlocked_paths
+haq::tests::sanitizer_replay_reproduces_the_canonical_build_and_refuses_the_rest
+m10::declared_level_matches_loss_report / pandoc_version_pinned
+one_projection_reaches_canonical_roundtrip_and_lenses_are_measured
+projection_laws_and_identity_ceilings_are_frozen
+real_cst_anchor_recovery_report_matches_golden
+```
+
+**Every `push` run on `main` has failed since at least 2026-09-11.** The only
+green runs in that window are `schedule` and `dynamic` events, which carry a
+different scope.
+
+The cause is structural, not flaky. `.github/workflows/ci.yml`'s `test` job
+installs `rustup toolchain` and `cargo-nextest` and nothing else, then runs
+`cargo nextest run --workspace --all-features --profile ci` on ubuntu, macos and
+windows. The suite includes tests that need pandoc, a nightly toolchain with
+`cargo-fuzz`, `strace`, and a writable `/var/tmp` sanitizer build root. Those
+hosts have none of it, so the job cannot pass on any platform and never could.
+
+This run adds one failure the 2026-09-11 run did not have,
+`vstd_admission::tests::current_workspace_metadata_is_admitted`, whose message is
+`cargo metadata refused vstd admission (status exit status: 101): error: failed
+to download anstyle-wincon v3.0.11` — a registry fetch on the runner, arriving
+with the vstd admission work in the 88-commit backlog rather than with this
+push.
+
+**The finding is not that CI is red. It is that a permanently red signal is the
+same as no signal, and it stayed that way for eight days across at least seven
+pushes.** This campaign has repeatedly found checks that pass for the wrong
+reason — F-78's stale binary was green three times that day. A check that fails
+for a reason nobody reads is the same defect wearing the opposite sign: nothing
+about the tree can be learned from it either way.
+
+`just ci` on the qualification host is green and is what M17.7 names, so M17 is
+not blocked by this. What is lost is any independent confirmation that the tree
+builds and passes anywhere other than one machine — on a program whose whole
+argument is that evidence must come from something that could have refused.
+
+Two ways to close it, and the choice is Brian's because it changes what a green
+tick means. Provision the runners with the tools the suite needs, which is
+awkward for the sanitizer and strace lanes on macOS and Windows. Or partition
+the suite explicitly, with a declared, named set of host-capability tests and a
+job that provisions them — explicitly, never by silently skipping what is
+absent, which is the failure mode this project exists to refuse.
