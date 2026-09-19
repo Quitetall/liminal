@@ -278,7 +278,18 @@ done
 default_jobs=$(nproc 2>/dev/null || echo 4)
 [ "$default_jobs" -gt 7 ] && default_jobs=7
 JOBS="${HAQP_FUZZ_JOBS:-$default_jobs}"
+# Say what the concurrency costs BEFORE spending it. The 2026-09-18 campaign ran
+# with HAQP_FUZZ_JOBS=4 on a 20-core host, so seven targets took two waves and
+# the stage cost 5630s of a 7994s campaign -- 70% of it -- where one wave would
+# have been ~1805s plus builds. Nothing reported that at the time; the cost was
+# only visible afterwards by dividing the stage elapsed by the budget.
+waves=$(( (${#TARGETS[@]} + JOBS - 1) / JOBS ))
 echo "=== fuzzing ${#TARGETS[@]} targets for ${SECS}s each, ${JOBS} at a time ==="
+echo "=== ${waves} wave(s); fuzzing alone will take about $(( waves * SECS ))s, plus serial builds ==="
+if [ "$JOBS" -lt "${#TARGETS[@]}" ] && [ "$default_jobs" -ge "${#TARGETS[@]}" ]; then
+  echo "NOTE: this host allows ${default_jobs} concurrent targets; HAQP_FUZZ_JOBS=${JOBS} adds $(( (waves - 1) * SECS ))s." >&2
+  echo "NOTE: ADR-0020 §4's budget is per family in TIME and is unchanged either way; concurrency costs exec DEPTH, which the recorded execs make visible." >&2
+fi
 running=0
 for t in "${TARGETS[@]}"; do
   (

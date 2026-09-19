@@ -4341,3 +4341,64 @@ in the pushed range, so clearing it needs the unpushed history rewritten. Brian
 declined that: the generator is bounded now, and the evidence will be small from
 the start when requalification runs at the new fixed base. The remote stays
 behind until then.
+
+## F-77 — where the campaign's 2.22 hours actually go
+
+Measured from `lanes.json` of the 2026-09-18 campaign, 7994s total:
+
+| stage | elapsed | share |
+|---|---|---|
+| fuzz | 5630s | 70.4% |
+| ci | 1119s | 14.0% |
+| reviews | 651s | 8.1% |
+| replay | 446s | 5.6% |
+| generated | 107s | 1.3% |
+| crash / mutation / canaries / concurrency | 41s | 0.5% |
+
+**The fuzz stage was throttled, and nothing said so.** `default_jobs` is
+`min(nproc, 7)`; this host reports `nproc` 20, so the default is 7 and the seven
+budgets overlap in one wave. The campaign ran with `HAQP_FUZZ_JOBS=4`, which
+makes two waves. Fuzzing alone therefore cost 2 x ~1805s where one wave costs
+~1805s, and the rest of the stage (~2020s) is the seven serial `cargo fuzz
+build` invocations. The stage now prints its wave count and projected seconds
+before it starts, and names the cost of a throttle when the host would allow
+more. ADR-0020 §4's budget is denominated per family in TIME and is unchanged by
+concurrency; what concurrency costs is exec DEPTH, which the recorded execs
+already make visible.
+
+**Two things that looked like optimizations and are not.** Both were measured
+rather than argued, and both failed.
+
+*Moving the campaign tree under `SCCACHE_BASEDIR`.* The sccache config's comment
+says worktrees live under `/mnt/4tb` "so a gate-run fork reuses the main
+checkout's compilations", and the observed Rust hit rate was 8.58%. The
+inference was that the campaign tree, at `/home/brianklam/liminal-haqp-final-
+2026-09-18`, was outside it and so reused nothing. Building identical sources in
+two directories both under `/mnt/4tb`, release profile, `CARGO_INCREMENTAL=0`:
+
+```
+after a: hits=0 misses=1
+after b: hits=0 misses=2
+```
+
+No reuse. `SCCACHE_BASEDIR` makes absolute paths basedir-RELATIVE, and two
+worktrees still have different relative paths, so the keys still differ. Cargo
+agrees independently: `-C metadata` derives from the package source path. **A
+fresh per-commit worktree is cold no matter which filesystem it is on**, and
+moving it would have bought nothing.
+
+*Moving the fuzz build root the same way.* Same refutation, plus a second one:
+`BUILD_RUSTFLAGS` embeds `$BUILD_ROOT`, which contains the commit sha, and
+RUSTFLAGS is part of the cache key. Every campaign at a new fixed base has a cold
+sanitizer build cache **by construction**, whatever the cache is configured to
+do.
+
+Warm builds across campaigns would require building at one stable path rather
+than a per-commit one. That path is pinned in two places that must agree —
+`BUILD_ROOT` here and `sanitizer_build_canon` at `haq.rs:6337` — and it is
+per-commit deliberately, so concurrent commits cannot clobber each other. It is
+reproducibility-critical machinery and is not changed on a performance argument.
+
+What remains true: the throttle, which is free to remove, and host scheduling.
+Today's two `SIGTERM`s came from running against a PTQ job at 54 of 62 GB, which
+costs more than any of this and can lose a two-hour campaign outright.
