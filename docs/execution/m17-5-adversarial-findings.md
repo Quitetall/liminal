@@ -4535,3 +4535,82 @@ The set is derived from the ubuntu-latest failures of run 35472022586. macOS and
 Windows may need more entries. That is safe in the direction that matters: a
 missing entry runs the test in the portable job, where it fails loudly, rather
 than vanishing.
+
+## F-78 addendum — the fix was worse than the failure, for one run
+
+F-78's first fix asked `cargo metadata` where the target directory is. Correct,
+and far more expensive than it looked. nextest runs a process per test, so a
+`OnceLock` caches per PROCESS, not per run: that is one cargo subprocess per
+TEST, each taking cargo's package lock. Since `build.target-dir` became a shared
+path on 2026-09-18 that lock is held across PROJECTS, and with an unrelated
+build running, `just ci` went from 46s to 1715s with **36 tests timed out at
+180s apiece**.
+
+Timed out, not failed. A timeout says nothing about the code, which is why it
+was worth chasing rather than retrying — and the same 36 tests that F-78 had
+just fixed.
+
+The location needed no subprocess at all. The running test binary is already
+inside the real target directory, at `<target-dir>/<profile>/deps/<binary>`, so
+`current_exe()` answers it with no lock and no cargo.
+
+Chasing that exposed the larger cost, which predates the fix. `resolve_target_bin`
+has called `cargo build` unconditionally since F-13, to cover `cargo test -p
+liminal-conformance` — the command cargo-mutants generates — never building
+another package's binaries. Under nextest that is another lock acquisition per
+test, and it only looked free while the machine was quiet and the target
+directory was this project's alone. A single test passed in 2.4s while the batch
+of 43 timed out: the cost is contention, not work.
+
+The build now runs only when no candidate exists AND not under nextest, where
+`NEXTEST` is set and the workspace binaries were built before the run. F-13's
+case is unchanged and was verified by removing `lim` and running the
+non-nextest path, which rebuilt it. The batch that timed out now passes in 5.7s.
+
+**What this cost was a day of green runs meaning nothing** — the stale binary
+before, the timeout after. Both were introduced by a change that was correct in
+isolation and wrong about the environment it ran in, which is the same shape as
+F-75, F-76 and F-79.
+
+## F-80 — `test-threaded` runs isolation-requiring tests without isolation
+
+A full `just ci` after the F-78 addendum showed 640/640 under nextest and then
+failed `test-threaded` with two tests the nextest run had just passed:
+
+```
+m05::overlay_aging_escalates   assertion failed: overlays_out.status.success()
+m08::freeze_rejects_stale_file_bytes
+  reopen after working tamper: Store(Locked("/tmp/liminal-toyrun-m08-freeze-stale-.../state"))
+```
+
+Both pass alone. The whole `milestones` binary passes threaded, and passes
+again single-threaded. Re-running `just test-threaded` on its own is clean in
+58s. So this is flakiness under concurrent load, which this repository treats as
+a finding rather than something to retry away — `.config/nextest.toml` sets
+`retries = 0` everywhere and says of the crash group that "a flaky
+crash-recovery test is a FINDING, never retried away".
+
+The cause is not subtle, and the repository already states it. That same file
+opens: nextest is mandatory "because process-per-test isolation is a correctness
+requirement for crash-injection tests". `just test-threaded` is
+`cargo test --workspace --all-targets` — libtest, threads inside one process,
+no such isolation. `Store(Locked(...))` is precisely what that produces: two
+tests reaching one store because nothing kept them apart.
+
+These tests are therefore being run in a mode the project itself calls unsound,
+and have been since `test-threaded` existed. It passed for the same reason
+F-78's stale binary passed: nothing contended until something else on the
+machine did.
+
+The F-78 addendum probably unmasked it rather than caused it. Removing the
+unconditional `cargo build` from `resolve_target_bin` removed an accidental
+mutex — every test used to queue on cargo's package lock before doing anything,
+which staggered them. That serialization was never intended and was never
+load-bearing on purpose, which is the worst kind of thing to depend on.
+
+Two honest closes, and the choice changes what the stage means, so it is
+Brian's. Run `test-threaded` with `--test-threads=1`, which costs roughly a
+minute and matches what the project says these tests need. Or exclude the
+isolation-requiring tests from it by the same declared-set mechanism F-79 used,
+so the exclusion is written down rather than implied. Retrying is not on the
+list.

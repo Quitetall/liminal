@@ -56,70 +56,91 @@ fn owning_package(name: &str) -> &'static str {
 /// lim` DID exist, these tests silently exercised whatever binary was last
 /// built, which need not match the source under test. Building on demand fixes
 /// both — cargo is a no-op when the binary is already current.
-/// Where cargo actually writes build output.
+/// The profile directory cargo actually writes to, read off THIS test binary.
 ///
-/// NOT `<workspace>/target`. `build.target-dir` in `$CARGO_HOME/config.toml`
-/// is outside this repository and redirects every build; when one was added on
+/// NOT `<workspace>/target`. `build.target-dir` in `$CARGO_HOME/config.toml` is
+/// outside this repository and redirects every build; when one was added on
 /// 2026-09-18 the binaries moved to a shared tree and this lookup found
-/// nothing, failing 36 tests with "lim-toy binary not found". Earlier runs had
-/// passed only because a stale `target/debug/lim-toy` was still lying there --
-/// the staler hazard this function's comment already warns about, which is why
-/// the location is asked of cargo rather than assumed.
-fn cargo_target_dir(workspace: &Utf8Path) -> Option<Utf8PathBuf> {
-    static TARGET_DIR: std::sync::OnceLock<Option<Utf8PathBuf>> = std::sync::OnceLock::new();
-    TARGET_DIR
-        .get_or_init(|| {
-            if let Ok(dir) = std::env::var("CARGO_TARGET_DIR")
-                && !dir.is_empty()
-            {
-                return Some(Utf8PathBuf::from(dir));
-            }
-            let output =
-                std::process::Command::new(std::env::var("CARGO").as_deref().unwrap_or("cargo"))
-                    .args(["metadata", "--format-version", "1", "--no-deps"])
-                    .current_dir(workspace)
-                    .output()
-                    .ok()?;
-            if !output.status.success() {
-                return None;
-            }
-            let metadata: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
-            metadata
-                .get("target_directory")?
-                .as_str()
-                .map(Utf8PathBuf::from)
-        })
-        .clone()
+/// nothing, failing 36 tests with "lim-toy binary not found".
+///
+/// Asking `cargo metadata` answered that correctly and cost far more than it
+/// looked: nextest runs a process per test, so a subprocess here is a subprocess
+/// per TEST, each taking cargo's package lock. That lock is shared with every
+/// other project pointed at the same `target-dir`, and with an unrelated build
+/// running the same 36 tests timed out at 180s apiece instead of failing.
+///
+/// The running test binary is already inside the real target directory --
+/// `<target-dir>/<profile>/deps/<binary>` -- so its own path answers the
+/// question with no subprocess and no lock.
+fn profile_dir_from_current_exe() -> Option<Utf8PathBuf> {
+    let exe = Utf8PathBuf::from_path_buf(std::env::current_exe().ok()?).ok()?;
+    // `.../<profile>/deps/<binary>` under nextest and cargo test; a binary run
+    // straight from `<profile>/` has no `deps` component.
+    let parent = exe.parent()?;
+    Some(if parent.file_name() == Some("deps") {
+        parent.parent()?.to_owned()
+    } else {
+        parent.to_owned()
+    })
 }
 
 fn resolve_target_bin(name: &str) -> Utf8PathBuf {
     let manifest = Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap_or(&manifest);
-    let target_dir = cargo_target_dir(workspace).unwrap_or_else(|| workspace.join("target"));
+    let profile_dir = profile_dir_from_current_exe();
+    let searched = profile_dir
+        .clone()
+        .unwrap_or_else(|| workspace.join("target"));
     let candidates = [
-        target_dir.join(format!("debug/{name}")),
-        target_dir.join(format!("release/{name}")),
-        workspace.join(format!("target/debug/{name}")),
-        workspace.join(format!("target/release/{name}")),
+        profile_dir.clone().map(|dir| dir.join(name)),
+        // The other profile in the same target directory, then the default
+        // location, so a tree with no `target-dir` override still resolves.
+        profile_dir
+            .as_ref()
+            .and_then(|dir| dir.parent())
+            .map(|dir| dir.join(format!("debug/{name}"))),
+        profile_dir
+            .as_ref()
+            .and_then(|dir| dir.parent())
+            .map(|dir| dir.join(format!("release/{name}"))),
+        Some(workspace.join(format!("target/debug/{name}"))),
+        Some(workspace.join(format!("target/release/{name}"))),
     ];
+    let candidates: Vec<Utf8PathBuf> = candidates.into_iter().flatten().collect();
 
-    let status = std::process::Command::new(std::env::var("CARGO").as_deref().unwrap_or("cargo"))
-        .args([
-            "build",
-            "--quiet",
-            "-p",
-            owning_package(name),
-            "--bin",
-            name,
-        ])
-        .current_dir(workspace)
-        .status();
-    match status {
-        Ok(status) if status.success() => {}
-        // Do not fail here on a build error: if a binary is already present the
-        // tests can still run, and if it is not, the panic below names the
-        // actual problem far more clearly than a cargo exit code would.
-        Ok(_) | Err(_) => {}
+    // Build on demand ONLY when nothing is there, and never under nextest.
+    //
+    // F-13 added the build because `cargo test -p liminal-conformance` -- the
+    // command cargo-mutants generates -- never builds another package's
+    // binaries, so `lim` was missing in a clean tree. That case is unchanged.
+    //
+    // What changed is the cost of doing it unconditionally. nextest runs a
+    // process per test, so this was one `cargo build` per TEST, each taking
+    // cargo's package lock. Since `build.target-dir` became a shared path on
+    // 2026-09-18 that lock is held across PROJECTS, and with an unrelated build
+    // running, 36 of these timed out at 180s apiece. Under nextest the
+    // workspace binaries were built before the run, so the build is pure
+    // contention: `NEXTEST` is set there, and a present binary is current.
+    let under_nextest = std::env::var_os("NEXTEST").is_some();
+    if !under_nextest && !candidates.iter().any(|path| path.exists()) {
+        let status =
+            std::process::Command::new(std::env::var("CARGO").as_deref().unwrap_or("cargo"))
+                .args([
+                    "build",
+                    "--quiet",
+                    "-p",
+                    owning_package(name),
+                    "--bin",
+                    name,
+                ])
+                .current_dir(workspace)
+                .status();
+        match status {
+            Ok(status) if status.success() => {}
+            // Do not fail here on a build error: the panic below names the
+            // actual problem far more clearly than a cargo exit code would.
+            Ok(_) | Err(_) => {}
+        }
     }
 
     for candidate in &candidates {
@@ -128,7 +149,7 @@ fn resolve_target_bin(name: &str) -> Utf8PathBuf {
         }
     }
     panic!(
-        "{name} binary not found in {target_dir} and `cargo build -p {} --bin {name}` did not \
+        "{name} binary not found in {searched} and `cargo build -p {} --bin {name}` did not \
          produce it",
         owning_package(name)
     )
