@@ -197,7 +197,13 @@ ci: fmt-check lint
     ./scripts/check_tracked_file_sizes.sh
     just formal-bootstrap-self-test
     just formal-proof-self-test
-    cargo nextest run --workspace --all-features --profile ci
+    # M17.5 F-82: the two halves run SEPARATELY, as the CI workflow runs them.
+    # sanitizer_replay performs a full ASan release build inside a test -- 73.9s
+    # saturating every core -- and beside it the crash tests, which spawn a
+    # subprocess per boundary and are judged on wall clock, were starved into a
+    # 240s timeout after running 7.9s alone. Sequencing the sets is the same
+    # split F-79 already declares, so local and remote now run identical halves.
+    ./scripts/run_ci_tests.sh
     # M17.5 F-79: prove the CI split still covers the suite exactly -- no test in
     # both halves, none in neither. A test that falls out of both stops running
     # while both CI jobs stay green.

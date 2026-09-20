@@ -4664,3 +4664,51 @@ exist, 764 MB each for recent commits and up to 1.9 GB for campaign ones, 6.6 GB
 total against 297 GB free. `haqp_fuzz_campaign.sh` prunes siblings under an
 exclusive lock; the verifier's path does not, so ordinary development
 accumulates them. Not urgent, and not fixed here.
+
+## F-82 — a full compile inside a test starved the tests judged on wall clock
+
+`just ci` at `8cff2ff0`: 639 passed, one timed out.
+
+```
+PASS    [  73.910s] haq::tests::sanitizer_replay_reproduces_the_canonical_build_and_refuses_the_rest
+SLOW    [>120.000s] haq::tests::crash_evidence_must_match_an_independent_replay
+TIMEOUT [ 240.012s] haq::tests::crash_evidence_must_match_an_independent_replay
+```
+
+Alone, the timed-out test takes **7.9s**. Thirty times under its own limit, and
+it was terminated at 240s.
+
+`sanitizer_replay` performs a full ASan release build inside a test — that is
+the point of it, since a proof about instrumentation cannot be taken from a
+marker string — and on a fresh build root that is 73.9s saturating every core.
+The crash tests spawn a subprocess per durable boundary and are judged on wall
+clock. Running beside a compile that owns the machine, they starve.
+
+It is timing, not correctness, and it is not flakiness to be retried away: the
+suite was arranged so that its heaviest test runs concurrently with its most
+timing-sensitive ones, and that is a property of the arrangement rather than of
+any machine. What it produced is a TIMEOUT, which says nothing about the code —
+the least informative way a run can fail.
+
+The fix needed nothing new. F-79 already declares the two halves for CI, and
+`sanitizer_replay` is in the host-capability set. Local `just ci` was the only
+place still running them together. `scripts/run_ci_tests.sh` now runs the
+portable half and then the host half, from that same file, so local and remote
+execute identical sets and the compile never overlaps the crash lane:
+
+```
+=== portable half ===        628 tests run: 628 passed
+=== host-capability half ===  12 tests run:  12 passed
+```
+
+**This is why the partition was worth building beyond its original reason.** It
+was written to make a red remote signal meaningful again; it turned out to name
+the exact boundary along which the local suite needed sequencing. The set that
+answers "what needs a capability this host may lack" is the same set that
+answers "what must not run beside everything else".
+
+Why the timeouts only appeared today: the build root is keyed by commit, so
+`sanitizer_replay` is a 74s compile on the first run at each new HEAD and
+roughly instant afterwards. Every earlier green run this session was measured
+against a warm root, and the cost arrives exactly when a commit is fresh —
+which is exactly when CI runs.
