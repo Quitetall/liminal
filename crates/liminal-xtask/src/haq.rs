@@ -6518,9 +6518,35 @@ fn verify_sanitizer_build_replay(
     lock.lock_shared()
         .context("shared-lock sanitizer build base")?;
     let worktree = build_root.clone();
-    if !worktree.join(".git").exists() {
+    // A worktree is reusable only when the build's own inputs are THERE, not
+    // merely when `.git` is. The checkout is `--no-checkout`, then
+    // sparse-checkout, then checkout: interrupt it between those and `.git`
+    // exists over a tree with no `crates/` and a `fuzz/` holding nothing but
+    // the `.cargo` this function writes. Being an existence check on the wrong
+    // file, the old condition then reused that forever, and every run failed
+    // with "could not read the manifest file: .../fuzz/Cargo.toml" — which is
+    // what a `just ci` killed mid-run left behind on 2026-09-20.
+    //
+    // The manifest is the right witness: it is exactly what `cargo fuzz build`
+    // opens first, so if it is present the build can start, and if it is not
+    // there is nothing to salvage.
+    let usable = worktree.join(".git").exists() && worktree.join("fuzz/Cargo.toml").exists();
+    if !usable {
         if worktree.exists() {
-            fs::remove_dir_all(&worktree).with_context(|| format!("clear stale {worktree}"))?;
+            // Registered-but-incomplete is the case that matters; `git worktree
+            // add` refuses a path it still knows about, so drop the
+            // registration with the directory.
+            let _ = Command::new("git")
+                .current_dir(root)
+                .args(["worktree", "remove", "--force", worktree.as_str()])
+                .status();
+            if worktree.exists() {
+                fs::remove_dir_all(&worktree).with_context(|| format!("clear stale {worktree}"))?;
+            }
+            let _ = Command::new("git")
+                .current_dir(root)
+                .args(["worktree", "prune"])
+                .status();
         }
         if let Some(parent) = worktree.parent() {
             fs::create_dir_all(parent)?;

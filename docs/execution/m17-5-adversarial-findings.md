@@ -4614,3 +4614,53 @@ minute and matches what the project says these tests need. Or exclude the
 isolation-requiring tests from it by the same declared-set mechanism F-79 used,
 so the exclusion is written down rather than implied. Retrying is not on the
 list.
+
+## F-81 — a half-made worktree was reused forever, because the check asked the wrong file
+
+`just ci` was killed by host memory pressure mid-run on 2026-09-20. Every run
+afterwards failed the same way:
+
+```
+replayed sanitizer build failed for cst_parse: Error: could not read the manifest
+file: /var/tmp/liminal-haqp-build/ac033f4b.../fuzz/Cargo.toml
+```
+
+The build root existed and held `.git`, `apps/`, `backends/`, `benches/`,
+`conformance/` and `fuzz/`. It did not hold `crates/`, and its `fuzz/` held
+exactly one entry: the `.cargo` directory `verify_sanitizer_build_replay` writes
+itself. The worktree is made in three steps — `git worktree add --no-checkout`,
+`sparse-checkout set`, then `checkout` — and the kill landed between them.
+
+The reuse condition was `!worktree.join(".git").exists()`. `.git` is written by
+the FIRST step, so it is present the instant the directory is registered and
+says nothing about whether anything was checked out. A tree that was interrupted
+therefore satisfied the condition and was reused on every subsequent run, each
+failing identically. Nothing self-healed, because the only path that rebuilds
+the tree was the one the condition had already excluded.
+
+The witness is now `fuzz/Cargo.toml`, which is exactly what `cargo fuzz build`
+opens first: if it is there the build can start, and if it is not there is
+nothing to salvage. A registered-but-incomplete path is dropped with `git
+worktree remove --force` and `git worktree prune` before re-adding, because
+`git worktree add` refuses a path it still knows about — the error the earlier
+manual `rm -rf` produced on this same directory.
+
+**This is an existence check standing in for a precondition**, which is the day's
+fourth instance of one shape: F-75 hashed whatever binary sat at a path without
+binding it to the build that ran, F-78 searched a target directory it assumed
+rather than the one cargo used, F-80 depended on a serialization nobody meant to
+provide, and this one asked whether a directory was registered when it needed to
+know whether it was populated. Each was cheap, plausible, and answered a question
+adjacent to the one that mattered.
+
+Fixed rather than recorded on F-75's reasoning: a gate that cannot build is not
+an instrument with a known imperfection, it is a gate that does not run. Under
+AM-17.15 it is not a suite defect — it cannot produce a false pass, only a
+failure — but the instrument freeze was never meant to preserve a gate that
+refuses to start.
+
+Noted while confirming the fix: build roots are keyed by commit and six now
+exist, 764 MB each for recent commits and up to 1.9 GB for campaign ones, 6.6 GB
+total against 297 GB free. `haqp_fuzz_campaign.sh` prunes siblings under an
+exclusive lock; the verifier's path does not, so ordinary development
+accumulates them. Not urgent, and not fixed here.
