@@ -20361,6 +20361,62 @@ mod tests {
         }
     }
 
+    /// AM-17.15 / RISK-006: the coarse oracle's coverage enforcement must be
+    /// EXERCISED, not merely present. F-73's A01 named the hole — blocks that
+    /// omit a nonblank region — and it was closed by reconstructing the
+    /// expected blank-line boundaries independently. One test reached that
+    /// reconstruction, and only through the narrowest case, dropping the LAST
+    /// block. Omitting a middle region and shrinking a range past a nonblank
+    /// line are the same defect and were not covered at all.
+    ///
+    /// Coverage here is a claim about what the suite can observe of the
+    /// PRODUCT, which AM-17.15 classifies as suite rather than instrument, so
+    /// it is tested rather than recorded.
+    #[test]
+    fn the_coarse_oracle_refuses_a_scan_that_does_not_cover_the_source() {
+        let source = "alpha
+
+bravo
+
+charlie
+";
+        let coarse = liminal_cst::coarse_parse(source);
+        verify_coarse_scan(source, &coarse).expect("the real scan of three blocks is accepted");
+        assert_eq!(
+            coarse.blocks.len(),
+            3,
+            "the fixture must have a middle block"
+        );
+
+        // A MIDDLE nonblank region omitted. Dropping the last block shortens
+        // the list the same way, so only this one shows the reconstruction is
+        // positional rather than a count.
+        let mut middle_gone = coarse.clone();
+        middle_gone.blocks.remove(1);
+        let err = verify_coarse_scan(source, &middle_gone)
+            .expect_err("a middle nonblank region cannot be omitted")
+            .to_string();
+        assert!(err.contains("expected 3 blank-line blocks"), "{err}");
+
+        // Every block present, but one range stops short of its nonblank line.
+        // Count-based coverage cannot see this; the reconstruction can.
+        let mut shrunk = coarse.clone();
+        shrunk.blocks[1].range.end -= 1;
+        let err = verify_coarse_scan(source, &shrunk)
+            .expect_err("a range that drops part of a nonblank line is not coverage")
+            .to_string();
+        assert!(err.contains("coarse block 1 has range"), "{err}");
+
+        // And a range that starts late, which leaves the region's first byte
+        // uncovered while every block still holds content.
+        let mut late = coarse.clone();
+        late.blocks[1].range.start += 1;
+        let err = verify_coarse_scan(source, &late)
+            .expect_err("a range that starts inside its region is not coverage")
+            .to_string();
+        assert!(err.contains("coarse block 1 has range"), "{err}");
+    }
+
     /// Blind pass 1 at `ec045588` (A01): every generated source held at most
     /// one coarse block, so the hash relation had nothing to relate and a
     /// constant hash passed 100,000 cases.

@@ -75,9 +75,9 @@
    "requirement": "P1-R002",
    "evidence": "docs/execution/m17-5-adversarial-findings.md:F-73",
    "planned_phase": "M24",
-   "mitigation": "verify_coarse_scan requires every nonblank source line to be covered, plus in-bounds non-overlap, nonblank, classification and content-hash checks. AM-17.11 records the residual regression risk; this qualifier code is frozen",
-   "authority": "AM-17.11",
-   "state": "accepted"
+   "mitigation": "verify_coarse_scan independently reconstructs the blank-line block boundaries from the source and requires each block's range to equal its expected range, so an omitted or shortened nonblank region is refused. AM-17.15 classifies oracle coverage as suite rather than instrument, so this is exercised rather than recorded: the_coarse_oracle_refuses_a_scan_that_does_not_cover_the_source covers middle-block omission and both range shrinks, and deleting the reconstruction makes that test alone fail",
+   "authority": "AM-17.15",
+   "state": "mitigated"
   },
   {
    "id": "RISK-007",
