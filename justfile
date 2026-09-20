@@ -195,6 +195,10 @@ ci: fmt-check lint
     # M17.5 F-76: an oversized tracked file is refused by the remote only at
     # push time, when the blob is already in history. Seconds, and first.
     ./scripts/check_tracked_file_sizes.sh
+    # M17.5 F-79: prove the CI split still covers the suite exactly -- no test in
+    # both halves, none in neither. A test that falls out of both stops running
+    # while both CI jobs stay green.
+    ./scripts/check_ci_partition.sh
     just formal-bootstrap-self-test
     just formal-proof-self-test
     cargo nextest run --workspace --all-features --profile ci

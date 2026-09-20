@@ -1,0 +1,36 @@
+# Tests that need a capability a bare GitHub runner does not have.
+#
+# M17.5 F-79: the CI `test` job installed rustup and cargo-nextest, then ran the
+# whole workspace on three operating systems. The suite needs pandoc, a nightly
+# toolchain with cargo-fuzz, strace, a writable /var/tmp sanitizer build root and
+# a reachable crates.io. Every push run on main failed from at least 2026-09-11,
+# so the signal was constant and nobody read it.
+#
+# This file is the ONE place the split is written. CI runs this expression in a
+# job that installs the tools, and its negation everywhere else, so the two sides
+# are complements by construction rather than by assertion. Adding a test that
+# needs a capability means adding it here; forgetting puts it in the portable job
+# where it FAILS rather than silently skipping, which is the outcome this project
+# wants from a missing capability.
+#
+# Names are EXACT. A prefix pattern would drag in neighbours that need nothing --
+# most haq::tests::canary_* are pure logic -- and quietly drop them from the
+# cross-platform job, which is coverage lost for no reason.
+#
+# Derived from the ubuntu-latest failures of run 35472022586. macOS and Windows
+# may need more; the partition check names what moved, and the portable job
+# fails loudly rather than skipping, so a missing entry is visible.
+#
+# scripts/check_ci_partition.sh proves the split covers the suite exactly.
+test(=haq::tests::sanitizer_replay_reproduces_the_canonical_build_and_refuses_the_rest)
++ test(=haq::tests::canary_evidence_must_match_a_replay_from_the_fixed_commit)
++ test(=haq::tests::canary_runner_rejects_prose_that_misdescribes_its_own_mutation)
++ test(=haq::tests::concurrency_evidence_is_read_from_disk_not_assumed)
++ test(=haq::tests::corpus_access_audit_rejects_forbidden_paths_and_accepts_unlocked_paths)
++ test(=vstd_admission::tests::current_workspace_metadata_is_admitted)
++ test(=conversion_loss::pandoc_roundtrip_loss_matches_golden)
++ test(=m10::pandoc_version_pinned)
++ test(=m10::declared_level_matches_loss_report)
++ test(=one_projection_reaches_canonical_roundtrip_and_lenses_are_measured)
++ test(=projection_laws_and_identity_ceilings_are_frozen)
++ test(=real_cst_anchor_recovery_report_matches_golden)

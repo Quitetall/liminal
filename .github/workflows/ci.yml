@@ -54,8 +54,48 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
-      - run: cargo nextest run --workspace --all-features --profile ci
+      # M17.5 F-79: the host-capability tests are excluded HERE and run in the
+      # job below, which installs what they need. The expression is read from
+      # one file and negated, so the two jobs are complements by construction.
+      - run: |
+          EXPR="$(grep -v '^[[:space:]]*#' .config/host-capability-tests.filter \
+                  | grep -v '^[[:space:]]*$' | tr '\n' ' ')"
+          cargo nextest run --workspace --all-features --profile ci \
+            --filter-expr "not ($EXPR)"
       - run: cargo test --workspace --doc # nextest does not run doctests
+
+  # The other half of the split. Linux only: the sanitizer, fuzz and strace
+  # lanes are Linux-specific in substance, and forcing them onto macOS and
+  # Windows would either fail or be faked. Every tool is installed and VERIFIED
+  # present, so a missing one fails this job rather than skipping its tests --
+  # a test that silently stops running is the defect this split exists to
+  # prevent (F-78 reported green three times off a stale binary).
+  host-capability:
+    name: host-capability (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install
+      - run: rustup toolchain install nightly
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest,cargo-fuzz
+      - run: sudo apt-get update && sudo apt-get install -y pandoc strace
+      - name: every declared capability must be present
+        run: |
+          set -euo pipefail
+          pandoc --version | head -1
+          strace -V | head -1
+          cargo +nightly fuzz --version
+          test -w /var/tmp
+      - name: the split must cover the suite exactly
+        run: ./scripts/check_ci_partition.sh
+      - run: |
+          EXPR="$(grep -v '^[[:space:]]*#' .config/host-capability-tests.filter \
+                  | grep -v '^[[:space:]]*$' | tr '\n' ' ')"
+          cargo nextest run --workspace --all-features --profile ci \
+            --filter-expr "$EXPR"
 
   docs:
     runs-on: ubuntu-latest

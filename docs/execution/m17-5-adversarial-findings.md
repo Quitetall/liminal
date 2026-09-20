@@ -4494,3 +4494,44 @@ awkward for the sanitizer and strace lanes on macOS and Windows. Or partition
 the suite explicitly, with a declared, named set of host-capability tests and a
 job that provisions them — explicitly, never by silently skipping what is
 absent, which is the failure mode this project exists to refuse.
+
+## F-79 resolution — the split, and the thing that guards it
+
+AM-17.15's line does not reach F-79: a CI workflow that cannot pass is not an
+oracle about the product. It is fixed because a permanently red signal is the
+same as no signal, and main had one for eight days.
+
+The split is written in exactly one place, `.config/host-capability-tests.filter`.
+CI runs that expression in a Linux job that installs pandoc, nightly with
+cargo-fuzz, and strace; every other job runs its negation. **The two sides are
+complements by construction**, not by assertion — nothing has to be kept in
+agreement, because one is literally `not (the other)`.
+
+Names are exact rather than prefixes. `test(/^haq::tests::canary_/)` would have
+captured twelve neighbours that need nothing — most canary tests are pure logic —
+and quietly dropped them from the cross-platform job. That is coverage lost for
+no reason, and the sort of thing that is never noticed once it is done.
+
+The host job **verifies each tool is present** before running anything, so a
+missing pandoc fails the job rather than skipping its tests. Silently skipping
+what is absent is the failure mode this project refuses, and it is precisely how
+F-78 stayed green three times while exercising a stale binary.
+
+**`scripts/check_ci_partition.sh` is the real guard.** The hazard was never a red
+job; it is a test that falls out of both halves and stops running while both jobs
+stay green. The check counts: `all=640 host=12 portable=628`, and `host +
+portable == all` proves no test is in neither. Nothing can be in both, because
+the halves are negations.
+
+The sum alone has a blind spot, and it is closed separately. A name matching
+nothing leaves the two halves summing correctly while the entry is dead, so the
+check also asserts that the number of names DECLARED equals the number MATCHED.
+Verified by adding a nonexistent name: `ERROR: 13 names declared, 12 matched.`
+A renamed test would also surface on its own — it lands in the portable job and
+fails there — but the check names the cause rather than leaving it to be
+rediscovered.
+
+The set is derived from the ubuntu-latest failures of run 35472022586. macOS and
+Windows may need more entries. That is safe in the direction that matters: a
+missing entry runs the test in the portable job, where it fails loudly, rather
+than vanishing.
