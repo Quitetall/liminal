@@ -4712,3 +4712,44 @@ Why the timeouts only appeared today: the build root is keyed by commit, so
 roughly instant afterwards. Every earlier green run this session was measured
 against a warm root, and the cost arrives exactly when a commit is fresh —
 which is exactly when CI runs.
+
+## F-83 — the strongest evidence raised instead of passing
+
+`just ci` at `6cdb6781` failed in `formal-bootstrap-self-test`:
+
+```
+ERROR: test_real_timeout_kills_owned_process_group_and_keeps_partial_logs
+  state = Path(f"/proc/{child_pid}/stat").read_text().split()[2]
+ProcessLookupError: [Errno 3] No such process
+```
+
+The test proves that a timed-out bootstrap command kills the whole process group
+rather than leaking the grandchild. It does that by reading the child's `/proc`
+state and requiring it to be absent or `Z`, and it already handled absence:
+
+```python
+except FileNotFoundError:
+    state = None
+self.assertIn(state, (None, "Z"), "timed-out subprocess child is still running")
+```
+
+There are two ways the process can be gone, and the kernel reports them
+differently. Gone before the open is `ENOENT`, which Python raises as
+`FileNotFoundError`. Gone during the read is `ESRCH`, raised as
+`ProcessLookupError`. The handler caught the first and not the second, so a
+child that was killed AND fully reaped before the read completed — the
+strongest possible evidence of what the test asserts — raised an error instead
+of passing.
+
+It only shows up when the kill and reap beat the read, which is why it survived
+every loaded run today and failed on an idle one. The test had been passing for
+the least reliable reason available: the machine was too busy to win the race.
+
+Both exceptions are now caught. The self-test passes three times in a row.
+
+**Sixth of the day in one shape.** F-75 hashed whatever binary sat at a path,
+F-78 searched an assumed target directory, F-80 leaned on an unintended
+serialization, F-81 asked whether a worktree was registered rather than
+populated, F-82 let a compile run beside the tests judged on wall clock, and
+this one recognised one of the two ways a process can cease to exist. Every one
+was cheap, plausible, and answered a question next to the one that mattered.

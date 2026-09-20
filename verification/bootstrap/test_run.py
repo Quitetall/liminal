@@ -279,7 +279,13 @@ class BootstrapRunnerTests(unittest.TestCase):
             try:
                 try:
                     state = Path(f"/proc/{child_pid}/stat").read_text().split()[2]
-                except FileNotFoundError:
+                except (FileNotFoundError, ProcessLookupError):
+                    # Gone before the open, or gone during the read: the kernel
+                    # reports the first as ENOENT and the second as ESRCH, and
+                    # both are the outcome this test asserts. Catching only
+                    # FileNotFoundError made the STRONGEST evidence -- the child
+                    # already reaped -- raise instead of pass, on an idle
+                    # machine where the kill and reap beat this read.
                     state = None
                 self.assertIn(state, (None, "Z"), "timed-out subprocess child is still running")
             finally:
