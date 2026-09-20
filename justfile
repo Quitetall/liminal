@@ -173,6 +173,23 @@ mutants *ARGS:
 haq-lane run="run-1":
     scripts/haqp_campaign_clock.sh {{ run }} conformance/haqp/evidence/campaign.json -- ./scripts/haqp_qualify.sh
 
+# The lane, detached and memory-bounded (F-77). A campaign is 1.5-2.2 hours and
+# is lost whole: on 2026-09-19 two runs were SIGTERMed under host memory
+# pressure after CI had already passed. `systemd-run` survives the terminal
+# closing, and MemoryMax makes the campaign fail on its OWN limit rather than be
+# chosen by the kernel while something else on the box grows. Watch with
+# `journalctl --user -u <unit> -f`.
+#
+# HAQP_FUZZ_JOBS is deliberately NOT set: the default is min(nproc, 7), and the
+# 2026-09-18 run passed 4, which made two waves and cost an extra 1805s.
+haq-lane-detached run="run-1" unit="liminal-haqp" mem="24G":
+    systemd-run --user --collect --unit={{ unit }} \
+      --working-directory="$PWD" \
+      -p MemoryMax={{ mem }} -p MemoryHigh=$(numfmt --from=iec --to=iec --suffix= $(( $(numfmt --from=iec {{ mem }}) * 85 / 100 ))) \
+      -p OOMPolicy=stop \
+      just haq-lane {{ run }}
+    @echo "started {{ unit }}; follow with: journalctl --user -u {{ unit }} -f"
+
 # Everything CI runs, locally, in CI order
 ci: fmt-check lint
     # M17.5 F-76: an oversized tracked file is refused by the remote only at

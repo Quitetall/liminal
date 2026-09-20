@@ -37,6 +37,25 @@ if [ -n "$(git status --porcelain)" ]; then
   exit 2
 fi
 
+# F-77: a campaign is 1.5-2.2 hours and dies whole. On 2026-09-19 two runs were
+# SIGTERMed under host memory pressure -- 54 of 62 GB resident with an unrelated
+# PTQ job and an editor session on the box -- after CI had already passed, which
+# cost the run and proved nothing. Refuse in two seconds instead of dying at 90%.
+#
+# The check is available memory, not free: page cache is reclaimable and counting
+# it as pressure would refuse a healthy idle host. Override for a deliberately
+# tight run; there is no way to make the campaign itself smaller.
+REQUIRED_AVAILABLE_MB="${HAQP_REQUIRED_AVAILABLE_MB:-12000}"
+available_mb=$(awk '/^MemAvailable:/ { print int($2 / 1024) }' /proc/meminfo 2>/dev/null)
+if [ -n "$available_mb" ] && [ "$available_mb" -lt "$REQUIRED_AVAILABLE_MB" ]; then
+  echo "refusing to start: ${available_mb} MB available, ${REQUIRED_AVAILABLE_MB} MB required." >&2
+  echo "a campaign is 1.5-2.2 hours and is lost whole if the host reclaims it." >&2
+  echo "largest resident processes:" >&2
+  ps -eo rss,comm --sort=-rss 2>/dev/null | awk 'NR>1 && NR<=6 { printf "  %6.1f GB  %s\n", $1/1048576, $2 }' >&2
+  echo "wait for the host to quiet, or set HAQP_REQUIRED_AVAILABLE_MB to accept the risk." >&2
+  exit 2
+fi
+
 if [ -z "${HAQP_CAMPAIGN_CLOCK:-}" ]; then
   echo "refusing to start: run this under the campaign clock, or ADR-0020 §7's" >&2
   echo "evidence is never written and the lane fails at haq-verify:" >&2
