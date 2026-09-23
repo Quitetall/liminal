@@ -3,98 +3,101 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
+/// Dispatch one `haq` subcommand. Kept apart from `main` so adding a
+/// subcommand does not push `main` past clippy's function-length limit.
+fn run_haq(command: HaqCommand) -> Result<()> {
+    match command {
+        HaqCommand::Verify => {
+            liminal_xtask::haq::verify_qualified_repo(&liminal_xtask::repo_root()?)?;
+        }
+        HaqCommand::VerifyInventory => {
+            liminal_xtask::haq::verify_inventory_repo(&liminal_xtask::repo_root()?)?;
+        }
+        HaqCommand::RunCanaries => {
+            liminal_xtask::haq::run_canaries_repo(&liminal_xtask::repo_root()?)?;
+        }
+        HaqCommand::ReviewUnresolved { record } => {
+            println!(
+                "{}",
+                liminal_xtask::haq::effective_unresolved_findings_repo(
+                    &liminal_xtask::repo_root()?,
+                    &record
+                )?
+            );
+        }
+        HaqCommand::SeedCorpus { target } => {
+            liminal_xtask::haq::write_seed_corpus_repo(&liminal_xtask::repo_root()?, &target)?;
+        }
+        HaqCommand::Concurrency => {
+            liminal_xtask::haq::run_concurrency_repo(&liminal_xtask::repo_root()?)?;
+        }
+        HaqCommand::ScopeDigest {
+            kind,
+            scope,
+            traces,
+        } => {
+            println!(
+                "{}",
+                liminal_xtask::haq::scope_trace_digest_repo(
+                    &liminal_xtask::repo_root()?,
+                    &kind,
+                    &traces,
+                    &scope
+                )?
+            );
+        }
+        HaqCommand::Churn { coordinate } => {
+            let root = liminal_xtask::repo_root()?;
+            let churn = liminal_xtask::haq::coordinate_is_campaign_churn(&root, &coordinate)?;
+            println!(
+                "{coordinate}: {}",
+                if churn {
+                    "campaign churn — recorded under AM-17.11"
+                } else {
+                    "under qualification — fixed"
+                }
+            );
+        }
+        HaqCommand::DeriveKillers => {
+            print!(
+                "{}",
+                liminal_xtask::haq::derive_killers_repo(&liminal_xtask::repo_root()?)?
+            );
+        }
+        HaqCommand::RequirementDigests => {
+            for (id, digest) in
+                liminal_xtask::haq::requirement_digests(&liminal_xtask::repo_root()?)?
+            {
+                println!("{id} {digest}");
+            }
+        }
+        HaqCommand::PacketDigest => {
+            println!(
+                "{}",
+                liminal_xtask::haq::packet_digest_repo(&liminal_xtask::repo_root()?)?
+            );
+        }
+        HaqCommand::Hash { path } => {
+            let bytes = std::fs::read(&path)?;
+            println!("{}", blake3::hash(&bytes).to_hex());
+        }
+        HaqCommand::Generate { cases } => {
+            liminal_xtask::haq::run_generated_repo(&liminal_xtask::repo_root()?, cases)?;
+        }
+        HaqCommand::Mutants { ids, run_ignored } => {
+            liminal_xtask::haq::run_mutants_repo(&liminal_xtask::repo_root()?, &ids, run_ignored)?;
+        }
+        HaqCommand::ScopeProbe { scope } => {
+            liminal_xtask::haq::run_scope_probe_repo(&liminal_xtask::repo_root()?, &scope)?;
+        }
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Haq { command } => match command {
-            HaqCommand::Verify => {
-                liminal_xtask::haq::verify_qualified_repo(&liminal_xtask::repo_root()?)?;
-            }
-            HaqCommand::VerifyInventory => {
-                liminal_xtask::haq::verify_inventory_repo(&liminal_xtask::repo_root()?)?;
-            }
-            HaqCommand::RunCanaries => {
-                liminal_xtask::haq::run_canaries_repo(&liminal_xtask::repo_root()?)?;
-            }
-            HaqCommand::ReviewUnresolved { record } => {
-                println!(
-                    "{}",
-                    liminal_xtask::haq::effective_unresolved_findings_repo(
-                        &liminal_xtask::repo_root()?,
-                        &record
-                    )?
-                );
-            }
-            HaqCommand::SeedCorpus { target } => {
-                liminal_xtask::haq::write_seed_corpus_repo(&liminal_xtask::repo_root()?, &target)?;
-            }
-            HaqCommand::Concurrency => {
-                liminal_xtask::haq::run_concurrency_repo(&liminal_xtask::repo_root()?)?;
-            }
-            HaqCommand::ScopeDigest {
-                kind,
-                scope,
-                traces,
-            } => {
-                println!(
-                    "{}",
-                    liminal_xtask::haq::scope_trace_digest_repo(
-                        &liminal_xtask::repo_root()?,
-                        &kind,
-                        &traces,
-                        &scope
-                    )?
-                );
-            }
-            HaqCommand::Churn { coordinate } => {
-                let root = liminal_xtask::repo_root()?;
-                let churn = liminal_xtask::haq::coordinate_is_campaign_churn(&root, &coordinate)?;
-                println!(
-                    "{coordinate}: {}",
-                    if churn {
-                        "campaign churn — recorded under AM-17.11"
-                    } else {
-                        "under qualification — fixed"
-                    }
-                );
-            }
-            HaqCommand::DeriveKillers => {
-                print!(
-                    "{}",
-                    liminal_xtask::haq::derive_killers_repo(&liminal_xtask::repo_root()?)?
-                );
-            }
-            HaqCommand::RequirementDigests => {
-                for (id, digest) in
-                    liminal_xtask::haq::requirement_digests(&liminal_xtask::repo_root()?)?
-                {
-                    println!("{id} {digest}");
-                }
-            }
-            HaqCommand::PacketDigest => {
-                println!(
-                    "{}",
-                    liminal_xtask::haq::packet_digest_repo(&liminal_xtask::repo_root()?)?
-                );
-            }
-            HaqCommand::Hash { path } => {
-                let bytes = std::fs::read(&path)?;
-                println!("{}", blake3::hash(&bytes).to_hex());
-            }
-            HaqCommand::Generate { cases } => {
-                liminal_xtask::haq::run_generated_repo(&liminal_xtask::repo_root()?, cases)?;
-            }
-            HaqCommand::Mutants { ids, run_ignored } => {
-                liminal_xtask::haq::run_mutants_repo(
-                    &liminal_xtask::repo_root()?,
-                    &ids,
-                    run_ignored,
-                )?;
-            }
-            HaqCommand::ScopeProbe { scope } => {
-                liminal_xtask::haq::run_scope_probe_repo(&liminal_xtask::repo_root()?, &scope)?;
-            }
-        },
+        Command::Haq { command } => run_haq(command)?,
         Command::Bench { command } => match command {
             BenchCommand::Sample { count } => {
                 liminal_xtask::bench::sample_repo(&liminal_xtask::repo_root()?, count)?;
