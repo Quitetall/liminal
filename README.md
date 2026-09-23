@@ -145,6 +145,8 @@ There is no application to run. The closest things are the toy binaries:
 
 ## License
 
-Apache-2.0 (see [`LICENSE`](LICENSE); v4 §131, ADR-0001). Unless you
+Apache-2.0 (see [`LICENSE`](LICENSE); v4 §131, ADR-0001). Eight corpus files
+under `conformance/corpora/heldout/v1/` contain third-party text and keep their
+upstream licenses; see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Unless you
 explicitly state otherwise, any contribution intentionally submitted for
 inclusion in Liminal is licensed as Apache-2.0, without any additional terms.
