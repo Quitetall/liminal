@@ -276,8 +276,8 @@ Available flags for AddressSanitizer:
 		- read more options from the given file (if it exists) (Current Value: )
 INFO: Running with entropic power schedule (0xFF, 100).
 INFO: Seed: 1
-INFO: Loaded 1 modules   (112360 inline 8-bit counters): 112360 [0x564411b762a0, 0x564411b91988), 
-INFO: Loaded 1 PC tables (112360 PCs): 112360 [0x564411b91988,0x564411d48808), 
+INFO: Loaded 1 modules   (112360 inline 8-bit counters): 112360 [0x55c840ea52a0, 0x55c840ec0988), 
+INFO: Loaded 1 PC tables (112360 PCs): 112360 [0x55c840ec0988,0x55c841077808), 
 INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 4096 bytes
 INFO: A corpus is not provided, starting from an empty corpus
 #2	INITED cov: 87 ft: 88 corp: 1/1b exec/s: 0 rss: 38Mb
