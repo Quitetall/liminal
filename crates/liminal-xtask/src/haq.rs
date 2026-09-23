@@ -14182,9 +14182,75 @@ fn case_source_cst(rng: &mut Rng) -> Result<Case> {
 /// decoded from canonical bytes must reproduce those bytes exactly. The
 /// comparison is over BYTES, never the type's own `PartialEq`, so a broken
 /// `Eq` cannot make this pass (ADR-0020 §5).
-fn case_interchange(rng: &mut Rng) -> Result<Case> {
-    use liminal_graph::Node;
+/// A valid transaction carrying exactly ONE defect, the one `category` names,
+/// in its first created node (A03). The untouched base must decode, and the
+/// mutated bytes must be refused with the error that defect produces -- so a
+/// refusal is attributable to the category rather than to the input merely not
+/// being a transaction.
+fn transaction_with_one_defect(category: &str, rng: &mut Rng) -> Result<Vec<u8>> {
+    let text = format!("{category}:{}", rng.word());
+    let (txn, _) = interchange_transaction("single-edge", rng, &text, false);
+    let base = serde_json::to_value(&txn)?;
+    anyhow::ensure!(
+        serde_json::from_value::<liminal_graph::Transaction>(base.clone()).is_ok(),
+        "graph negative {category}: the base transaction must decode before a defect is added"
+    );
+    let mut value = base;
+    let op = value["ops"]
+        .as_array_mut()
+        .and_then(|ops| ops.iter_mut().find(|op| op.get("create-node").is_some()))
+        .context("graph negative base has no create-node operation")?;
+    let create = op["create-node"]
+        .as_object_mut()
+        .context("create-node is not an object")?;
+    let (raw, expected_error) = match category {
+        "missing-node" => {
+            create.remove("node").context("create-node has no node")?;
+            (serde_json::to_vec(&value)?, "missing field `node`")
+        }
+        "unknown-kind" => {
+            create["node"]["kind"] = serde_json::json!("unknown");
+            (serde_json::to_vec(&value)?, "invalid type")
+        }
+        "cycle" | "external-value" | "comment" => {
+            create["node"]["payload"] = match category {
+                "cycle" => serde_json::json!({ "cycle": ["a", "b", "a"] }),
+                "external-value" => serde_json::json!({ "external-value": "source" }),
+                _ => serde_json::json!({ "comment": "note" }),
+            };
+            (serde_json::to_vec(&value)?, "unknown variant")
+        }
+        "duplicate-id" => {
+            // A JSON object cannot hold a key twice as a Value, so the second
+            // `id` is spliced into the serialized node text.
+            let node = serde_json::to_string(&create["node"])?;
+            let rest = node
+                .strip_prefix('{')
+                .context("serialized node is not an object")?;
+            // The id's SERIALIZED form, not its Display form: the first
+            // version spliced `NodeId`'s Display text (`n…`) and the codec
+            // refused it for a malformed UUID -- a second defect, caught by the
+            // attribution check below.
+            let second_id = serde_json::to_string(&liminal_id::NodeId::from_uuid(rng.uuid()))?;
+            let duplicated = format!(r#"{{"id":{second_id},{rest}"#);
+            create["node"] = serde_json::json!("__A03_NODE__");
+            let text = serde_json::to_string(&value)?.replace(r#""__A03_NODE__""#, &duplicated);
+            (text.into_bytes(), "duplicate field `id`")
+        }
+        other => anyhow::bail!("unknown graph negative category {other}"),
+    };
+    let error = serde_json::from_slice::<liminal_graph::Transaction>(&raw)
+        .err()
+        .with_context(|| format!("graph negative {category} decoded as a Transaction"))?
+        .to_string();
+    anyhow::ensure!(
+        error.contains(expected_error),
+        "graph negative {category} was refused for another reason: expected {expected_error:?}, got {error:?}"
+    );
+    Ok(raw)
+}
 
+fn case_interchange(rng: &mut Rng) -> Result<Case> {
     let category = rng.category("graph/interchange codecs");
     let malformed = matches!(
         category,
@@ -14200,14 +14266,17 @@ fn case_interchange(rng: &mut Rng) -> Result<Case> {
             | "hostile"
     );
     if malformed {
+        // Blind pass 1 at `51bcc0b3` (A03): negatives were bare Node JSON checked
+        // with `from_slice::<Node>`, while the codec's unit is a Transaction --
+        // the positive half moved to Transaction under A07 and this half was
+        // left behind. A Transaction rejects a bare Node for being the wrong
+        // shape, not for the defect the category names, so no negative tested
+        // the codec's handling of a malformed transaction. Structural
+        // categories now carry exactly one defect inside an otherwise valid
+        // transaction, and the codec must reject it with the error that defect
+        // produces. Byte-level categories are malformed for any type already.
         let raw = match category {
             "empty" => Vec::new(),
-            "duplicate-id" => br#"{"id":"00000000-0000-0000-0000-000000000001","id":"00000000-0000-0000-0000-000000000002","kind":1,"payload":"none","revision":0,"flags":0}"#.to_vec(),
-            "missing-node" => br"{}".to_vec(),
-            "cycle" => br#"{"id":"00000000-0000-0000-0000-000000000001","kind":1,"payload":{"cycle":["a","b","a"]},"revision":0,"flags":0}"#.to_vec(),
-            "unknown-kind" => br#"{"id":"00000000-0000-0000-0000-000000000001","kind":"unknown","payload":"none","revision":0,"flags":0}"#.to_vec(),
-            "external-value" => br#"{"id":"00000000-0000-0000-0000-000000000001","kind":1,"payload":{"external-value":"source"},"revision":0,"flags":0}"#.to_vec(),
-            "comment" => br#"{"id":"00000000-0000-0000-0000-000000000001","kind":1,"payload":{"comment":"note"},"revision":0,"flags":0}"#.to_vec(),
             "truncated-json" => format!(r#"{{"category":"{category}""#).into_bytes(),
             "invalid-json" => {
                 let mut bytes = format!("{category}\0").into_bytes();
@@ -14215,11 +14284,11 @@ fn case_interchange(rng: &mut Rng) -> Result<Case> {
                 bytes
             }
             "hostile" => vec![0, 0xff, 0x7f],
-            _ => unreachable!("unknown graph negative category {category}"),
+            structural => transaction_with_one_defect(structural, rng)?,
         };
         anyhow::ensure!(
-            serde_json::from_slice::<Node>(&raw).is_err(),
-            "graph negative category {category} unexpectedly decoded"
+            serde_json::from_slice::<liminal_graph::Transaction>(&raw).is_err(),
+            "graph negative category {category} unexpectedly decoded as a Transaction"
         );
         let witness = if raw.is_empty() {
             format!("{category}:empty").into_bytes()
@@ -17552,7 +17621,7 @@ mod tests {
             ),
             (
                 "graph/interchange codecs",
-                "ca99f0374a5e69c0d1e20954b8056859ffee020ff2672658eed28c8f1684bb86",
+                "f4dc49555981218323e0c6cbe77ea7c7511a6a72fc7839a618915e0e546fba4b",
             ),
             (
                 "transforms/projections",
@@ -20692,6 +20761,40 @@ charlie
             .expect_err("a range that starts inside its region is not coverage")
             .to_string();
         assert!(err.contains("coarse block 1 has range"), "{err}");
+    }
+
+    /// Blind pass 1 at `51bcc0b3` (A03): every structural graph negative is a
+    /// real transaction with one defect, refused by the Transaction codec with
+    /// the error that defect produces -- never merely for not being a
+    /// transaction.
+    #[test]
+    fn every_graph_negative_is_a_transaction_refused_for_its_own_defect() {
+        for category in [
+            "duplicate-id",
+            "missing-node",
+            "cycle",
+            "unknown-kind",
+            "external-value",
+            "comment",
+        ] {
+            for seed in 0..32 {
+                let mut rng = Rng(0xA03 ^ seed);
+                let raw = transaction_with_one_defect(category, &mut rng)
+                    .unwrap_or_else(|error| panic!("{category} seed {seed}: {error:#}"));
+                // A Value keeps one of the duplicated keys, which is enough for
+                // the shape check; the codec sees the raw bytes below.
+                let value: serde_json::Value =
+                    serde_json::from_slice(&raw).expect("well-formed JSON");
+                assert!(
+                    value.get("ops").is_some() && value.get("meta").is_some(),
+                    "{category}: a negative must be transaction-shaped, not a bare node"
+                );
+                assert!(
+                    serde_json::from_slice::<liminal_graph::Transaction>(&raw).is_err(),
+                    "{category}: the codec must refuse it"
+                );
+            }
+        }
     }
 
     /// Blind pass 1 at `ec045588` (A01): every generated source held at most
