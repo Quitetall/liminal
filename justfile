@@ -182,9 +182,16 @@ haq-lane run="run-1":
 #
 # HAQP_FUZZ_JOBS is deliberately NOT set: the default is min(nproc, 7), and the
 # 2026-09-18 run passed 4, which made two waves and cost an extra 1805s.
+#
+# `-E PATH` is required, not tidiness: a `systemd --user` unit starts with the
+# manager's minimal PATH, which does not include ~/.local/bin, so the blind
+# review's `codex` CLI was not found and the first launch on 2026-09-23 died in
+# one second: "reviewer codex:gpt-5.6-sol is unreachable: [Errno 2] No such
+# file or directory: 'codex'". Copying the caller's PATH gives the unit the same
+# tools the operator's shell resolves; cargo is the rustup proxy either way.
 haq-lane-detached run="run-1" unit="liminal-haqp" mem="24G":
     systemd-run --user --collect --unit={{ unit }} \
-      --working-directory="$PWD" \
+      --working-directory="$PWD" -E PATH \
       -p MemoryMax={{ mem }} -p MemoryHigh=$(numfmt --from=iec --to=iec --suffix= $(( $(numfmt --from=iec {{ mem }}) * 85 / 100 ))) \
       -p OOMPolicy=stop \
       just haq-lane {{ run }}
