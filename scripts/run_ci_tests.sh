@@ -18,6 +18,8 @@
 #
 # EXCLUDE_UNIX_TOOLING (set by the CI matrix on Windows only, F-90) excludes the
 # Unix-only tooling crates; every test in them still runs on Linux and macOS.
+# `${EXCLUDE[@]+...}` because macOS bash 3.2 treats an empty array as unbound
+# under `set -u`.
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
@@ -34,12 +36,12 @@ fi
 
 build_binaries() {
   echo "=== workspace binaries ==="
-  cargo build --workspace "${EXCLUDE[@]}" --all-features --bins
+  cargo build --workspace ${EXCLUDE[@]+"${EXCLUDE[@]}"} --all-features --bins
 }
 
 portable() {
   echo "=== portable half ==="
-  cargo nextest run --workspace "${EXCLUDE[@]}" --all-features --profile ci \
+  cargo nextest run --workspace ${EXCLUDE[@]+"${EXCLUDE[@]}"} --all-features --profile ci \
     --filter-expr "not ($EXPR)"
 }
 
@@ -51,7 +53,7 @@ host() {
 case "$MODE" in
   portable) build_binaries && portable ;;
   host) build_binaries && host ;;
-  doctest) cargo test --workspace "${EXCLUDE[@]}" --doc ;;
+  doctest) cargo test --workspace ${EXCLUDE[@]+"${EXCLUDE[@]}"} --doc ;;
   all) build_binaries && portable && host ;;
   *) echo "usage: $0 [portable|host|doctest|all]" >&2; exit 2 ;;
 esac
