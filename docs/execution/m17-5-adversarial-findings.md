@@ -4949,3 +4949,33 @@ the generated witnesses, and therefore the `graph/interchange codecs` golden in
 `generated_case_builders_match_their_recorded_goldens`. Accepting a changed golden
 is a T1 act that AM-17.16 excludes from proposal. It is prepared separately for
 Brian's decision and not committed to main.
+
+## F-80 correction — the two closes I offered were both wrong
+
+F-80 offered Brian two ways to close the `test-threaded` flake: run it with
+`--test-threads=1`, or exclude the isolation-requiring tests. **Both would have
+hidden the defect the lane exists to catch.** The justfile says so directly:
+`test-threaded` was added under F-11 because "nextest gives every test its own
+PROCESS, so the suite's green status under `cargo test` — tests as THREADS in one
+process — was never exercised by CI … a suite whose result depends on the harness
+is not qualified." Neither change was applied.
+
+The flake is F-11's own defect, not a harness quirk. `flock(2)` ownership belongs
+to the open file description, so a child spawned by a sibling thread co-owns the
+store lock until it reaches `execve`. F-11 answered with `acquire_write_lock`,
+which retries contention for a 250 ms budget. That makes the window less likely
+to bite and does not close it: F-11's own measurement was 4 failures in 3,000
+with a sibling thread spawning children. Under load — `just ci` beside seven
+fuzzers, or two OS-level builds — a descheduled child can hold the fork→exec
+window past 250 ms, and the reopen fails `Store(Locked(..))`. That is the error
+`m08::freeze_rejects_stale_file_bytes` reported.
+
+**The fix is in the store, and it is proposed, not made.** A lock whose ownership
+a child does not inherit — `fcntl` process-associated locks are not inherited
+across `fork` — combined with explicit in-process exclusion, such as a
+process-wide registry of held store paths, gives single-writer semantics with no
+fork window, instead of a budget that load can exceed. It changes the durability
+path in `liminal-graph/src/store/mod.rs`, where ten mutants are pinned by
+coordinate (P1-M017..M019, M021..M024 among them). That means re-anchoring under
+AM-17.13's reference-maintenance procedure, in the middle of qualification. The
+decision is Brian's.
