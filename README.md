@@ -127,6 +127,11 @@ liminal/
 
 ## Development quickstart
 
+Test classification and maintenance:
+[`verification/assurance/README.md`](verification/assurance/README.md).
+`just assurance-check` validates classification only; full tests and qualification
+remain separate. Profile receipts and CI-parity delivery are tracked in that guide.
+
 The toolchain is pinned by `rust-toolchain.toml`; with
 [rustup](https://rustup.rs) installed, the first `cargo` invocation fetches it
 automatically. Tasks run through [`just`](https://github.com/casey/just):

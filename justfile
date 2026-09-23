@@ -14,6 +14,20 @@ setup:
 check:
     cargo check --workspace --all-targets --all-features
 
+# Classification only; not execution or qualification (ADR-0022).
+assurance-check:
+    cargo run -p liminal-xtask -- assurance check
+
+# Complete registered profile, with a new external evidence directory.
+assurance-run profile output:
+    cargo run -p liminal-xtask -- assurance run {{ quote(profile) }} --output {{ quote(output) }}
+
+assurance-report receipt:
+    cargo run -p liminal-xtask -- assurance report {{ quote(receipt) }}
+
+assurance-workflows:
+    cargo run -p liminal-xtask -- assurance generate-workflows
+
 fmt:
     cargo fmt --all
     # Scope TOML formatting to repository inputs; nested untracked projects are
@@ -70,6 +84,7 @@ haq-crash:
     cargo run -p liminal-conformance --bin crash-evidence
 
 haq-blind-review:
+    mkdir -p target/haqp/blind-review
     python3 scripts/haqp_blind_review.py --self-test
     python3 scripts/haqp_blind_review.py --run
 
@@ -197,41 +212,20 @@ haq-lane-detached run="run-1" unit="liminal-haqp" mem="24G":
       just haq-lane {{ run }}
     @echo "started {{ unit }}; follow with: journalctl --user -u {{ unit }} -f"
 
-# Everything CI runs, locally, in CI order
-ci: fmt-check lint
-    # M17.5 F-76: an oversized tracked file is refused by the remote only at
-    # push time, when the blob is already in history. Seconds, and first.
-    ./scripts/check_tracked_file_sizes.sh
-    # M17.5 F-90: the fuzz lockfile must already describe the sanitizer build.
-    # It went stale when the DG17 work added dependencies, so every fuzz build
-    # re-resolved 14 packages against the registry of that day.
-    cargo metadata --manifest-path fuzz/Cargo.toml --locked --format-version 1 > /dev/null
-    just formal-bootstrap-self-test
-    just formal-proof-self-test
-    # M17.5 F-82: the two halves run SEPARATELY, as the CI workflow runs them.
-    # sanitizer_replay performs a full ASan release build inside a test -- 73.9s
-    # saturating every core -- and beside it the crash tests, which spawn a
-    # subprocess per boundary and are judged on wall clock, were starved into a
-    # 240s timeout after running 7.9s alone. Sequencing the sets is the same
-    # split F-79 already declares, so local and remote now run identical halves.
-    ./scripts/run_ci_tests.sh
-    # M17.5 F-79: prove the CI split still covers the suite exactly -- no test in
-    # both halves, none in neither. A test that falls out of both stops running
-    # while both CI jobs stay green.
-    #
-    # AFTER the test run, not before: it lists the suite three times, and listing
-    # means building. Ahead of the run that is the whole workspace build brought
-    # forward to gate everything else, which is how it was killed under memory
-    # pressure on 2026-09-20. Here the build is already done and listing is cheap.
-    ./scripts/check_ci_partition.sh
-    just test-threaded
-    cargo test --workspace --doc
-    just doc
-    just deny
-    # M17.5 F-14: these two gates were outside CI, so the packet digest sat
-    # broken for three commits without anything going red. Both are seconds.
-    just haq-inventory
-    just haq-canaries
+# Everything CI runs, locally, in CI order: the assurance `merge` profile
+# (ADR-0022), which writes durable receipts outside the checkout. Main's
+# 2026-09-20..23 gates -- the tracked-file size guard (F-76), the fuzz lockfile
+# guard (F-90), the split and sequenced test halves (F-82, F-84) and the CI
+# partition check (F-79) -- are registered gates of that profile, so they run
+# here and in the generated workflow from one definition.
+# Full Linux merge profile; durable receipts outside the candidate checkout.
+ci:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    assurance_state="${XDG_STATE_HOME:-$HOME/.local/state}/liminal/assurance"
+    mkdir -p "$assurance_state"
+    assurance_run="$(mktemp -d "$assurance_state/run.XXXXXXXX")"
+    cargo run -p liminal-xtask -- assurance run merge --output "$assurance_run/merge"
 
 # Install the repository's hooks (pre-push tracked-file size guard).
 install-hooks:

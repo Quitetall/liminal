@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "profiles": {
+    "development": ["style", "assurance"],
+    "merge": ["style", "lint", "tracked-sizes", "fuzz-lock", "bootstrap", "proof-support", "nextest", "host", "partition", "threaded", "doctest", "docs", "deny", "inventory", "canaries", "resource-run", "resource-lint", "assurance"],
+    "portability": ["nextest", "doctest"],
+    "scheduled": ["advisories", "beta"],
+    "qualification": ["haqp"]
+  },
+  "families": [
+    {
+      "id": "proof-support", "owner": "release owner",
+      "source_areas": ["verification/bootstrap", "verification/proof"],
+      "targets": ["python::verification/bootstrap/test_run.py", "python::verification/proof/test_command.py", "python::verification/proof/test_dependencies.py", "python::verification/proof/test_distribution.py", "python::verification/proof/test_observation.py", "python::verification/proof/test_run.py", "python::verification/proof/test_runner_stage.py", "python::verification/proof/test_sandbox.py", "python::verification/proof/test_stage.py", "python::verification/proof/test_toolchain.py"],
+      "references": [{"path": "docs/security/threat-model.md", "anchor": "TM-16"}],
+      "review_triggers": ["phase-gate", "toolchain-change", "evidence-contract"],
+      "profiles": ["merge"], "platforms": ["linux"]
+    },
+    {
+      "id": "resource-controls", "owner": "jurisdiction owner",
+      "source_areas": ["verification/resource-controls"],
+      "targets": ["verification/resource-controls/Cargo.toml::bin::liminal-resource-controls"],
+      "references": [{"path": "verification/obligations.json", "anchor": "authority"}],
+      "review_triggers": ["phase-gate", "allocation-layout", "admission-or-recovery-interface"],
+      "profiles": ["merge"], "platforms": ["linux"]
+    },
+    {
+      "id": "fuzz", "owner": "corpus custodian",
+      "source_areas": ["fuzz/fuzz_targets"],
+      "targets": ["fuzz/Cargo.toml::bin::canonical_round_trip", "fuzz/Cargo.toml::bin::cst_parse", "fuzz/Cargo.toml::bin::format_idempotent", "fuzz/Cargo.toml::bin::html_render", "fuzz/Cargo.toml::bin::incremental_full_equivalence", "fuzz/Cargo.toml::bin::graph_interchange_codec", "fuzz/Cargo.toml::bin::ilrp_recovery"],
+      "references": [{"path": "docs/security/threat-model.md", "anchor": "TM-14"}],
+      "review_triggers": ["phase-gate", "parser-change", "mutation-surface"],
+      "profiles": ["qualification"], "platforms": ["linux"]
+    },
+    {
+      "id": "identity-revision", "owner": "revision owner",
+      "source_areas": ["crates/liminal-id", "crates/liminal-revision", "crates/liminal-scratch"],
+      "targets": ["crates/liminal-id/Cargo.toml::lib::liminal_id", "crates/liminal-revision/Cargo.toml::lib::liminal_revision", "crates/liminal-scratch/Cargo.toml::lib::liminal_scratch"],
+      "references": [{"path": "verification/obligations.json", "anchor": "identity-only"}],
+      "review_triggers": ["phase-gate", "identity-or-basis-change"],
+      "profiles": ["merge", "portability"], "platforms": ["linux", "macos", "windows"]
+    },
+    {
+      "id": "source-format", "owner": "source owner",
+      "source_areas": ["crates/liminal-source", "crates/liminal-cst", "crates/liminal-text", "crates/liminal-format"],
+      "targets": ["crates/liminal-source/Cargo.toml::lib::liminal_source", "crates/liminal-cst/Cargo.toml::lib::liminal_cst", "crates/liminal-text/Cargo.toml::lib::liminal_text", "crates/liminal-format/Cargo.toml::lib::liminal_format"],
+      "references": [{"path": "docs/security/threat-model.md", "anchor": "TM-03"}],
+      "review_triggers": ["phase-gate", "parser-or-format-interface"],
+      "profiles": ["merge", "portability"], "platforms": ["linux", "macos", "windows"]
+    },
+    {
+      "id": "graph-history", "owner": "graph-store owner",
+      "source_areas": ["crates/liminal-graph", "crates/liminal-history"],
+      "targets": ["crates/liminal-graph/Cargo.toml::lib::liminal_graph", "crates/liminal-graph/Cargo.toml::test::asof", "crates/liminal-graph/Cargo.toml::test::owner", "crates/liminal-graph/Cargo.toml::test::store", "crates/liminal-history/Cargo.toml::lib::liminal_history"],
+      "references": [{"path": "docs/security/threat-model.md", "anchor": "TM-01"}, {"path": "docs/security/threat-model.md", "anchor": "TM-02"}],
+      "review_triggers": ["phase-gate", "durability-boundary", "store-interface"],
+      "profiles": ["merge", "portability"], "platforms": ["linux", "macos", "windows"]
+    },
+    {
+      "id": "authority-recovery", "owner": "jurisdiction owner",
+      "source_areas": ["crates/liminal-jurisdiction", "crates/liminal-safety"],
+      "targets": ["crates/liminal-jurisdiction/Cargo.toml::lib::liminal_jurisdiction", "crates/liminal-jurisdiction/Cargo.toml::test::admission", "crates/liminal-jurisdiction/Cargo.toml::test::ilrp_driver", "crates/liminal-jurisdiction/Cargo.toml::test::order_proof", "crates/liminal-safety/Cargo.toml::lib::liminal_safety", "crates/liminal-safety/Cargo.toml::test::acknowledgement", "crates/liminal-safety/Cargo.toml::test::ordering", "crates/liminal-safety/Cargo.toml::example::acknowledgement_witness"],
+      "references": [{"path": "verification/obligations.json", "anchor": "authority"}],
+      "review_triggers": ["phase-gate", "authority-interface", "recovery-boundary"],
+      "profiles": ["merge", "portability"], "platforms": ["linux", "macos", "windows"]
+    },
+    {
+      "id": "query-resolution", "owner": "query owner",
+      "source_areas": ["crates/liminal-query", "crates/liminal-resolver", "crates/liminal-hir", "crates/liminal-cir"],
+      "targets": ["crates/liminal-query/Cargo.toml::lib::liminal_query", "crates/liminal-resolver/Cargo.toml::lib::liminal_resolver", "crates/liminal-hir/Cargo.toml::lib::liminal_hir", "crates/liminal-cir/Cargo.toml::lib::liminal_cir"],
+      "references": [{"path": "docs/security/threat-model.md", "anchor": "TM-05"}],
+      "review_triggers": ["phase-gate", "query-or-resolver-interface"],
+      "profiles": ["merge", "portability"], "platforms": ["linux", "macos", "windows"]
+    },
+    {
+      "id": "client-daemon", "owner": "daemon owner",
+      "source_areas": ["crates/liminal-cli", "crates/liminal-daemon", "crates/liminal-protocol"],
+      "targets": ["crates/liminal-cli/Cargo.toml::lib::liminal_cli", "crates/liminal-cli/Cargo.toml::bin::lim", "crates/liminal-daemon/Cargo.toml::lib::liminal_daemon", "crates/liminal-daemon/Cargo.toml::bin::liminald", "crates/liminal-daemon/Cargo.toml::test::acceptance_actor", "crates/liminal-daemon/Cargo.toml::test::crash", "crates/liminal-daemon/Cargo.toml::test::workspace_owner", "crates/liminal-protocol/Cargo.toml::lib::liminal_protocol"],
+      "references": [{"path": "docs/security/threat-model.md", "anchor": "TM-04"}],
+      "review_triggers": ["phase-gate", "client-trust-boundary"],
+      "profiles": ["merge", "portability"], "platforms": ["linux", "macos", "windows"]
+    },
+    {
+      "id": "reserved-extension-targets", "owner": "plugin owner",
+      "source_areas": ["crates/liminal-lua", "crates/liminal-plugin-api", "crates/liminal-resource", "crates/liminal-sync", "crates/liminal-transform", "crates/liminal-wasm-host"],
+      "targets": ["crates/liminal-lua/Cargo.toml::lib::liminal_lua", "crates/liminal-plugin-api/Cargo.toml::lib::liminal_plugin_api", "crates/liminal-resource/Cargo.toml::lib::liminal_resource", "crates/liminal-sync/Cargo.toml::lib::liminal_sync", "crates/liminal-transform/Cargo.toml::lib::liminal_transform", "crates/liminal-wasm-host/Cargo.toml::lib::liminal_wasm_host"],
+      "references": [{"path": "docs/security/threat-model.md", "anchor": "TM-16"}],
+      "review_triggers": ["phase-gate", "first-implementation", "new-trust-boundary"],
+      "profiles": ["merge", "portability"], "platforms": ["linux", "macos", "windows"]
+    },
+    {
+      "id": "assurance-tooling", "owner": "release owner",
+      "source_areas": ["crates/liminal-xtask", "verification/assurance"],
+      "targets": ["crates/liminal-xtask/Cargo.toml::lib::liminal_xtask", "crates/liminal-xtask/Cargo.toml::bin::liminal-xtask", "crates/liminal-xtask/Cargo.toml::test::formal", "crates/liminal-xtask/Cargo.toml::test::assurance"],
+      "references": [{"path": "docs/security/threat-model.md", "anchor": "TM-16"}],
+      "review_triggers": ["phase-gate", "gate-change", "dependency-change"],
+      "profiles": ["merge", "portability"], "platforms": ["linux", "macos"]
+    },
+    {
+      "id": "conformance", "owner": "corpus custodian",
+      "source_areas": ["conformance/src", "conformance/tests"],
+      "targets": ["conformance/Cargo.toml::lib::liminal_conformance", "conformance/Cargo.toml::bin::crash-evidence", "conformance/Cargo.toml::bin::gates", "conformance/Cargo.toml::bin::gen-manifest", "conformance/Cargo.toml::bin::lim-toy", "conformance/Cargo.toml::bin::scorecard", "conformance/Cargo.toml::bin::tracegen", "conformance/Cargo.toml::test::classes", "conformance/Cargo.toml::test::crash", "conformance/Cargo.toml::test::gate_final", "conformance/Cargo.toml::test::law_canaries", "conformance/Cargo.toml::test::laws", "conformance/Cargo.toml::test::milestones", "conformance/Cargo.toml::test::phase0", "conformance/Cargo.toml::test::phase_minus_1", "conformance/Cargo.toml::test::slo"],
+      "references": [{"path": "docs/security/threat-model.md", "anchor": "TM-14"}],
+      "review_triggers": ["phase-gate", "requirement-change", "oracle-change"],
+      "profiles": ["merge", "portability", "qualification"], "platforms": ["linux", "macos"]
+    },
+    {
+      "id": "spikes-benchmarks", "owner": "release owner",
+      "source_areas": ["conformance/spikes", "benches"],
+      "targets": ["conformance/spikes/spike-annotation/Cargo.toml::lib::spike_annotation", "conformance/spikes/spike-richedit/Cargo.toml::lib::spike_richedit", "conformance/spikes/real-cst/Cargo.toml::lib::spike_real_cst", "conformance/spikes/real-cst/Cargo.toml::bin::report", "benches/Cargo.toml::lib::liminal_benches", "benches/Cargo.toml::bench::liminal"],
+      "references": [{"path": "docs/security/threat-model.md", "anchor": "TM-16"}],
+      "review_triggers": ["phase-gate", "measurement-change"],
+      "profiles": ["merge", "portability"], "platforms": ["linux", "macos"]
+    }
+  ]
+}

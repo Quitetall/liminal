@@ -12,6 +12,10 @@ This records sequencing and implementation scope, not final phase authorization.
 
 ## Current delivery boundary
 
+Testing-maintenance implementation is tracked separately in
+[`assurance/PLAN.md`](assurance/PLAN.md), under ADR-0022/AM-17.18. It preserves
+this proof contract and does not establish any pending obligation.
+
 The first implementation slice supplies the closed candidate obligation and
 assumption registries, structural validation and refusal-only qualification
 commands. `formal-check` currently validates those registries and their source

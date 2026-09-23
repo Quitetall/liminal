@@ -1120,11 +1120,11 @@
    "family": "source/CST/formatting",
    "operator": "predicate-deletion",
    "source": "crates/liminal-format/src/lib.rs:341",
-   "requirement": "P1-R004",
-   "defect": "emit a literal the compact parser would normalize",
+   "requirement": "P1-R040",
+   "defect": "strip author-named position attributes, collapsing distinct semantic documents",
    "killing_tests": [
-    "P1-T02",
-    "P1-T09"
+    "P1-T03",
+    "P1-T13"
    ],
    "disposition": "predeclared"
   },

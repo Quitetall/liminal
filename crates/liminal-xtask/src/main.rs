@@ -97,6 +97,7 @@ fn run_haq(command: HaqCommand) -> Result<()> {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
+        Command::Assurance { command } => command.dispatch_assurance()?,
         Command::Haq { command } => run_haq(command)?,
         Command::Bench { command } => match command {
             BenchCommand::Sample { count } => {
@@ -137,6 +138,11 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Maintain test classification without granting qualification.
+    Assurance {
+        #[command(subcommand)]
+        command: Box<AssuranceCommand>,
+    },
     /// HAQP-1 qualification helpers.
     Haq {
         #[command(subcommand)]
@@ -152,6 +158,127 @@ enum Command {
         #[command(subcommand)]
         command: FormalCommand,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum AssuranceCommand {
+    /// Prepare reference-maintenance evidence; never grants authority.
+    Amend {
+        #[command(subcommand)]
+        command: Box<AssuranceAmendCommand>,
+    },
+    /// Explicitly regenerate hosted workflow wiring; does not execute CI.
+    GenerateWorkflows,
+    /// Check catalog completeness (not a test or qualification run).
+    Check,
+    /// Execute every command in a profile; never establishes qualification.
+    Run {
+        /// Registered profile name.
+        profile: String,
+        /// New absolute receipt directory outside the repository.
+        #[arg(long)]
+        output: camino::Utf8PathBuf,
+        /// Caller-reported cache state: cold, warm or unknown.
+        #[arg(long, default_value = "unknown")]
+        cache_state: String,
+    },
+    /// Inspect an existing execution receipt without executing tests.
+    Report {
+        /// Path to receipt.json.
+        receipt: camino::Utf8PathBuf,
+    },
+}
+
+impl AssuranceCommand {
+    fn dispatch_assurance(self) -> Result<()> {
+        match self {
+            Self::Amend { command } => command.dispatch_amendment(),
+            Self::GenerateWorkflows => {
+                liminal_xtask::assurance::generate_workflows(&liminal_xtask::repo_root()?)
+            }
+            Self::Check => liminal_xtask::assurance::check(&liminal_xtask::repo_root()?),
+            Self::Run {
+                profile,
+                output,
+                cache_state,
+            } => liminal_xtask::assurance::run_profile(
+                &liminal_xtask::repo_root()?,
+                &profile,
+                &output,
+                &cache_state,
+            ),
+            Self::Report { receipt } => liminal_xtask::assurance::report(&receipt),
+        }
+    }
+}
+
+#[derive(Debug, Subcommand)]
+enum AssuranceAmendCommand {
+    /// Authenticate batch scope only; does not authorize applying a patch.
+    Check(liminal_xtask::assurance::authorization::AuthorizationRequest),
+    /// Apply a verified coordinate patch only in a fresh external worktree.
+    Apply {
+        #[command(flatten)]
+        request: liminal_xtask::assurance::authorization::AuthorizationRequest,
+        /// New absolute destination outside every repository worktree.
+        #[arg(long)]
+        output: camino::Utf8PathBuf,
+    },
+    /// Read-only proposal for a unique, unchanged top-level expression target.
+    Propose {
+        #[arg(long)]
+        base: String,
+        #[arg(long)]
+        candidate: String,
+        #[arg(long)]
+        source: camino::Utf8PathBuf,
+        #[arg(long)]
+        line: usize,
+        #[arg(long)]
+        anchor: String,
+    },
+}
+
+impl AssuranceAmendCommand {
+    fn dispatch_amendment(self) -> Result<()> {
+        match self {
+            Self::Check(request) => {
+                let summary = liminal_xtask::assurance::authorization::check_authorization(
+                    &liminal_xtask::repo_root()?,
+                    &request,
+                )?;
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+                Ok(())
+            }
+            Self::Apply { request, output } => {
+                let summary = liminal_xtask::assurance::authorization::apply_isolated(
+                    &liminal_xtask::repo_root()?,
+                    &request,
+                    &output,
+                )?;
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+                Ok(())
+            }
+            Self::Propose {
+                base,
+                candidate,
+                source,
+                line,
+                anchor,
+            } => {
+                let proposal = liminal_xtask::assurance::amendment::propose_coordinate(
+                    &liminal_xtask::repo_root()?,
+                    &base,
+                    &candidate,
+                    &source,
+                    line,
+                    &anchor,
+                )?;
+                println!("{}", serde_json::to_string_pretty(&proposal)?);
+                Ok(())
+            }
+        }
+    }
 }
 
 #[derive(Debug, Subcommand)]
