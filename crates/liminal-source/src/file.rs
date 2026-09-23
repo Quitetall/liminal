@@ -239,6 +239,13 @@ mod tests {
     fn observe_propagates_non_not_found_errors() {
         let dir = tmp_dir("observe-directory");
         let err = observe(&dir).expect_err("reading a directory must fail");
+        // The property is that only NotFound is absorbed as `None`: every other
+        // error propagates. Which kind a directory read produces is the OS's
+        // choice -- `IsADirectory` on Unix, `PermissionDenied` on Windows, where
+        // the first public Windows run failed this test on the kind alone while
+        // `observe` behaved correctly (M17.5 F-91).
+        assert_ne!(err.kind(), io::ErrorKind::NotFound);
+        #[cfg(unix)]
         assert_eq!(err.kind(), io::ErrorKind::IsADirectory);
     }
 

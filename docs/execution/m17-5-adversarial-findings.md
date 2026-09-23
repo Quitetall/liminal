@@ -5024,3 +5024,33 @@ ubuntu and macOS. `liminal-daemon/tests/crash.rs`, which reads SIGABRT through
 `ExitStatusExt::signal`, is now `#![cfg(unix)]`, as its own comment already
 scoped it: "Windows crash semantics are a Phase 2 concern." The 26-crate set,
 tests included, type-checks for `x86_64-pc-windows-gnu`.
+
+## F-91 — the first Windows test run: one assertion about the OS, not about the code
+
+With F-90 in, seven of eight CI jobs passed on clean runners, `host-capability`
+among them. The sanitizer replay, the pinned pandoc and the real-CST
+measurement all ran green on a runner for the first time. Windows compiled the
+26 product crates and passed 198 of 199 tests.
+
+The one failure is in `liminal-source`,
+`file::tests::observe_propagates_non_not_found_errors`:
+
+```
+assertion `left == right` failed
+left: PermissionDenied
+right: IsADirectory
+```
+
+`observe` treats `NotFound` as "no file" (`None`) and propagates every other
+error. On Windows, reading a directory fails with `PermissionDenied`; on Unix it
+fails with `IsADirectory`. The code did exactly what the test's name promises.
+The assertion pinned the Unix error kind instead. It now asserts the property —
+the error is propagated and is not `NotFound` — and keeps `IsADirectory` under
+`#[cfg(unix)]`, where the platform defines it.
+
+Three mutants are pinned in this file, at lines 30, 92 and 147, all above the
+test module. `haq verify-inventory` confirms their anchors are intact.
+
+This is the Windows job earning its place. It is the first cross-platform
+behaviour this repository has checked, and it found an over-specified test
+rather than a defect, which is the better of the two outcomes.
