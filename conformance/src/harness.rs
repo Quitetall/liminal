@@ -84,6 +84,86 @@ fn profile_dir_from_current_exe() -> Option<Utf8PathBuf> {
     })
 }
 
+/// Build `name` exactly once per test RUN, so the binary a test executes is
+/// always the one built from the source under test (M17.5 F-13, F-78, F-84).
+///
+/// Three earlier answers were each wrong in a different direction:
+///
+/// - Build per test (F-13): correct, but nextest runs a process per test, so it
+///   was one `cargo build` per TEST, each taking cargo's package lock. With a
+///   shared `build.target-dir` that lock is held across projects, and 36 tests
+///   timed out at 180s apiece.
+/// - Never build under nextest (F-78 addendum): assumed nextest builds every
+///   workspace binary first. It does not -- cargo builds a package's binaries
+///   only for that package's own integration tests, and `liminal-cli` has
+///   none. On a clean CI runner `lim` did not exist and ten tests failed on
+///   2026-09-23. Locally they passed only because an older `lim` was still in
+///   the target directory: the stale-binary hazard itself.
+/// - Build only when absent: would rebuild the clean-runner case but keep
+///   running a stale binary everywhere else.
+///
+/// The build itself is expected to be a no-op: every CI path runs `cargo build
+/// --workspace --all-features --bins` before the tests (F-84). This is the
+/// fallback for a run that did not.
+///
+/// Under nextest every test process of one run shares `NEXTEST_RUN_ID`, so a
+/// marker keyed by it plus an exclusive file lock gives one build per run: the
+/// first process builds while the rest wait, then all find the marker. Under
+/// plain `cargo test` the tests share a process, and a per-process guard is
+/// already once per run.
+fn ensure_built_this_run(workspace: &Utf8Path, target_dir: &Utf8Path, name: &str) {
+    static BUILT_IN_PROCESS: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+    let mut built = BUILT_IN_PROCESS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if built.iter().any(|done| done == name) {
+        return;
+    }
+    let run_cargo_build = || {
+        // A build error is not reported here: the panic in the caller names the
+        // missing binary and the directory searched, which is the clearer fact.
+        let _ = std::process::Command::new(std::env::var("CARGO").as_deref().unwrap_or("cargo"))
+            // The SAME resolution the test build used. `-p <package>` resolves
+            // features for that one package, so shared dependencies fingerprint
+            // differently from nextest's `--workspace --all-features` build and
+            // the whole graph recompiles while every other test waits past its
+            // 180s limit (reproduced 2026-09-23: 5 of 51 timed out). Matching
+            // the flags makes this a no-op after `cargo build --workspace
+            // --all-features --bins` -- measured at 0.06s -- and a correct build
+            // in an ad-hoc run where nothing was built first.
+            .args([
+                "build",
+                "--quiet",
+                "--workspace",
+                "--all-features",
+                "--bin",
+                name,
+            ])
+            .current_dir(workspace)
+            .status();
+    };
+    match std::env::var("NEXTEST_RUN_ID") {
+        Ok(run_id) if !run_id.is_empty() => {
+            let dir = target_dir.join("liminal-bin-builds");
+            let _ = std::fs::create_dir_all(&dir);
+            let marker = dir.join(format!("{run_id}-{name}"));
+            match std::fs::File::create(dir.join(format!("{name}.lock"))) {
+                Ok(lock) if lock.lock().is_ok() => {
+                    if !marker.exists() {
+                        run_cargo_build();
+                        let _ = std::fs::write(&marker, b"");
+                    }
+                    let _ = lock.unlock();
+                }
+                // No lock means no coordination; building is still correct.
+                _ => run_cargo_build(),
+            }
+        }
+        _ => run_cargo_build(),
+    }
+    built.push(name.to_owned());
+}
+
 fn resolve_target_bin(name: &str) -> Utf8PathBuf {
     let manifest = Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap_or(&manifest);
@@ -108,40 +188,7 @@ fn resolve_target_bin(name: &str) -> Utf8PathBuf {
     ];
     let candidates: Vec<Utf8PathBuf> = candidates.into_iter().flatten().collect();
 
-    // Build on demand ONLY when nothing is there, and never under nextest.
-    //
-    // F-13 added the build because `cargo test -p liminal-conformance` -- the
-    // command cargo-mutants generates -- never builds another package's
-    // binaries, so `lim` was missing in a clean tree. That case is unchanged.
-    //
-    // What changed is the cost of doing it unconditionally. nextest runs a
-    // process per test, so this was one `cargo build` per TEST, each taking
-    // cargo's package lock. Since `build.target-dir` became a shared path on
-    // 2026-09-18 that lock is held across PROJECTS, and with an unrelated build
-    // running, 36 of these timed out at 180s apiece. Under nextest the
-    // workspace binaries were built before the run, so the build is pure
-    // contention: `NEXTEST` is set there, and a present binary is current.
-    let under_nextest = std::env::var_os("NEXTEST").is_some();
-    if !under_nextest && !candidates.iter().any(|path| path.exists()) {
-        let status =
-            std::process::Command::new(std::env::var("CARGO").as_deref().unwrap_or("cargo"))
-                .args([
-                    "build",
-                    "--quiet",
-                    "-p",
-                    owning_package(name),
-                    "--bin",
-                    name,
-                ])
-                .current_dir(workspace)
-                .status();
-        match status {
-            Ok(status) if status.success() => {}
-            // Do not fail here on a build error: the panic below names the
-            // actual problem far more clearly than a cargo exit code would.
-            Ok(_) | Err(_) => {}
-        }
-    }
+    ensure_built_this_run(workspace, &searched, name);
 
     for candidate in &candidates {
         if candidate.exists() {
@@ -149,8 +196,8 @@ fn resolve_target_bin(name: &str) -> Utf8PathBuf {
         }
     }
     panic!(
-        "{name} binary not found in {searched} and `cargo build -p {} --bin {name}` did not \
-         produce it",
+        "{name} (package {}) not found in {searched} after `cargo build --workspace \
+         --all-features --bin {name}` ran for this test run",
         owning_package(name)
     )
 }

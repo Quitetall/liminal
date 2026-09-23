@@ -91,13 +91,13 @@ bench *ARGS:
 # qualification requires seven separate 30-minute sanitizer runs plus traced
 # corpus-access manifests.
 fuzz-smoke:
-    cargo +nightly fuzz run cst_parse --sanitizer address -- -runs=1000
-    cargo +nightly fuzz run format_idempotent --sanitizer address -- -runs=1000
-    cargo +nightly fuzz run canonical_round_trip --sanitizer address -- -runs=1000
-    cargo +nightly fuzz run incremental_full_equivalence --sanitizer address -- -runs=1000
-    cargo +nightly fuzz run html_render --sanitizer address -- -runs=1000
-    cargo +nightly fuzz run graph_interchange_codec --sanitizer address -- -runs=1000
-    cargo +nightly fuzz run ilrp_recovery --sanitizer address -- -runs=1000
+    cargo +nightly-2026-06-22 fuzz run cst_parse --sanitizer address -- -runs=1000
+    cargo +nightly-2026-06-22 fuzz run format_idempotent --sanitizer address -- -runs=1000
+    cargo +nightly-2026-06-22 fuzz run canonical_round_trip --sanitizer address -- -runs=1000
+    cargo +nightly-2026-06-22 fuzz run incremental_full_equivalence --sanitizer address -- -runs=1000
+    cargo +nightly-2026-06-22 fuzz run html_render --sanitizer address -- -runs=1000
+    cargo +nightly-2026-06-22 fuzz run graph_interchange_codec --sanitizer address -- -runs=1000
+    cargo +nightly-2026-06-22 fuzz run ilrp_recovery --sanitizer address -- -runs=1000
 
 phase1-tests:
     cargo nextest run -p liminal-conformance --test laws --test classes --run-ignored all -E 'test(/(formatter_idempotence_law_holds|canonical_round_trip_law_holds|incremental_equals_full_compile_law_holds|malformed_source_never_panics_and_round_trips|fuzz_regressions_stay_fixed|full_document_html_matches_golden|incremental_patch_equals_full_render)/)'

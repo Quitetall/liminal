@@ -23,6 +23,16 @@ trap 'echo "haqp: interrupted, stopping campaign children" >&2; kill 0' INT TERM
 
 cd "$(dirname "$0")/.."
 
+# F-86: build into THIS checkout's own target directory, never a shared one.
+# `build.target-dir` in $CARGO_HOME/config.toml points every checkout on this
+# machine at /mnt/2tb/cargo-target. Cargo keeps hashed artifacts apart by
+# package path, but it UPLIFTS final binaries to fixed names -- debug/lim,
+# debug/lim-toy -- which every checkout shares. A build anywhere else could
+# therefore replace the binary this lane is testing while it runs, and the
+# campaign would qualify code that is not its fixed base. The 2026-09-23 lane
+# ran while this very checkout's main tree was being built beside it.
+export CARGO_TARGET_DIR="$PWD/target"
+
 if [ -n "$(git status --porcelain)" ]; then
   echo "refusing to start: the tree is dirty; the fixed base must be clean (ADR-0020 §1)" >&2
   git status --short | sed 's/^/  /' >&2

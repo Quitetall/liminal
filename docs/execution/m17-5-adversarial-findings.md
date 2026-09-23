@@ -4753,3 +4753,164 @@ serialization, F-81 asked whether a worktree was registered rather than
 populated, F-82 let a compile run beside the tests judged on wall clock, and
 this one recognised one of the two ways a process can cease to exist. Every one
 was cheap, plausible, and answered a question next to the one that mattered.
+
+## F-84 — the first public CI run named six host requirements, two of them my own bugs
+
+Making the repository public on 2026-09-23 let GitHub Actions run again, and the
+F-79 split executed on real runners for the first time. Every static job passed
+(`docs`, `fmt / toml / typos`, `clippy`, `deny`). Every test job failed, and each
+failure named something specific. This is the split doing its job: requirements
+that used to hide inside one permanently red job each arrived as a named cause.
+
+1. **`lim binary not found in .../target/debug`** (ubuntu, macOS). My F-78
+   addendum skipped the in-test build under nextest, on the assumption that
+   nextest builds every workspace binary first. It does not. Cargo builds a
+   package's executables only for that package's own integration tests, and
+   `liminal-cli` has none. Locally the tests passed only because an older `lim`
+   was still in the target directory — the stale-binary hazard that function's
+   own comment warns about, reintroduced by me.
+2. **`ParserError: Missing expression after unary operator '--'`** (Windows).
+   The workflow's bash step ran under PowerShell, the Windows default. Mine.
+3. **`M10 requires pandoc 3.10.2; found pandoc 3.1.3`**. Ubuntu's apt pandoc is
+   years behind the pin.
+4. **`cargo metadata refused vstd admission`**. Metadata resolves every
+   platform's dependencies, and a runner's cache lacks other platforms' crates.
+5. **`ambiguous argument '94228049...^{tree}'`**. `actions/checkout` clones
+   shallow, and the real-CST measurement reads a pinned commit.
+6. **The sanitizer replay re-locked 14 packages under `1.100.0-nightly`**. See
+   F-85.
+
+Fixes. The host job now runs on `ubuntu-24.04` (not `-latest`, which moves to
+Ubuntu 26 on 2026-10-19), with `fetch-depth: 0`, pandoc installed from the
+3.10.2 upstream release and verified by exact version, the pinned nightly, and
+`cargo fetch`. The portable step declares `shell: bash`.
+
+The binary fix took three attempts, and each wrong answer was wrong in a
+different direction:
+
+- **Build per test** (F-13) is correct, but costs one build per test process.
+- **Never build under nextest** (F-78 addendum) broke clean runners.
+- **Build once per run, `-p <package>`**, keyed by `NEXTEST_RUN_ID` under a file
+  lock. This produced exactly one build per binary — but `-p` resolves features
+  for one package, so shared dependencies fingerprinted differently from the
+  test build and recompiled while 5 of 51 tests timed out.
+
+The final form builds `--workspace --all-features --bin <name>`, the test
+build's own resolution. Every CI path now runs `cargo build --workspace
+--all-features --bins` first. After that, the in-test fallback measured 0.06 s.
+With `lim` deleted and nothing pre-built, 51 of 51 passed.
+
+## F-85 — the sanitizer toolchain was whatever nightly the machine had
+
+Sanitizer builds used `cargo +nightly`, meaning whichever nightly a machine last
+installed. Every recorded sanitizer binary came from `1.98.0-nightly (91fe22da8
+2026-06-21)`, the `nightly-2026-06-22` channel. A clean runner installed
+`1.100.0-nightly`, re-resolved the fuzz lockfile, and failed the replay. A proof
+that a build is byte-reproducible cannot name a compiler that moves every night.
+
+`SANITIZER_TOOLCHAIN = "nightly-2026-06-22"` now pins it in `haq.rs`, the
+campaign script, the justfile's fuzz recipes, and the CI host job.
+`every_sanitizer_build_names_the_same_pinned_toolchain` fails if the three
+disagree, or if any of them falls back to a floating channel. That guard exists
+because a comment asking two files to agree is how F-75 drifted. The pinned
+channel was verified to be the same compiler: `rustc +nightly-2026-06-22
+--version` reports `91fe22da8`.
+
+Committed evidence still says `cargo +nightly`. I first recorded that this
+mattered only at flip time. That was wrong: canary C27 reads the committed proof
+every CI run, and F-87 is what that exposed. The evidence is regenerated under
+the pinned compiler before anything is pushed.
+
+## F-86 — every project on the machine shared one build lock and one set of binaries
+
+`build.target-dir` in `$CARGO_HOME/config.toml` points every project on this host
+at `/mnt/2tb/cargo-target`, to keep build trees off the root partition. Two
+consequences surfaced on 2026-09-23.
+
+**One lock.** Cargo serializes builds per target directory. Tests that shell out
+to `lim` must take that lock even for a no-op build, and they queued behind an
+OpenWarrant compile and then a Tritium `cargo test --release`. Twenty timed out
+at 180 s apiece. From a shell, the same build took 0.06 s.
+
+**One set of uplifted binaries.** Cargo keeps hashed artifacts apart by package
+path, but uplifts final executables to fixed names such as `debug/lim`, and
+every checkout shares those. A build in any other checkout could replace the
+binary a qualification campaign was testing, mid-run. The 2026-09-23 campaign
+ran while this repository's main tree was being built beside it.
+
+Two fixes. `.cargo/config.toml` sets `target-dir = "target"`. A repository
+config outranks `$CARGO_HOME`'s, so the override applies to Liminal only, and
+each worktree gets its own `target/`. `haqp_qualify.sh` also exports
+`CARGO_TARGET_DIR="$PWD/target"`, so a campaign stays isolated even under a
+different configuration. The cost is disk on the root partition, roughly 10–20
+GB per actively built checkout, against 269 GB free.
+
+This is the same shape as F-75 through F-83: an environment setting that was
+correct for its purpose and silently wrong for a guarantee elsewhere.
+
+## F-87 — canary C27 could be caught for someone else's reason
+
+C27 mutates a retained sanitizer binary's runtime marker, runs the proof
+verifier, and expects `sanitizer proof lacks compiler/runtime replay`. That is a
+*family* prefix, so any sanitizer-proof failure matches it. The canary never
+checked that the **unmutated** proof verifies first.
+
+Pinning the toolchain (F-85) exposed this. The committed proof records
+`cargo +nightly`, the verifier now requires the pinned command, and C27 went on
+reporting "caught" — by the build-command check, not the runtime-marker check it
+exists to prove. The canary suite still said "all 33 caught".
+
+The canary now verifies the unmutated baseline first. If the baseline fails, it
+reports `sanitizer canary baseline does not verify, so no refusal can be
+attributed to the runtime marker`, which deliberately does not match C27's
+declared prefix, so it counts as a miss, never a catch.
+`the_sanitizer_canary_attributes_a_refusal_only_to_the_marker` stages both
+directions in scratch.
+
+Checking the baseline also executed a scratch binary for the first time. It
+failed with `execute sanitizer runtime probe`, because `fs::write` creates mode
+0644. The mutated binary had always been refused at the marker check, before
+anything ran it. Scratch copies are now written executable.
+
+Until the fuzz evidence is regenerated under the pinned compiler, C27 is
+correctly red. Regenerating that evidence is the fix. Rewriting the recorded
+command by hand would claim a command that was never run.
+
+## F-88 — the flip-time sanitizer check could never pass on genuine evidence
+
+Checking C27's baseline ran `verify_sanitizer_proof` on real evidence, and it
+refused: `retained sanitizer probe differs from fresh binary execution`.
+
+It executed `<binary> -help=1` and required the output to equal the recorded
+probe byte for byte. That invocation prints libFuzzer's usage text, 11,623
+bytes. The recorded probe comes from the campaign's invocation,
+`ASAN_OPTIONS=help=1:detect_leaks=0 <binary> -runs=0 -seed=1`, and is the
+sanitizer runtime's flag list, 19,421 bytes. The two can never be equal. The
+campaign script even says its probe is "exactly the probe
+verify_sanitizer_build_replay re-runs". That is true of the replay path. It was
+never true of this one.
+
+Byte equality of the whole output could not have held with the right invocation
+either. libFuzzer's trailing `INFO:` lines print ASLR load addresses and
+coverage counts that change on every execution: `0x55a836…`, `0x55d261…`,
+`0x559d1b…` across three runs of one binary.
+
+`verify_qualified_repo` runs this check, so **every genuine campaign's evidence
+would have been refused at the flip.** Nobody saw it because no campaign has
+ever reached the flip — each was refused earlier, on review findings.
+
+The verifier now runs the same `probe_sanitizer_runtime` as the replay. It
+requires the runtime's own name in the output, as the replay does, and compares
+only the runtime's self-description: everything before the first `INFO:` line.
+That section was measured identical between the recorded probe and fresh runs,
+across `cst_parse`, `format_idempotent` and `ilrp_recovery`, and between two
+fresh runs.
+
+A "probe names the target" check was removed. The genuine probe never names the
+target (zero mentions in all three recorded probes); only the wrong invocation's
+usage line contained the binary path. Target identity is established
+structurally instead: the verifier executes the binary whose digest it just
+checked, and that binary must carry the target identity marker.
+
+This is the largest finding of the day. The gate that would have judged a
+passing campaign could not pass one.

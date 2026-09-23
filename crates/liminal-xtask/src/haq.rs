@@ -6128,7 +6128,7 @@ fn verify_sanitizer_proof(
         !proof.build_command.trim().is_empty()
             && proof.build_command
                 == format!(
-                    "cargo +nightly fuzz build -s {} {}",
+                    "cargo +{SANITIZER_TOOLCHAIN} fuzz build -s {} {}",
                     row.sanitizer, row.target
                 ),
         "{}: sanitizer proof build command does not name fuzz build and sanitizer",
@@ -6302,25 +6302,34 @@ fn verify_sanitizer_proof(
         "{}: sanitizer binary has no target identity marker",
         row.target
     );
-    let probe_output = Command::new(&binary_path)
-        .arg("-help=1")
-        .output()
+    // F-88: the SAME probe the campaign recorded and the replay re-runs, judged
+    // the same way. This used to execute `<binary> -help=1` -- libFuzzer's usage
+    // text, 11,623 bytes -- and require it to equal the recorded probe, which is
+    // the sanitizer runtime's flag list from `ASAN_OPTIONS=help=1 ... -runs=0
+    // -seed=1`, 19,421 bytes. They could never be equal, so this check refused
+    // every genuine campaign's evidence; no campaign had yet reached the flip to
+    // show it. Byte equality of the WHOLE output could not have held either:
+    // libFuzzer's trailing INFO lines print ASLR load addresses and coverage
+    // counts that differ on every execution.
+    let (probe_bytes, runtime_name) = probe_sanitizer_runtime(&binary_path, root, row)
         .with_context(|| format!("{}: execute sanitizer runtime probe", row.target))?;
+    let probe_text = String::from_utf8_lossy(&probe_bytes);
     anyhow::ensure!(
-        probe_output.status.success(),
-        "{}: sanitizer runtime probe execution failed",
-        row.target
+        probe_text.contains(runtime_name),
+        "{}: sanitizer runtime probe does not carry the {} runtime ({runtime_name} absent)",
+        row.target,
+        row.sanitizer
     );
-    let mut probe_bytes = probe_output.stdout;
-    probe_bytes.extend_from_slice(&probe_output.stderr);
-    anyhow::ensure!(
-        String::from_utf8_lossy(&probe_bytes).contains(&row.target),
-        "{}: sanitizer runtime probe does not identify target",
-        row.target
-    );
+    // No "probe names the target" check: the genuine probe never does -- zero
+    // mentions in the recorded probes for cst_parse, format_idempotent and
+    // ilrp_recovery. Only the wrong `-help=1` invocation printed a usage line
+    // containing the binary's path. Which target was probed is established
+    // structurally instead: this executes the binary whose digest was just
+    // checked, and which must carry the target identity marker above.
     let recorded_probe = fs::read(&probe_path)?;
+    let fresh = sanitizer_runtime_section(&probe_bytes);
     anyhow::ensure!(
-        probe_bytes == recorded_probe,
+        !fresh.is_empty() && fresh == sanitizer_runtime_section(&recorded_probe),
         "{}: retained sanitizer probe differs from fresh binary execution",
         row.target
     );
@@ -6439,6 +6448,23 @@ fn add_sparse_worktree(
     Ok(())
 }
 
+/// The deterministic part of a sanitizer probe: the runtime describing its own
+/// flags, which is fixed by the binary. It ends where libFuzzer's run telemetry
+/// begins -- the first `INFO:` line -- because that telemetry carries ASLR load
+/// addresses and coverage counts that change on every execution (F-88). Measured
+/// identical between the recorded probe and fresh runs for cst_parse,
+/// format_idempotent and ilrp_recovery, and between two fresh runs.
+fn sanitizer_runtime_section(probe: &[u8]) -> &[u8] {
+    let mut offset = 0;
+    for line in probe.split_inclusive(|byte| *byte == b'\n') {
+        if line.starts_with(b"INFO:") {
+            break;
+        }
+        offset += line.len();
+    }
+    &probe[..offset]
+}
+
 fn probe_sanitizer_runtime(
     candidate: &Utf8Path,
     worktree: &Utf8Path,
@@ -6467,6 +6493,19 @@ fn probe_sanitizer_runtime(
     probe_bytes.extend_from_slice(&probe.stderr);
     Ok((probe_bytes, runtime_name))
 }
+
+/// The one toolchain sanitizer builds use, pinned (M17.5 F-85).
+///
+/// It was `+nightly`, which means "whatever nightly this machine last
+/// installed". Every recorded sanitizer binary here came from
+/// `1.98.0-nightly (91fe22da8 2026-06-21)`, the `nightly-2026-06-22` channel.
+/// A clean CI runner installed `1.100.0-nightly`, re-resolved 14 packages in the
+/// fuzz lockfile, and failed the replay. A proof that a build is byte-
+/// reproducible cannot name a compiler that moves every night. Must match
+/// `SANITIZER_TOOLCHAIN` in scripts/haqp_fuzz_campaign.sh; the proof records the
+/// command and `verify_sanitizer_proof` refuses any other, so the two cannot
+/// drift silently.
+const SANITIZER_TOOLCHAIN: &str = "nightly-2026-06-22";
 
 fn sanitizer_build_canon(fixed_commit: &str) -> (Utf8PathBuf, String) {
     let root = Utf8PathBuf::from(format!("/var/tmp/liminal-haqp-build/{fixed_commit}"));
@@ -6576,7 +6615,7 @@ fn verify_sanitizer_build_replay(
         // default, so recorded digests are unaffected.
         .env("CARGO_TARGET_DIR", worktree.join("fuzz/target"))
         .args([
-            "+nightly",
+            &format!("+{SANITIZER_TOOLCHAIN}"),
             "fuzz",
             "build",
             "-s",
@@ -13087,6 +13126,25 @@ fn run_qualification_canary(root: &Utf8Path, packet: &Packet, id: &str) -> Resul
     }
 }
 
+/// Write a scratch copy of a retained executable, keeping it executable.
+///
+/// `fs::write` creates mode 0644. The sanitizer proof verifier EXECUTES the
+/// binary for its runtime probe, so a copy written that way fails with "execute
+/// sanitizer runtime probe" before any property of the binary is examined. C27
+/// never noticed because its mutated binary was refused at the marker check,
+/// before execution; checking the unmutated baseline (F-87) is the first time a
+/// scratch copy had to run.
+fn write_executable(path: &Utf8Path, bytes: &[u8]) -> Result<()> {
+    fs::write(path, bytes).with_context(|| format!("write {path}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755))
+            .with_context(|| format!("make {path} executable"))?;
+    }
+    Ok(())
+}
+
 /// Replace one retained sanitizer binary's runtime marker with inert bytes and
 /// invoke the same compiler/runtime proof verifier used by qualification. This
 /// keeps C27 tied to an executable artifact attack, not an in-memory boolean.
@@ -13121,7 +13179,32 @@ fn run_sanitizer_canary(root: &Utf8Path) -> Result<()> {
         );
     }
     let binary_path = safe_repo_path(root, &proof.binary, "sanitizer canary binary")?;
+    let runtime_probe_path = safe_repo_path(root, &proof.runtime_probe, "sanitizer canary probe")?;
+    let build_log_path = safe_repo_path(root, &proof.build_log, "sanitizer canary build log")?;
+    let scratch_binary_path = scratch_root.join(&proof.binary);
+    let scratch_probe_path = scratch_root.join(&proof.runtime_probe);
+    let scratch_log_path = scratch_root.join(&proof.build_log);
+    fs::create_dir_all(scratch_binary_path.parent().expect("binary parent"))?;
+    fs::create_dir_all(scratch_probe_path.parent().expect("probe parent"))?;
+    fs::create_dir_all(scratch_log_path.parent().expect("log parent"))?;
+    fs::copy(&runtime_probe_path, &scratch_probe_path)?;
+    fs::copy(&build_log_path, &scratch_log_path)?;
     let mut binary = fs::read(&binary_path)?;
+    // F-87: the UNMUTATED proof must verify before the mutation is applied. A
+    // refusal is evidence about the marker only if nothing else was already
+    // refused. Without this, pinning the sanitizer toolchain (F-85) made the
+    // committed proof fail on its recorded `cargo +nightly` command, and C27
+    // went on reporting "caught" -- by the build-command check, not the
+    // runtime-marker check it exists to prove. This error deliberately does not
+    // match C27's declared prefix, so a baseline that does not verify is a
+    // missed canary, never a caught one.
+    write_executable(&scratch_binary_path, &binary)?;
+    verify_sanitizer_proof(scratch_root, row, &proof, None).map_err(|error| {
+        anyhow::anyhow!(
+            "sanitizer canary baseline does not verify, so no refusal can be attributed to \
+             the runtime marker: {error}"
+        )
+    })?;
     let marker = match row.sanitizer.as_str() {
         "address" | "leak" => b"asan_globals".as_slice(),
         "memory" => b"msan".as_slice(),
@@ -13139,17 +13222,7 @@ fn run_sanitizer_canary(root: &Utf8Path) -> Result<()> {
         replaced,
         "sanitizer canary source binary has no runtime marker"
     );
-    let scratch_binary_path = scratch_root.join(&proof.binary);
-    let scratch_probe_path = scratch_root.join(&proof.runtime_probe);
-    let scratch_log_path = scratch_root.join(&proof.build_log);
-    fs::create_dir_all(scratch_binary_path.parent().expect("binary parent"))?;
-    fs::create_dir_all(scratch_probe_path.parent().expect("probe parent"))?;
-    fs::create_dir_all(scratch_log_path.parent().expect("log parent"))?;
-    fs::write(&scratch_binary_path, &binary)?;
-    let runtime_probe_path = safe_repo_path(root, &proof.runtime_probe, "sanitizer canary probe")?;
-    let build_log_path = safe_repo_path(root, &proof.build_log, "sanitizer canary build log")?;
-    fs::copy(runtime_probe_path, &scratch_probe_path)?;
-    fs::copy(build_log_path, &scratch_log_path)?;
+    write_executable(&scratch_binary_path, &binary)?;
     proof.binary_blake3 = hex_digest(&binary);
     proof.runtime_probe_blake3 = hex_digest(&fs::read(&scratch_probe_path)?);
     proof.build_log_blake3 = hex_digest(&fs::read(&scratch_log_path)?);
@@ -21812,6 +21885,111 @@ charlie
         assert!(err.to_string().contains("concurrency mode"), "{err}");
     }
 
+    /// F-87: C27 may only claim a catch when its unmutated baseline verifies.
+    /// Built in scratch from the committed proof so both directions are shown:
+    /// a consistent baseline is refused by the RUNTIME-MARKER check, and a
+    /// baseline refused for any other reason is a miss, not a catch.
+    #[test]
+    fn the_sanitizer_canary_attributes_a_refusal_only_to_the_marker() {
+        let root = repo_root();
+        let evidence = "conformance/haqp/evidence/fuzz.json";
+        let rows: Vec<FuzzEvidence> =
+            serde_json::from_slice(&fs::read(root.join(evidence)).expect("fuzz.json"))
+                .expect("parse fuzz.json");
+        let proof = rows
+            .iter()
+            .find_map(|row| row.sanitizer_proof.clone())
+            .expect("a retained sanitizer proof");
+
+        let stage = |build_command: &str| {
+            let scratch = liminal_scratch::ScratchDir::new("haq-c27-baseline").expect("scratch");
+            let at = scratch.path().to_owned();
+            for rel in [
+                proof.binary.as_str(),
+                proof.runtime_probe.as_str(),
+                proof.build_log.as_str(),
+            ] {
+                let to = at.join(rel);
+                fs::create_dir_all(to.parent().expect("parent")).expect("mkdir");
+                fs::copy(root.join(rel), &to).expect("copy evidence");
+            }
+            let mut staged = rows.clone();
+            for row in &mut staged {
+                if let Some(proof) = row.sanitizer_proof.as_mut() {
+                    proof.build_command = format!(
+                        "{build_command} fuzz build -s {} {}",
+                        row.sanitizer, row.target
+                    );
+                }
+            }
+            let to = at.join(evidence);
+            fs::create_dir_all(to.parent().expect("parent")).expect("mkdir");
+            fs::write(&to, serde_json::to_vec(&staged).expect("encode")).expect("write");
+            (scratch, at)
+        };
+
+        let (_consistent, at) = stage(&format!("cargo +{SANITIZER_TOOLCHAIN}"));
+        let caught = run_sanitizer_canary(&at)
+            .expect_err("a canary always refuses")
+            .to_string();
+        assert!(
+            caught.starts_with("sanitizer proof lacks compiler/runtime replay:")
+                && caught.contains("runtime marker"),
+            "a consistent baseline must be refused by the runtime-marker check: {caught}"
+        );
+
+        let (_stale, at) = stage("cargo +nightly");
+        let missed = run_sanitizer_canary(&at)
+            .expect_err("a canary always refuses")
+            .to_string();
+        assert!(
+            missed.starts_with("sanitizer canary baseline does not verify"),
+            "a baseline that fails for another reason must be a miss: {missed}"
+        );
+        assert!(
+            !canary_failure_matches("sanitizer proof lacks compiler/runtime replay", &missed),
+            "and it must not satisfy C27's declared failure"
+        );
+    }
+
+    /// F-85: the sanitizer toolchain is named in three files, and a comment
+    /// asking them to agree is how F-75's pinned path drifted. The verifier,
+    /// the campaign that produces the proof, and the CI job that replays it
+    /// must name one compiler, or a proof is built on one and checked on another.
+    #[test]
+    fn every_sanitizer_build_names_the_same_pinned_toolchain() {
+        let root = repo_root();
+        let script = fs::read_to_string(root.join("scripts/haqp_fuzz_campaign.sh"))
+            .expect("campaign script");
+        assert!(
+            script
+                .lines()
+                .any(|line| line == format!("SANITIZER_TOOLCHAIN={SANITIZER_TOOLCHAIN}")),
+            "haqp_fuzz_campaign.sh must pin SANITIZER_TOOLCHAIN={SANITIZER_TOOLCHAIN}"
+        );
+        let workflow = fs::read_to_string(root.join(".github/workflows/ci.yml")).expect("ci.yml");
+        assert!(
+            workflow
+                .lines()
+                .any(|line| line.trim() == format!("SANITIZER_TOOLCHAIN: {SANITIZER_TOOLCHAIN}")),
+            "ci.yml's host-capability job must pin SANITIZER_TOOLCHAIN: {SANITIZER_TOOLCHAIN}"
+        );
+        for (path, text) in [
+            ("scripts/haqp_fuzz_campaign.sh", &script),
+            ("ci.yml", &workflow),
+        ] {
+            assert!(
+                !text.contains("+nightly ") && !text.contains("install nightly\n"),
+                "{path} still builds with an unpinned nightly"
+            );
+        }
+        assert!(
+            SANITIZER_TOOLCHAIN.starts_with("nightly-")
+                && SANITIZER_TOOLCHAIN.len() == "nightly-YYYY-MM-DD".len(),
+            "SANITIZER_TOOLCHAIN must be a dated nightly, not a floating channel"
+        );
+    }
+
     /// Canary evidence must equal a fresh replay from the FIXED commit's own
     /// packet and Markdown. Deleting the check survived: nothing compared the
     /// committed record to anything. The replay is a real `git show` plus the
@@ -22017,7 +22195,7 @@ charlie
         let (canon_root, canon_flags) = sanitizer_build_canon(&head);
         let row = fuzz_row("cst_parse", 30);
         let proof = |digest: &str, root: &str, flags: &str| SanitizerProof {
-            build_command: "cargo +nightly fuzz build -s address cst_parse".to_owned(),
+            build_command: format!("cargo +{SANITIZER_TOOLCHAIN} fuzz build -s address cst_parse"),
             build_root: root.to_owned(),
             build_rustflags: flags.to_owned(),
             binary: "conformance/haqp/evidence/binaries/cst_parse".to_owned(),

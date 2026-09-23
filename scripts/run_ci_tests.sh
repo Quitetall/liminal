@@ -20,6 +20,14 @@ if [ -z "${EXPR// /}" ]; then
   exit 1
 fi
 
+# F-84: build every workspace binary first, with the same flags as the tests.
+# Cargo builds a package's executables only for that package's own integration
+# tests, and liminal-cli has none -- so `lim` did not exist on a clean runner
+# and ten conformance tests that shell out to it failed. Building here makes the
+# harness's once-per-run fallback a no-op.
+echo "=== workspace binaries ==="
+cargo build --workspace --all-features --bins || exit $?
+
 echo "=== portable half ==="
 cargo nextest run --workspace --all-features --profile ci --filter-expr "not ($EXPR)" || exit $?
 

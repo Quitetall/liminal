@@ -54,10 +54,16 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
+      # F-84: build every workspace binary with the tests' own flags first;
+      # cargo does not build liminal-cli's `lim` for any test on its own.
+      - run: cargo build --workspace --all-features --bins
       # M17.5 F-79: the host-capability tests are excluded HERE and run in the
       # job below, which installs what they need. The expression is read from
       # one file and negated, so the two jobs are complements by construction.
-      - run: |
+      # `shell: bash` because this is bash: windows-latest defaults to
+      # PowerShell and failed to parse it on the first public run (F-84).
+      - shell: bash
+        run: |
           EXPR="$(grep -v '^[[:space:]]*#' .config/host-capability-tests.filter \
                   | grep -v '^[[:space:]]*$' | tr '\n' ' ')"
           cargo nextest run --workspace --all-features --profile ci \
@@ -70,25 +76,51 @@ jobs:
   # present, so a missing one fails this job rather than skipping its tests --
   # a test that silently stops running is the defect this split exists to
   # prevent (F-78 reported green three times off a stale binary).
+  #
+  # Each requirement below was named by a failure on the first public run
+  # (F-84), not guessed:
+  # - ubuntu-24.04, not -latest: -latest moves to Ubuntu 26 from 2026-10-19, and
+  #   this job's tools come from the image.
+  # - fetch-depth 0: real_cst and the canary replays read pinned commits, which
+  #   a shallow clone does not have.
+  # - pandoc from the upstream release: M10 pins 3.10.2; apt ships 3.1.3.
+  # - the pinned nightly: sanitizer builds are byte-reproducible only on one
+  #   compiler (SANITIZER_TOOLCHAIN in haq.rs, F-85).
+  # - cargo fetch: vstd admission resolves metadata for every platform, and a
+  #   runner's cache lacks other platforms' crates.
   host-capability:
-    name: host-capability (ubuntu-latest)
-    runs-on: ubuntu-latest
+    name: host-capability (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    env:
+      PANDOC_VERSION: 3.10.2
+      SANITIZER_TOOLCHAIN: nightly-2026-06-22
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - run: rustup toolchain install
-      - run: rustup toolchain install nightly
+      - run: rustup toolchain install "$SANITIZER_TOOLCHAIN"
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest,cargo-fuzz
-      - run: sudo apt-get update && sudo apt-get install -y pandoc strace
+      - run: sudo apt-get update && sudo apt-get install -y strace
+      - name: install the pinned pandoc
+        run: |
+          set -euo pipefail
+          deb="pandoc-${PANDOC_VERSION}-1-amd64.deb"
+          curl -fsSLo "/tmp/$deb" "https://github.com/jgm/pandoc/releases/download/${PANDOC_VERSION}/$deb"
+          sudo dpkg -i "/tmp/$deb"
+      - run: cargo fetch
       - name: every declared capability must be present
         run: |
           set -euo pipefail
-          pandoc --version | head -1
+          pandoc --version | head -1 | grep -qx "pandoc ${PANDOC_VERSION}"
           strace -V | head -1
-          cargo +nightly fuzz --version
+          cargo "+${SANITIZER_TOOLCHAIN}" fuzz --version
           test -w /var/tmp
+          git cat-file -e HEAD~1
+      - run: cargo build --workspace --all-features --bins
       - name: the split must cover the suite exactly
         run: ./scripts/check_ci_partition.sh
       - run: |

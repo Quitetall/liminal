@@ -1,0 +1,21 @@
+# Liminal builds into its OWN target directory (M17.5 F-86).
+#
+# $CARGO_HOME/config.toml on the qualification host sets
+# `build.target-dir = "/mnt/2tb/cargo-target"` for every project on the machine,
+# to keep build trees off the root partition. That also makes every project
+# share ONE cargo build lock and one set of uplifted binaries:
+#
+# - Tests that shell out to `lim` and `lim-toy` must take that lock, even for a
+#   no-op build. On 2026-09-23 they queued behind unrelated OpenWarrant and
+#   Tritium compiles, and 20 of them timed out at 180s apiece.
+# - Uplifted binaries such as `debug/lim` are not hashed per checkout, so a
+#   build in any other checkout could replace the binary a qualification
+#   campaign was testing, mid-run.
+#
+# A repository config outranks $CARGO_HOME's, so this applies to Liminal only.
+# The relative path resolves against this repository's root, so each worktree
+# gets its own `target/` -- which is exactly the isolation a fixed-base
+# campaign needs. CI runners already build into ./target, so nothing changes
+# there.
+[build]
+target-dir = "target"

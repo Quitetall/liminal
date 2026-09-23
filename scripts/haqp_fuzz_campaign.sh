@@ -176,6 +176,10 @@ overall=0
 # both build at exactly this path, keyed by commit so concurrent commits cannot
 # clobber each other. /var/tmp is persistent disk; older commits' trees are
 # pruned so the directory cannot grow without bound.
+# F-85: pinned, not `+nightly`. Must match SANITIZER_TOOLCHAIN in
+# crates/liminal-xtask/src/haq.rs; the proof records this command and the
+# verifier refuses any other.
+SANITIZER_TOOLCHAIN=nightly-2026-06-22
 BUILD_ROOT_BASE=/var/tmp/liminal-haqp-build
 BUILD_ROOT="$BUILD_ROOT_BASE/$source_commit"
 BUILD_RUSTFLAGS="-Zremap-cwd-prefix=/liminal --remap-path-prefix=$BUILD_ROOT=/liminal --remap-path-prefix=$HOME/.cargo=/cargo"
@@ -214,7 +218,7 @@ for t in "${TARGETS[@]}"; do
   log="target/haqp/fuzz-$t.log"
   build_log="target/haqp/build-$t.log"
   build_log_evidence="conformance/haqp/evidence/build-logs/$t.log"
-  build_command="cargo +nightly fuzz build -s $SANITIZER $t"
+  build_command="cargo +$SANITIZER_TOOLCHAIN fuzz build -s $SANITIZER $t"
   # Pin the target directory to the one the binary lookup below reads.
   # `build.target-dir` in $CARGO_HOME/config.toml is outside this repository
   # and redirected the build out of $BUILD_ROOT on 2026-09-18. The value is
