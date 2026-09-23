@@ -64,6 +64,13 @@ fn main() -> Result<()> {
                     liminal_xtask::haq::derive_killers_repo(&liminal_xtask::repo_root()?)?
                 );
             }
+            HaqCommand::RequirementDigests => {
+                for (id, digest) in
+                    liminal_xtask::haq::requirement_digests(&liminal_xtask::repo_root()?)?
+                {
+                    println!("{id} {digest}");
+                }
+            }
             HaqCommand::PacketDigest => {
                 println!(
                     "{}",
@@ -203,6 +210,12 @@ enum HaqCommand {
         #[arg(required = true)]
         traces: Vec<camino::Utf8PathBuf>,
     },
+    /// Print `id digest` for every requirement's bound wording (AM-17.17).
+    ///
+    /// Rebinding is deliberate: a changed digest means a requirement's text
+    /// changed, and the packet should say so only after someone decides the
+    /// suite still covers the new wording.
+    RequirementDigests,
     /// The packet digest the markdown surface must carry.
     ///
     /// The flip shells out here rather than recomputing it: the gate hashes

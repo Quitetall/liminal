@@ -97,90 +97,105 @@
    "id": "P1-R001",
    "kind": "law",
    "source": "docs/execution/M18.md:D18.1",
+   "source_blake3": "eb0d0ca432610e554a6454bb01bb62c34c93d72a75ba96fe850a131cf6af3b2d",
    "critical": true
   },
   {
    "id": "P1-R002",
    "kind": "law",
    "source": "docs/execution/M18.md:D18.2",
+   "source_blake3": "6d57230b5968787284cb298111823ac77e6aa60450266c34bfe145ed10197a2d",
    "critical": true
   },
   {
    "id": "P1-R003",
    "kind": "law",
    "source": "docs/execution/M18.md:D18.3",
+   "source_blake3": "df3b5ffdcfc67537bdb5dae4fc4355787b1b85a9b3c9ae142b1b42df815b47c3",
    "critical": true
   },
   {
    "id": "P1-R004",
    "kind": "law",
    "source": "docs/execution/M18.md:D18.4",
+   "source_blake3": "b09bb0c1a9312ac6896beea1506f1a6542499119ed52dd4d1b1beebd044fb3d8",
    "critical": true
   },
   {
    "id": "P1-R005",
    "kind": "law",
    "source": "docs/execution/M18.md:D18.5",
+   "source_blake3": "a075f1f49bb40233822015c9079ce7c258c99c5a5a88943fcf15aac58671cbbd",
    "critical": true
   },
   {
    "id": "P1-R006",
    "kind": "law",
    "source": "docs/execution/M18.md:D18.6",
+   "source_blake3": "95d425c025f8460b819bfcdb717241cfe4b4bc553e82a7c5fec406318d113a35",
    "critical": true
   },
   {
    "id": "P1-R007",
    "kind": "gate",
    "source": "docs/execution/M18.md:## Exit gate",
+   "source_blake3": "f87316d33b22330b6c73dfed02e22a2eb6f24ef76df232c0c5b93dfd50fed241",
    "critical": true
   },
   {
    "id": "P1-R008",
    "kind": "law",
    "source": "docs/execution/M19.md:D19.1",
+   "source_blake3": "fa0d97a22b2204256b07096065e18241fe5a380dbfdbf8948eeec06104b6aeba",
    "critical": true
   },
   {
    "id": "P1-R009",
    "kind": "law",
    "source": "docs/execution/M19.md:D19.2",
+   "source_blake3": "d1fd6fc73b6a850a76aa75a76fc7d7b2e13e0807a84cf83fe3f013da7101df7b",
    "critical": true
   },
   {
    "id": "P1-R010",
    "kind": "law",
    "source": "docs/execution/M19.md:D19.3",
+   "source_blake3": "22fba95362724abe486c6410de765f392adaf36b50c7a6a818356861a89ebf67",
    "critical": true
   },
   {
    "id": "P1-R011",
    "kind": "law",
    "source": "docs/execution/M19.md:D19.4",
+   "source_blake3": "631a0a124f138e034c220f667ffe60082a2189fe640c5d8ee4cccdc5d732d6e8",
    "critical": true
   },
   {
    "id": "P1-R012",
    "kind": "gate",
    "source": "docs/execution/M19.md:## Exit gate",
+   "source_blake3": "5e428b0ad78c4393a4a5431884952d9d6587cf41d139b571ce43e7b5464d31a9",
    "critical": true
   },
   {
    "id": "P1-R013",
    "kind": "law",
    "source": "docs/execution/M20.md:D20.1",
+   "source_blake3": "dcee0ffaef38427b0aae23daffa5004fff7d0dbf3dadc20a214fb217ce764edb",
    "critical": true
   },
   {
    "id": "P1-R014",
    "kind": "law",
    "source": "docs/execution/M20.md:D20.2",
+   "source_blake3": "1d665727dc7b59a72d1717e51c658d31f4412b73a21d2cd2071582ced8129698",
    "critical": true
   },
   {
    "id": "P1-R015",
    "kind": "fault",
    "source": "docs/execution/M20.md:D20.3",
+   "source_blake3": "c8271d18f63ed83e0111b1cec434f16308ca12aee6e8d4513605a7b6ea421a51",
    "critical": true,
    "stateful": true
   },
@@ -188,240 +203,280 @@
    "id": "P1-R016",
    "kind": "abuse",
    "source": "docs/execution/M20.md:D20.4",
+   "source_blake3": "7d0925825bc723d8a9e51b6e2a475573d82f0148a767282a83a564a6bbe914a8",
    "critical": true
   },
   {
    "id": "P1-R017",
    "kind": "law",
    "source": "docs/execution/M21.md:D21.1",
+   "source_blake3": "2b6d5ee8a2e1736f894e4305eb517db60d66f6bb38791b55a505db420e245f6a",
    "critical": true
   },
   {
    "id": "P1-R018",
    "kind": "law",
    "source": "docs/execution/M21.md:D21.2",
+   "source_blake3": "6108df1676a123566b06fafd7904acfa8312b6e57e53f702dbeb245eee22281d",
    "critical": true
   },
   {
    "id": "P1-R019",
    "kind": "law",
    "source": "docs/execution/M21.md:D21.3",
+   "source_blake3": "046573c6f54f93fe2ed547e8bef326877d77fc1ef06417862a341919ac971f3b",
    "critical": true
   },
   {
    "id": "P1-R020",
    "kind": "law",
    "source": "docs/execution/M22.md:D22.1",
+   "source_blake3": "fdffda6f555246f9c6fd57ad469f292a4a4b663aa3bf2f1c2e86baec5e61dc33",
    "critical": true
   },
   {
    "id": "P1-R021",
    "kind": "law",
    "source": "docs/execution/M22.md:D22.2",
+   "source_blake3": "12743e7c5fd39a1bad882934d8fcd1b2c20869a9dcb4daafc4e763af6a6625d5",
    "critical": true
   },
   {
    "id": "P1-R022",
    "kind": "law",
    "source": "docs/execution/M23.md:D23.1",
+   "source_blake3": "0bab2dc55bc37c1a0bcff0c2cd3768715b48bb002bff3a8ff40964e514c41cf7",
    "critical": true
   },
   {
    "id": "P1-R023",
    "kind": "law",
    "source": "docs/execution/M23.md:D23.6",
+   "source_blake3": "86a5d9a5ae1bb458743ace1599dcff71b3ac77d206c45f89b3a1f28f9b5f4d57",
    "critical": true
   },
   {
    "id": "P1-R024",
    "kind": "gate",
    "source": "docs/execution/M24.md:D24.1",
+   "source_blake3": "d349e3c937e8230bf5e050ca910f6a63f9f28203f2955026b1c689900fa4e5e0",
    "critical": true
   },
   {
    "id": "P1-R025",
    "kind": "law",
    "source": "docs/execution/M20.md:D20.5",
+   "source_blake3": "a06853e9b5663b89bde2b270cd5b058afe84de49d4796e9cf40aef3d9e102a9c",
    "critical": true
   },
   {
    "id": "P1-R026",
    "kind": "law",
    "source": "docs/execution/M20.md:D20.6",
+   "source_blake3": "b916e0a89ffe7322e33666def7a8bfec945dfdcc1c0df060576ca44aab6b666b",
    "critical": true
   },
   {
    "id": "P1-R027",
    "kind": "law",
    "source": "docs/execution/M20.md:D20.7",
+   "source_blake3": "9f475ab732dd5059462eef2c94d8183e8cf5ab79e1ac4628143ab46a22e8680f",
    "critical": true
   },
   {
    "id": "P1-R028",
    "kind": "law",
    "source": "docs/execution/M21.md:D21.4",
+   "source_blake3": "a32e6880f9cea9dad077ec81ff410e8c72a01ea9eb1cb56e043ab709a8514717",
    "critical": true
   },
   {
    "id": "P1-R029",
    "kind": "law",
    "source": "docs/execution/M21.md:D21.5",
+   "source_blake3": "fc2b2b2c19107c006bf728ffbe4b7d35eaf88816b1d4504e6032102eece2cd82",
    "critical": true
   },
   {
    "id": "P1-R030",
    "kind": "law",
    "source": "docs/execution/M21.md:D21.6",
+   "source_blake3": "1fc84ee409f09e66d6f34e90bc68eea15db1d486f426a6ab9db517df1e14db7a",
    "critical": true
   },
   {
    "id": "P1-R031",
    "kind": "law",
    "source": "docs/execution/M21.md:D21.7",
+   "source_blake3": "d098beac4811ebf2b572ef9de821fb3572163ff7a2d9004b122befc11763581f",
    "critical": true
   },
   {
    "id": "P1-R032",
    "kind": "law",
    "source": "docs/execution/M22.md:D22.3",
+   "source_blake3": "559f87c08fbca7d644af88151ef0832da8f675d7889e96c5cc2e8d33a336915c",
    "critical": true
   },
   {
    "id": "P1-R033",
    "kind": "law",
    "source": "docs/execution/M22.md:D22.4",
+   "source_blake3": "531a34322dbc0af531b6de42f7c3b8923a3a352ef2a2801ebb0a891a89168da3",
    "critical": true
   },
   {
    "id": "P1-R034",
    "kind": "law",
    "source": "docs/execution/M22.md:D22.5",
+   "source_blake3": "b3e31df32b97b8f656ea766fa3a6e0b1e3d20440f3eefd4cdf7f8724afe542c0",
    "critical": true
   },
   {
    "id": "P1-R035",
    "kind": "law",
    "source": "docs/execution/M22.md:D22.6",
+   "source_blake3": "ea964afb39373727dec77adca0c123bb073a5ca19c93e0c749e345913fc990b6",
    "critical": true
   },
   {
    "id": "P1-R036",
    "kind": "law",
    "source": "docs/execution/M22.md:D22.7",
+   "source_blake3": "fdd92ddde5dba9ab1ee5bed356dea7e277d30134d360c74a45df9aa94b6dcf17",
    "critical": true
   },
   {
    "id": "P1-R037",
    "kind": "law",
    "source": "docs/execution/M19.md:D19.0",
+   "source_blake3": "5c53e954a1368126ecff4145e6d68f22f03f1004d502aa9e95b26dc0f45f8883",
    "critical": true
   },
   {
    "id": "P1-R038",
    "kind": "law",
    "source": "docs/execution/M19.md:D19.5",
+   "source_blake3": "e6dc62d3109067695b6ee06b0453c0139427691ad3640ee431809e9d6569daa1",
    "critical": true
   },
   {
    "id": "P1-R039",
    "kind": "law",
    "source": "docs/execution/M19.md:D19.6",
+   "source_blake3": "44cfc1a3c2305f0c61db0d6383a11fbb90871f5517df6da6a57644740b8f9ddd",
    "critical": true
   },
   {
    "id": "P1-R040",
    "kind": "law",
    "source": "docs/execution/M19.md:D19.7",
+   "source_blake3": "35e3e389c00cc823bc53f8e789da8f055491bc0270bf96c76f468eee5c5e217f",
    "critical": true
   },
   {
    "id": "P1-R041",
    "kind": "law",
    "source": "docs/execution/M19.md:D19.8",
+   "source_blake3": "41175b2ca3ba581b8c7c78f8c278268211efc08fe5fbbe1c6710ef189c864dfe",
    "critical": true
   },
   {
    "id": "P1-R042",
    "kind": "law",
    "source": "docs/execution/M20.md:D20.0",
+   "source_blake3": "76ac0c9a993cadd5461a94837e2d585822fb962766dc40bbca1c2e46d8f36b5b",
    "critical": true
   },
   {
    "id": "P1-R043",
    "kind": "gate",
    "source": "docs/execution/M20.md:## Exit gate",
+   "source_blake3": "f1cd0c763c233a50847e4eb839087e718f24d679bef38f80272d7b9b657aab9a",
    "critical": true
   },
   {
    "id": "P1-R044",
    "kind": "gate",
    "source": "docs/execution/M21.md:## Exit gate",
+   "source_blake3": "b9919ffe02b475aa91049c02cf89b2abd5f89c8295de16197a566f9c81a3c721",
    "critical": true
   },
   {
    "id": "P1-R045",
    "kind": "gate",
    "source": "docs/execution/M22.md:## Exit gate",
+   "source_blake3": "aa062e364276c575ea8ba8a48fde9223f0c308d4b10b9ca15f46f9ec2bdfcf0b",
    "critical": true
   },
   {
    "id": "P1-R046",
    "kind": "law",
    "source": "docs/execution/M23.md:D23.2",
+   "source_blake3": "c21051c6872bbd6dc8802b07f470bc4cd9b5f64595af2d570a5baa67ace2fbff",
    "critical": true
   },
   {
    "id": "P1-R047",
    "kind": "law",
    "source": "docs/execution/M23.md:D23.3",
+   "source_blake3": "60137ececd2d50401208e0b5e0b301a6625cdb00438bf0dbbb539fd8a29750a2",
    "critical": true
   },
   {
    "id": "P1-R048",
    "kind": "law",
    "source": "docs/execution/M23.md:D23.4",
+   "source_blake3": "cc4f543044aed695ad3cc2722d47e8d9e1920541524d6d830c38d788baddd5a5",
    "critical": true
   },
   {
    "id": "P1-R049",
    "kind": "law",
    "source": "docs/execution/M23.md:D23.5",
+   "source_blake3": "dda5671d9333f1f1dca72925a3e74b5818a1b1649364b0ab66d75480f9c06a29",
    "critical": true
   },
   {
    "id": "P1-R050",
    "kind": "gate",
    "source": "docs/execution/M23.md:## Exit gate",
+   "source_blake3": "ddef5a1cb5892840129dd08f830fbb44bfafefd1537fe8fc8dc482feb1f38ada",
    "critical": true
   },
   {
    "id": "P1-R051",
    "kind": "law",
    "source": "docs/execution/M24.md:D24.2",
+   "source_blake3": "c851522e1b19b4f23edf4b3b6121d97bb799d2cec7c2efbe932d19eef6f7b852",
    "critical": true
   },
   {
    "id": "P1-R052",
    "kind": "law",
    "source": "docs/execution/M24.md:D24.3",
+   "source_blake3": "a0f181ebfb8827175e44844d15f73af370a97928ad2eb4734e1ba1f8be658886",
    "critical": true
   },
   {
    "id": "P1-R053",
    "kind": "law",
    "source": "docs/execution/M24.md:D24.4",
+   "source_blake3": "081b7071253f45207e8295b1bce7096adea4c715322976a0941d1b86be5e7f5d",
    "critical": true
   },
   {
    "id": "P1-R054",
    "kind": "gate",
    "source": "docs/execution/M24.md:D24.5",
+   "source_blake3": "c715f124ae248345280318e9bb2043b1ee8863efb9bb4e915a3559420f917564",
    "critical": true
   },
   {
    "id": "P1-R055",
    "kind": "gate",
    "source": "docs/execution/M24.md:## Exit gate",
+   "source_blake3": "bfa29966040bc5a260365b6aa6afe9c3d3c9528c78afa515eec8259f6e672418",
    "critical": true
   }
  ],

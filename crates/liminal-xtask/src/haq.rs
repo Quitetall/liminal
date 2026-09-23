@@ -8855,8 +8855,124 @@ fn verify_requirement_sources(root: &Utf8Path, packet: &Packet) -> Result<()> {
             requirement.id,
             coordinate
         );
+        let clause = requirement_clause(&source, coordinate)
+            .with_context(|| format!("requirement {} in {path}", requirement.id))?;
+        let digest = blake3::hash(clause.as_bytes()).to_hex().to_string();
+        anyhow::ensure!(
+            requirement.source_blake3 == digest,
+            "requirement {} wording at {} no longer matches the packet: the packet binds \
+             {}, the source now reads {digest}. A requirement's text changed under an \
+             unchanged coordinate; rebind it deliberately with `haq requirement-digests`, \
+             or restore the wording",
+            requirement.id,
+            requirement.source,
+            requirement.source_blake3
+        );
     }
     Ok(())
+}
+
+/// The normative wording a requirement coordinate names, whitespace-normalized
+/// (AM-17.17).
+///
+/// A coordinate is DEFINED at exactly one site: a list item whose bold label
+/// opens with it (`- **D20.3 —** ...`), or, for a `## ` coordinate, that
+/// heading. The clause is the item and its continuation lines, up to the next
+/// item, blank line or heading; for a heading, the section up to the next `## `
+/// heading. Prose that merely mentions `D20.3` is not a definition, which
+/// `has_exact_coordinate_anchor` cannot tell apart.
+///
+/// Whitespace is collapsed so rewrapping a paragraph is not a change of meaning,
+/// while any change to a word is.
+fn requirement_clause(source: &str, coordinate: &str) -> Result<String> {
+    let lines: Vec<&str> = source.lines().collect();
+    let is_heading = coordinate.starts_with("## ");
+    let starts: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| {
+            if is_heading {
+                line.trim() == coordinate
+            } else {
+                let item = line.trim_start();
+                (item.starts_with("- **") || item.starts_with("* **"))
+                    && item[4..].strip_prefix(coordinate).is_some_and(|rest| {
+                        rest.chars()
+                            .next()
+                            .is_none_or(|ch| !coordinate_anchor_char(ch))
+                    })
+            }
+        })
+        .map(|(index, _)| index)
+        .collect();
+    anyhow::ensure!(
+        starts.len() == 1,
+        "coordinate {coordinate:?} has {} definition sites; it must have exactly one",
+        starts.len()
+    );
+    let start = starts[0];
+    let indent = |line: &str| line.len() - line.trim_start().len();
+    let item_indent = indent(lines[start]);
+    let mut end = start + 1;
+    while end < lines.len() {
+        let line = lines[end];
+        let trimmed = line.trim_start();
+        // A nested sub-item is part of the requirement it sits under; only an
+        // item at the definition's own depth or shallower begins another one.
+        let sibling_item =
+            (trimmed.starts_with("- ") || trimmed.starts_with("* ")) && indent(line) <= item_indent;
+        let stop = if is_heading {
+            line.starts_with("## ")
+        } else {
+            trimmed.is_empty() || trimmed.starts_with('#') || sibling_item
+        };
+        if stop {
+            break;
+        }
+        end += 1;
+    }
+    Ok(lines[start..end]
+        .join(" ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" "))
+}
+
+/// `(requirement id, digest)` for every packet requirement, computed by the
+/// same code that verifies them, for `haq requirement-digests`.
+///
+/// Reads the packet as plain JSON rather than through `Packet`: the struct
+/// requires `source_blake3`, and a tool that computes the binding cannot depend
+/// on the binding already being present.
+pub fn requirement_digests(root: &Utf8Path) -> Result<Vec<(String, String)>> {
+    let path = root.join("conformance/haqp/packet.json");
+    let packet: serde_json::Value =
+        serde_json::from_slice(&fs::read(&path).with_context(|| format!("read {path}"))?)
+            .with_context(|| format!("parse {path}"))?;
+    packet["requirements"]
+        .as_array()
+        .context("packet has no requirements array")?
+        .iter()
+        .map(|requirement| {
+            let id = requirement["id"]
+                .as_str()
+                .context("requirement without id")?;
+            let source = requirement["source"]
+                .as_str()
+                .with_context(|| format!("requirement {id} without source"))?;
+            let (file, coordinate) = source
+                .split_once(':')
+                .with_context(|| format!("requirement {id} source lacks coordinate"))?;
+            let text =
+                fs::read_to_string(root.join(file)).with_context(|| format!("read {file}"))?;
+            let clause = requirement_clause(&text, coordinate)
+                .with_context(|| format!("requirement {id}"))?;
+            Ok((
+                id.to_owned(),
+                blake3::hash(clause.as_bytes()).to_hex().to_string(),
+            ))
+        })
+        .collect()
 }
 
 /// A requirement coordinate is an exact anchor, not a substring assertion.
@@ -12390,6 +12506,12 @@ struct Requirement {
     id: String,
     kind: String,
     source: String,
+    /// blake3 of the requirement's normative wording: the definition clause
+    /// `source` names, whitespace-normalized (AM-17.17, blind pass 1 at
+    /// `51bcc0b3`, A09). The coordinate alone located a requirement and said
+    /// nothing about what it requires, so the wording could be rewritten under
+    /// an unchanged anchor and every check still passed.
+    source_blake3: String,
     critical: bool,
     /// Explicit stateful-law marker. The qualified layer requires fault and
     /// recovery evidence for this marker, independently of `kind` spelling.
@@ -18209,6 +18331,62 @@ mod tests {
                 "{why} must be refused, but {bad:?} was accepted"
             );
         }
+    }
+
+    /// Blind pass 1 at `51bcc0b3` (A09): a requirement's wording could change
+    /// under an unchanged coordinate and nothing noticed. The packet now binds
+    /// the wording, so rewording a clause is refused while rewrapping is not.
+    #[test]
+    fn a_requirement_whose_wording_changed_under_its_coordinate_is_refused() {
+        let root = repo_root();
+        let packet = read_packet(&root).expect("packet");
+        verify_requirement_sources(&root, &packet).expect("the committed wording must verify");
+
+        let source = "# M\n\n- **D9.1 —** the formatter preserves every byte\n  of opaque regions.\n- **D9.2 —** other.\n\nSee D9.1 in prose.\n";
+        let bound = requirement_clause(source, "D9.1").expect("one definition site");
+        assert_eq!(
+            bound, "- **D9.1 —** the formatter preserves every byte of opaque regions.",
+            "the clause is the item and its continuation, and nothing after it"
+        );
+
+        let rewrapped = source.replace("every byte\n  of opaque", "every\n  byte of opaque");
+        assert_eq!(
+            requirement_clause(&rewrapped, "D9.1").expect("rewrap"),
+            bound,
+            "rewrapping is not a change of meaning"
+        );
+
+        let reworded = source.replace("every byte", "most bytes");
+        assert_ne!(
+            requirement_clause(&reworded, "D9.1").expect("reword"),
+            bound,
+            "changing a word changes the requirement"
+        );
+
+        let nested = "- **D9.3 —** holds when:\n  - the tree is clean, and\n  - the base is fixed.\n- **D9.4 —** next.\n";
+        assert_eq!(
+            requirement_clause(nested, "D9.3").expect("nested"),
+            "- **D9.3 —** holds when: - the tree is clean, and - the base is fixed.",
+            "nested sub-items belong to the requirement they sit under"
+        );
+
+        let duplicated = format!("{source}- **D9.1 —** a second definition.\n");
+        let err = requirement_clause(&duplicated, "D9.1").expect_err("two definition sites");
+        assert!(err.to_string().contains("2 definition sites"), "{err}");
+
+        let prose_only = "# M\n\nSee D9.1 in prose.\n";
+        let err =
+            requirement_clause(prose_only, "D9.1").expect_err("a mention is not a definition");
+        assert!(err.to_string().contains("0 definition sites"), "{err}");
+
+        let mut doctored = packet.clone();
+        doctored.requirements[0].source_blake3 = "0".repeat(64);
+        let err = verify_requirement_sources(&root, &doctored)
+            .expect_err("a digest that does not match the wording must be refused");
+        assert!(
+            err.to_string().contains("no longer matches the packet"),
+            "{err}"
+        );
     }
 
     /// §5 oracle independence names an exact coordinate. Deleting the whole

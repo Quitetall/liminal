@@ -4914,3 +4914,38 @@ checked, and that binary must carry the target identity marker.
 
 This is the largest finding of the day. The gate that would have judged a
 passing campaign could not pass one.
+
+## F-89 — blind pass 1 at `51bcc0b3`: two findings, one fixed here, one held for a golden
+
+The 2026-09-23 campaign's pass 1 (`codex:gpt-5.6-sol`) made 12 attempts: 7
+caught violations, 3 false positives it classified itself, and 2 verified
+defects, both independently reproduced. Its records are preserved outside the
+campaign worktree. The campaign was stopped once pass 1 had failed, because
+`verify_reviews` refuses any nonzero unresolved count. By then it could not
+qualify, and it was contending for this checkout's build lock (F-86).
+
+**A09 (fixed): a requirement bound its coordinate and not its wording.**
+Verified at `verify_requirement_sources`. The check proved the file existed and
+the anchor token appeared somewhere in it, and nothing else. Every packet
+requirement now carries `source_blake3`, the digest of its whitespace-normalized
+definition clause, and both gates recompute it. The binding rule is AM-17.17,
+recorded as proposed under AM-17.16 because it defines semantics. All 55
+requirements have exactly one definition site. The digest test is proven by
+mutation.
+
+**A03 (held for Brian): graph negatives were rejected for the wrong reason.**
+The generator asserts `serde_json::from_slice::<Node>(&raw).is_err()`, but the
+codec's unit is `Transaction` — the comment directly below already says so,
+because the A07 fix moved the positive half and left the negative half behind.
+Probed across 5,373 generated negatives: every category is rejected by both
+`Node` and `Transaction`. So nothing is being accepted, but a `duplicate-id`
+negative is a malformed Node, which `Transaction` rejects for being the wrong
+shape rather than for the duplicate id. The negatives never test the codec's
+handling of a malformed transaction.
+
+The fix builds each negative as a valid transaction with exactly the one defect
+its category names, and requires that the untouched base decodes. That changes
+the generated witnesses, and therefore the `graph/interchange codecs` golden in
+`generated_case_builders_match_their_recorded_goldens`. Accepting a changed golden
+is a T1 act that AM-17.16 excludes from proposal. It is prepared separately for
+Brian's decision and not committed to main.
