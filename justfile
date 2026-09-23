@@ -202,6 +202,10 @@ ci: fmt-check lint
     # M17.5 F-76: an oversized tracked file is refused by the remote only at
     # push time, when the blob is already in history. Seconds, and first.
     ./scripts/check_tracked_file_sizes.sh
+    # M17.5 F-90: the fuzz lockfile must already describe the sanitizer build.
+    # It went stale when the DG17 work added dependencies, so every fuzz build
+    # re-resolved 14 packages against the registry of that day.
+    cargo metadata --manifest-path fuzz/Cargo.toml --locked --format-version 1 > /dev/null
     just formal-bootstrap-self-test
     just formal-proof-self-test
     # M17.5 F-82: the two halves run SEPARATELY, as the CI workflow runs them.

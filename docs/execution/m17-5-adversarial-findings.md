@@ -4979,3 +4979,48 @@ path in `liminal-graph/src/store/mod.rs`, where ten mutants are pinned by
 coordinate (P1-M017..M019, M021..M024 among them). That means re-anchoring under
 AM-17.13's reference-maintenance procedure, in the middle of qualification. The
 decision is Brian's.
+
+## F-90 — the second public run: an installer's binary, a stale lockfile, and Windows
+
+With F-84..F-88 pushed, `test (ubuntu-latest)` passed on a clean runner for the
+first time. Three jobs still failed, each for one nameable reason.
+
+**host-capability: cargo-fuzz was a musl build.** `taiki-e/install-action` does
+not know cargo-fuzz, so it fell back to `cargo-binstall`, which fetched
+`cargo-fuzz v0.13.2 (x86_64-unknown-linux-musl)`. cargo-fuzz defaults `--target`
+to the triple it was itself built for, so every fuzz target compiled for musl.
+That produced `sanitizer is incompatible with statically linked libc` and `can't
+find crate for std` (there is no musl std for the pinned nightly). The same
+version built locally is a glibc build, which is why the identical replay passes
+here. The job now builds `cargo-fuzz 0.13.2` from source, `--locked`, and checks
+the version exactly. That is one more unpinned input to a proof meant to be
+reproducible.
+
+**The fuzz lockfile was stale.** Every fuzz build announced `Locking 14 packages
+to latest compatible versions` — `liminal-safety`, `vstd` and the `verus_*`
+crates added by the DG17 work, which `fuzz/Cargo.lock` never recorded. So each
+sanitizer build re-resolved part of its dependency graph against the registry of
+that day. The lock that built the committed evidence (at `8a3188bc`) is
+byte-identical to today's re-lock. It is committed as `fuzz/Cargo.lock`, which
+freezes exactly the resolution behind the recorded binaries.
+`cargo metadata --manifest-path fuzz/Cargo.toml --locked` now runs in `just ci`
+and in the host job. On the stale lock it exits 101; on the committed one, 0.
+
+**macOS: a test of mine that executes a Linux binary.**
+`the_sanitizer_canary_attributes_a_refusal_only_to_the_marker` runs the retained
+sanitizer binary, which is an ELF. It belonged in the host-capability set and I
+did not put it there. The partition check could not catch it, because it proves
+coverage, not placement. It is now declared: 13 host, 630 portable, 643 total.
+
+**Windows: the tooling never compiled.** `liminal-xtask` uses
+`std::os::unix::fs::MetadataExt` for dev/inode hard-link identity in the
+locked-corpus alias checks. The Windows equivalent is unstable on stable Rust.
+Earlier runs died before the build, so this was never visible. The tooling is
+Unix in substance — strace, sanitizers, flock/fork semantics, the SIGKILL crash
+matrix — so the Windows job now excludes the four crates that are the tooling
+or depend on it (`liminal-xtask`, `liminal-conformance`, `spike-annotation`,
+`spike-richedit`), and tests the other 26. Every excluded test still runs on
+ubuntu and macOS. `liminal-daemon/tests/crash.rs`, which reads SIGABRT through
+`ExitStatusExt::signal`, is now `#![cfg(unix)]`, as its own comment already
+scoped it: "Windows crash semantics are a Phase 2 concern." The 26-crate set,
+tests included, type-checks for `x86_64-pc-windows-gnu`.

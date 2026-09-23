@@ -4,6 +4,13 @@
 //! injector via `LIMINAL_CRASHPOINT`, and assert real SIGABRT death plus
 //! durable hit tracing. They run in the nextest serialized crash group
 //! (`test(/^crash_/)`).
+//!
+//! Unix only, as this file already declares below: the proof is a real SIGABRT
+//! read back through `ExitStatusExt::signal`, and Windows crash semantics are a
+//! Phase 2 concern. Gated at the test target rather than left to fail to
+//! compile, so Windows CI builds this crate's other targets (M17.5 F-90). These
+//! tests still run on the Linux and macOS jobs.
+#![cfg(unix)]
 
 use std::process::Command;
 

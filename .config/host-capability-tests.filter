@@ -23,6 +23,7 @@
 #
 # scripts/check_ci_partition.sh proves the split covers the suite exactly.
 test(=haq::tests::sanitizer_replay_reproduces_the_canonical_build_and_refuses_the_rest)
++ test(=haq::tests::the_sanitizer_canary_attributes_a_refusal_only_to_the_marker)
 + test(=haq::tests::canary_evidence_must_match_a_replay_from_the_fixed_commit)
 + test(=haq::tests::canary_runner_rejects_prose_that_misdescribes_its_own_mutation)
 + test(=haq::tests::concurrency_evidence_is_read_from_disk_not_assumed)

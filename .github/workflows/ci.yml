@@ -47,6 +47,14 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      # F-90: the qualification tooling is Unix in substance -- strace,
+      # sanitizers, flock/fork semantics, SIGKILL crash matrices, and
+      # dev/inode hard-link identity, whose Windows equivalent is unstable on
+      # stable Rust. It never compiled on Windows. These four crates are the
+      # tooling and its dependents; every test in them still runs on ubuntu
+      # and macOS, so nothing goes untested -- Windows tests the other 26.
+      EXCLUDE_UNIX_TOOLING: ${{ matrix.os == 'windows-latest' && '--exclude liminal-xtask --exclude liminal-conformance --exclude spike-annotation --exclude spike-richedit' || '' }}
     steps:
       - uses: actions/checkout@v4
       - run: rustup toolchain install
@@ -56,7 +64,8 @@ jobs:
           tool: cargo-nextest
       # F-84: build every workspace binary with the tests' own flags first;
       # cargo does not build liminal-cli's `lim` for any test on its own.
-      - run: cargo build --workspace --all-features --bins
+      - shell: bash
+        run: cargo build --workspace $EXCLUDE_UNIX_TOOLING --all-features --bins
       # M17.5 F-79: the host-capability tests are excluded HERE and run in the
       # job below, which installs what they need. The expression is read from
       # one file and negated, so the two jobs are complements by construction.
@@ -66,9 +75,10 @@ jobs:
         run: |
           EXPR="$(grep -v '^[[:space:]]*#' .config/host-capability-tests.filter \
                   | grep -v '^[[:space:]]*$' | tr '\n' ' ')"
-          cargo nextest run --workspace --all-features --profile ci \
+          cargo nextest run --workspace $EXCLUDE_UNIX_TOOLING --all-features --profile ci \
             --filter-expr "not ($EXPR)"
-      - run: cargo test --workspace --doc # nextest does not run doctests
+      - shell: bash
+        run: cargo test --workspace $EXCLUDE_UNIX_TOOLING --doc # nextest does not run doctests
 
   # The other half of the split. Linux only: the sanitizer, fuzz and strace
   # lanes are Linux-specific in substance, and forcing them onto macOS and
@@ -94,6 +104,7 @@ jobs:
     env:
       PANDOC_VERSION: 3.10.2
       SANITIZER_TOOLCHAIN: nightly-2026-06-22
+      CARGO_FUZZ_VERSION: 0.13.2
     steps:
       - uses: actions/checkout@v4
         with:
@@ -103,7 +114,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest,cargo-fuzz
+          tool: cargo-nextest
+      # F-90: from source, pinned. install-action fell back to cargo-binstall,
+      # which fetched the MUSL build of cargo-fuzz 0.13.2; cargo-fuzz defaults
+      # --target to the triple it was built for, so every fuzz target compiled
+      # for musl and failed ("sanitizer is incompatible with statically linked
+      # libc"; "can't find crate for std"). A source build on this runner is
+      # a glibc build, the same as the one that produced the evidence.
+      - run: cargo install cargo-fuzz --version "$CARGO_FUZZ_VERSION" --locked
       - run: sudo apt-get update && sudo apt-get install -y strace
       - name: install the pinned pandoc
         run: |
@@ -117,7 +135,10 @@ jobs:
           set -euo pipefail
           pandoc --version | head -1 | grep -qx "pandoc ${PANDOC_VERSION}"
           strace -V | head -1
-          cargo "+${SANITIZER_TOOLCHAIN}" fuzz --version
+          cargo "+${SANITIZER_TOOLCHAIN}" fuzz --version | grep -qx "cargo-fuzz ${CARGO_FUZZ_VERSION}"
+          # F-90: the fuzz lockfile must already describe the build; a stale
+          # one is re-resolved against whatever the registry holds that day.
+          cargo metadata --manifest-path fuzz/Cargo.toml --locked --format-version 1 > /dev/null
           test -w /var/tmp
           git cat-file -e HEAD~1
       - run: cargo build --workspace --all-features --bins
