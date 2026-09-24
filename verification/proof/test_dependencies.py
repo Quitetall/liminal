@@ -1,4 +1,5 @@
 import gzip
+import hashlib
 import importlib.util
 import io
 import json
@@ -16,14 +17,11 @@ DependencyFailure = RUNNER.DependencyFailure
 prepare_dependencies = RUNNER.prepare_dependencies
 
 ABC_SHA256 = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
-ARCHIVE_SHA256 = "6e8975e02d8f7cc5d2e8a22688f7279f9a36ff87fdafd113a812c881b4267e8e"
-TRAVERSAL_SHA256 = "1e77bb783fe91b6495f1ce000806f8bc47276a89cbd783c96ef9944bcd209e42"
-RAWDOT_SHA256 = "90aad6cf2b6bf3786f502cee10f9216e54489a9ff39290d6ad8593ad4a27a4d0"
-SYMLINK_SHA256 = "4d938f6a4e2752decf4590b8e4b3e68942361c05243de679cfdcce8076782333"
-MEMBER_BUDGET_SHA256 = "db502eb9f31705197dc236c2c8fa2a48bcda0467feadd3204f4b69c1e2b92812"
-TYPED_REGULAR_SHA256 = "b7e6e3fa679557bfc12ef7e06558b19b3ea4d515f34d8783ff6ae9846988e890"
-TYPE_MISMATCH_SHA256 = "7fe059343872dbfaccee243df0152d665ef9795130ee7c4972cdebb849de3422"
-SETUID_SHA256 = "de182ad67ff7a29c97b71568666af69c10a9e2bbd76465f67fae2ae5b9f021fd"
+# The archives below are built at test time through the host's zlib, and gzip
+# output differs between zlib builds (zlib-ng here, stock zlib on Ubuntu CI), so
+# a digest pinned from one host names bytes another host never writes. Each
+# test's lockfile names the archive that test actually built. The wrong-checksum
+# test keeps its deliberately wrong value, so the checksum gate stays covered.
 
 
 class DependencyTests(unittest.TestCase):
@@ -39,6 +37,9 @@ class DependencyTests(unittest.TestCase):
 
     def tearDown(self):
         self.temporary.cleanup()
+
+    def archive_sha256(self):
+        return hashlib.sha256(self.archive.read_bytes()).hexdigest()
 
     def write_lockfile(self, checksum):
         self.lockfile.write_text(
@@ -125,7 +126,7 @@ class DependencyTests(unittest.TestCase):
         self.assertFalse(self.destination.exists())
 
     def test_valid_dependencies_preserve_files_git_control_and_modes(self):
-        self.write_lockfile(ARCHIVE_SHA256)
+        self.write_lockfile(self.archive_sha256())
 
         result = prepare_dependencies(self.lockfile, [self.archive], self.destination)
 
@@ -143,7 +144,7 @@ class DependencyTests(unittest.TestCase):
                     "bin/tool": ABC_SHA256,
                     "src/lib.rs": ABC_SHA256,
                 },
-                "package": ARCHIVE_SHA256,
+                "package": self.archive_sha256(),
             },
         )
         self.assertEqual(
@@ -152,7 +153,7 @@ class DependencyTests(unittest.TestCase):
                 "status": "dependencies-prepared",
                 "qualification": False,
                 "package_count": 1,
-                "archive_sha256": {"demo-1.0.0": ARCHIVE_SHA256},
+                "archive_sha256": {"demo-1.0.0": self.archive_sha256()},
                 "file_sha256": {
                     "demo-1.0.0/.gitignore": ABC_SHA256,
                     "demo-1.0.0/bin/tool": ABC_SHA256,
@@ -162,13 +163,13 @@ class DependencyTests(unittest.TestCase):
         )
 
     def test_missing_archive_is_rejected_before_destination_exists(self):
-        self.write_lockfile(ARCHIVE_SHA256)
+        self.write_lockfile(self.archive_sha256())
         with self.assertRaisesRegex(DependencyFailure, "missing archive"):
             prepare_dependencies(self.lockfile, [], self.destination)
         self.assertFalse(self.destination.exists())
 
     def test_extra_archive_is_rejected_before_destination_exists(self):
-        self.write_lockfile(ARCHIVE_SHA256)
+        self.write_lockfile(self.archive_sha256())
         extra = self.root / "extra-1.0.0.crate"
         extra.write_bytes(self.archive.read_bytes())
         with self.assertRaisesRegex(DependencyFailure, "unknown archive"):
@@ -177,27 +178,27 @@ class DependencyTests(unittest.TestCase):
 
     def test_traversal_member_is_rejected_before_destination_exists(self):
         self.write_custom_archive("file", "demo-1.0.0/../escape")
-        self.write_lockfile(TRAVERSAL_SHA256)
+        self.write_lockfile(self.archive_sha256())
         with self.assertRaisesRegex(DependencyFailure, "unsafe archive member"):
             prepare_dependencies(self.lockfile, [self.archive], self.destination)
         self.assertFalse(self.destination.exists())
 
     def test_raw_dot_member_is_rejected_before_destination_exists(self):
         self.write_custom_archive("file", "demo-1.0.0/./src/lib.rs")
-        self.write_lockfile(RAWDOT_SHA256)
+        self.write_lockfile(self.archive_sha256())
         with self.assertRaisesRegex(DependencyFailure, "unsafe archive member"):
             prepare_dependencies(self.lockfile, [self.archive], self.destination)
         self.assertFalse(self.destination.exists())
 
     def test_symlink_member_is_rejected_before_destination_exists(self):
         self.write_custom_archive("symlink", "demo-1.0.0/link")
-        self.write_lockfile(SYMLINK_SHA256)
+        self.write_lockfile(self.archive_sha256())
         with self.assertRaisesRegex(DependencyFailure, "link or special"):
             prepare_dependencies(self.lockfile, [self.archive], self.destination)
         self.assertFalse(self.destination.exists())
 
     def test_existing_destination_is_untouched(self):
-        self.write_lockfile(ARCHIVE_SHA256)
+        self.write_lockfile(self.archive_sha256())
         self.destination.mkdir()
         marker = self.destination / "keep"
         marker.write_bytes(b"abc")
@@ -214,7 +215,7 @@ class DependencyTests(unittest.TestCase):
 
     def test_member_budget_refuses_before_later_invalid_member(self):
         self.write_member_budget_archive()
-        self.write_lockfile(MEMBER_BUDGET_SHA256)
+        self.write_lockfile(self.archive_sha256())
 
         with self.assertRaisesRegex(DependencyFailure, "member limit"):
             prepare_dependencies(self.lockfile, [self.archive], self.destination)
@@ -222,7 +223,7 @@ class DependencyTests(unittest.TestCase):
 
     def test_regular_file_type_bits_are_allowed_and_permissions_normalized(self):
         self.write_mode_archive(0o100664)
-        self.write_lockfile(TYPED_REGULAR_SHA256)
+        self.write_lockfile(self.archive_sha256())
 
         result = prepare_dependencies(self.lockfile, [self.archive], self.destination)
 
@@ -233,7 +234,7 @@ class DependencyTests(unittest.TestCase):
 
     def test_regular_member_with_symlink_type_bits_is_rejected(self):
         self.write_mode_archive(0o120644)
-        self.write_lockfile(TYPE_MISMATCH_SHA256)
+        self.write_lockfile(self.archive_sha256())
 
         with self.assertRaisesRegex(DependencyFailure, "conflicting file type"):
             prepare_dependencies(self.lockfile, [self.archive], self.destination)
@@ -241,14 +242,14 @@ class DependencyTests(unittest.TestCase):
 
     def test_setuid_permission_is_rejected(self):
         self.write_mode_archive(0o104644)
-        self.write_lockfile(SETUID_SHA256)
+        self.write_lockfile(self.archive_sha256())
 
         with self.assertRaisesRegex(DependencyFailure, "special permission"):
             prepare_dependencies(self.lockfile, [self.archive], self.destination)
         self.assertFalse(self.destination.exists())
 
     def test_byte_identical_duplicate_archive_candidates_succeed_per_package(self):
-        self.write_lockfile(ARCHIVE_SHA256)
+        self.write_lockfile(self.archive_sha256())
         first = self.root / "first/demo-1.0.0.crate"
         second = self.root / "second/demo-1.0.0.crate"
         first.parent.mkdir()
@@ -259,7 +260,7 @@ class DependencyTests(unittest.TestCase):
         result = prepare_dependencies(self.lockfile, [first, second], self.destination)
 
         self.assertEqual(result["package_count"], 1)
-        self.assertEqual(result["archive_sha256"], {"demo-1.0.0": ARCHIVE_SHA256})
+        self.assertEqual(result["archive_sha256"], {"demo-1.0.0": self.archive_sha256()})
         self.assertEqual(
             result["file_sha256"],
             {
@@ -270,7 +271,7 @@ class DependencyTests(unittest.TestCase):
         )
 
     def test_wrong_duplicate_archive_is_rejected_in_both_input_orders(self):
-        self.write_lockfile(ARCHIVE_SHA256)
+        self.write_lockfile(self.archive_sha256())
         valid = self.root / "valid/demo-1.0.0.crate"
         invalid = self.root / "invalid/demo-1.0.0.crate"
         valid.parent.mkdir()
