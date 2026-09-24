@@ -5089,3 +5089,46 @@ findings. Artifacts and corrected checksums are archived under
 P1-M001's metadata correction is mechanical and does not claim a kill. Any
 packet change invalidates prior qualification evidence; a full rerun is required.
 Pass 2 found zero unresolved defects. Qualification remains **not established**.
+
+## F-80 fixed — a dropped store unlocks its lock instead of waiting for every copy to close
+
+Brian authorized the store change on 2026-09-24. The fix is smaller than the
+one the correction above proposed, and needs no new dependency.
+
+The defect: `flock(2)` belongs to the open file description, and a child forked
+by any thread shares that description until it reaches `execve`. The store
+released its lock only by closing its descriptor, and closing one descriptor
+does not release a lock another still shares. So a store dropped while a sibling
+thread was spawning children stayed locked until those children reached
+`execve`, and F-11's 250 ms retry budget only made that wait likely to end in
+time.
+
+The fix: `Inner`'s `Drop` calls `unlock()` (`LOCK_UN`) before the descriptor
+closes. `LOCK_UN` acts on the description itself, so it releases the lock for
+every descriptor sharing it, including a child's. The drop-then-reopen path now
+has no window at all, under any load.
+
+The proposed alternative, `fcntl` process-associated locks plus an in-process
+registry, was not taken, for two reasons. `fcntl` locks are released when
+*any* descriptor for the file in the process closes, so `matches_directory`'s
+own open-and-compare would silently drop the lock. And it needs a dependency
+(`rustix`) outside `CONCURRENCY_SCAN_ALLOWED_DEPENDENCIES`, a closed list in the
+frozen instrument.
+
+One transient holder remains, and it is honest: a writer that *dies* while a
+child it forked has not reached `execve`. That child holds the lock until it
+does. The retry budget stays for that case, and its doc comment now says so. A
+holder that outlasts the budget is refused as `Locked`. That refuses a writer
+and never admits a second one.
+
+**Proof.** `store::tests::a_dropped_store_is_not_held_by_a_child_sharing_its_lock`
+gives `sleep` a stdin that shares the lock's description. That child is what a
+forked child is before `execve`, held open for the whole test, so the result
+does not depend on load. With the unlock removed, the test fails after exactly
+the budget (0.253s). With it, the test passes. The full `test-threaded` lane,
+where F-80 was found, passes every test outside `liminal-xtask`, including
+`m05::overlay_aging_escalates` and `m08::freeze_rejects_stale_file_bytes`.
+
+Three mutant coordinates below the change move by +17 (P1-M019, M021, M022).
+Their re-anchoring is recorded under AM-17.13 in
+`reference-maintenance/2026-09-24-f80-store-lock.md`.

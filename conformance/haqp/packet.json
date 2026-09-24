@@ -1353,7 +1353,7 @@
    "id": "P1-M019",
    "family": "graph/interchange codecs",
    "operator": "success-error-substitution",
-   "source": "crates/liminal-graph/src/store/mod.rs:334",
+   "source": "crates/liminal-graph/src/store/mod.rs:351",
    "requirement": "P1-R011",
    "defect": "accept invalid interchange payload",
    "killing_tests": [
@@ -1379,7 +1379,7 @@
    "id": "P1-M021",
    "family": "graph/interchange codecs",
    "operator": "wrong-holder-selection",
-   "source": "crates/liminal-graph/src/store/mod.rs:440",
+   "source": "crates/liminal-graph/src/store/mod.rs:457",
    "requirement": "P1-R012",
    "defect": "resolve EXTERNAL_VALUE ungoverned",
    "killing_tests": [
@@ -1392,7 +1392,7 @@
    "id": "P1-M022",
    "family": "graph/interchange codecs",
    "operator": "skipped-durable-transition",
-   "source": "crates/liminal-graph/src/store/mod.rs:629",
+   "source": "crates/liminal-graph/src/store/mod.rs:646",
    "requirement": "P1-R015",
    "defect": "omit codec checkpoint record",
    "killing_tests": [

@@ -10686,7 +10686,7 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ("crates/liminal-graph/src/store/mod.rs", 108, "match op {"),
         (
             "crates/liminal-graph/src/store/mod.rs",
-            334,
+            351,
             "Ok(self.lock()?.state.head)",
         ),
         (
@@ -10696,12 +10696,12 @@ fn mutant_source_coordinate(id: &str) -> Option<(&'static str, usize, &'static s
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
-            440,
+            457,
             "return Ok(inner.state.nodes.get(&id).cloned());",
         ),
         (
             "crates/liminal-graph/src/store/mod.rs",
-            629,
+            646,
             "inner.log.append(&record)?;",
         ),
         (

@@ -256,6 +256,23 @@ impl std::fmt::Debug for Inner {
     }
 }
 
+/// Release the write lock explicitly before the descriptor closes (M17.5 F-80).
+///
+/// Closing our descriptor is not enough. `flock(2)` ownership belongs to the
+/// open file description, and a child this process forked shares that
+/// description until it reaches `execve`. A lock released only by closing
+/// stays held until every such child gets there, however long load delays
+/// it. `LOCK_UN` acts on the description itself, so it releases the lock for
+/// every descriptor that shares it, including the child's.
+impl Drop for Inner {
+    fn drop(&mut self) {
+        // A failure is not reported because a drop has nowhere to report it,
+        // and it leaves nothing worse than before this unlock existed: the
+        // lock is released when the last descriptor sharing it closes.
+        let _ = self.lock_handle.as_file().unlock();
+    }
+}
+
 /// How long [`acquire_write_lock`] tolerates a transient lock holder. Sized to
 /// dwarf a fork→exec window (microseconds, worst case low milliseconds under
 /// load) while staying far below any human-visible open latency. A genuine
@@ -272,18 +289,18 @@ const LOCK_ACQUIRE_BUDGET: std::time::Duration = std::time::Duration::from_milli
 /// discard them until `execve`. Inside that window the child co-owns our lock's
 /// OFD — and therefore closing *our* descriptor does not release the lock.
 ///
-/// That makes a plain `try_lock` unsound for any process that both spawns
-/// children and reopens a store, which is exactly what the conformance harness
-/// does: `StepRunner::open` deliberately drops the workspace and reopens the
-/// same path (M08.7's `seed_durable_inputs` ordering), while sibling tests
-/// spawn `lim-toy` and `git`. The reopen then failed with `EWOULDBLOCK` against
-/// a lock no live writer held.
+/// A store dropped by this process no longer leaves such a holder: `Inner`'s
+/// `Drop` unlocks the description itself (F-80), which F-11's reopen needed
+/// and this budget only made likely. Before that, `StepRunner::open`'s
+/// drop-then-reopen failed 4/3000 with a sibling thread spawning children, and
+/// under load past any budget.
 ///
-/// Measured in isolation with a control: a drop-then-reopen loop fails 0/3000
-/// times with no subprocess spawning and 4/3000 with a sibling thread spawning
-/// children. This is not a flaky test retried away — it is a lock acquisition
-/// that was never correct in a process that forks, and the permanent-holder
-/// canary in `tests/store.rs` pins that real contention still fails.
+/// A transient holder can still exist when a writer dies while a child it
+/// forked has not yet reached `execve`: the child holds the lock until it
+/// does. Waiting that out is what the budget is for. A holder that outlasts it
+/// is reported as `Locked`, which refuses a writer and never admits a second
+/// one. The permanent-holder canary in `tests/store.rs` pins that real
+/// contention still fails.
 /// Only contention is retried. `try_lock_exclusive` reports contention as
 /// `Ok(false)`; any `Err` is a real I/O fault (a closed descriptor, a
 /// filesystem that cannot lock) and propagates immediately rather than being
@@ -865,5 +882,59 @@ impl GraphStore {
         };
         let named = same_file::Handle::from_file(named_file)?;
         Ok(inner.lock_handle == named)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GraphStore;
+
+    /// Kills the stand-in child even when an assertion fails first.
+    struct Reaped(std::process::Child);
+
+    impl Drop for Reaped {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    /// F-80: a child that shares the lock's open file description must not
+    /// keep the store locked after the store that took the lock is dropped.
+    ///
+    /// `sleep` stands in for a child between `fork` and `execve`: its stdin
+    /// shares the lock's description, which is exactly what such a child
+    /// holds. Unlike a real one it keeps holding it, so the window stays open
+    /// for the whole test instead of microseconds, and the result does not
+    /// depend on load. Without the unlock in `Inner`'s `Drop`, the reopen waits
+    /// out the whole acquisition budget and fails `Locked`.
+    #[cfg(unix)]
+    #[test]
+    fn a_dropped_store_is_not_held_by_a_child_sharing_its_lock() {
+        let dir =
+            liminal_scratch::ScratchDir::new("store-lock-shared-description").expect("scratch dir");
+        let store = GraphStore::open(&dir).expect("first open");
+        let shared = store
+            .lock()
+            .expect("store mutex")
+            .lock_handle
+            .as_file()
+            .try_clone()
+            .expect("share the lock's description");
+        let _child = Reaped(
+            std::process::Command::new("sleep")
+                .arg("60")
+                .stdin(shared)
+                .spawn()
+                .expect("spawn the stand-in child"),
+        );
+
+        drop(store);
+        let reopened = GraphStore::open(&dir);
+        assert!(
+            reopened.is_ok(),
+            "a dropped store stayed locked by a child sharing its lock: {:?}",
+            reopened.err()
+        );
     }
 }
