@@ -36,10 +36,12 @@ fn render(catalog: &super::Catalog) -> Result<[(String, String); 2]> {
             "docs" => "DOCS",
             "deny" => "DENY",
             "nextest" | "doctest" => "PORTABILITY",
-            "host" => "HOST",
+            // `threaded` runs every test in one libtest process, host-capability
+            // tests included, so it runs where those capabilities are
+            // provisioned. On the plain runner it failed for want of pandoc.
+            "host" | "threaded" => "HOST",
             "tracked-sizes" | "fuzz-lock" | "bootstrap" | "proof-support" | "partition"
-            | "threaded" | "inventory" | "canaries" | "resource-run" | "resource-lint"
-            | "assurance" => "LINUX",
+            | "inventory" | "canaries" | "resource-run" | "resource-lint" | "assurance" => "LINUX",
             _ => bail!("unmapped mandatory CI command: {id}"),
         };
         groups.entry(group).or_default().push(shell_command(id)?);

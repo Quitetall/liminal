@@ -104,6 +104,9 @@ jobs:
   #   byte-reproducible only on one compiler, and cargo-binstall's musl
   #   cargo-fuzz compiled every target for musl, which ASan refuses.
   # - cargo fetch: vstd admission resolves metadata for every platform.
+  # - `threaded` (just test-threaded) runs here, not in `test`: it is every
+  #   test in one libtest process, host-capability tests included, and on the
+  #   plain runner it failed for want of pandoc.
   # Each tool is verified present, so a missing one fails the job rather than
   # skipping its tests.
   host-capability:
@@ -124,7 +127,16 @@ jobs:
         with:
           tool: cargo-nextest
       - run: cargo install cargo-fuzz --version "$CARGO_FUZZ_VERSION" --locked
-      - run: sudo apt-get update && sudo apt-get install -y strace
+      # `threaded` runs here too (every test, in one process), so this job needs
+      # the same bounded-execution session as the test job's Linux leg.
+      - name: Provision Linux bounded-execution prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dbus-user-session strace
+          sudo loginctl enable-linger "$(id -un)"
+          sudo systemctl start "user@$(id -u).service"
+          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus" >> "$GITHUB_ENV"
       - name: install the pinned pandoc
         run: |
           deb="pandoc-${PANDOC_VERSION}-1-amd64.deb"
