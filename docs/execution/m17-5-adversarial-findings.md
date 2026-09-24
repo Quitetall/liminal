@@ -5132,3 +5132,29 @@ where F-80 was found, passes every test outside `liminal-xtask`, including
 Three mutant coordinates below the change move by +17 (P1-M019, M021, M022).
 Their re-anchoring is recorded under AM-17.13 in
 `reference-maintenance/2026-09-24-f80-store-lock.md`.
+
+## F-92 A12 fixed — a review record's claims must be its reviewer's answer
+
+F-92 left A12 open: the raw review answer and the structured claims were each
+hashed and bound, and nothing compared them. A record could keep a real answer
+and carry different attempts, findings, reproduced ids, unresolved count or
+verdict, with every digest true. It was a finding of the §6 blind review against
+the gate, so under AM-17.14 it is fixed, not recorded.
+
+`verify_review_claims_are_the_answer` re-derives each claim the way the runner
+builds it, `redact_deep(parse_json(raw)[field])`, and requires the record to
+hold exactly that. `review_answer_json` locates the JSON as `parse_json` does:
+the whole answer, or else first `{` to last `}`. `redact_evidence` reimplements
+the runner's `CREDENTIAL_SHAPED` substitution, including `re.sub`'s
+resume-after-match. Its parity is pinned by
+`the_gate_masks_evidence_exactly_as_the_runner_does`, whose expected values
+the Python runner produced. Changing either masker means changing both.
+
+**Proof.** `a_review_record_must_claim_what_its_answer_says` requires both
+committed records, which are real runner output, to pass. It then refuses a copy
+with each of the five claims edited, and checks the refusal names that claim.
+With the comparison disabled, the test fails.
+
+The shared test fixture's retained answer changed from `fixture raw answer` to
+`{"findings":null}`, which is what its receipt-only record file claims. Every
+test that used it keeps its assertions.

@@ -2857,6 +2857,132 @@ fn verify_review_raw_response(
     )
 }
 
+/// The record's claims are what the retained answer says (F-92, blind pass 1
+/// at `088ddeec`, A12).
+///
+/// The raw answer and the structured claims were each hashed, and nothing
+/// compared them. A record could retain a real answer and carry different
+/// attempts, findings or verdict, with every digest true. The runner builds
+/// each claim as `redact_deep(parse_json(raw)[field])`
+/// (`scripts/haqp_blind_review.py`), so the gate re-derives it the same way
+/// from the retained answer, and requires the record to hold exactly that.
+fn verify_review_claims_are_the_answer(record_path: &Utf8Path) -> Result<()> {
+    let raw_path = record_path.with_extension("raw.txt");
+    let raw = fs::read_to_string(&raw_path)
+        .with_context(|| format!("{raw_path}: the raw answer must be retained"))?;
+    let answer = review_answer_json(&raw)
+        .with_context(|| format!("{raw_path}: the retained answer is not a review"))?;
+    let record: serde_json::Value = serde_json::from_slice(
+        &fs::read(record_path).with_context(|| format!("read {record_path}"))?,
+    )
+    .with_context(|| format!("parse {record_path}"))?;
+    for field in [
+        "attempts",
+        "findings",
+        "independently_reproduced",
+        "unresolved_verified_findings",
+        "result",
+    ] {
+        let said = match answer.get(field) {
+            Some(value) => value.clone(),
+            // `parsed.get("findings", [])`: the runner's one defaulted field.
+            None if field == "findings" => serde_json::Value::Array(Vec::new()),
+            None => serde_json::Value::Null,
+        };
+        // The count is copied, not redacted: it is not a string.
+        let expected = if field == "unresolved_verified_findings" {
+            said
+        } else {
+            redact_evidence_deep(&said)
+        };
+        let recorded = record.get(field).unwrap_or(&serde_json::Value::Null);
+        anyhow::ensure!(
+            *recorded == expected,
+            "review record `{field}` is not what the retained answer says; a record's \
+             claims are the reviewer's answer, not an edit of it"
+        );
+    }
+    Ok(())
+}
+
+/// The reviewer's JSON, located as the runner's `parse_json` locates it: the
+/// whole text, or else the span from the first `{` to the last `}`.
+fn review_answer_json(raw: &str) -> Result<serde_json::Value> {
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) {
+        return Ok(value);
+    }
+    let (Some(start), Some(end)) = (raw.find('{'), raw.rfind('}')) else {
+        anyhow::bail!("no JSON object in the answer");
+    };
+    anyhow::ensure!(start < end, "no JSON object in the answer");
+    Ok(serde_json::from_str(&raw[start..=end])?)
+}
+
+/// `redact_deep` from `scripts/haqp_blind_review.py`: every string masked by
+/// [`redact_evidence`], structure and every other value unchanged.
+fn redact_evidence_deep(value: &serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::String(text) => serde_json::Value::String(redact_evidence(text)),
+        serde_json::Value::Array(items) => {
+            serde_json::Value::Array(items.iter().map(redact_evidence_deep).collect())
+        }
+        serde_json::Value::Object(map) => serde_json::Value::Object(
+            map.iter()
+                .map(|(key, item)| (key.clone(), redact_evidence_deep(item)))
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
+
+/// `redact_evidence` from `scripts/haqp_blind_review.py`, which substitutes
+/// `****` for each match of its `CREDENTIAL_SHAPED` pattern:
+///
+/// - a known vendor prefix followed by 12 or more of `[A-Za-z0-9_-]`, or
+/// - a run of 24 or more of `[A-Za-z0-9_-]` holding a lowercase letter, an
+///   uppercase letter and a digit.
+///
+/// Both alternatives consume greedily and matching resumes after each match,
+/// as `re.sub` does. The second alternative looks ahead over the whole run
+/// from its start, so a run that fails it has no suffix that passes.
+fn redact_evidence(text: &str) -> String {
+    const PREFIXES: [&str; 10] = [
+        "sk-", "AIza", "ghp_", "gho_", "xoxb-", "xoxa-", "xoxp-", "xoxr-", "xoxs-", "hf_",
+    ];
+    let is_key_byte = |b: u8| b.is_ascii_alphanumeric() || b == b'_' || b == b'-';
+    let bytes = text.as_bytes();
+    let run_from = |at: usize| bytes[at..].iter().take_while(|b| is_key_byte(**b)).count();
+    let mut out = String::with_capacity(text.len());
+    let mut at = 0;
+    while at < bytes.len() {
+        let rest = &text[at..];
+        let prefixed = PREFIXES.iter().find_map(|prefix| {
+            if !rest.starts_with(prefix) {
+                return None;
+            }
+            let tail = run_from(at + prefix.len());
+            (tail >= 12).then_some(prefix.len() + tail)
+        });
+        let shaped = || {
+            let run = &bytes[at..at + run_from(at)];
+            (run.len() >= 24
+                && run.iter().any(u8::is_ascii_lowercase)
+                && run.iter().any(u8::is_ascii_uppercase)
+                && run.iter().any(u8::is_ascii_digit))
+            .then_some(run.len())
+        };
+        if let Some(len) = prefixed.or_else(shaped) {
+            out.push_str("****");
+            at += len;
+        } else {
+            let ch = rest.chars().next().expect("at is a char boundary below len");
+            out.push(ch);
+            at += ch.len_utf8();
+        }
+    }
+    out
+}
+
 /// The record's digests: hex-shaped, and the raw one the SHA-256 of the
 /// retained answer (A09: a digest of nothing retained bound a record to no
 /// answer).
@@ -3348,6 +3474,7 @@ fn verify_review_record_digests(
     )?;
     require_hex_digest("review raw_response_sha256", &record.raw_response_sha256)?;
     verify_review_raw_response(root, record_path, &record.raw_response_sha256)?;
+    verify_review_claims_are_the_answer(record_path)?;
     verify_review_provider_receipt(record, record_path)?;
     require_hex_digest(
         "review integrity_binding_sha256",
@@ -16069,12 +16196,18 @@ mod tests {
     /// The transcript a fixture codex receipt attests to.
     /// A rollout opens with its own `session_meta`, and A09 binds the receipt's
     /// id to the `session_id` that record carries.
+    /// The retained answer of a fixture record. `fixture_record_path` writes a
+    /// record file holding only the receipt, so every claim reads null, and
+    /// this answer says exactly that (F-92 A12): `findings` present and null,
+    /// the rest absent. `FIXTURE_TRANSCRIPT` carries it as its last message.
+    const FIXTURE_ANSWER: &str = r#"{"findings":null}"#;
+
     /// A rollout opens with its own `session_meta` and ends with what the
     /// provider said; A09 binds the retained answer to that last message.
     const FIXTURE_TRANSCRIPT: &[u8] = concat!(
         "{\"type\":\"session_meta\",\"payload\":{\"session_id\":\"fixture\"}}\n",
         "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",",
-        "\"content\":[{\"type\":\"output_text\",\"text\":\"fixture raw answer\"}]}}\n",
+        "\"content\":[{\"type\":\"output_text\",\"text\":\"{\\\"findings\\\":null}\"}]}}\n",
     )
     .as_bytes();
 
@@ -16090,7 +16223,7 @@ mod tests {
 
     fn fixture_record_path() -> (liminal_scratch::ScratchDir, Utf8PathBuf) {
         let scratch = liminal_scratch::ScratchDir::new("haq-review-raw").expect("scratch");
-        fs::write(scratch.path().join("r.raw.txt"), "fixture raw answer").expect("raw");
+        fs::write(scratch.path().join("r.raw.txt"), FIXTURE_ANSWER).expect("raw");
         fs::write(scratch.path().join("r.session.jsonl"), FIXTURE_TRANSCRIPT).expect("transcript");
         let path = scratch.path().join("r.json");
         // The claims and receipt the binding hashes are read from this file;
@@ -16120,7 +16253,7 @@ mod tests {
             independently_reproduced: Vec::new(),
             unresolved_verified_findings: 0,
             result: "pass".to_owned(),
-            raw_response_sha256: sha256_text("fixture raw answer"),
+            raw_response_sha256: sha256_text(FIXTURE_ANSWER),
             schema_retries: 0,
             provider_receipt: serde_json::from_str(&fixture_receipt_json())
                 .expect("fixture receipt parses"),
@@ -16163,6 +16296,111 @@ mod tests {
             record.unresolved_verified_findings
         ));
         record
+    }
+
+    /// The gate masks exactly as the runner's `redact_evidence` does. The
+    /// expected values were produced by `scripts/haqp_blind_review.py` itself;
+    /// a divergence would refuse honest records or pass edited ones.
+    #[test]
+    fn the_gate_masks_evidence_exactly_as_the_runner_does() {
+        for (input, runner) in [
+            ("key sk-abcdefghijklmnop here", "key **** here"),
+            ("sk-short", "sk-short"),
+            (
+                "verify_canonical_round_trip_is_long",
+                "verify_canonical_round_trip_is_long",
+            ),
+            (
+                "commit 96e51a3502a8a32014c777bac7f4fce91dcff115 ok",
+                "commit 96e51a3502a8a32014c777bac7f4fce91dcff115 ok",
+            ),
+            ("token AbCdEfGh1234567890abcdEFGH end", "token **** end"),
+            ("mask-abcdefghijklmn", "ma****"),
+            ("x=hf_ABCdef123456789;", "x=****;"),
+            ("AbCdEfGh1234567890abcdEF", "****"),
+            ("AbCdEfGh1234567890abcdE", "AbCdEfGh1234567890abcdE"),
+            ("é AIzaSyA1234567890abc — ghp_", "é **** — ghp_"),
+            (
+                "xoxb-123456789012 and xoxz-123456789012",
+                "**** and xoxz-123456789012",
+            ),
+        ] {
+            assert_eq!(redact_evidence(input), runner, "{input:?}");
+        }
+    }
+
+    /// F-92 A12: a record's claims must be the retained answer's. The
+    /// committed records are real runner output, so they must pass; a copy
+    /// with one claim edited must be refused, naming the claim.
+    #[test]
+    fn a_review_record_must_claim_what_its_answer_says() {
+        let root = repo_root();
+        let evidence = root.join("conformance/haqp/evidence/reviews");
+        for name in ["pass1-codex-gpt-5.6-sol", "pass2-mimo-direct-mimo-v2.5-pro"] {
+            verify_review_claims_are_the_answer(&evidence.join(format!("{name}.json")))
+                .unwrap_or_else(|err| panic!("{name}: committed record: {err:#}"));
+        }
+
+        let scratch = liminal_scratch::ScratchDir::new("haq-review-claims").expect("scratch");
+        let record_path = scratch.path().join("r.json");
+        fs::copy(
+            evidence.join("pass1-codex-gpt-5.6-sol.raw.txt"),
+            scratch.path().join("r.raw.txt"),
+        )
+        .expect("copy answer");
+        let original: serde_json::Value = serde_json::from_slice(
+            &fs::read(evidence.join("pass1-codex-gpt-5.6-sol.json")).expect("read record"),
+        )
+        .expect("parse record");
+        let doctor = |edit: &dyn Fn(&mut serde_json::Value)| -> String {
+            let mut record = original.clone();
+            edit(&mut record);
+            fs::write(&record_path, serde_json::to_vec_pretty(&record).expect("json"))
+                .expect("write record");
+            verify_review_claims_are_the_answer(&record_path)
+                .map(|()| "accepted".to_owned())
+                .unwrap_or_else(|err| err.to_string())
+        };
+
+        assert_eq!(doctor(&|_| {}), "accepted", "an unedited copy must pass");
+        for (field, edit) in [
+            (
+                "attempts",
+                &(|r: &mut serde_json::Value| {
+                    r["attempts"][0]["observed_result"] = "edited after the fact".into();
+                }) as &dyn Fn(&mut serde_json::Value),
+            ),
+            (
+                "findings",
+                &|r: &mut serde_json::Value| {
+                    r["findings"] = serde_json::json!([{"id": "F-x", "attempt_id": "A01"}]);
+                },
+            ),
+            (
+                "independently_reproduced",
+                &|r: &mut serde_json::Value| {
+                    r["independently_reproduced"] = serde_json::json!(["F-x"]);
+                },
+            ),
+            (
+                "unresolved_verified_findings",
+                &|r: &mut serde_json::Value| {
+                    r["unresolved_verified_findings"] = 7.into();
+                },
+            ),
+            ("result", &|r: &mut serde_json::Value| {
+                r["result"] = "pass".into();
+                if original["result"] == "pass" {
+                    r["result"] = "fail".into();
+                }
+            }),
+        ] {
+            let refusal = doctor(edit);
+            assert!(
+                refusal.contains(&format!("`{field}` is not what the retained answer says")),
+                "an edited {field} must be refused for that reason: {refusal}"
+            );
+        }
     }
 
     fn review_row() -> Review {
@@ -21762,7 +22000,7 @@ charlie
             let mut row = review_record(2, "mimo", "mimo-direct");
             row.provider_receipt = serde_json::from_str(&format!(
                 r#"{{"backend":"mimo-direct","content_sha256":"{:x}","created":{created},"provider_model":"mimo-v2.5-pro","response_id":"chatcmpl-x","usage":{usage}}}"#,
-                Sha256::digest(b"fixture raw answer")
+                Sha256::digest(FIXTURE_ANSWER.as_bytes())
             ))
             .expect("receipt parses");
             row
