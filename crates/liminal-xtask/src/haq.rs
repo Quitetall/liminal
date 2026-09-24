@@ -16364,8 +16364,7 @@ mod tests {
             )
             .expect("write record");
             verify_review_claims_are_the_answer(&record_path)
-                .map(|()| "accepted".to_owned())
-                .unwrap_or_else(|err| err.to_string())
+                .map_or_else(|err| err.to_string(), |()| "accepted".to_owned())
         };
 
         assert_eq!(doctor(&|_| {}), "accepted", "an unedited copy must pass");
