@@ -4947,8 +4947,12 @@ The fix builds each negative as a valid transaction with exactly the one defect
 its category names, and requires that the untouched base decodes. That changes
 the generated witnesses, and therefore the `graph/interchange codecs` golden in
 `generated_case_builders_match_their_recorded_goldens`. Accepting a changed golden
-is a T1 act that AM-17.16 excludes from proposal. It is prepared separately for
-Brian's decision and not committed to main.
+is a T1 act that AM-17.16 excludes from proposal. It was prepared separately
+for Brian's decision.
+
+**Accepted.** The fix reached main in `2ab2ade2` when the branches were
+consolidated on 2026-09-23. Brian explicitly accepted the changed golden
+(`ca99f037…` → `f4dc4955…`) on 2026-09-24 ("accepted.").
 
 ## F-80 correction — the two closes I offered were both wrong
 
