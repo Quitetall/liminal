@@ -5158,3 +5158,65 @@ With the comparison disabled, the test fails.
 The shared test fixture's retained answer changed from `fixture raw answer` to
 `{"findings":null}`, which is what its receipt-only record file claims. Every
 test that used it keeps its assertions.
+
+## F-93 — lane at `cbed339f`: a CI conflict from the consolidation, and four pass-1 findings
+
+The first lane after the consolidation (`liminal-haqp`, 2026-09-24) recorded
+both blind reviews, then died at `--- ci ---`:
+
+```
+Error: merge requires unset CARGO_TARGET_DIR: crash and sanitizer replay need
+independent checkout-local targets
+```
+
+**The conflict.** F-86 made `haqp_qualify.sh` export
+`CARGO_TARGET_DIR=$PWD/target`. The assurance merge profile, from the branch,
+refuses that variable because the crash and sanitizer replays build in their own
+worktrees and each needs its own target. Both were right about what they
+wanted, and only the branch's side needed a variable to get it: the repository's
+`.cargo/config.toml` already sets `target-dir = "target"`, which cargo resolves
+per checkout and per worktree. The script now unsets the variable and refuses
+to start unless `cargo metadata` resolves this checkout's own `target/`. F-86's
+guarantee is checked instead of forced.
+
+Lane output is archived with SHA-256 sums under
+`/mnt/4tb/liminal-formal-evidence/reviews/haqp-cbed339f-run-1-failed-2026-09-24/`.
+
+**The reviews.** Pass 2 (MiMo `v2.5-pro`) found nothing. Pass 1 (Codex
+`gpt-5.6-sol`) verified four defects, and each was checked at its coordinate:
+
+| attempt | claim | verdict | disposition |
+|---|---|---|---|
+| A01 | the CST oracle accepts `- alpha` formatted to bare `alpha` | **true** | fixed |
+| A04 | P1-M042 (jurisdiction threshold) is killed by M20 formatter tests that do not exercise it | true of the mapping; unmeasurable before the tests exist | draft ruling R-007 for Brian |
+| A06 | the trace scanner keeps a dead pid's cwd, so a reused pid inherits it | **true, and worse** | fixed |
+| A08 | a file-scoped ruling plus phrase matching clears claims outside its intended scope | RISK-004 verbatim | draft ruling R-008 for Brian |
+
+**A01 (fixed).** Lowering a marker into structure is the formatter's job, and
+dropping one is not; the oracle checked words, marks, order and non-emptiness,
+none of which tells them apart. The real formatter was probed: `- alpha` becomes
+`node unordered-list { … node list-item … }`, `# alpha` becomes `node heading`, a
+fence becomes `node code-block`. Every block the coarse scan classifies as List,
+Heading or Fence must now come back as that node, or verbatim, as a region
+preserved rather than canonicalized (D20.6). The test refuses a flattened list,
+heading and fence, each for the stated reason. The generated witnesses are
+unchanged, so no golden moves. The full 100,000-per-family generation confirms
+no real case is refused.
+
+**A06 (fixed).** On exit the scanner dropped the pid's descriptors and kept its
+cwd and any unfinished call. Worse than the claim: clone inheritance copied the
+parent's cwd only when the parent had one, so a child reusing a dead pid under a
+parent that never moved kept the dead process's cwd. A root-relative write into
+`conformance/corpora/heldout/` then resolved under the dead process's directory,
+and was not seen as a write to the corpus. Exit now forgets cwd and unfinished
+state, and a clone from a parent with no cwd clears the child's.
+`a_reused_pid_does_not_inherit_a_dead_process_cwd` covers both paths and fails
+without the fix.
+
+**A04 and A08 are not fixable in this stage, and neither is mine to rule.**
+A04 asks whether tests AM-17.4 has not written yet exercise a mutant. That is
+what HAQP-1b measures at M24 (RISK-001, and the F-74 A02 precedent). A08 is
+RISK-004, which AM-17.15 keeps recorded, and fixing it by requiring coordinates
+would retire R-001..R-006. Both are drafted as rulings (R-007, R-008) with
+`status: draft`, so neither clears anything until Brian rules and signs it
+against `conformance/haqp/ruling-signers`.

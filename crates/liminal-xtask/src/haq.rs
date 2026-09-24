@@ -2013,6 +2013,34 @@ fn independent_oracle_source_cst(
         "formatting emptied a non-empty document"
     );
     let (kinds, hashes) = verify_coarse_scan(source, coarse)?;
+    // Blind pass 1 at `cbed339f` (A01): lowering a marker is the formatter's
+    // job, and dropping one is not, and nothing told the two apart. `- alpha`
+    // formatted to a bare `alpha` kept every word and lost the list. Every
+    // block the scan classifies as structure must come back as the explicit
+    // node the dialect lowers it to, or verbatim, as a region the formatter
+    // preserved rather than canonicalized (D20.6).
+    for block in &coarse.blocks {
+        let node = match block.coarse_kind {
+            liminal_cst::CoarseKind::List => "node unordered-list",
+            liminal_cst::CoarseKind::Heading => "node heading",
+            liminal_cst::CoarseKind::Fence => "node code-block",
+            _ => continue,
+        };
+        let range = usize::try_from(block.range.start)?..usize::try_from(block.range.end)?;
+        let first = source
+            .get(range)
+            .context("the coarse scan's block lies inside its source")?
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .trim();
+        anyhow::ensure!(
+            once.contains(node) || once.contains(first),
+            "formatting dropped the structure of {:?} block {first:?}: neither {node:?} nor \
+             the block itself survives: {source:?} -> {once:?}",
+            block.coarse_kind
+        );
+    }
     let mut witness = emitted.as_bytes().to_vec();
     witness.extend_from_slice(once.as_bytes());
     witness.extend_from_slice(format!("coarse:{}", coarse.blocks.len()).as_bytes());
@@ -7647,9 +7675,14 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
                 scan.exited_zero.insert(pid);
             }
             // A pid that exited holds no directory fds; a later process
-            // reusing the number must not inherit them.
+            // reusing the number must not inherit them. Blind pass 1 at
+            // `cbed339f` (A06): nor its working directory or a call it left
+            // unfinished. Only the fds were dropped, so a process reusing the
+            // number resolved its relative paths against the dead one's cwd.
             if line.contains(" +++ exited with ") || line.contains(" +++ killed by ") {
                 open_fds.retain(|(owner, _), _| *owner != pid);
+                cwds.remove(&pid);
+                unfinished.remove(&pid);
             }
         }
         let pid = line
@@ -7700,9 +7733,13 @@ fn scan_scope_trace<R: std::io::BufRead>(mut reader: R) -> Result<ScopeTraceScan
             // against nothing. A child begins life with its parent's working
             // directory and its open descriptors.
             if let Some(child) = clone_child_pid(&line) {
-                if let Some(cwd) = cwds.get(&pid).cloned() {
-                    cwds.insert(child, cwd);
-                }
+                // A parent with no recorded cwd is at the trace's root, and so
+                // is its child: whatever the map held for the child's number
+                // belonged to an earlier process (A06, `cbed339f`).
+                match cwds.get(&pid).cloned() {
+                    Some(cwd) => cwds.insert(child, cwd),
+                    None => cwds.remove(&child),
+                };
                 let inherited = open_fds
                     .range((pid, i64::MIN)..=(pid, i64::MAX))
                     .map(|((_, fd), dir)| (*fd, dir.clone()))
@@ -21080,6 +21117,47 @@ charlie
         verify_coarse_scan(source, &coarse).expect("independent hash relation accepts real hashes");
     }
 
+    /// Blind pass 1 at `cbed339f` (A06): a process that reuses an exited
+    /// process's pid must not inherit its working directory. Pid 200 chdirs
+    /// away from the root and exits; pid 100, which never moved, spawns a new
+    /// 200 that writes the locked corpus by a root-relative path. Resolving it
+    /// against the dead process's cwd hid the write.
+    #[test]
+    fn a_reused_pid_does_not_inherit_a_dead_process_cwd() {
+        let reused = concat!(
+            "200 chdir(\"/elsewhere\")                = 0\n",
+            "200 +++ exited with 0 +++\n",
+            "100 clone3({flags=CLONE_VM|CLONE_VFORK, exit_signal=SIGCHLD}, 88) = 200\n",
+            "200 openat(AT_FDCWD, \"conformance/corpora/heldout/case.txt\", O_WRONLY) = 3\n",
+            "200 +++ exited with 0 +++\n",
+            "100 +++ exited with 0 +++\n",
+        );
+        let scan = scan_scope_trace(std::io::Cursor::new(reused.as_bytes())).expect("scan");
+        assert!(
+            scan.locked_write_candidates
+                .iter()
+                .any(|path| path == "conformance/corpora/heldout/case.txt"),
+            "the write resolves against the new process's cwd, not the dead one's: {:?}",
+            scan.locked_write_candidates
+        );
+
+        // Without a clone line the reused number is still a new process: the
+        // exit alone forgets the old cwd.
+        let unannounced = concat!(
+            "200 chdir(\"/elsewhere\")                = 0\n",
+            "200 +++ exited with 0 +++\n",
+            "200 openat(AT_FDCWD, \"conformance/corpora/heldout/case.txt\", O_WRONLY) = 3\n",
+        );
+        let scan = scan_scope_trace(std::io::Cursor::new(unannounced.as_bytes())).expect("scan");
+        assert!(
+            scan.locked_write_candidates
+                .iter()
+                .any(|path| path == "conformance/corpora/heldout/case.txt"),
+            "an exited pid's cwd is forgotten: {:?}",
+            scan.locked_write_candidates
+        );
+    }
+
     /// Blind pass 1 at `ec045588` (A06): `chmod` names a path and was listed;
     /// `fchmod` names a descriptor and was not, so changing the locked
     /// corpus's mode through an open descriptor produced no write candidate.
@@ -21219,8 +21297,36 @@ charlie
         // A list marker lowered into structure is the formatter working.
         let listed = "- alpha\n";
         let listed_coarse = liminal_cst::coarse_parse(listed);
-        independent_oracle_source_cst(listed, listed, "alpha\n", "alpha\n", "-", &listed_coarse)
+        let lowered = "#!liminal-explicit-v1\nnode unordered-list {\n  literal \"\";\n  \
+                       node list-item {\n    literal \"alpha\";\n  }\n}\n";
+        independent_oracle_source_cst(listed, listed, lowered, lowered, "-", &listed_coarse)
             .expect("lowering a list marker is not losing content");
+        // Blind pass 1 at `cbed339f` (A01): deleting it is. The words survive
+        // and the list does not.
+        let err = independent_oracle_source_cst(
+            listed,
+            listed,
+            "alpha\n",
+            "alpha\n",
+            "-",
+            &listed_coarse,
+        )
+        .expect_err("a list flattened into a paragraph lost its structure");
+        assert!(
+            err.to_string().contains("dropped the structure"),
+            "refused for the wrong reason: {err}"
+        );
+        // A heading and a fence are held to the same rule.
+        for (source, flattened) in [("# alpha\n", "alpha\n"), ("```\nalpha\n```\n", "alpha\n")] {
+            let coarse = liminal_cst::coarse_parse(source);
+            let err =
+                independent_oracle_source_cst(source, source, flattened, flattened, "a", &coarse)
+                    .expect_err("flattened structure");
+            assert!(
+                err.to_string().contains("dropped the structure"),
+                "refused for the wrong reason: {err}"
+            );
+        }
     }
 
     /// Review of `e490671`: braces inside a comment or a string are text, and

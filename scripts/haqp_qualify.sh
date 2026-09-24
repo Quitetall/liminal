@@ -31,7 +31,19 @@ cd "$(dirname "$0")/.."
 # therefore replace the binary this lane is testing while it runs, and the
 # campaign would qualify code that is not its fixed base. The 2026-09-23 lane
 # ran while this very checkout's main tree was being built beside it.
-export CARGO_TARGET_DIR="$PWD/target"
+#
+# The repository's .cargo/config.toml sets `target-dir = "target"`, which
+# resolves per checkout and per worktree. That is the isolation, and it is
+# CHECKED here rather than forced. Exporting CARGO_TARGET_DIR forced it too
+# widely: the crash and sanitizer replays build in their own worktrees and must
+# get their own targets, so the merge profile refuses the variable (2026-09-24,
+# lane at cbed339f: "merge requires unset CARGO_TARGET_DIR").
+unset CARGO_TARGET_DIR
+resolved_target="$(cargo metadata --format-version 1 --no-deps | python3 -c 'import json, sys; print(json.load(sys.stdin)["target_directory"])')"
+if [ "$resolved_target" != "$PWD/target" ]; then
+  echo "refusing to start: cargo builds into $resolved_target, not this checkout's $PWD/target (F-86)" >&2
+  exit 2
+fi
 
 if [ -n "$(git status --porcelain)" ]; then
   echo "refusing to start: the tree is dirty; the fixed base must be clean (ADR-0020 §1)" >&2
