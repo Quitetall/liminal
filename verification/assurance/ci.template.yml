@@ -79,12 +79,6 @@ jobs:
           sudo systemctl start "user@$(id -u).service"
           echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
           echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus" >> "$GITHUB_ENV"
-      # vstd admission (canary C32 among others) runs `cargo metadata --offline`
-      # over every platform's dependencies, so a crate only Windows builds (e.g.
-      # anstyle-wincon) must already be downloaded. The host job does the same.
-      - name: Fetch every platform's dependencies
-        if: runner.os == 'Linux'
-        run: cargo fetch
       - name: Portable test coverage
         run: |
 @@PORTABILITY@@
@@ -113,6 +107,9 @@ jobs:
   # - `threaded` (just test-threaded) runs here, not in `test`: it is every
   #   test in one libtest process, host-capability tests included, and on the
   #   plain runner it failed for want of pandoc.
+  # - `canaries` runs here too: C32 replays pinned commits (fetch-depth 0) and
+  #   vstd admission's offline metadata needs every platform's crates (cargo
+  #   fetch). On the shallow, unfetched test runner it failed on both.
   # Each tool is verified present, so a missing one fails the job rather than
   # skipping its tests.
   host-capability:

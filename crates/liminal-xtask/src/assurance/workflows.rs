@@ -37,11 +37,13 @@ fn render(catalog: &super::Catalog) -> Result<[(String, String); 2]> {
             "deny" => "DENY",
             "nextest" | "doctest" => "PORTABILITY",
             // `threaded` runs every test in one libtest process, host-capability
-            // tests included, so it runs where those capabilities are
-            // provisioned. On the plain runner it failed for want of pandoc.
-            "host" | "threaded" => "HOST",
+            // tests included, and `canaries` replays pinned commits through
+            // offline metadata for every platform. Both run where full history,
+            // fetched crates and the host tools are provisioned; on the plain
+            // shallow runner they failed for want of pandoc and history.
+            "host" | "threaded" | "canaries" => "HOST",
             "tracked-sizes" | "fuzz-lock" | "bootstrap" | "proof-support" | "partition"
-            | "inventory" | "canaries" | "resource-run" | "resource-lint" | "assurance" => "LINUX",
+            | "inventory" | "resource-run" | "resource-lint" | "assurance" => "LINUX",
             _ => bail!("unmapped mandatory CI command: {id}"),
         };
         groups.entry(group).or_default().push(shell_command(id)?);
