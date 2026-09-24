@@ -296,7 +296,12 @@ def mimo_direct_call(model: str, prompt: str, *, liveness: bool = False) -> str:
     command = [
         "bash",
         "-lc",
-        "source /home/brianklam/.config/lamu/api-keys.env; "
+        # The key comes from the environment. ~/.config/lamu/api-keys.env was
+        # retired (lamu ADR 0082); keys live in the encrypted secrets store and
+        # reach this process through `secrets run --`, which the lane recipe
+        # wraps. Sourcing the retired file sent an empty bearer token and the
+        # provider answered 401 (lane at 4d8e5e3a, 2026-09-24).
+        ': "${MIMO_API_KEY:?MIMO_API_KEY is unset; run the lane under secrets run --}"; '
         "config=$(mktemp); "
         "trap 'rm -f \"$config\"' EXIT; "
         "umask 077; printf 'header = \"Authorization: Bearer %s\"\\n' \"$MIMO_API_KEY\" > \"$config\"; "

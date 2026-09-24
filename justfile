@@ -204,12 +204,17 @@ haq-lane run="run-1":
 # one second: "reviewer codex:gpt-5.6-sol is unreachable: [Errno 2] No such
 # file or directory: 'codex'". Copying the caller's PATH gives the unit the same
 # tools the operator's shell resolves; cargo is the rustup proxy either way.
+#
+# `secrets run --` hands the unit the reviewers' API keys from the encrypted
+# store. The unit inherits no login environment, and the retired
+# ~/.config/lamu/api-keys.env (lamu ADR 0082) no longer exists, so without it
+# the MiMo pass sent an empty token and got 401 (2026-09-24).
 haq-lane-detached run="run-1" unit="liminal-haqp" mem="24G":
     systemd-run --user --collect --unit={{ unit }} \
       --working-directory="$PWD" -E PATH \
       -p MemoryMax={{ mem }} -p MemoryHigh=$(numfmt --from=iec --to=iec --suffix= $(( $(numfmt --from=iec {{ mem }}) * 85 / 100 ))) \
       -p OOMPolicy=stop \
-      just haq-lane {{ run }}
+      secrets run -- just haq-lane {{ run }}
     @echo "started {{ unit }}; follow with: journalctl --user -u {{ unit }} -f"
 
 # Everything CI runs, locally, in CI order: the assurance `merge` profile
