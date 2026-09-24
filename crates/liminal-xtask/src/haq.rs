@@ -2975,7 +2975,10 @@ fn redact_evidence(text: &str) -> String {
             out.push_str("****");
             at += len;
         } else {
-            let ch = rest.chars().next().expect("at is a char boundary below len");
+            let ch = rest
+                .chars()
+                .next()
+                .expect("at is a char boundary below len");
             out.push(ch);
             at += ch.len_utf8();
         }
@@ -16355,8 +16358,11 @@ mod tests {
         let doctor = |edit: &dyn Fn(&mut serde_json::Value)| -> String {
             let mut record = original.clone();
             edit(&mut record);
-            fs::write(&record_path, serde_json::to_vec_pretty(&record).expect("json"))
-                .expect("write record");
+            fs::write(
+                &record_path,
+                serde_json::to_vec_pretty(&record).expect("json"),
+            )
+            .expect("write record");
             verify_review_claims_are_the_answer(&record_path)
                 .map(|()| "accepted".to_owned())
                 .unwrap_or_else(|err| err.to_string())
@@ -16370,18 +16376,12 @@ mod tests {
                     r["attempts"][0]["observed_result"] = "edited after the fact".into();
                 }) as &dyn Fn(&mut serde_json::Value),
             ),
-            (
-                "findings",
-                &|r: &mut serde_json::Value| {
-                    r["findings"] = serde_json::json!([{"id": "F-x", "attempt_id": "A01"}]);
-                },
-            ),
-            (
-                "independently_reproduced",
-                &|r: &mut serde_json::Value| {
-                    r["independently_reproduced"] = serde_json::json!(["F-x"]);
-                },
-            ),
+            ("findings", &|r: &mut serde_json::Value| {
+                r["findings"] = serde_json::json!([{"id": "F-x", "attempt_id": "A01"}]);
+            }),
+            ("independently_reproduced", &|r: &mut serde_json::Value| {
+                r["independently_reproduced"] = serde_json::json!(["F-x"]);
+            }),
             (
                 "unresolved_verified_findings",
                 &|r: &mut serde_json::Value| {
