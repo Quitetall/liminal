@@ -79,6 +79,12 @@ jobs:
           sudo systemctl start "user@$(id -u).service"
           echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
           echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus" >> "$GITHUB_ENV"
+      # vstd admission (canary C32 among others) runs `cargo metadata --offline`
+      # over every platform's dependencies, so a crate only Windows builds (e.g.
+      # anstyle-wincon) must already be downloaded. The host job does the same.
+      - name: Fetch every platform's dependencies
+        if: runner.os == 'Linux'
+        run: cargo fetch
       - name: Portable test coverage
         run: |
           './scripts/run_ci_tests.sh' 'portable'
@@ -135,7 +141,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest
+          tool: cargo-nextest,just
       - run: cargo install cargo-fuzz --version "$CARGO_FUZZ_VERSION" --locked
       # `threaded` runs here too (every test, in one process), so this job needs
       # the same bounded-execution session as the test job's Linux leg.
