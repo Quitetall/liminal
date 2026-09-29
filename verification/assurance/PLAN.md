@@ -12,7 +12,7 @@ AM-17.18. Baseline: `54b6450c15f161978ad63cc0f999d5090bc577f4`.
 - [x] S3: `assurance run <profile>` and `assurance report`: fixed command registry,
   durable incomplete/failure receipts, environment/cost observations and advisory
   impact. Selection never bypasses merge requirements.
-- [ ] S4: Generated workflow wiring; Linux parity, portability/job names,
+- [x] S4: Generated workflow wiring; Linux parity, portability/job names,
   nextest/threaded diversity, weekly advisories, informational beta. Integrate
   bounded resource harness run/lint, refusing missing limits. Hosted execution
   evidence is separate from local generation checks.
@@ -28,15 +28,19 @@ AM-17.18. Baseline: `54b6450c15f161978ad63cc0f999d5090bc577f4`.
   test deltas and independent diff/commit findings verified at cited lines. Human
   enrollment and hosted execution remain explicit external boundaries.
 
-Checklist interpretation: S5 remains open because external trust enrollment is
-pending. Its local implementation and tests are complete in machine-local
+Checklist interpretation: S4 is complete: generated workflows match their
+templates (`just assurance-workflows` exited 0 with no working-tree changes),
+and hosted CI run `36039248930` plus scheduled run `36387091585` both passed on
+the exact baseline commit `5f45e999cc17b5eee1b697a7c472bcc2f6ec7a53`. The local
+merge receipt also passed all 18 registered checks on that commit. S5 remains
+open because external trust enrollment is pending. Its local implementation
+and tests are complete in machine-local
 receipt file `$XDG_STATE_HOME/liminal/assurance/run.5FLLnQEb/merge/receipt.json`
 (default root `~/.local/state/liminal/assurance`; SHA-256 of that file:
 `92db157e03f97db9797ef9488b405591f4e26f0e255a8daca603cf090f25f642`). External
-trust enrollment is deliberately not part of local closure. S4 remains open for
-observed hosted parity. S6 remains open for its final whole-system review and
-any hosted/external evidence; its registered local merge checks are green in the
-receipts below.
+trust enrollment is deliberately not part of local closure. S6 remains open for
+its final whole-system review and any hosted/external evidence; its registered
+local merge checks are green in the receipts below.
 
 ## Public test seams
 
