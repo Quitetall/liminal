@@ -5220,3 +5220,36 @@ RISK-004, which AM-17.15 keeps recorded, and fixing it by requiring coordinates
 would retire R-001..R-006. Both are drafted as rulings (R-007, R-008) with
 `status: draft`, so neither clears anything until Brian rules and signs it
 against `conformance/haqp/ruling-signers`.
+
+## F-94 — 2026-09-29 retry: A09 reproduced and fixed; qualification attempt failed
+
+The retry at base `74154693` retained two blind reports before the lane failed.
+Its receipt uses the malformed run id `run=run-2` and records `result=fail`; it
+does not establish qualification. The complete reports, provider session,
+scope trace, receipt and SHA-256 list are archived at
+`docs/execution/reviews/2026-09-29-lane-74154693-run-2-failed/`.
+
+Pass 1 independently reproduced A08 again. This is the RISK-004 question
+already described above and in draft R-008, not a new defect classification or
+an authority to change the ruling model. Brian must decide whether the
+file-scoped behavior remains disclosed risk or is narrowed, which would
+require revisiting the standing rulings.
+
+Pass 1 also independently reproduced A09 at
+`crates/liminal-xtask/src/haq.rs:11437`: the ratification row accepted
+`unratified — ratified and approved by Brian`. The generic rendered-table scan
+did not inspect this authority row. The verifier now rejects any verdict word
+inside that cell, not only a positive prefix. The regression test
+`markdown_authority_row_rejects_embedded_ratification_verdicts` changes the
+real row to the contradictory text and requires refusal. It failed before the
+fix and passes with it. The source and test are committed in `e1618ad1`.
+Pass 2's A09 attempt only exercised a generic table cell, so it did not
+independently find this authority-row gap.
+
+After the fix, all 260 `liminal-xtask` library tests and all 317 package tests
+(260 unit, 45 assurance, 12 formal) passed. `just gates`, `just fmt-check`, and
+`haq verify-inventory` passed. The clean-source Linux merge profile also passed
+all commands on `e1618ad1` with Pandoc 3.10.2 (receipt under
+`~/.local/state/liminal/assurance/run.aZyU8mwb/merge/`). Its result explicitly
+keeps `qualification_established` false. M17.5 still needs a new valid-base
+lane after Brian resolves R-008; M17.6 remains a separate human decision.
