@@ -832,7 +832,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "syn 2.0.119",
+ "syn 3.0.6",
  "toml",
  "uuid",
  "zstd",
