@@ -35,7 +35,9 @@ four crates without an accepted ADR exception. Generated workflows match their
 templates (`just assurance-workflows` exited 0 with no working-tree changes);
 hosted CI run `36039248930` and scheduled run `36387091585` passed on baseline
 `5f45e999cc17b5eee1b697a7c472bcc2f6ec7a53`, and hosted CI run `36525539920`
-passed every job on current HEAD `84439e0bb13adc9aa0aab83948d0514127f05c56`.
+passed every job on code commit `84439e0bb13adc9aa0aab83948d0514127f05c56`.
+After this status update, hosted CI run `36527278323` also passed every job on
+the evidence-update commit `229e7c917d264ced8144a0a0bf98ccb732b88ffa`.
 The Windows job in that run still excludes `liminal-xtask`,
 `liminal-conformance`, `spike-annotation`, and `spike-richedit`; green status
 does not resolve the policy finding. The assurance integration target also
