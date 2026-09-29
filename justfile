@@ -214,7 +214,7 @@ haq-lane-detached run="run-1" unit="liminal-haqp" mem="24G":
       --working-directory="$PWD" -E PATH \
       -p MemoryMax={{ mem }} -p MemoryHigh=$(numfmt --from=iec --to=iec --suffix= $(( $(numfmt --from=iec {{ mem }}) * 85 / 100 ))) \
       -p OOMPolicy=stop \
-      secrets run -- just haq-lane {{ run }}
+      secrets run -- env RUSTC_WRAPPER= just haq-lane {{ run }}
     @echo "started {{ unit }}; follow with: journalctl --user -u {{ unit }} -f"
 
 # Everything CI runs, locally, in CI order: the assurance `merge` profile
