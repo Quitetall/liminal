@@ -11433,9 +11433,14 @@ fn verify_markdown_surface_text(text: &str, packet: &Packet) -> Result<()> {
     };
     let ratification = row_value("ratification decision")
         .context("the authority table has no ratification decision row")?;
+    // A09 from the fresh M17.5 blind pass: checking only the negative prefix
+    // let `unratified — ratified and approved` assert both sides at once.
+    let ratification_claims_verdict = ratification
+        .split(|ch: char| !ch.is_ascii_alphabetic())
+        .any(|word| VERDICT_VOCABULARY.contains(&word.to_ascii_lowercase().as_str()));
     anyhow::ensure!(
-        ratification.starts_with("unratified"),
-        "the authority table records ratification {ratification:?}; the packet is unratified"
+        ratification.starts_with("unratified") && !ratification_claims_verdict,
+        "the authority table records ratification {ratification:?}; the packet is unratified and the cell may not claim a verdict"
     );
     // Blind pass 1 at `ec045588` (A10): the qualification lane's table renders
     // the commands, hashes and toolchain a run would record, and no rendered
@@ -20753,6 +20758,22 @@ mod tests {
             err.to_string().contains("while the packet is unqualified"),
             "{err}"
         );
+    }
+
+    #[test]
+    fn markdown_authority_row_rejects_embedded_ratification_verdicts() {
+        let text = fs::read_to_string(repo_root().join("docs/execution/phase1-suite-review.md"))
+            .expect("read the review markdown");
+        let packet = packet_from_repo();
+        verify_markdown_surface_text(&text, &packet).expect("the current authority row is valid");
+        let doctored = text.replace(
+            "| ratification decision | unratified — Brian T1 decision required |",
+            "| ratification decision | unratified — ratified and approved by Brian |",
+        );
+        assert_ne!(doctored, text, "the authority row must be changed");
+        let err = verify_markdown_surface_text(&doctored, &packet)
+            .expect_err("an unqualified packet cannot claim ratification later in its cell");
+        assert!(err.to_string().contains("records ratification"), "{err}");
     }
 
     /// Blind pass 1 at `0a0b4b4b` (A02): a macro is an item the oracle can
