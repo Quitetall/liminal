@@ -12,10 +12,11 @@ AM-17.18. Baseline: `54b6450c15f161978ad63cc0f999d5090bc577f4`.
 - [x] S3: `assurance run <profile>` and `assurance report`: fixed command registry,
   durable incomplete/failure receipts, environment/cost observations and advisory
   impact. Selection never bypasses merge requirements.
-- [x] S4: Generated workflow wiring; Linux parity, portability/job names,
+- [ ] S4: Generated workflow wiring; Linux parity, portability/job names,
   nextest/threaded diversity, weekly advisories, informational beta. Integrate
   bounded resource harness run/lint, refusing missing limits. Hosted execution
-  evidence is separate from local generation checks.
+  evidence is separate from local generation checks. Final closure is pending
+  resolution of the Windows matrix-reduction finding in the S6 review.
 - [ ] S5: `assurance amend propose|check|apply`: parser-backed unchanged exact
   targets, independent review, externally pinned SSH policy/tool trust, isolated
   apply and producer-derived refresh. Disposable-key controls cover signatures,
@@ -28,15 +29,27 @@ AM-17.18. Baseline: `54b6450c15f161978ad63cc0f999d5090bc577f4`.
   test deltas and independent diff/commit findings verified at cited lines. Human
   enrollment and hosted execution remain explicit external boundaries.
 
-Checklist interpretation: S4 is complete: generated workflows match their
-templates (`just assurance-workflows` exited 0 with no working-tree changes),
-and hosted CI run `36039248930` plus scheduled run `36387091585` both passed on
-the exact baseline commit `5f45e999cc17b5eee1b697a7c472bcc2f6ec7a53`. The local
-merge receipt also passed all 18 registered checks on that commit. S5 remains
-open because external trust enrollment is pending. Its local implementation
-and tests are complete in machine-local
-receipt file `$XDG_STATE_HOME/liminal/assurance/run.5FLLnQEb/merge/receipt.json`
-(default root `~/.local/state/liminal/assurance`; SHA-256 of that file:
+Checklist interpretation: S4's execution evidence is green, but S4 is not
+closed: the independent standards review found that the Windows matrix excludes
+four crates without an accepted ADR exception. Generated workflows match their
+templates (`just assurance-workflows` exited 0 with no working-tree changes);
+hosted CI run `36039248930` and scheduled run `36387091585` passed on baseline
+`5f45e999cc17b5eee1b697a7c472bcc2f6ec7a53`, and hosted CI run `36525539920`
+passed every job on current HEAD `84439e0bb13adc9aa0aab83948d0514127f05c56`.
+The Windows job in that run still excludes `liminal-xtask`,
+`liminal-conformance`, `spike-annotation`, and `spike-richedit`; green status
+does not resolve the policy finding. The assurance integration target also
+passed 45/45 tests at this code revision; `just assurance-check` and
+`haq verify-inventory` exited 0. The current gate meter reports 693 active,
+2 deferred M17 Phase 0 gates, and 47 deferred overall; this supersedes the
+stale 356/43 expectation only as an observed reading, not as M17.8 reconciliation.
+The same-commit 18-command local merge receipt passed all commands:
+`$XDG_STATE_HOME/liminal/assurance/run.vITJb1tn/merge/receipt.json` (default
+root `~/.local/state/liminal/assurance`; SHA-256
+`39afde5ed4ceb3a138cb6d1d48c696020137e5180a1c90fd7580528b4caebcff`). S5
+remains open because external trust enrollment is pending. Its local
+implementation and tests are complete in machine-local receipt file
+`$XDG_STATE_HOME/liminal/assurance/run.5FLLnQEb/merge/receipt.json` (SHA-256
 `92db157e03f97db9797ef9488b405591f4e26f0e255a8daca603cf090f25f642`). External
 trust enrollment is deliberately not part of local closure. S6 remains open for
 its final whole-system review and any hosted/external evidence; its registered
