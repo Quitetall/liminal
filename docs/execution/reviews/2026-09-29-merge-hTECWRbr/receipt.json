@@ -1,0 +1,279 @@
+{
+  "schema_version": 1,
+  "profile": "merge",
+  "state": "passed",
+  "qualification_established": false,
+  "source_commit": "c3dc8eb5ab624cac52555a6904a46f219a78e44d",
+  "source_dirty": false,
+  "platform": "linux",
+  "architecture": "x86_64",
+  "cache_state_reported": "unknown",
+  "sample_count": 1,
+  "impact_advisory": [],
+  "commands": [
+    {
+      "id": "style",
+      "state": "passed",
+      "informational": false,
+      "argv": [
+        "just",
+        "fmt-check"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 2374,
+      "peak_memory_bytes": null,
+      "error": null
+    },
+    {
+      "id": "lint",
+      "state": "passed",
+      "informational": false,
+      "argv": [
+        "just",
+        "lint"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 127,
+      "peak_memory_bytes": null,
+      "error": null
+    },
+    {
+      "id": "tracked-sizes",
+      "state": "passed",
+      "informational": false,
+      "argv": [
+        "./scripts/check_tracked_file_sizes.sh"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 787,
+      "peak_memory_bytes": null,
+      "error": null
+    },
+    {
+      "id": "fuzz-lock",
+      "state": "passed",
+      "informational": false,
+      "argv": [
+        "cargo",
+        "metadata",
+        "--manifest-path",
+        "fuzz/Cargo.toml",
+        "--locked",
+        "--format-version",
+        "1"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 59,
+      "peak_memory_bytes": null,
+      "error": null
+    },
+    {
+      "id": "bootstrap",
+      "state": "passed",
+      "informational": false,
+      "argv": [
+        "just",
+        "formal-bootstrap-self-test"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 386,
+      "peak_memory_bytes": null,
+      "error": null
+    },
+    {
+      "id": "proof-support",
+      "state": "passed",
+      "informational": false,
+      "argv": [
+        "just",
+        "formal-proof-self-test"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 5894,
+      "peak_memory_bytes": null,
+      "error": null
+    },
+    {
+      "id": "nextest",
+      "state": "passed",
+      "informational": false,
+      "argv": [
+        "./scripts/run_ci_tests.sh",
+        "portable"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 37577,
+      "peak_memory_bytes": null,
+      "error": null
+    },
+    {
+      "id": "host",
+      "state": "passed",
+      "informational": false,
+      "argv": [
+        "./scripts/run_ci_tests.sh",
+        "host"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 50345,
+      "peak_memory_bytes": null,
+      "error": null
+    },
+    {
+      "id": "partition",
+      "state": "passed",
+      "informational": false,
+      "argv": [
+        "./scripts/check_ci_partition.sh"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 739,
+      "peak_memory_bytes": null,
+      "error": null
+    },
+    {
+      "id": "threaded",
+      "state": "passed",
+      "informational": false,
+      "argv": [
+        "just",
+        "test-threaded"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 46342,
+      "peak_memory_bytes": null,
+      "error": null
+    },
+    {
+      "id": "doctest",
+      "state": "passed",
+      "informational": false,
+      "argv": [
+        "./scripts/run_ci_tests.sh",
+        "doctest"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 1446,
+      "peak_memory_bytes": null,
+      "error": null
+    },
+    {
+      "id": "docs",
+      "state": "passed",
+      "informational": false,
+      "argv": [
+        "just",
+        "doc"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 2018,
+      "peak_memory_bytes": null,
+      "error": null
+    },
+    {
+      "id": "deny",
+      "state": "passed",
+      "informational": false,
+      "argv": [
+        "just",
+        "deny"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 455,
+      "peak_memory_bytes": null,
+      "error": null
+    },
+    {
+      "id": "inventory",
+      "state": "passed",
+      "informational": false,
+      "argv": [
+        "just",
+        "haq-inventory"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 11454,
+      "peak_memory_bytes": null,
+      "error": null
+    },
+    {
+      "id": "canaries",
+      "state": "passed",
+      "informational": false,
+      "argv": [
+        "just",
+        "haq-canaries"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 12810,
+      "peak_memory_bytes": null,
+      "error": null
+    },
+    {
+      "id": "resource-run",
+      "state": "passed",
+      "informational": false,
+      "argv": [
+        "python3",
+        "-B",
+        "verification/assurance/resource.py",
+        "resource-run",
+        "--output",
+        "/home/brianklam/.local/state/liminal/assurance/run.hTECWRbr/merge/resource-run"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 170,
+      "peak_memory_bytes": 21549056,
+      "error": null
+    },
+    {
+      "id": "resource-lint",
+      "state": "passed",
+      "informational": false,
+      "argv": [
+        "python3",
+        "-B",
+        "verification/assurance/resource.py",
+        "resource-lint",
+        "--output",
+        "/home/brianklam/.local/state/liminal/assurance/run.hTECWRbr/merge/resource-lint"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 161,
+      "peak_memory_bytes": 25243648,
+      "error": null
+    },
+    {
+      "id": "assurance",
+      "state": "passed",
+      "informational": false,
+      "argv": [
+        "/home/brianklam/Desktop/liminal/target/debug/liminal-xtask",
+        "assurance",
+        "check"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "elapsed_ms": 34,
+      "peak_memory_bytes": null,
+      "error": null
+    }
+  ]
+}
