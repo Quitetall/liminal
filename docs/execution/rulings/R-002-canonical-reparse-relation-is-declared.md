@@ -1,7 +1,7 @@
 ---
 id: R-002
 attack_class: vacuity
-target: conformance/haqp/packet.json
+target: crates/liminal-xtask/src/haq.rs:142
 claim_requires: canonical-reparse relation
 claim_excludes: mutation; mutant
 status: ruled
@@ -24,15 +24,11 @@ output fails both for any source with more than one paragraph. Idempotence
 (`P1-T01`) is not the only declared relation; the finding's premise is false
 against the committed packet.
 
-**Effect.** A verified finding of class `vacuity` whose target file is
-`conformance/haqp/packet.json` and whose claim is that no canonical-reparse
-relation is declared is cleared by this ruling while its status is `ruled` and the last commit
-touching this file verifies against `conformance/haqp/ruling-signers`.
+**Effect.** This ruling can clear only the claim at the exact persisted target
+`crates/liminal-xtask/src/haq.rs:142`, if its class and claim phrases match.
 
-**Scope (added 2026-09-06 after A08 at lane `aa00d41`).** This ruling answers
-only a claim whose prose contains `canonical-reparse relation`. Matching on attack class and
-target file alone cleared an unrelated finding in the same class and file; a
-ruling answers a claim, not a coordinate.
+**Scope.** This ruling answers only the persisted finding at its exact
+coordinate. It cannot clear another finding in the same class or file.
 
 **Scope narrowed again (2026-09-07, after A08 at lane `5fb1b57`).** A required
 phrase can occur inside a sentence that negates it, so this ruling also lists

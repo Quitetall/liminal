@@ -165,3 +165,16 @@ cost observations and narrowly signed AM-17.13 coordinate maintenance. Frozen
 HAQP behavior, assertions and authorities remain unchanged. Human external trust
 enrollment is required before automatic apply; no signing, qualification, proof
 adoption or phase authorization is delegated.
+
+AM-17.19 (M17): user-approved 2026-09-30, require every HAQP standing ruling to
+name exactly one persisted `repository/path:positive-line` target and match that
+attempt coordinate byte-for-byte; reject file-only and wildcard scope while
+retaining the existing claim filters and one-clearance limit. Reissue R-001
+through R-006 at their recorded attempt coordinates and require fresh Brian
+signatures before they are in force. Accept R-007's narrow deferral of P1-M042
+killer strength to HAQP-1b at M24, without claiming pre-measurement effectiveness.
+Use `conformance/haqp/ruling-registry.json` as a closed ID-to-document registry;
+reject missing, duplicate, unregistered, extra, or mismatched ruling files.
+Withdraw R-008's file-scope risk acceptance; fix and verify its matcher finding
+before a fresh M17.5 lane. No threshold, denominator, Phase 0 GO, Phase 1
+authorization, suite ratification, or release authority changes.

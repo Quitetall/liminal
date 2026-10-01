@@ -1,18 +1,18 @@
 ---
 id: R-007
 attack_class: weak mutants
-target: conformance/haqp/packet.json
+target: conformance/haqp/packet.json:1652
 claim_requires: killing tests
 claim_excludes: disposition; killed; not-ready; anchor; coordinate
-status: draft
-ruled_by:
-date:
+status: ruled
+ruled_by: Brian
+date: 2026-09-30
 ---
 
 # R-007 — whether a named killer kills its mutant is measured at M24, not asserted at M17.5
 
-**DRAFT. Not in force until Brian sets `status: ruled`, fills `ruled_by` and
-`date`, and commits it signed against `conformance/haqp/ruling-signers`.**
+**Recorded by Brian on 2026-09-30.** This exact-coordinate ruling takes effect
+only after its commit verifies against `conformance/haqp/ruling-signers`.
 
 **Finding ruled on.** Blind pass 1 at lane base `cbed339f`, attempt A04 (weak
 mutants): "Mutant at conformance/haqp/packet.json:1652 names formatter-focused
@@ -34,9 +34,8 @@ Re-mapping by judgment now would replace the derived rule with an unmeasured
 guess. This is RISK-001, and the F-74 A02 precedent (RISK-007): a claim about
 the strength of tests AM-17.4 says are unwritten.
 
-**Effect.** A verified finding of class `weak mutants` on
-`conformance/haqp/packet.json` whose claim concerns whether a mutant's named
-killing tests exercise it is cleared while this ruling is `ruled`. It does not
-clear a claim about a disposition, a kill, a `not-ready` row, or an anchor or
-coordinate. Those are defects in the packet as it stands, and are excluded by
-name.
+**Effect.** This ruling can clear only the claim at the exact persisted target
+`conformance/haqp/packet.json:1652`, if its class and claim phrases match. It
+does not clear a claim about a disposition, a kill, a `not-ready` row, or an
+anchor or coordinate. Those are defects in the packet as it stands, and are
+excluded by name.

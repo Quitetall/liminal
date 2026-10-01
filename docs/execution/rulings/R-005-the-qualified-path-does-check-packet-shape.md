@@ -1,7 +1,7 @@
 ---
 id: R-005
 attack_class: vacuity
-target: crates/liminal-xtask/src/haq.rs
+target: crates/liminal-xtask/src/haq.rs:3450
 claim_requires: bails before; verify_packet_shape
 claim_excludes: constant; oracle; formatter; canonical-reparse
 status: ruled
@@ -30,9 +30,7 @@ This is the reviewer's documented ~20-30% false-positive rate, not a defect.
 Under grilling decision 6 (2026-09-03) a finding ruled incorrect is cleared by
 a signed ruling, which is what this is — not a set-aside of a true finding.
 
-**Effect.** A verified finding of class `vacuity` on
-`crates/liminal-xtask/src/haq.rs` whose claim is that the qualified path bails
-before `verify_packet_shape` is cleared while this ruling's status is `ruled`
-and the last commit touching this file verifies against
-`conformance/haqp/ruling-signers`. It does not clear any claim about a
-constant-returning formatter, an oracle, or the canonical-reparse relation.
+**Effect.** This ruling can clear only the claim at the exact persisted target
+`crates/liminal-xtask/src/haq.rs:3450`, if its class and claim phrases match.
+It does not clear another claim about a constant-returning formatter, an
+oracle, or the canonical-reparse relation.

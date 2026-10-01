@@ -1,7 +1,7 @@
 ---
 id: R-001
 attack_class: corpus leakage
-target: crates/liminal-xtask/src/haq.rs
+target: crates/liminal-xtask/src/haq.rs:1580
 claim_requires: read access
 claim_excludes: chdir; fchdir; wrote; write access; renameat; fuzz
 status: ruled
@@ -26,15 +26,11 @@ is about the corpus — keep the full any-touch rule. The prohibition on
 *tuning* against held-out data binds people and agents and is enforced by the
 corpus manifest and its history, not by a stage trace.
 
-**Effect.** A verified finding of class `corpus leakage` whose target file is
-`crates/liminal-xtask/src/haq.rs` and whose claim is that stage reads of the
-locked corpus are accepted is cleared by this ruling while its status is `ruled` and the last commit
-touching this file verifies against `conformance/haqp/ruling-signers`.
+**Effect.** This ruling can clear only the claim at the exact persisted target
+`crates/liminal-xtask/src/haq.rs:1580`, if its class and claim phrases match.
 
-**Scope (added 2026-09-06 after A08 at lane `aa00d41`).** This ruling answers
-only a claim whose prose contains `read access`. Matching on attack class and
-target file alone cleared an unrelated finding in the same class and file; a
-ruling answers a claim, not a coordinate.
+**Scope.** This ruling answers only the persisted finding at its exact
+coordinate. It cannot clear another finding in the same class or file.
 
 **Scope narrowed again (2026-09-07, after A08 at lane `5fb1b57`).** A required
 phrase can occur inside a sentence that negates it, so this ruling also lists

@@ -1,7 +1,7 @@
 ---
 id: R-003
 attack_class: corpus leakage
-target: crates/liminal-xtask/src/haq.rs
+target: crates/liminal-xtask/src/haq.rs:1
 claim_requires: does not run under strace; the verifier itself
 claim_excludes: chdir; fchdir; dirfd; renameat; wrote; write access
 status: ruled
@@ -32,9 +32,7 @@ reviewers are given `haq.rs` in full precisely so a human-independent party
 reads what the gate does. The residual — that a hostile author of the gate
 could read the locked corpus from inside the gate — is stated, not closed.
 
-**Effect.** A verified finding of class `corpus leakage` on
-`crates/liminal-xtask/src/haq.rs` whose claim is that the verifier is not
-itself traced is cleared while this ruling's status is `ruled` and the last
-commit touching this file verifies against `conformance/haqp/ruling-signers`.
-It does not clear any claim about a stage trace, a directory fd, a `chdir`, or
-a write to the locked corpus; those are excluded by name.
+**Effect.** This ruling can clear only the claim at the exact persisted target
+`crates/liminal-xtask/src/haq.rs:1`, if its class and claim phrases match. It
+does not clear another claim, a stage trace, a directory fd, a `chdir`, or a
+write to the locked corpus.

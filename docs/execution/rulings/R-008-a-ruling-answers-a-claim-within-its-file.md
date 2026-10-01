@@ -1,18 +1,18 @@
 ---
 id: R-008
 attack_class: exception broadening
-target: crates/liminal-xtask/src/haq.rs
+target: crates/liminal-xtask/src/haq.rs:3166
 claim_requires: ruling target
 claim_excludes: signature; signer; unsigned; draft; status
-status: draft
-ruled_by:
-date:
+status: withdrawn
+ruled_by: Brian
+date: 2026-09-30
 ---
 
 # R-008 — a file-scoped ruling is RISK-004, disclosed, not a defect
 
-**DRAFT. Not in force until Brian sets `status: ruled`, fills `ruled_by` and
-`date`, and commits it signed against `conformance/haqp/ruling-signers`.**
+**Withdrawn by Brian on 2026-09-30.** The file-wide scope is rejected. This
+record is retained as an audit artifact and never clears a finding.
 
 **Finding ruled on.** Blind pass 1 at lane base `cbed339f`, attempt A08
 (exception broadening): "Branch at crates/liminal-xtask/src/haq.rs:3166 accepts

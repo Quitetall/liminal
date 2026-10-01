@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "rulings": [
+    {
+      "id": "R-001",
+      "file": "docs/execution/rulings/R-001-stage-reads-of-the-locked-corpus.md",
+      "target": "crates/liminal-xtask/src/haq.rs:1580"
+    },
+    {
+      "id": "R-002",
+      "file": "docs/execution/rulings/R-002-canonical-reparse-relation-is-declared.md",
+      "target": "crates/liminal-xtask/src/haq.rs:142"
+    },
+    {
+      "id": "R-003",
+      "file": "docs/execution/rulings/R-003-the-verifier-is-not-traced-by-itself.md",
+      "target": "crates/liminal-xtask/src/haq.rs:1"
+    },
+    {
+      "id": "R-004",
+      "file": "docs/execution/rulings/R-004-a-change-to-the-gate-is-not-caught-by-the-gate.md",
+      "target": "crates/liminal-xtask/src/haq.rs:1"
+    },
+    {
+      "id": "R-005",
+      "file": "docs/execution/rulings/R-005-the-qualified-path-does-check-packet-shape.md",
+      "target": "crates/liminal-xtask/src/haq.rs:3450"
+    },
+    {
+      "id": "R-006",
+      "file": "docs/execution/rulings/R-006-a-per-file-census-has-no-order-to-drift.md",
+      "target": "crates/liminal-xtask/src/haq.rs:2847"
+    },
+    {
+      "id": "R-007",
+      "file": "docs/execution/rulings/R-007-a-killer-mapping-for-an-unwritten-test-is-measured-at-m24.md",
+      "target": "conformance/haqp/packet.json:1652"
+    },
+    {
+      "id": "R-008",
+      "file": "docs/execution/rulings/R-008-a-ruling-answers-a-claim-within-its-file.md",
+      "target": "crates/liminal-xtask/src/haq.rs:3166"
+    }
+  ]
+}

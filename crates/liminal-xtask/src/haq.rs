@@ -3020,10 +3020,10 @@ fn redact_evidence(text: &str) -> String {
 /// A standing ruling on a class of reviewer finding (grilling decision 6,
 /// 2026-09-03): a finding Brian rules incorrect is cleared by a ruling
 /// commit signed against the pinned signer, never by editing the record.
-/// Rulings live in `docs/execution/rulings/*.md` with a front matter of
-/// `id`, `attack_class`, `target` (a repository path) and `status`
-/// (`draft` or `ruled`). A ruling cannot name its own commit, so the commit
-/// that counts is the last one that touched the ruling's file.
+/// Rulings are enumerated by the closed registry in `conformance/haqp`; each
+/// has a front matter `target` that is one exact repository path and line.
+/// A ruling cannot name its own commit, so the commit that counts is the last
+/// one that touched the ruling's file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Ruling {
     id: String,
@@ -3033,8 +3033,8 @@ struct Ruling {
     /// answer it. Blind pass 1 at aa00d41 (A08): matching on class and file
     /// alone cleared an unrelated second claim in the same class and file —
     /// R-001, written for "stage reads are leakage", silently cleared a
-    /// genuine untracked-chdir defect. A ruling answers a claim, not a
-    /// coordinate.
+    /// genuine untracked-chdir defect. A ruling answers one claim at one
+    /// exact persisted coordinate.
     claim_requires: Vec<String>,
     /// Phrases whose presence means this ruling does NOT answer the claim.
     /// Blind pass 1 at 5fb1b57 (A08): a required phrase can be found inside a
@@ -3047,16 +3047,81 @@ struct Ruling {
 }
 
 const RULING_SIGNERS: &str = "conformance/haqp/ruling-signers";
+const RULING_REGISTRY: &str = "conformance/haqp/ruling-registry.json";
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RulingRegistry {
+    schema_version: u32,
+    rulings: Vec<RulingRegistryEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RulingRegistryEntry {
+    id: String,
+    file: String,
+    target: String,
+}
 
 fn rulings(root: &Utf8Path) -> Result<Vec<Ruling>> {
+    let registry_path = root.join(RULING_REGISTRY);
+    let registry: RulingRegistry = serde_json::from_slice(
+        &fs::read(&registry_path).with_context(|| format!("read {registry_path}"))?,
+    )
+    .with_context(|| format!("parse {registry_path}"))?;
+    anyhow::ensure!(
+        registry.schema_version == 1,
+        "{RULING_REGISTRY}: unsupported schema_version {}",
+        registry.schema_version
+    );
     let dir = root.join("docs/execution/rulings");
-    if !dir.is_dir() {
-        return Ok(Vec::new());
-    }
+    anyhow::ensure!(dir.is_dir(), "docs/execution/rulings is missing");
     let mut files = fs::read_dir(dir.as_std_path())?
         .map(|entry| entry.map(|e| e.path()))
         .collect::<std::io::Result<Vec<_>>>()?;
     files.sort();
+    let actual_files = files
+        .iter()
+        .filter(|file| file.extension().is_some_and(|ext| ext == "md"))
+        .map(|file| {
+            Utf8PathBuf::from_path_buf(file.clone())
+                .map_err(|p| anyhow::anyhow!("non-UTF-8 path {}", p.display()))?
+                .strip_prefix(root)
+                .map(ToOwned::to_owned)
+                .map_err(anyhow::Error::from)
+        })
+        .collect::<Result<BTreeSet<_>>>()?;
+    let mut registered_files = BTreeSet::new();
+    let mut registered_ids = BTreeSet::new();
+    for entry in &registry.rulings {
+        anyhow::ensure!(
+            registered_ids.insert(entry.id.as_str()),
+            "{RULING_REGISTRY}: duplicate ruling id {}",
+            entry.id
+        );
+        anyhow::ensure!(
+            registered_files.insert(entry.file.as_str()),
+            "{RULING_REGISTRY}: duplicate ruling file {}",
+            entry.file
+        );
+        validate_ruling_coordinate(&entry.target).with_context(|| {
+            format!("{RULING_REGISTRY}: ruling {} has invalid target", entry.id)
+        })?;
+        anyhow::ensure!(
+            entry.file.starts_with("docs/execution/rulings/")
+                && Path::new(&entry.file)
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
+                && canonical_relative_path(&entry.file),
+            "{RULING_REGISTRY}: invalid ruling file path {:?}",
+            entry.file
+        );
+    }
+    anyhow::ensure!(
+        registered_files == actual_files.iter().map(|p| p.as_str()).collect(),
+        "{RULING_REGISTRY}: registered ruling files differ from docs/execution/rulings/*.md; registered={registered_files:?}, actual={actual_files:?}"
+    );
     let mut out = Vec::new();
     for file in files {
         let file = Utf8PathBuf::from_path_buf(file)
@@ -3064,6 +3129,14 @@ fn rulings(root: &Utf8Path) -> Result<Vec<Ruling>> {
         if file.extension() != Some("md") {
             continue;
         }
+        let relative_file = file.strip_prefix(root)?.to_string();
+        let registry_entry = registry
+            .rulings
+            .iter()
+            .find(|entry| entry.file == relative_file)
+            .with_context(|| {
+                format!("{RULING_REGISTRY}: unregistered ruling file {relative_file}")
+            })?;
         let text = fs::read_to_string(&file)?;
         let front = text
             .strip_prefix("---\n")
@@ -3071,9 +3144,17 @@ fn rulings(root: &Utf8Path) -> Result<Vec<Ruling>> {
             .map(|(front, _)| front)
             .with_context(|| format!("{file}: ruling has no front matter"))?;
         let field = |key: &str| -> Result<String> {
-            front
+            let fields = front
                 .lines()
-                .find_map(|line| line.strip_prefix(&format!("{key}: ")))
+                .filter_map(|line| line.strip_prefix(&format!("{key}: ")))
+                .collect::<Vec<_>>();
+            anyhow::ensure!(
+                fields.len() == 1,
+                "{file}: expected exactly one {key} field"
+            );
+            fields
+                .first()
+                .copied()
                 .map(|v| v.trim().trim_matches('"').to_owned())
                 .with_context(|| format!("{file}: ruling front matter lacks {key}"))
         };
@@ -3082,12 +3163,29 @@ fn rulings(root: &Utf8Path) -> Result<Vec<Ruling>> {
         anyhow::ensure!(
             !requires.trim().is_empty(),
             "{file}: ruling claim_requires is empty; a ruling that answers any claim in its \
-             class and file clears defects it was never shown (A08)"
+             class and coordinate clears defects it was never shown (A08)"
+        );
+        let id = field("id")?;
+        let target = field("target")?;
+        let status = field("status")?;
+        validate_ruling_coordinate(&target)
+            .with_context(|| format!("{file}: ruling target must be an exact coordinate"))?;
+        anyhow::ensure!(
+            id == registry_entry.id,
+            "{file}: ruling id differs from registry"
+        );
+        anyhow::ensure!(
+            target == registry_entry.target,
+            "{file}: ruling target differs from its authoritative registry coordinate"
+        );
+        anyhow::ensure!(
+            matches!(status.as_str(), "draft" | "ruled" | "withdrawn"),
+            "{file}: unsupported ruling status {status:?}"
         );
         out.push(Ruling {
-            id: field("id")?,
+            id,
             attack_class: field("attack_class")?,
-            target: field("target")?,
+            target,
             claim_requires: requires
                 .split(';')
                 .map(|phrase| phrase.trim().to_ascii_lowercase())
@@ -3098,11 +3196,40 @@ fn rulings(root: &Utf8Path) -> Result<Vec<Ruling>> {
                 .map(|phrase| phrase.trim().to_ascii_lowercase())
                 .filter(|phrase| !phrase.is_empty())
                 .collect(),
-            status: field("status")?,
-            file: file.strip_prefix(root).unwrap_or(&file).to_string(),
+            status,
+            file: relative_file,
         });
     }
     Ok(out)
+}
+
+fn validate_ruling_coordinate(target: &str) -> Result<()> {
+    let (path, line) = target
+        .rsplit_once(':')
+        .context("target is not a repository path:positive-line coordinate")?;
+    anyhow::ensure!(
+        canonical_relative_path(path) && !path.contains(':') && !path.contains('\\'),
+        "target path is not canonical"
+    );
+    anyhow::ensure!(
+        !line.is_empty()
+            && line.bytes().all(|byte| byte.is_ascii_digit())
+            && (line == "0" || !line.starts_with('0'))
+            && line.parse::<usize>().is_ok_and(|value| value > 0),
+        "target line must be a canonical positive decimal"
+    );
+    Ok(())
+}
+
+fn canonical_relative_path(path: &str) -> bool {
+    !path.is_empty()
+        && !path.starts_with('/')
+        && Path::new(path)
+            .components()
+            .all(|component| matches!(component, Component::Normal(_)))
+        && path
+            .split('/')
+            .all(|component| !component.is_empty() && component != "." && component != "..")
 }
 
 /// A ruling is in force when its status is `ruled` and the last commit that
@@ -3137,8 +3264,8 @@ fn ruling_in_force(root: &Utf8Path, ruling: &Ruling) -> Result<bool> {
 
 /// The findings a record leaves unresolved after standing rulings: verified,
 /// independently reproduced, not resolved by a fix proof, and not covered by
-/// a ruling in force on the same attack class and target file. Read as plain
-/// JSON so the count is over what was persisted.
+/// a ruling in force on the same attack class and exact target coordinate.
+/// Read as plain JSON so the count is over what was persisted.
 pub fn effective_unresolved_findings_repo(root: &Utf8Path, record: &Utf8Path) -> Result<u64> {
     let value: serde_json::Value =
         serde_json::from_slice(&fs::read(record)?).with_context(|| format!("parse {record}"))?;
@@ -3173,7 +3300,6 @@ fn effective_unresolved_findings(
         {
             continue;
         }
-        let target_file = target.split(':').next().unwrap_or(target);
         let prose = format!(
             "{} {}",
             attempt["attempt"].as_str().unwrap_or_default(),
@@ -3191,11 +3317,7 @@ fn effective_unresolved_findings(
             .iter()
             .filter(|ruling| {
                 ruling.attack_class == class
-                    && if ruling.target.contains(':') {
-                        ruling.target == target
-                    } else {
-                        ruling.target == target_file
-                    }
+                    && ruling.target == target
                     && ruling
                         .claim_requires
                         .iter()
@@ -20123,7 +20245,7 @@ mod tests {
         let here = "crates/liminal-xtask/src/haq.rs:120";
         let elsewhere = "crates/liminal-xtask/src/haq.rs:900";
 
-        // A file-level ruling still answers the claim it was written for.
+        // A file-level ruling is no longer a valid scope and cannot clear it.
         let one = record(&[attempt(
             "A1",
             here,
@@ -20132,7 +20254,7 @@ mod tests {
         assert_eq!(
             effective_unresolved_findings(&[ruling("crates/liminal-xtask/src/haq.rs")], &one, path)
                 .expect("count"),
-            0
+            1
         );
 
         // Named to a coordinate, it does not reach a different line.
@@ -20150,12 +20272,35 @@ mod tests {
         // Two findings whose prose both match is the broad-phrase failure.
         let two = record(&[
             attempt("A1", here, "unauthorized read access remains accepted"),
-            attempt("A2", elsewhere, "a second defect: read access is unchecked"),
+            attempt("A2", here, "a second defect: read access is unchecked"),
         ]);
-        let err =
-            effective_unresolved_findings(&[ruling("crates/liminal-xtask/src/haq.rs")], &two, path)
-                .expect_err("a ruling that clears two findings is too broad");
+        let err = effective_unresolved_findings(&[ruling(here)], &two, path)
+            .expect_err("a ruling that clears two findings is too broad");
         assert!(err.to_string().contains("too broad to stand"), "{err}");
+    }
+
+    #[test]
+    fn ruling_coordinates_are_canonical_positive_line_anchors() {
+        for valid in ["src/lib.rs:1", "docs/execution/M17.md:1652"] {
+            validate_ruling_coordinate(valid).expect("canonical coordinate");
+        }
+        for invalid in [
+            "src/lib.rs",
+            "src/lib.rs:0",
+            "src/lib.rs:01",
+            "src/lib.rs:+1",
+            "src/../lib.rs:1",
+            "src//lib.rs:1",
+            "src/lib.rs/:1",
+            "/src/lib.rs:1",
+            "src\\lib.rs:1",
+            "src/lib.rs:1-2",
+        ] {
+            assert!(
+                validate_ruling_coordinate(invalid).is_err(),
+                "accepted invalid coordinate {invalid:?}"
+            );
+        }
     }
 
     /// Review of `cff54890`: `RESULT_BEARING_TABLES` is matched by exact
@@ -22203,10 +22348,15 @@ charlie
         let (_scratch, root) = scratch_git_repo("haq-ruling-claim");
         fs::create_dir_all(root.join("docs/execution/rulings")).expect("mkdir");
         fs::create_dir_all(root.join("conformance/haqp")).expect("mkdir");
+        fs::write(
+            root.join(RULING_REGISTRY),
+            r#"{"schema_version":1,"rulings":[{"id":"R-001","file":"docs/execution/rulings/R-001.md","target":"crates/liminal-xtask/src/haq.rs:1"}]}"#,
+        )
+        .expect("registry");
         fs::write(root.join(RULING_SIGNERS), "brian ssh-ed25519 AAAA\n").expect("signers");
         fs::write(
             root.join("docs/execution/rulings/R-001.md"),
-            "---\nid: R-001\nattack_class: corpus leakage\ntarget: crates/liminal-xtask/src/haq.rs\nclaim_requires: read access\nclaim_excludes: chdir\nstatus: ruled\n---\n\nReads are by design.\n",
+            "---\nid: R-001\nattack_class: corpus leakage\ntarget: crates/liminal-xtask/src/haq.rs:1\nclaim_requires: read access\nclaim_excludes: chdir\nstatus: ruled\n---\n\nReads are by design.\n",
         )
         .expect("ruling");
         let ruling = &rulings(&root).expect("parse")[0];
@@ -22253,7 +22403,7 @@ charlie
         // An empty claim_requires is refused outright.
         fs::write(
             root.join("docs/execution/rulings/R-001.md"),
-            "---\nid: R-001\nattack_class: corpus leakage\ntarget: crates/liminal-xtask/src/haq.rs\nclaim_requires:  \nstatus: ruled\n---\n\nToo broad.\n",
+            "---\nid: R-001\nattack_class: corpus leakage\ntarget: crates/liminal-xtask/src/haq.rs:1\nclaim_requires:  \nstatus: ruled\n---\n\nToo broad.\n",
         )
         .expect("ruling");
         let err = rulings(&root).expect_err("an empty claim filter");
@@ -22270,9 +22420,15 @@ charlie
     fn an_unsigned_ruling_clears_nothing() {
         let (_scratch, root) = scratch_git_repo("haq-ruling");
         fs::create_dir_all(root.join("docs/execution/rulings")).expect("mkdir");
+        fs::create_dir_all(root.join("conformance/haqp")).expect("mkdir");
+        fs::write(
+            root.join(RULING_REGISTRY),
+            r#"{"schema_version":1,"rulings":[{"id":"R-999","file":"docs/execution/rulings/R-999-test.md","target":"crates/liminal-xtask/src/haq.rs:1"}]}"#,
+        )
+        .expect("registry");
         fs::write(
             root.join("docs/execution/rulings/R-999-test.md"),
-                                    "---\nid: R-999\nattack_class: corpus leakage\ntarget: crates/liminal-xtask/src/haq.rs\nclaim_requires: read access\nstatus: draft\n---\n\nA draft.\n",
+            "---\nid: R-999\nattack_class: corpus leakage\ntarget: crates/liminal-xtask/src/haq.rs:1\nclaim_requires: read access\nstatus: draft\n---\n\nA draft.\n",
         )
         .expect("ruling");
         let parsed = rulings(&root).expect("parse");
@@ -22286,7 +22442,7 @@ charlie
         fs::write(root.join(RULING_SIGNERS), "brian ssh-ed25519 AAAA\n").expect("signers");
         fs::write(
             root.join("docs/execution/rulings/R-999-test.md"),
-                        "---\nid: R-999\nattack_class: corpus leakage\ntarget: crates/liminal-xtask/src/haq.rs\nclaim_requires: read access\nstatus: ruled\n---\n\nRuled, unsigned.\n",
+            "---\nid: R-999\nattack_class: corpus leakage\ntarget: crates/liminal-xtask/src/haq.rs:1\nclaim_requires: read access\nstatus: ruled\n---\n\nRuled, unsigned.\n",
         )
         .expect("ruling");
         for args in [

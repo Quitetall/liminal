@@ -1,7 +1,7 @@
 ---
 id: R-006
 attack_class: nondeterminism
-target: crates/liminal-xtask/src/haq.rs
+target: crates/liminal-xtask/src/haq.rs:2847
 claim_requires: compares counts not order
 claim_excludes: spawn; thread; concurrent; pthread; async
 status: ruled
@@ -32,9 +32,6 @@ If ordering ever becomes load-bearing — a boundary sequence whose ORDER is the
 invariant, as ILRP's eight protocol steps are — that is a different surface with
 a different check, and this ruling does not reach it.
 
-**Effect.** A verified finding of class `nondeterminism` on
-`crates/liminal-xtask/src/haq.rs` whose claim is that the durable census
-compares counts and not order is cleared while this ruling's status is `ruled`
-and the last commit touching this file verifies against
-`conformance/haqp/ruling-signers`. It does not clear any claim about spawned
-threads or concurrent execution.
+**Effect.** This ruling can clear only the claim at the exact persisted target
+`crates/liminal-xtask/src/haq.rs:2847`, if its class and claim phrases match.
+It does not clear another claim about spawned threads or concurrent execution.

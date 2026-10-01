@@ -1,7 +1,7 @@
 ---
 id: R-004
 attack_class: exception broadening
-target: crates/liminal-xtask/src/haq.rs
+target: crates/liminal-xtask/src/haq.rs:1
 claim_requires: a code change to the verifier itself
 claim_excludes: deny_unknown_fields; undeclared; waiver; packet.json; review record
 status: ruled
@@ -29,10 +29,7 @@ in-tree partial answer — the mutation campaign that found twenty-seven
 verifier functions surviving replacement with `Ok(())` — and it measures
 accident, not malice.
 
-**Effect.** A verified finding of class `exception broadening` on
-`crates/liminal-xtask/src/haq.rs` whose claim is that a code change to the
-verifier is not caught by the verifier is cleared while this ruling's status is
-`ruled` and the last commit touching this file verifies against
-`conformance/haqp/ruling-signers`. It does not clear any claim about an
-undeclared field, a waiver, the packet or a review record; those are excluded
-by name.
+**Effect.** This ruling can clear only the claim at the exact persisted target
+`crates/liminal-xtask/src/haq.rs:1`, if its class and claim phrases match. It
+does not clear another claim, an undeclared field, a waiver, the packet or a
+review record.

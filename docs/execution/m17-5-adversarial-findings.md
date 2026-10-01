@@ -5253,3 +5253,17 @@ all commands on `e1618ad1` with Pandoc 3.10.2 (receipt under
 `~/.local/state/liminal/assurance/run.aZyU8mwb/merge/`). Its result explicitly
 keeps `qualification_established` false. M17.5 still needs a new valid-base
 lane after Brian resolves R-008; M17.6 remains a separate human decision.
+
+## Decision update — 2026-09-30 (AM-17.19)
+
+Brian resolved the two pending decisions after F-94: R-007's P1-M042
+killer-strength claim is deferred to HAQP-1b at M24, and R-008's proposed
+file-scoped risk acceptance is rejected in favor of exact-coordinate ruling
+scope. The ruling matcher must require a canonical persisted
+`repository/path:positive-line` target and exact equality with the review
+attempt target; it has no file-wide or wildcard fallback. R-001 through R-006
+must be reissued at their exact recorded attempt coordinates and re-signed
+before clearing anything. R-008 is withdrawn as a risk-acceptance route; its
+finding must be fixed and verified. These decisions change no qualification
+threshold and grant no Phase 0 GO or Phase 1 authority. A new M17.5 lane remains
+pending implementation, verification, and the required signed ruling commit.
