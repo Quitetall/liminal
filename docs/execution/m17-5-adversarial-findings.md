@@ -5267,3 +5267,56 @@ before clearing anything. R-008 is withdrawn as a risk-acceptance route; its
 finding must be fixed and verified. These decisions change no qualification
 threshold and grant no Phase 0 GO or Phase 1 authority. A new M17.5 lane remains
 pending implementation, verification, and the required signed ruling commit.
+
+## F-95 — 2026-10-01 signed-base retry: three fresh findings; run failed
+
+Run-1 used signed base `59391d335ce8e78d276c7ed788f0b7538c89320a`, tree
+`8cafa433f3d529126edefbd22e2d8ba3a02d46ef`. Its receipt records a clean tree,
+594 seconds, and `result=fail`. The receipt, both reviewer passes, pass-1
+session, scope traces, scope rows, and SHA-256 manifest are preserved in
+`docs/execution/reviews/2026-10-01-lane-59391d3-run-1-failed/`.
+
+Pass 1 verified three findings; pass 2 reported none. The pass disagreement is
+preserved as evidence and does not negate pass 1's source-verified claims.
+
+| attempt | coordinate | finding | disposition |
+|---|---|---|---|
+| HAQP1-A03 | `crates/liminal-xtask/src/haq.rs:6101` | A benign ASCII file named `hostile` witnessed the hostile seed class. | Fixed in worktree; broad verification and signed rerun pending. |
+| HAQP1-A09 | `crates/liminal-xtask/src/haq.rs:14911` | `lines.get(1)` selected the empty separator rather than the second block, so the commute category did not build two independent block edits. | Fixed in worktree; broad verification and signed rerun pending. |
+| HAQP1-A10 | `crates/liminal-xtask/src/haq.rs:2160` | The oracle required outcome-class symmetry and token survival, but not equality of forward and swapped results for independent edits. | Fixed in worktree; broad verification and signed rerun pending. |
+
+The hostile class now requires invalid UTF-8, a non-whitespace ASCII control
+byte, or at least 16 levels of structural nesting in a seed whose name declares
+it. The last case is needed for the committed Markdown hostile seeds, which
+are 32 unclosed braces rather than binary text. The commute fixture now
+guarantees at least two blocks and selects the second block after splitting on
+blank paragraph separators. The independent oracle checks exact result
+equality for the declared commute category, and the relation is listed in both
+the code's closed relation set and `packet.json`.
+
+Each change has a regression that failed before its correction and passed
+afterward: `a_seed_set_must_span_every_class_by_name`,
+`commute_transform_edits_target_two_distinct_blocks`, and
+`independent_source_edits_must_produce_the_same_commuted_result`; the explicit
+generated commute path also passes in
+`commute_generator_exercises_its_two_block_relation`. These targeted results
+are supplemented by a successful deterministic `haq generate --cases 100000`
+run (100,000 accepted in each of five families; artifact BLAKE3
+`b104095f45849470eb620af537ce4f383ec8e71d22a111743381c2bf7f907326`), a
+passing `just haq-canaries` run (33/33 caught), and `just haq-inventory`. The
+packet's generator counts/hashes and the phase-review packet digest mirror
+were refreshed from those producers. The packet digest changed from
+`d8693e75535c2dd63cd82936bd950dcbaaff1f41b2c6f02ec9d2b625acb515b3` to
+`c25120378e33cc3a305016fc2121b189933263062f36d2fa1f6b05a11032063f` using
+`cargo run -p liminal-xtask -- haq packet-digest`. The transform builder golden
+changed from `3c56f417…` to `e26379c8…` alongside the intentional generator
+correction.
+
+The first full `cargo test -p liminal-xtask` run exposed stale dependent
+artifacts: the Markdown hostile seed needed the structural-depth property, the
+fixed-HEAD canary replay cannot see the uncommitted packet relation, and the
+transform builder golden needed an explicit re-record. The first two are
+corrected in the worktree; the replay requires the updated state to be
+committed before it can be meaningfully rerun. Full package verification and a
+fresh signed HAQP lane remain required; no qualification or phase decision is
+claimed here.

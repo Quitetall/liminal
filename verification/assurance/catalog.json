@@ -91,7 +91,7 @@
     {
       "id": "assurance-tooling", "owner": "release owner",
       "source_areas": ["crates/liminal-xtask", "verification/assurance"],
-      "targets": ["crates/liminal-xtask/Cargo.toml::lib::liminal_xtask", "crates/liminal-xtask/Cargo.toml::bin::liminal-xtask", "crates/liminal-xtask/Cargo.toml::test::formal", "crates/liminal-xtask/Cargo.toml::test::assurance"],
+      "targets": ["crates/liminal-xtask/Cargo.toml::lib::liminal_xtask", "crates/liminal-xtask/Cargo.toml::bin::liminal-xtask", "crates/liminal-xtask/Cargo.toml::test::formal", "crates/liminal-xtask/Cargo.toml::test::assurance", "crates/liminal-xtask/Cargo.toml::test::haq_review_unresolved"],
       "references": [{"path": "docs/security/threat-model.md", "anchor": "TM-16"}],
       "review_triggers": ["phase-gate", "gate-change", "dependency-change"],
       "profiles": ["merge", "portability"], "platforms": ["linux", "macos"]

@@ -1,0 +1,2 @@
+{"stage":"reviews","command":"just haq-blind-review","exit_code":0,"elapsed_s":593,"artifact":"none","artifact_blake3":"absent"}
+{"stage":"ci","command":"just ci","exit_code":1,"elapsed_s":1,"artifact":"none","artifact_blake3":"absent"}

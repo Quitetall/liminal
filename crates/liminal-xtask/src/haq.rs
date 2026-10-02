@@ -1539,7 +1539,11 @@ fn generated_relations(family: &str) -> &'static [&'static str] {
     match family {
         "source/CST/formatting" => &["lossless_emit", "format_idempotence"],
         "graph/interchange codecs" => &["byte_canonical_stability", "field_fidelity"],
-        "transforms/projections" => &["identity_merge", "outcome_class_symmetry"],
+        "transforms/projections" => &[
+            "identity_merge",
+            "outcome_class_symmetry",
+            "commuting_independent_edits",
+        ],
         "repair/ILRP/recovery" => &[
             "dependency_order",
             "permutation_invariance",
@@ -2049,9 +2053,10 @@ fn independent_oracle_source_cst(
     Ok(witness)
 }
 
-/// Independent merge oracle. It checks raw content and outcome classes, not
-/// merge-result equality.
+/// Independent merge oracle. It checks raw content and outcome classes, plus
+/// result equality for the category that declares independent edits.
 fn independent_oracle_source_transform(
+    category: &str,
     base: &str,
     ours: &str,
     theirs: &str,
@@ -2161,7 +2166,28 @@ fn independent_oracle_source_transform(
         disjoint(forward) == disjoint(swapped),
         "merge disjointness is not symmetric under swapping sides"
     );
+    if category == "commute" {
+        require_commuting_source_outcomes(forward, swapped)?;
+    }
     Ok(format!("{identity:?}|{forward:?}|{swapped:?}").into_bytes())
+}
+
+fn require_commuting_source_outcomes(
+    forward: &liminal_source::merge::MergeOutcome,
+    swapped: &liminal_source::merge::MergeOutcome,
+) -> Result<()> {
+    let (
+        liminal_source::merge::MergeOutcome::Disjoint { merged: forward },
+        liminal_source::merge::MergeOutcome::Disjoint { merged: swapped },
+    ) = (forward, swapped)
+    else {
+        anyhow::bail!("independent source edits were not disjoint in both merge orders");
+    };
+    anyhow::ensure!(
+        forward == swapped,
+        "independent source edits do not commute: forward={forward:?}, swapped={swapped:?}"
+    );
+    Ok(())
 }
 
 fn ordered_block_contents(text: &str) -> BTreeMap<String, Vec<String>> {
@@ -5963,8 +5989,38 @@ fn verify_fuzz_seed_manifests(root: &Utf8Path, recorded: &[FuzzEvidence]) -> Res
 /// those bytes valid. A name that asserts a byte property must exhibit it.
 type SeedPredicate = fn(&[u8]) -> bool;
 
-const SEED_NAME_PREDICATES: [(&str, SeedPredicate); 5] = [
+fn has_hostile_seed_property(bytes: &[u8]) -> bool {
+    if std::str::from_utf8(bytes).is_err()
+        || bytes
+            .iter()
+            .any(|byte| byte.is_ascii_control() && !byte.is_ascii_whitespace())
+    {
+        return true;
+    }
+    // The textual hostile seed is 32 unclosed structural delimiters. Treat
+    // excessive nesting as a hostile shape too, even when the bytes are valid
+    // UTF-8 and printable; the class must not be binary-only.
+    let mut depth = 0_usize;
+    let mut maximum_depth = 0_usize;
+    for byte in bytes {
+        match byte {
+            b'{' | b'[' | b'(' | b'<' => {
+                depth = depth.saturating_add(1);
+                maximum_depth = maximum_depth.max(depth);
+            }
+            b'}' | b']' | b')' | b'>' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+    maximum_depth >= 16
+}
+
+const SEED_NAME_PREDICATES: [(&str, SeedPredicate); 6] = [
     ("invalid-utf8", |bytes| std::str::from_utf8(bytes).is_err()),
+    // ADR-0020's hostile class must contain a hostile byte property, not only
+    // a filename token. Raw octets, non-whitespace controls, and excessive
+    // structural nesting are the hostile shapes used by the seed corpora.
+    ("hostile", has_hostile_seed_property),
     ("empty", |bytes: &[u8]| {
         bytes.iter().copied().all(|byte| byte.is_ascii_whitespace())
     }),
@@ -14858,9 +14914,13 @@ fn transform_negative_input(category: &str, rng: &mut Rng) -> String {
 }
 
 fn case_transform(rng: &mut Rng) -> Result<Case> {
+    let category = rng.category("transforms/projections");
+    case_transform_category(category, rng)
+}
+
+fn case_transform_category(category: &'static str, rng: &mut Rng) -> Result<Case> {
     use liminal_source::merge::three_way;
 
-    let category = rng.category("transforms/projections");
     if matches!(category, "empty" | "invalid-span" | "truncated" | "hostile") {
         // Negative inputs still cross the production merge implementation.
         // Blind pass 1 at 612cbcc (A03): every category used to become an
@@ -14890,6 +14950,7 @@ fn case_transform(rng: &mut Rng) -> Result<Case> {
         return Ok(Case::Negative { category, witness });
     }
     let blocks = match category {
+        "commute" => 2 + rng.below(3),
         "deep" => 12,
         "wide" | "large-patch" => 8,
         _ => 1 + rng.below(4),
@@ -14906,23 +14967,49 @@ fn case_transform(rng: &mut Rng) -> Result<Case> {
         });
     }
     let token = rng.word();
+    let (ours, theirs) = source_transform_edits(category, &base, &token)?;
+
+    // Identity: theirs unchanged => the merge must carry ours' content.
+    //
+    // M17.5 pass-2 #9: this used to be `if let Disjoint { merged } = ...`, so an
+    // implementation that returned `Conflict` for EVERY input never entered the
+    // branch and the relation held vacuously — the metamorphic check tested
+    // nothing at all. A side that changed nothing cannot conflict with anything,
+    // so `Disjoint` is a REQUIREMENT here, not a case to handle.
+    let identity = three_way(&base, &ours, &base);
+    let forward = three_way(&base, &ours, &theirs);
+    let swapped = three_way(&base, &theirs, &ours);
+    let witness = independent_oracle_source_transform(
+        category, &base, &ours, &theirs, &identity, &forward, &swapped,
+    )?;
+    Ok(Case::Accepted { category, witness })
+}
+
+fn source_transform_edits(category: &str, base: &str, token: &str) -> Result<(String, String)> {
     let mut lines = base.lines().map(str::to_owned).collect::<Vec<_>>();
     let first = lines.first().cloned().unwrap_or_default();
-    let second = lines.get(1).cloned().unwrap_or_else(|| first.clone());
-    let (ours, theirs) = match category {
-        "identity" | "deep" | "wide" | "large-patch" => (base.clone(), base.clone()),
-        "insert" => (format!("{token}\n\n{base}"), base.clone()),
+    let second = base
+        .split("\n\n")
+        .nth(1)
+        .map_or_else(|| first.clone(), str::to_owned);
+    anyhow::ensure!(
+        category != "commute" || base.split("\n\n").count() >= 2,
+        "commuting source edits require two distinct base blocks"
+    );
+    Ok(match category {
+        "identity" | "deep" | "wide" | "large-patch" => (base.to_owned(), base.to_owned()),
+        "insert" => (format!("{token}\n\n{base}"), base.to_owned()),
         "delete" => (
             lines.iter().skip(1).cloned().collect::<Vec<_>>().join("\n"),
-            base.clone(),
+            base.to_owned(),
         ),
         "replace" => (
             base.replacen(&first, &format!("{token} {first}"), 1),
-            base.clone(),
+            base.to_owned(),
         ),
         "move" => {
             lines.reverse();
-            (lines.join("\n"), base.clone())
+            (lines.join("\n"), base.to_owned())
         }
         "overlap" => (
             base.replacen(&first, &format!("ours {first}"), 1),
@@ -14936,23 +15023,9 @@ fn case_transform(rng: &mut Rng) -> Result<Case> {
             base.replacen(&first, &format!("left {first}"), 1),
             base.replacen(&first, &format!("right {first}"), 1),
         ),
-        "boundary-span" => (format!("\n{base}\n"), base.clone()),
+        "boundary-span" => (format!("\n{base}\n"), base.to_owned()),
         other => unreachable!("unknown transform category {other}"),
-    };
-
-    // Identity: theirs unchanged => the merge must carry ours' content.
-    //
-    // M17.5 pass-2 #9: this used to be `if let Disjoint { merged } = ...`, so an
-    // implementation that returned `Conflict` for EVERY input never entered the
-    // branch and the relation held vacuously — the metamorphic check tested
-    // nothing at all. A side that changed nothing cannot conflict with anything,
-    // so `Disjoint` is a REQUIREMENT here, not a case to handle.
-    let identity = three_way(&base, &ours, &base);
-    let forward = three_way(&base, &ours, &theirs);
-    let swapped = three_way(&base, &theirs, &ours);
-    let witness =
-        independent_oracle_source_transform(&base, &ours, &theirs, &identity, &forward, &swapped)?;
-    Ok(Case::Accepted { category, witness })
+    })
 }
 
 /// Family 3 — repair/ILRP/recovery.
@@ -18026,7 +18099,7 @@ mod tests {
             ),
             (
                 "transforms/projections",
-                "3c56f417ccf4334d819c7600c1feb1143d32530de59130be531aaba991cba40d",
+                "e26379c88293d5cd7add6e090c07a87451cdcce9860e76803ed6730af70f78ba",
             ),
             (
                 "repair/ILRP/recovery",
@@ -20012,11 +20085,14 @@ mod tests {
         let swapped = MergeOutcome::Disjoint {
             merged: "alpha {#y}\n\nbeta {#x}".to_owned(),
         };
-        independent_oracle_source_transform(base, ours, base, &faithful, &faithful, &faithful)
-            .expect("a faithful move keeps every marker's content");
-        let err =
-            independent_oracle_source_transform(base, ours, base, &swapped, &swapped, &swapped)
-                .expect_err("swapped contents under moved markers");
+        independent_oracle_source_transform(
+            "move", base, ours, base, &faithful, &faithful, &faithful,
+        )
+        .expect("a faithful move keeps every marker's content");
+        let err = independent_oracle_source_transform(
+            "move", base, ours, base, &swapped, &swapped, &swapped,
+        )
+        .expect_err("swapped contents under moved markers");
         assert!(err.to_string().contains("re-associated"), "{err}");
     }
 
@@ -20032,10 +20108,53 @@ mod tests {
         let dropped = MergeOutcome::Disjoint {
             merged: base.to_owned(),
         };
-        let err =
-            independent_oracle_source_transform(base, ours, theirs, &identity, &dropped, &dropped)
-                .expect_err("a disjoint result that drops edits is not safe");
+        let err = independent_oracle_source_transform(
+            "commute", base, ours, theirs, &identity, &dropped, &dropped,
+        )
+        .expect_err("a disjoint result that drops edits is not safe");
         assert!(err.to_string().contains("dropped added token"), "{err}");
+    }
+
+    #[test]
+    fn independent_source_edits_must_produce_the_same_commuted_result() {
+        use liminal_source::merge::MergeOutcome;
+        let base = "alpha {#a}\n\nbeta {#b}";
+        let ours = "ours alpha {#a}\n\nbeta {#b}";
+        let theirs = "alpha {#a}\n\ntheirs beta {#b}";
+        let identity = MergeOutcome::Disjoint {
+            merged: ours.to_owned(),
+        };
+        let forward = MergeOutcome::Disjoint {
+            merged: "ours alpha {#a}\n\ntheirs beta {#b}".to_owned(),
+        };
+        let swapped = MergeOutcome::Disjoint {
+            merged: "theirs beta {#b}\n\nours alpha {#a}".to_owned(),
+        };
+        let err = independent_oracle_source_transform(
+            "commute", base, ours, theirs, &identity, &forward, &swapped,
+        )
+        .expect_err("independent edits with different merged order do not commute");
+        assert!(err.to_string().contains("commute"), "{err}");
+    }
+
+    #[test]
+    fn commute_transform_edits_target_two_distinct_blocks() {
+        let base = "alpha {#a}\n\nbeta {#b}";
+        let (ours, theirs) = source_transform_edits("commute", base, "change")
+            .expect("the fixture has two base blocks");
+        assert_eq!(ours, "ours alpha {#a}\n\nbeta {#b}");
+        assert_eq!(theirs, "alpha {#a}\n\ntheirs beta {#b}");
+    }
+
+    #[test]
+    fn commute_generator_exercises_its_two_block_relation() {
+        let Case::Accepted { category, witness } =
+            case_transform_category("commute", &mut Rng(7)).expect("independent edits commute")
+        else {
+            panic!("a generated independent edit pair must be accepted");
+        };
+        assert_eq!(category, "commute");
+        assert!(!witness.is_empty(), "the merge outputs are the witness");
     }
 
     /// Blind pass 1 at 612cbcc (A03): each negative category constructs the
@@ -21931,7 +22050,12 @@ charlie
         // The valid class is declared by name like every other (A03).
         fs::write(dir.join("00-single-token.bin"), b"declared valid").expect("seed");
         commit_all("classed seeds");
-        verify_seed_classes(&root, "t", &dir).expect("every class declared");
+        let err = verify_seed_classes(&root, "t", &dir)
+            .expect_err("a benign ASCII payload must not witness hostile input");
+        assert!(err.to_string().contains("named \"hostile\""), "{err}");
+        fs::write(dir.join("hostile.bin"), [0, 0xff, 0x7f]).expect("hostile bytes");
+        commit_all("hostile bytes match the class");
+        verify_seed_classes(&root, "t", &dir).expect("hostile class has hostile bytes");
 
         // Copying a seed under another class's name adds a name, not a class.
         fs::write(dir.join("hostile-copy.bin"), b"class 0").expect("seed");
@@ -21992,7 +22116,7 @@ charlie
             ("01-boundary.bin", b"boundary".as_slice()),
             ("02-truncated.bin", b"truncated".as_slice()),
             ("03-invalid.bin", b"invalid".as_slice()),
-            ("04-hostile.bin", b"hostile".as_slice()),
+            ("04-hostile.bin", [0, 0xff, 0x7f].as_slice()),
         ] {
             fs::write(graph_dir.join(name), bytes).expect("graph negative seed");
         }

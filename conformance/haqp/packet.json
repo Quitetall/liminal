@@ -2221,7 +2221,7 @@
    ],
    "result": "planned",
    "seed": 11400714819323198485,
-   "evidence_hash": "4f96c1bbb58bfbf136f6b66e92a1029e919d32a90635d1d025ec87efca1af43e",
+   "evidence_hash": "7ea60dbcad1baacc1496c0ab1065cbf60cbe3843966bd841fe47c42fee3f41ad",
    "fuzz_targets": [
     "cst_parse",
     "canonical_round_trip",
@@ -2239,9 +2239,9 @@
   {
    "family": "graph/interchange codecs",
    "accepted": 100000,
-   "attempts": 266440,
+   "attempts": 266453,
    "discards": 0,
-   "negatives": 166440,
+   "negatives": 166453,
    "seed_categories": [
     "empty",
     "single-node",
@@ -2262,7 +2262,7 @@
    ],
    "result": "planned",
    "seed": 11400713719811571110,
-   "evidence_hash": "801f9f6ce8baebba58346ccbb8af4da46661977589b9f1b2bdb3cd70835694e5",
+   "evidence_hash": "9299861d87a57b7ee1b5e21eee8ff8b5c0e9856b461a7284fb5afea4e3b03c96",
    "fuzz_targets": [
     "graph_interchange_codec"
    ],
@@ -2278,9 +2278,9 @@
   {
    "family": "transforms/projections",
    "accepted": 100000,
-   "attempts": 133537,
+   "attempts": 133442,
    "discards": 0,
-   "negatives": 33537,
+   "negatives": 33442,
    "seed_categories": [
     "identity",
     "insert",
@@ -2301,13 +2301,14 @@
    ],
    "result": "planned",
    "seed": 11400717018346454899,
-   "evidence_hash": "ca44ad0239aa6bff887a12a75b03d5d7e2fb6b4f6336b7cd2fce0b3e6f76f167",
+   "evidence_hash": "42a31075c571262a97b7e16ad110dce232da68381a2302ce804363487161bae6",
    "fuzz_targets": [
     "html_render"
    ],
    "relations": [
     "identity_merge",
-    "outcome_class_symmetry"
+    "outcome_class_symmetry",
+    "commuting_independent_edits"
    ],
    "oracle": {
     "id": "oracle:transforms_projections",
@@ -2317,9 +2318,9 @@
   {
    "family": "repair/ILRP/recovery",
    "accepted": 100000,
-   "attempts": 106434,
-   "discards": 269,
-   "negatives": 6165,
+   "attempts": 121748,
+   "discards": 248,
+   "negatives": 21500,
    "seed_categories": [
     "prepared",
     "applying",
@@ -2341,7 +2342,7 @@
    ],
    "result": "planned",
    "seed": 11400715918834825484,
-   "evidence_hash": "ee3e1d1e4f97948639535910c411ecf06ce0cb9572a31e9fd3ed5a0d2262383f",
+   "evidence_hash": "24609b1b08f9fb379a326d1cef6336aa2f46f90eb3615e02f681338aa9bdaaf6",
    "fuzz_targets": [
     "ilrp_recovery"
    ],
@@ -2358,9 +2359,9 @@
   {
    "family": "Basis/revision/query invalidation",
    "accepted": 100000,
-   "attempts": 145569,
+   "attempts": 145876,
    "discards": 0,
-   "negatives": 45569,
+   "negatives": 45876,
    "seed_categories": [
     "empty-basis",
     "single-revision",
@@ -2381,7 +2382,7 @@
    ],
    "result": "planned",
    "seed": 11400719217369709273,
-   "evidence_hash": "f85ed05fbfb6f1d24ca21ac1ddc2947b400da234fbfb5ca28f6d3f4f2a65e7d0",
+   "evidence_hash": "02397cd41786126616fe5e570c9a75aacb97eed96fe407194c4cc820c21ed547",
    "fuzz_targets": [
     "incremental_full_equivalence"
    ],
