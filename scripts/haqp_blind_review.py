@@ -652,6 +652,20 @@ def parse_json(text: str) -> dict[str, Any]:
                 for field in ("commit", "coordinate", "evidence_path", "evidence_sha256")
             ):
                 raise ValueError(f"resolved verified attempt {identifier} needs resolution proof")
+        # AM-17.20: a verified defect carries the reviewer's proposed class.
+        # S1 (false pass) blocks; S2 (weak check) and S3 (bookkeeping) are
+        # recorded, and need a stated reason a false pass is ruled out. The
+        # gate re-derives this and treats anything incomplete as S1.
+        if attempt["classification"] == "verified_defect":
+            severity = attempt.get("severity")
+            if severity not in {"S1", "S2", "S3"}:
+                raise ValueError(f"verified attempt {identifier} needs severity S1, S2 or S3")
+            if severity != "S1":
+                reason = str(attempt.get("false_pass_ruled_out", "")).strip()
+                if len(reason) < 24 or len(reason.split()) < 4:
+                    raise ValueError(
+                        f"{severity} attempt {identifier} must state why a false pass is ruled out"
+                    )
         if attempt["classification"] == "false_positive" and not attempt["independently_reproduced"]:
             raise ValueError(f"false-positive attempt {identifier} lacks independent reproduction evidence")
         if attempt["classification"] == "caught_violation":
@@ -840,6 +854,11 @@ def run_pass(
         "A resolved verified_defect attempt must also carry resolution={commit,coordinate,evidence_path,evidence_sha256}; "
         "its evidence file must contain resolution_result: pass, verification_command:, and verification_exit_code: 0. "
         "leave resolved=false when no fix proof exists. "
+        "Every verified_defect attempt must also carry severity: S1 if the gate would accept something untrue "
+        "(a real product defect, a packet claim that does not hold, held-out corpus access, or forged evidence it "
+        "cannot detect); S2 if a check runs but is weaker or narrower than it claims and no false pass follows; "
+        "S3 if only the gate's own reporting or bookkeeping is wrong. S2 and S3 also require false_pass_ruled_out, "
+        "a sentence explaining why no false pass is possible. If you can construct a concrete false pass, it is S1. "
         "Return JSON object with attempts array, findings array, independently_reproduced array of finding ids, "
         "unresolved_verified_findings integer, and result. Set unresolved_verified_findings to the count "
         "of independently reproduced findings whose linked attempt has resolved=false; set it to 0 when "
@@ -1140,7 +1159,10 @@ def self_test() -> int:
     )
     linked = {
         **good,
-        "attempts": [{**a, "classification": "verified_defect"} if a["id"] == "A0" else a for a in good["attempts"]],
+        "attempts": [
+            {**a, "classification": "verified_defect", "severity": "S1"} if a["id"] == "A0" else a
+            for a in good["attempts"]
+        ],
         "findings": [{"id": "F1", "attempt_id": "A0"}],
         "independently_reproduced": ["F1"],
         "unresolved_verified_findings": 1,
@@ -1149,6 +1171,35 @@ def self_test() -> int:
         parse_json(json.dumps(linked))
     except ValueError as exc:
         failures.append(f"a linked finding/reproduction record was rejected: {exc}")
+    # AM-17.20: a verified defect states its class, and a non-blocking class
+    # states why no false pass is possible.
+    def with_a0(**fields: Any) -> str:
+        return json.dumps({
+            **linked,
+            "attempts": [{**a, **fields} if a["id"] == "A0" else a for a in linked["attempts"]],
+        })
+    # A valid reason must not rescue a missing or unknown class.
+    reason = "the transform golden asserts the same outcome independently"
+    rejects(
+        "parse_json accepted a verified defect with no severity",
+        parse_json,
+        with_a0(severity=None, false_pass_ruled_out=reason),
+    )
+    rejects(
+        "parse_json accepted an unknown severity",
+        parse_json,
+        with_a0(severity="S4", false_pass_ruled_out=reason),
+    )
+    rejects("parse_json accepted S2 with no stated reason", parse_json, with_a0(severity="S2"))
+    rejects(
+        "parse_json accepted S3 with a token reason",
+        parse_json,
+        with_a0(severity="S3", false_pass_ruled_out="fine"),
+    )
+    try:
+        parse_json(with_a0(severity="S2", false_pass_ruled_out=reason))
+    except ValueError as exc:
+        failures.append(f"an S2 finding with a stated reason was rejected: {exc}")
     rejects(
         "parse_json accepted reproduction of an absent finding",
         parse_json,

@@ -5320,3 +5320,22 @@ corrected in the worktree; the replay requires the updated state to be
 committed before it can be meaningfully rerun. Full package verification and a
 fresh signed HAQP lane remain required; no qualification or phase decision is
 claimed here.
+
+## Decision update — 2026-10-03 (AM-17.20 and the F-95 golden)
+
+Brian approved AM-17.20: blind-review findings are classed S1 (false pass,
+blocks), S2 (weak check) or S3 (bookkeeping), and only S1 blocks the flip. The
+reviewer prompt now asks for the class, `haqp_blind_review.py` refuses a
+verified defect without one or an S2/S3 without a stated reason, and the gate's
+`finding_blocks` counts anything incomplete as S1.
+`only_a_false_pass_blocks_qualification` fails when the reason requirement is
+removed; the runner self-test fails when the class check is removed.
+
+Applied to F-95: A10 is S1 and A03 and A09 are S2. All three are fixed in
+`cc8dbac5`.
+
+F-95's fix changed the transform builder golden from `3c56f417…` to
+`e26379c8…`. Accepting a changed golden is a T1 act, and no acceptance was on
+record. Brian accepted it on 2026-10-03, in the same exchange that approved
+AM-17.20 ("agree. Let's go.").
+

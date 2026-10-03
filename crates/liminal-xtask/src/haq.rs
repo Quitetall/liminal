@@ -3302,6 +3302,24 @@ pub fn effective_unresolved_findings_repo(root: &Utf8Path, record: &Utf8Path) ->
     effective_unresolved_findings(&in_force, &value, record)
 }
 
+/// Whether a verified, unresolved defect blocks qualification (AM-17.20).
+///
+/// Only S1, a false pass, blocks. A defect is S2 (weak check) or S3
+/// (bookkeeping) only when the reviewer both says so and states why a false
+/// pass is ruled out, in prose of the same substance every attempt field
+/// needs. Anything else, including a missing or unknown class and every record
+/// written before the bar existed, is S1. The default runs toward blocking, so
+/// a lazy or truncated answer cannot downgrade a finding.
+fn finding_blocks(attempt: &serde_json::Value) -> bool {
+    let downgraded = matches!(attempt["severity"].as_str(), Some("S2" | "S3"));
+    let reason = attempt["false_pass_ruled_out"]
+        .as_str()
+        .unwrap_or_default()
+        .trim();
+    let substantive = reason.len() >= 24 && reason.split_whitespace().count() >= 4;
+    !(downgraded && substantive)
+}
+
 /// The count, given the rulings already established to be in force. Split from
 /// the repository walk so the clearance rules can be exercised without a
 /// signing key: a rule the tests cannot reach is a rule nothing checks.
@@ -3323,6 +3341,7 @@ fn effective_unresolved_findings(
                 .as_bool()
                 .unwrap_or(false)
             || attempt["resolved"].as_bool().unwrap_or(false)
+            || !finding_blocks(attempt)
         {
             continue;
         }
@@ -13166,6 +13185,15 @@ struct ReviewRecordAttempt {
     resolved: bool,
     #[serde(default)]
     resolution: Option<ReviewResolution>,
+    /// AM-17.20: the reviewer's proposed class for a verified defect, `S1`
+    /// (false pass), `S2` (weak check) or `S3` (bookkeeping). Absent in
+    /// records written before the bar existed, which therefore stay blocking.
+    #[serde(default)]
+    severity: Option<String>,
+    /// AM-17.20: why this defect cannot produce a false pass. Required for a
+    /// non-blocking class; without it the finding is S1.
+    #[serde(default)]
+    false_pass_ruled_out: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -16428,6 +16456,8 @@ mod tests {
             classification: "caught_violation".to_owned(),
             resolved: false,
             resolution: None,
+            severity: None,
+            false_pass_ruled_out: None,
         }
     }
 
@@ -20398,6 +20428,58 @@ mod tests {
         assert!(err.to_string().contains("too broad to stand"), "{err}");
     }
 
+    /// AM-17.20: only a false pass (S1) blocks. A weak check (S2) or a
+    /// bookkeeping defect (S3) is recorded and does not block, but only when
+    /// the reviewer says why no false pass is possible. Every way of omitting
+    /// or garbling that leaves the finding blocking.
+    #[test]
+    fn only_a_false_pass_blocks_qualification() {
+        let path = Utf8Path::new("r.json");
+        let because = "the same behaviour is asserted by the transform golden";
+        let count = |extra: &str| -> u64 {
+            let record: serde_json::Value = serde_json::from_str(&format!(
+                r#"{{"attempts":[{{"id":"A1","attack_class":"vacuity","target":"src/lib.rs:7","attempt":"a","observed_result":"b","classification":"verified_defect","independently_reproduced":true,"resolved":false{extra}}}]}}"#
+            ))
+            .expect("record");
+            effective_unresolved_findings(&[], &record, path).expect("count")
+        };
+
+        assert_eq!(
+            count(""),
+            1,
+            "a record from before the bar has no class: S1"
+        );
+        assert_eq!(count(r#","severity":"S1""#), 1, "S1 blocks");
+        for class in ["S2", "S3"] {
+            assert_eq!(
+                count(&format!(
+                    r#","severity":"{class}","false_pass_ruled_out":"{because}""#
+                )),
+                0,
+                "{class} with a reason is recorded, not blocking"
+            );
+            assert_eq!(
+                count(&format!(r#","severity":"{class}""#)),
+                1,
+                "{class} without a reason is S1"
+            );
+            assert_eq!(
+                count(&format!(
+                    r#","severity":"{class}","false_pass_ruled_out":"trust me""#
+                )),
+                1,
+                "{class} with a token reason is S1"
+            );
+        }
+        assert_eq!(
+            count(&format!(
+                r#","severity":"s2","false_pass_ruled_out":"{because}""#
+            )),
+            1,
+            "an unknown class is S1"
+        );
+    }
+
     #[test]
     fn ruling_coordinates_are_canonical_positive_line_anchors() {
         for valid in ["src/lib.rs:1", "docs/execution/M17.md:1652"] {
@@ -20803,6 +20885,8 @@ mod tests {
                 classification: "verified_defect".to_owned(),
                 resolved: false,
                 resolution: None,
+                severity: None,
+                false_pass_ruled_out: None,
             }];
             record.findings = vec![serde_json::json!({"id": "F-eq", "attempt_id": "A1"})];
             record.independently_reproduced = vec!["F-eq".to_owned()];
@@ -21104,6 +21188,8 @@ mod tests {
             classification: "verified_defect".to_owned(),
             resolved: false,
             resolution: None,
+            severity: None,
+            false_pass_ruled_out: None,
         };
         let codex = attempt(
             "falsify the content survival check",
