@@ -6,6 +6,12 @@
 perf.data*
 flamegraph.svg
 
+# Core dumps. The crash tests SIGABRT `lim-toy` on purpose, and a host whose
+# kernel.core_pattern is plain `core` writes one per abort into the working
+# directory (90 of them, 58 MB, on 2026-10-12). They are never evidence.
+/core
+/core.[0-9]*
+
 # Fuzzing artifacts (fuzz/ itself is committed once it exists — Phase 1)
 fuzz/artifacts/
 # libFuzzer grows fuzz/corpus/ during a campaign; that growth is a regenerable
