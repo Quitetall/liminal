@@ -25,6 +25,15 @@ fn run_haq(command: HaqCommand) -> Result<()> {
                 )?
             );
         }
+        HaqCommand::ReviewNonBlocking { record } => {
+            println!(
+                "{}",
+                liminal_xtask::haq::effective_non_blocking_findings_repo(
+                    &liminal_xtask::repo_root()?,
+                    &record
+                )?
+            );
+        }
         HaqCommand::SeedCorpus { target } => {
             liminal_xtask::haq::write_seed_corpus_repo(&liminal_xtask::repo_root()?, &target)?;
         }
@@ -318,6 +327,12 @@ enum HaqCommand {
     /// A review record's unresolved verified findings after standing signed
     /// rulings (grilling decision 6; M17.5 F-48).
     ReviewUnresolved {
+        /// The record JSON.
+        record: camino::Utf8PathBuf,
+    },
+    /// A review record's unresolved S2/S3 findings after standing signed
+    /// rulings: recorded, not blocking (AM-17.20).
+    ReviewNonBlocking {
         /// The record JSON.
         record: camino::Utf8PathBuf,
     },

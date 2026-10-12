@@ -1,0 +1,9 @@
+run_id=run-1
+commit=503caee898d9002b5b42fd08dfb0c24c70a15818
+tree=7134d46ce52cf9a8c9ba572dca41207a6fbdd2a2
+command=./scripts/haqp_qualify.sh 
+started_epoch=1791407551
+finished_epoch=1791408143
+elapsed_s=592
+clean=1
+result=fail

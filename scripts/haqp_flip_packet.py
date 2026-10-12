@@ -667,6 +667,19 @@ def main() -> int:
         row["attempts"] = len(record["attempts"])
         row["findings"] = [f.get("id") or f.get("finding_id") for f in record.get("findings", [])]
         row["unresolved_verified_findings"] = effective
+        # AM-17.20 (blind pass 1 at 503caee8, A08): open S2/S3 findings do not
+        # block, but the packet records how many remain rather than dropping them.
+        non_blocking = int(
+            subprocess.check_output(
+                ["cargo", "run", "-q", "-p", "liminal-xtask", "--", "haq", "review-non-blocking", str(path)],
+                cwd=ROOT,
+                text=True,
+            ).strip()
+        )
+        if non_blocking:
+            row["non_blocking_findings"] = non_blocking
+        else:
+            row.pop("non_blocking_findings", None)
         row["evidence"] = str(path.relative_to(ROOT))
 
     # Mutants are NOT touched. ADR-0021 defers the mutation requirement to 1b.

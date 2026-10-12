@@ -218,18 +218,81 @@ fn item_bodies<'a>(text: &'a str, name: &str) -> Vec<&'a str> {
     let needles = [format!("fn {name}("), format!("macro_rules! {name}")];
     let mut scanner = SourceScanner::default();
     let mut starts = BTreeSet::new();
+    let mut initializers = BTreeSet::new();
     let mut offset = 0;
     for line in text.split_inclusive('\n') {
         let structural = scanner.structural(line);
         if needles.iter().any(|needle| structural.contains(needle)) {
             starts.insert(offset);
+        } else if value_item_name(&structural).as_deref() == Some(name) {
+            initializers.insert(offset);
         }
         offset += line.len();
     }
     starts
         .into_iter()
         .filter_map(|start| item_body_from_start(text, start))
+        .chain(
+            initializers
+                .into_iter()
+                .filter_map(|start| initializer_from_start(text, start)),
+        )
         .collect()
+}
+
+/// The name a line declares as a `const` or `static` item, if it declares one.
+/// Blind pass 1 at `503caee8` (A02): the closure followed `fn` and
+/// `macro_rules!` items only, so `const P: fn(&str) -> _ = production::parse;`
+/// called from an oracle as `P(input)` reached production through an item
+/// the closure never entered.
+fn value_item_name(line: &str) -> Option<String> {
+    let mut rest = line.trim_start();
+    if let Some(after) = rest.strip_prefix("pub") {
+        rest = after.trim_start();
+        if rest.starts_with('(') {
+            rest = rest[rest.find(')')? + 1..].trim_start();
+        }
+    }
+    let rest = rest
+        .strip_prefix("const ")
+        .or_else(|| rest.strip_prefix("static mut "))
+        .or_else(|| rest.strip_prefix("static "))?
+        .trim_start();
+    let end = rest.find(|ch: char| !(ch.is_alphanumeric() || ch == '_'))?;
+    // `const fn name(` is a function and `const _` names nothing.
+    let name = &rest[..end];
+    (!name.is_empty() && name != "fn" && name != "_" && rest[end..].trim_start().starts_with(':'))
+        .then(|| name.to_owned())
+}
+
+/// A `const` or `static` item beginning at line byte `start`, through the
+/// `;` that ends it at nesting depth zero. Its initializer is where a
+/// production path would sit, and it carries no braces of its own for
+/// [`item_body_from_start`] to match.
+fn initializer_from_start(text: &str, start: usize) -> Option<&str> {
+    let mut scanner = SourceScanner::default();
+    let mut depth = 0i32;
+    let mut end = start;
+    for line in text[start..].split_inclusive('\n') {
+        let structural = scanner.structural(line);
+        let mut terminated = false;
+        for ch in structural.chars() {
+            match ch {
+                '{' | '(' | '[' => depth += 1,
+                '}' | ')' | ']' => depth -= 1,
+                ';' if depth == 0 => terminated = true,
+                _ => {}
+            }
+            if terminated {
+                break;
+            }
+        }
+        end += line.len();
+        if terminated {
+            return Some(&text[start..end]);
+        }
+    }
+    None
 }
 
 /// The crate's own sources, concatenated, for the crate owning `file`. Blind
@@ -290,6 +353,9 @@ fn oracle_reachable_body(text: &str, name: &str) -> String {
             if let Some(rest) = trimmed.strip_prefix("macro_rules! ") {
                 let end = rest.find(['{', '(', '[']).unwrap_or(rest.len());
                 return Some(rest[..end].trim().to_owned());
+            }
+            if let Some(value) = value_item_name(trimmed) {
+                return Some(value);
             }
             let rest = trimmed
                 .split_once("fn ")
@@ -3293,13 +3359,26 @@ fn ruling_in_force(root: &Utf8Path, ruling: &Ruling) -> Result<bool> {
 /// a ruling in force on the same attack class and exact target coordinate.
 /// Read as plain JSON so the count is over what was persisted.
 pub fn effective_unresolved_findings_repo(root: &Utf8Path, record: &Utf8Path) -> Result<u64> {
+    Ok(effective_findings_repo(root, record)?.0)
+}
+
+/// Unresolved verified findings AM-17.20 records without blocking (S2, S3),
+/// after standing signed rulings. Reported beside the blocking count so a
+/// packet never shows zero while a recorded finding is still open (blind pass
+/// 1 at `503caee8`, A08).
+pub fn effective_non_blocking_findings_repo(root: &Utf8Path, record: &Utf8Path) -> Result<u64> {
+    Ok(effective_findings_repo(root, record)?.1)
+}
+
+/// `(blocking, non_blocking)` unresolved verified findings after rulings.
+fn effective_findings_repo(root: &Utf8Path, record: &Utf8Path) -> Result<(u64, u64)> {
     let value: serde_json::Value =
         serde_json::from_slice(&fs::read(record)?).with_context(|| format!("parse {record}"))?;
     let in_force = rulings(root)?
         .into_iter()
         .filter(|ruling| ruling_in_force(root, ruling).unwrap_or(false))
         .collect::<Vec<_>>();
-    effective_unresolved_findings(&in_force, &value, record)
+    unresolved_split(&in_force, &value, record)
 }
 
 /// Whether a verified, unresolved defect blocks qualification (AM-17.20).
@@ -3323,15 +3402,29 @@ fn finding_blocks(attempt: &serde_json::Value) -> bool {
 /// The count, given the rulings already established to be in force. Split from
 /// the repository walk so the clearance rules can be exercised without a
 /// signing key: a rule the tests cannot reach is a rule nothing checks.
+#[cfg(test)]
 fn effective_unresolved_findings(
     in_force: &[Ruling],
     value: &serde_json::Value,
     record: &Utf8Path,
 ) -> Result<u64> {
+    Ok(unresolved_split(in_force, value, record)?.0)
+}
+
+/// `(blocking, non_blocking)`: unresolved, independently reproduced verified
+/// findings no ruling in force answers, split by [`finding_blocks`]. A ruling
+/// clears a finding of any class; what it does not clear is counted, never
+/// dropped.
+fn unresolved_split(
+    in_force: &[Ruling],
+    value: &serde_json::Value,
+    record: &Utf8Path,
+) -> Result<(u64, u64)> {
     // Counted from each attempt's own flags, not through the findings list:
     // a verified, reproduced attempt the reviewer forgot to list as a finding
     // is still unresolved.
     let mut unresolved = 0u64;
+    let mut non_blocking = 0u64;
     let mut cleared: BTreeMap<String, u64> = BTreeMap::new();
     for attempt in value["attempts"].as_array().into_iter().flatten() {
         let class = attempt["attack_class"].as_str().unwrap_or_default();
@@ -3341,7 +3434,6 @@ fn effective_unresolved_findings(
                 .as_bool()
                 .unwrap_or(false)
             || attempt["resolved"].as_bool().unwrap_or(false)
-            || !finding_blocks(attempt)
         {
             continue;
         }
@@ -3377,7 +3469,11 @@ fn effective_unresolved_findings(
             *cleared.entry(ruling.id.clone()).or_insert(0u64) += 1;
         }
         if matched.is_empty() {
-            unresolved += 1;
+            if finding_blocks(attempt) {
+                unresolved += 1;
+            } else {
+                non_blocking += 1;
+            }
         }
     }
     for (id, count) in &cleared {
@@ -3388,7 +3484,7 @@ fn effective_unresolved_findings(
                  broad to stand"
         );
     }
-    Ok(unresolved)
+    Ok((unresolved, non_blocking))
 }
 
 /// The receipt must be the backend's own shape, and a Codex transcript must be
@@ -3699,7 +3795,13 @@ fn verify_unresolved_count(
     record_path: &Utf8Path,
     who: &str,
 ) -> Result<()> {
-    let effective = effective_unresolved_findings_repo(root, record_path)?;
+    let (effective, non_blocking) = effective_findings_repo(root, record_path)?;
+    anyhow::ensure!(
+        non_blocking == review.non_blocking_findings,
+        "{who} declares {} non-blocking findings; its record and the rulings in force leave \
+         {non_blocking} open S2/S3 findings (AM-17.20: recorded, never dropped)",
+        review.non_blocking_findings
+    );
     anyhow::ensure!(
         effective == review.unresolved_verified_findings,
         "{who} declares {} unresolved verified findings; its record and the rulings in force \
@@ -13092,10 +13194,25 @@ struct Review {
     #[serde(default)]
     independently_reproduced: Vec<String>,
     unresolved_verified_findings: u64,
+    /// AM-17.20: unresolved S2/S3 findings, recorded and not blocking. The
+    /// gate re-derives it from the record, so an open non-blocking finding is
+    /// visible in the packet rather than absent from it.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    non_blocking_findings: u64,
     /// Committed record of the run; required once `result` is `pass`.
     #[serde(default)]
     evidence: Option<String>,
     result: String,
+}
+
+/// Serde predicate: leave a zero count out of serialized output, so adding
+/// [`Review::non_blocking_findings`] leaves existing packets byte-identical.
+#[allow(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's skip_serializing_if calls the predicate with a reference"
+)]
+fn is_zero(count: &u64) -> bool {
+    *count == 0
 }
 
 /// A blind-review run's committed record, as `scripts/haqp_blind_review.py`
@@ -16676,6 +16793,7 @@ mod tests {
             findings: Vec::new(),
             independently_reproduced: Vec::new(),
             unresolved_verified_findings: 0,
+            non_blocking_findings: 0,
             evidence: Some("conformance/haqp/evidence/review.json".to_owned()),
             result: "pass".to_owned(),
         }
@@ -20480,6 +20598,44 @@ mod tests {
         );
     }
 
+    /// Blind pass 1 at `503caee8` (A08): an open S2 left the blocking count
+    /// and appeared nowhere else, so the packet read zero while the record held
+    /// one. The split keeps it counted, and a review row must declare it.
+    #[test]
+    fn a_non_blocking_finding_is_counted_not_dropped() {
+        let path = Utf8Path::new("r.json");
+        let record: serde_json::Value = serde_json::from_str(
+            r#"{"attempts":[
+                {"id":"A1","attack_class":"vacuity","target":"src/lib.rs:7","attempt":"a","observed_result":"b","classification":"verified_defect","independently_reproduced":true,"resolved":false,"severity":"S2","false_pass_ruled_out":"the transform golden asserts the same outcome"},
+                {"id":"A2","attack_class":"vacuity","target":"src/lib.rs:9","attempt":"a","observed_result":"b","classification":"verified_defect","independently_reproduced":true,"resolved":false,"severity":"S1"}
+            ]}"#,
+        )
+        .expect("record");
+        assert_eq!(
+            unresolved_split(&[], &record, path).expect("split"),
+            (1, 1),
+            "one blocking, one recorded: neither disappears"
+        );
+
+        // Through the repository path, a row that hides the open S2 is refused.
+        let scratch = liminal_scratch::ScratchDir::new("haq-non-blocking").expect("scratch");
+        let file = scratch.path().join("r.json");
+        fs::write(&file, record.to_string()).expect("write record");
+        let mut row = review_row();
+        row.unresolved_verified_findings = 1;
+        let mut typed = review_record(1, "openai", "codex");
+        typed.unresolved_verified_findings = 2;
+        let err = verify_unresolved_count(&repo_root(), &row, &typed, &file, "openai")
+            .expect_err("a row reporting no non-blocking findings hides one");
+        assert!(
+            err.to_string().contains("non-blocking findings"),
+            "refused for the wrong reason: {err}"
+        );
+        row.non_blocking_findings = 1;
+        verify_unresolved_count(&repo_root(), &row, &typed, &file, "openai")
+            .expect("a row declaring both counts matches its record");
+    }
+
     #[test]
     fn ruling_coordinates_are_canonical_positive_line_anchors() {
         for valid in ["src/lib.rs:1", "docs/execution/M17.md:1652"] {
@@ -21143,6 +21299,36 @@ mod tests {
             !body.contains("other_thing("),
             "a macro it never invokes is not"
         );
+    }
+
+    /// Blind pass 1 at `503caee8` (A02): a `const` or `static` holding a
+    /// function pointer carried the oracle to production through an item the
+    /// closure never entered, because the closure followed `fn` and macros only.
+    #[test]
+    fn the_oracle_closure_follows_const_and_static_items() {
+        for item in [
+            "const PARSE: fn(u8) -> u8 = forbidden_path;\n",
+            "pub(crate) static PARSE: fn(u8) -> u8 =\n    forbidden_path;\n",
+            "static mut PARSE: fn(u8) -> u8 = forbidden_path;\n",
+        ] {
+            let text = format!(
+                "{item}\nconst UNUSED: fn(u8) -> u8 = other_thing;\n\n\
+                 fn oracle(x: u8) -> u8 {{\n    PARSE(x)\n}}\n"
+            );
+            let body = oracle_reachable_body(&text, "oracle");
+            assert!(
+                body.contains("forbidden_path"),
+                "an item the oracle names is part of the oracle: {item:?} -> {body}"
+            );
+            assert!(
+                !body.contains("other_thing"),
+                "an item it never names is not"
+            );
+        }
+        // A `const fn` is still followed as a function, not mistaken for a value.
+        let text = "const fn reach(x: u8) -> u8 {\n    forbidden_path(x)\n}\n\n\
+                    fn oracle(x: u8) -> u8 {\n    reach(x)\n}\n";
+        assert!(oracle_reachable_body(text, "oracle").contains("forbidden_path("));
     }
 
     /// Blind pass 1 at `0a0b4b4b` (A07): the fuzz any-touch rule fired on the

@@ -1,0 +1,163 @@
+{
+  "attempts": [
+    {
+      "id": "A01",
+      "attack_class": "vacuity",
+      "target": "crates/liminal-xtask/src/haq.rs:1768",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:1768 by returning empty coarse block metadata for nonempty input while preserving every other generated result.",
+      "observed_result": "The explicit block-count equality at crates/liminal-xtask/src/haq.rs:1768 rejects empty or incomplete coarse metadata before its contents can count as evidence.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A02",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:275",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:275 by binding a forbidden production parser to a module-level const function pointer called by an independent oracle.",
+      "observed_result": "The closure builder at crates/liminal-xtask/src/haq.rs:275 enumerates functions and macros only, leaving the const initializer and its forbidden production path outside the scanned reachable body.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false,
+      "severity": "S1"
+    },
+    {
+      "id": "A03",
+      "attack_class": "missing negatives",
+      "target": "crates/liminal-xtask/src/haq.rs:14624",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:14624 by replacing a crafted one-defect transaction with bare wrong-shaped JSON that fails for an unrelated reason.",
+      "observed_result": "The category-specific error assertion at crates/liminal-xtask/src/haq.rs:14624 rejects a negative rejected for the wrong reason, so malformed shape alone cannot satisfy the test.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A04",
+      "attack_class": "weak mutants",
+      "target": "conformance/haqp/packet.json:1800",
+      "attempt": "Falsify conformance/haqp/packet.json:1800 by comparing the declared success-error-substitution operator with its unrelated predicate-deletion defect narrative.",
+      "observed_result": "The row at conformance/haqp/packet.json:1800 describes deleting an invalidation predicate although its operator is success-error-substitution, and the inventory gate checks only that this prose is nonempty.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false,
+      "severity": "S3",
+      "false_pass_ruled_out": "The evaluated patch is separately constrained by its closed operator and source anchor, so this mismatch corrupts reporting without admitting a semantic kill."
+    },
+    {
+      "id": "A05",
+      "attack_class": "fault omissions",
+      "target": "crates/liminal-xtask/src/haq.rs:13486",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:13486 by understating the declared deferred durable-transition surface by exactly one registered site.",
+      "observed_result": "The executable canary at crates/liminal-xtask/src/haq.rs:13486 performs that one-site decrement and requires the specific durable-surface mismatch refusal.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A06",
+      "attack_class": "nondeterminism",
+      "target": "crates/liminal-xtask/src/haq.rs:15598",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:15598 by varying wall-clock duration and checking whether timing noise changes the generated evidence artifact.",
+      "observed_result": "At crates/liminal-xtask/src/haq.rs:15598 elapsed milliseconds enter a separate telemetry vector after the evidence row is constructed and are not serialized into its artifact.",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    },
+    {
+      "id": "A07",
+      "attack_class": "corpus leakage",
+      "target": "crates/liminal-xtask/src/haq.rs:7382",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:7382 by treating every stage read of the locked corpus as unauthorized held-out access.",
+      "observed_result": "The WritesOnly policy at crates/liminal-xtask/src/haq.rs:7382 intentionally permits governed stage reads after write candidates are rejected; only carved fuzz binaries use the any-touch rule.",
+      "independently_reproduced": true,
+      "classification": "false_positive",
+      "resolved": false
+    },
+    {
+      "id": "A08",
+      "attack_class": "exception broadening",
+      "target": "crates/liminal-xtask/src/haq.rs:3344",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:3344 with an independently reproduced, unresolved S2 finding carrying a substantive false-pass explanation.",
+      "observed_result": "The condition at crates/liminal-xtask/src/haq.rs:3344 excludes that verified unresolved finding from the effective count, allowing the packet summary to report zero while the raw record reports one.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false,
+      "severity": "S1"
+    },
+    {
+      "id": "A09",
+      "attack_class": "evidence/report drift",
+      "target": "crates/liminal-xtask/src/haq.rs:11731",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:11731 by changing a complete packet's conclusion to Current conclusion: NOT QUALIFIED.",
+      "observed_result": "The substring predicate at crates/liminal-xtask/src/haq.rs:11731 accepts NOT QUALIFIED because it still contains QUALIFIED, leaving the human conclusion inconsistent with the packet.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false,
+      "severity": "S3",
+      "false_pass_ruled_out": "The negative conclusion cannot make unsuccessful qualification evidence pass; it only makes the human-facing report contradict an already complete packet."
+    },
+    {
+      "id": "A10",
+      "attack_class": "evidence/report drift",
+      "target": "crates/liminal-xtask/src/haq.rs:11685",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:11685 by placing the correct state marker in unrelated prose while giving the authority-table state row an incorrect value.",
+      "observed_result": "The whole-document search at crates/liminal-xtask/src/haq.rs:11685 finds the displaced marker and never binds it to the authority-table row whose claim is wrong.",
+      "independently_reproduced": true,
+      "classification": "verified_defect",
+      "resolved": false,
+      "severity": "S3",
+      "false_pass_ruled_out": "Qualification evidence and packet state are verified independently, so this placement defect corrupts the rendered authority report without converting failed evidence into a pass."
+    },
+    {
+      "id": "A11",
+      "attack_class": "shared-oracle coupling",
+      "target": "crates/liminal-xtask/src/haq.rs:13546",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:13546 by injecting the literal production parser call directly into the independent source oracle.",
+      "observed_result": "The canary injection at crates/liminal-xtask/src/haq.rs:13546 requires the independence verifier to reject that literal production path, so the direct coupling is caught.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    },
+    {
+      "id": "A12",
+      "attack_class": "evidence/report drift",
+      "target": "crates/liminal-xtask/src/haq.rs:4062",
+      "attempt": "Falsify crates/liminal-xtask/src/haq.rs:4062 by omitting the exact target coordinate from an otherwise substantive attempt narrative.",
+      "observed_result": "The coordinate-binding assertion at crates/liminal-xtask/src/haq.rs:4062 rejects the record unless its attempt text contains the exact declared target.",
+      "independently_reproduced": true,
+      "classification": "caught_violation",
+      "resolved": false
+    }
+  ],
+  "findings": [
+    {
+      "id": "F01",
+      "attempt_id": "A02"
+    },
+    {
+      "id": "F02",
+      "attempt_id": "A04"
+    },
+    {
+      "id": "F03",
+      "attempt_id": "A08"
+    },
+    {
+      "id": "F04",
+      "attempt_id": "A09"
+    },
+    {
+      "id": "F05",
+      "attempt_id": "A10"
+    }
+  ],
+  "independently_reproduced": [
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05"
+  ],
+  "unresolved_verified_findings": 5,
+  "result": "fail"
+}

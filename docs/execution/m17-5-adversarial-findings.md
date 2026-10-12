@@ -5339,3 +5339,60 @@ F-95's fix changed the transform builder golden from `3c56f417…` to
 record. Brian accepted it on 2026-10-03, in the same exchange that approved
 AM-17.20 ("agree. Let's go.").
 
+
+## F-96 — 2026-10-07 lane at `503caee8`: the first run under AM-17.20
+
+The lane launched on 2026-10-07 at 17:12 EDT, from base
+`503caee898d9002b5b42fd08dfb0c24c70a15818`. The reviews stage completed. The ci
+stage failed in 2 seconds: `fmt-check` could not run `taplo`. The receipt
+records `result=fail`. Everything it produced is archived in
+`docs/execution/reviews/2026-10-07-lane-503caee8-run-1-failed/` with SHA-256
+sums.
+
+**Why `taplo` was missing.** On 2026-10-03 at 23:54:53 UTC, 39 binaries
+vanished from `~/.cargo/bin`, among them every tool the merge profile calls. A
+watcher logging deletions pinned the time. The runner's job log shows a
+LamQuant CI job on the bare-host self-hosted runner. It ran as Brian with the
+real `~/.cargo`, and five seconds before the deletion it started the post step
+of `Swatinem/rust-cache`, whose `cleanBin` removes every binary that predates
+the job. The LamQuant session fixed this at the runner level: the unit now
+sets its own `CARGO_HOME` and `RUSTUP_HOME` and keeps `~/.cargo/bin` off its
+`PATH` (LamQuant PR #72). Liminal's tools were reinstalled at their recorded
+versions. This was a host failure, not a suite defect.
+
+**The reviews.** Pass 2 (MiMo `v2.5-pro`) found nothing. Pass 1 (Codex
+`gpt-5.6-sol`) verified five defects and classed them under AM-17.20. Each
+class was checked at its cited source:
+
+| attempt | class | coordinate | finding | disposition |
+|---|---|---|---|---|
+| A02 | S1 | `haq.rs:275` | The oracle closure followed only `fn` and `macro_rules!` items, so a production parser bound to a `const` or `static` function pointer was reachable but never scanned | Fixed |
+| A08 | S1 | `haq.rs:3344` | An open S2 left the blocking count and appeared nowhere else, so the packet reported zero while the record held one | Fixed |
+| A04 | S3 | `packet.json:1800` | A mutant's defect prose describes predicate deletion under a success-error-substitution operator | Recorded |
+| A09 | S3 | `haq.rs:11731` | The rendered-conclusion check accepts `NOT QUALIFIED` because it contains `QUALIFIED` | Recorded |
+| A10 | S3 | `haq.rs:11685` | The authority-state marker is found anywhere in the document, not bound to its table row | Recorded |
+
+**A02.** `value_item_name` recognizes `const`, `static` and `static mut`
+items, but not `const fn`, which remains a function. `initializer_from_start`
+reads such an item through its terminating `;` at depth zero. The closure now
+follows any of them that the oracle names.
+`the_oracle_closure_follows_const_and_static_items` covers all three forms,
+plus an unreferenced item that must stay outside. It fails when the closure
+drops value items.
+
+**A08.** The gate splits unresolved findings into blocking (S1) and
+non-blocking (S2, S3) after rulings. A ruling can clear either class;
+anything it does not clear is counted. A packet review row now carries
+`non_blocking_findings` beside `unresolved_verified_findings`, and
+`verify_unresolved_count` re-derives both from the record. `haqp_flip_packet.py`
+writes the count with the new `haq review-non-blocking` command. The field is
+omitted when zero, so existing packets are byte-identical.
+`a_non_blocking_finding_is_counted_not_dropped` fails when the check is removed.
+On the archived record, the commands report 2 blocking and 3 non-blocking,
+which matches the classification.
+
+**The S3s.** A04, A09 and A10 do not block. Owner: Liminal qualifier
+maintenance. Milestone: the first AM-17.20 batch, due before M18 closes.
+
+All 327 `liminal-xtask` tests pass, and clippy and fmt are clean. A new lane
+on the fixed base is next.
